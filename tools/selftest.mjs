@@ -893,7 +893,7 @@ function signup(email, d) {
       if (req.url === '/api/import/guide?kind=sync') return res.end(JSON.stringify({ spec: 'SYNC RULES', brief: 'SYNC BRIEF', schema: { type: 'object', title: 'sync' } }));
       if (req.url.startsWith('/api/import/status?id=')) return res.end(JSON.stringify({ exists: true, opened: globalThis.fakeOpened === true }));
       if (JSON.parse(body).answer.bad) return res.end(JSON.stringify({ problems: ['summary: empty'] }));
-      res.end(JSON.stringify({ url: 'https://psycheai.io/?m=AAAAAAAAAAAAAAAA#' + 'k'.repeat(43), expiresInDays: 7, pdf: 'https://psycheai.io/api/import/pdf?id=AAAAAAAAAAAAAAAA&k=' + 'k'.repeat(43), pdfName: 'Psyche Report - Mei Tan - 29102026.pdf', sections: [{ title: 'Overview', finding: 'Mulan · ENFJ (The Protagonist). Your patterns: A, B and C.' }, { title: 'Who you are', finding: 'MBTI: ENFJ. Big Five: high Openness (80).', points: ['MBTI: ENFJ.', 'Big Five: high Openness (80).', 42] }, { title: 'bad' }] }));
+      res.end(JSON.stringify({ url: 'https://psycheai.io/?m=AAAAAAAAAAAAAAAA#' + 'k'.repeat(43), expiresInDays: 7, pdf: 'https://psycheai.io/report-pdf?m=AAAAAAAAAAAAAAAA#' + 'k'.repeat(43), pdfName: 'Psyche Report - Mei Tan - 29102026.pdf', sections: [{ title: 'Overview', finding: 'Mulan · ENFJ (The Protagonist). Your patterns: A, B and C.' }, { title: 'Who you are', finding: 'MBTI: ENFJ. Big Five: high Openness (80).', points: ['MBTI: ENFJ.', 'Big Five: high Openness (80).', 42] }, { title: 'bad' }] }));
     });
   });
   await new Promise(r => fake.listen(0, r));
@@ -946,7 +946,7 @@ function signup(email, d) {
     notifyMod.seen(user.id);
   }
   check('publishing returns the psycheai.io link, the card image and the PDF, and nothing about how long the link lasts', pub.ok && /^https:\/\/psycheai\.io\/\?m=/.test(pub.url) && /\/card\/.+\.png$/.test(pub.image) && !('expiresInDays' in pub) &&
-    !('page' in pub) && /^For the chat: sections is the report in short, each a title and its points \(its finding as bullets\)/.test(pub.show) && /with their Psyche Card on its first page/.test(pub.show) && !/Instagram Story|Attach the|give its link/.test(pub.show) && /\/api\/import\/pdf\?id=/.test(pub.pdf) && pub.sections.length === 2 && pub.sections[0].title === 'Overview' && !('points' in pub.sections[0]) && JSON.stringify(pub.sections[1].points) === JSON.stringify(['MBTI: ENFJ.', 'Big Five: high Openness (80).']) && pub.attach.length === 1 && pub.attach[0].mimeType === 'application/pdf' && pub.attach[0].name === 'Psyche Report - Mei Tan - 29102026.pdf' &&
+    !('page' in pub) && /^For the chat: sections is the report in short, each a title and its points \(its finding as bullets\)/.test(pub.show) && !/Instagram Story|Attach the|give its link/.test(pub.show) && pub.pdf === 'https://psycheai.io/report-pdf?m=AAAAAAAAAAAAAAAA#' + 'k'.repeat(43) && pub.sections.length === 2 && pub.sections[0].title === 'Overview' && !('points' in pub.sections[0]) && JSON.stringify(pub.sections[1].points) === JSON.stringify(['MBTI: ENFJ.', 'Big Five: high Openness (80).']) && pub.attach.length === 0 && pub.pdfName === 'Psyche Report - Mei Tan - 29102026.pdf' && /pdf opens the report as a PDF, with their Psyche Card on its first page, unlocked in their browser on psycheai\.io/.test(pub.show) &&
     !/What your Instagram shows that you might not/.test(instructions.MUSE_PROCEDURE) && /attach the report's PDF \(its file\): its first page is their Psyche Card/.test(instructions.MUSE_PROCEDURE) &&
     pub.story === 'https://psycheai.io/?m=AAAAAAAAAAAAAAAA&story=1#' + 'k'.repeat(43) && /story opens the card full screen on psycheai\.io, where they can share it themselves if they want/.test(pub.show) && !/Share your card to your Instagram Story: <story>/.test(instructions.MUSE_PROCEDURE) && /image is their Psyche Card as a picture/.test(pub.show) &&
     /"Your Psyche is ready\." Then their Psyche Card as a picture \(publish_psyche's image; with the PsycheAI skill, the file bin\/psyche\.py show card saves, or its image link if it saved none\), right under that line/.test(instructions.MUSE_PROCEDURE) &&
@@ -957,9 +957,10 @@ function signup(email, d) {
     const file = viaMcp.result.content.find(c => c.type === 'resource_link' && c.mimeType === 'application/pdf');
     const cardFile = viaMcp.result.content.find(c => c.type === 'resource_link' && c.mimeType === 'image/png');
     holdKeys(user.id, viaMcp.result.structuredContent.cardKey);
-    check('over MCP, the card and the report\'s PDF come as files for the chat (resource links) beside the text',
+    // The PDF link keeps its key after the #, so it's a page, never a file link a host fetches (the skill saves the PDF itself).
+    check('over MCP, the card comes as a file for the chat (a resource link) beside the text, and the PDF only as its link, whose key no host fetch carries',
       // The card's address is https in production; the test server's is http, so it isn't attached here.
-      (cardFile ? /^Psyche Card - Mei Tan\.png$/.test(cardFile.name) : !/^https:/.test(pub.image)) && file && file.mimeType === 'application/pdf' && /\/api\/import\/pdf\?id=/.test(file.uri) && file.name === 'Psyche Report - Mei Tan - 29102026.pdf' && viaMcp.result.content[0].type === 'text');
+      (cardFile ? /^Psyche Card - Mei Tan\.png$/.test(cardFile.name) : !/^https:/.test(pub.image)) && !file && /\/report-pdf\?m=.+#/.test(viaMcp.result.structuredContent.pdf) && viaMcp.result.content[0].type === 'text');
   }
   check('the read goes to PsycheAI with the name', seen.some(x => x.path === '/api/import' && x.body.name === 'Mei Tan' && x.body.answer.summary));
   const kept = JSON.stringify(store.kvGet('psyche', user.id));
@@ -1869,6 +1870,24 @@ print(json.dumps({'fine': m.answer_problems(fine),
       fsx.writeFileSync(pathx.join(dir, 'last-psyche.json'), JSON.stringify({ ok: true, url: 'https://psycheai.io/?m=A#k', story: 'https://psycheai.io/?m=A&story=1#k', image: 'file://' + fakePng,
         sections: [{ title: 'Overview', finding: 'Mulan.' }], pdf: 'file://' + fakePdf, nextStep: { say: 'Ask me', buttons: ['Reveal my roast 🔥'] }, askIdeas: ['Q1'],
         files: [{ type: 'resource_link', uri: 'file://' + fakePdf, name: 'Psyche Report - Mei Tan.pdf', mimeType: 'application/pdf' }] }));
+      // A /report-pdf link: the skill sends its key in a header, never in the address it asks for.
+      {
+        const { createServer } = await import('node:http');
+        const asked = [];
+        const site = createServer((q, s) => {
+          asked.push({ url: q.url, key: q.headers['x-psyche-key'] || null });
+          if (q.url === '/api/import/pdf?id=AAAAAAAAAAAAAAAA' && q.headers['x-psyche-key'] === 'K'.repeat(43)) { s.writeHead(200, { 'Content-Type': 'application/pdf' }); return s.end('%PDF-1.4 from the header'); }
+          s.writeHead(404); s.end('{}');
+        });
+        await new Promise(r => site.listen(0, '127.0.0.1', r));
+        const link = 'http://127.0.0.1:' + site.address().port + '/report-pdf?m=AAAAAAAAAAAAAAAA#' + 'K'.repeat(43);
+        const got = JSON.parse((await execFile('python3', ['-c', `import importlib.util, sys, json
+spec = importlib.util.spec_from_file_location('psyche', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+r = m.local_pdf({'pdf': sys.argv[2], 'pdfName': 'Psyche Report - Mei Tan - 30102026.pdf'})
+print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get('file') else None}))`, pathx.join(dir, 'bin', 'psyche.py'), link], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: keep, NO_PROXY: '*', no_proxy: '*' }, timeout: 30000 })).stdout);
+        site.close();
+        skillState.headerPdf = { got, asked };
+      }
       skillState.parts = {};
       for (const part of ['card', 'summary', 'pdf', 'links', 'next', 'nope']) skillState.parts[part] = await run('show', part);
       skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche Card \d{4}\.png$/.test(f));
@@ -1919,6 +1938,9 @@ print(json.dumps({'fine': m.answer_problems(fine),
           JSON.stringify(pinned) === JSON.stringify({ read: { spec: r.spec, rubric: r.rubric, schema: r.schema }, deepSpec: dp.spec.slice(r.spec.length), sync: { spec: sy.spec, brief: sy.brief, schema: sy.schema } }));
       }
     }
+    check('show pdf saves a /report-pdf link\'s PDF with its key in a header: the address it asks for never holds the key',
+      ((H) => H && H.got.body === '%PDF-1.4 from the header' && /Psyche Report - Mei Tan - 30102026 \d{4}\.pdf$/.test(H.got.file) && H.asked.length === 1 &&
+        !H.asked[0].url.includes('KKKK') && H.asked[0].key === 'K'.repeat(43))(skillState.headerPdf), JSON.stringify(skillState.headerPdf));
     check('the skill keeps its keys in the workspace (the card key, and each Sync code once), sends them with every call, and forget --everything deletes them',
       skillState.keyCalls.headers['X-Psyche-Card-Key'] === 'C'.repeat(43) && skillState.keyCalls.headers['X-Psyche-Sync-Keys'] === 'AbCdEfGhIjKlMnOpQrStUv' &&
       skillState.keyCalls.kept.card === 'C'.repeat(43) && skillState.keyCalls.kept.syncs.length === 1 && skillState.keysGone &&

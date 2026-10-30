@@ -52,7 +52,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 4
+RELEASE = 5
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -98,7 +98,7 @@ def local_pdf(r):
     """The report's PDF saved in out/, so it's attached as a file rather than linked."""
     link = r.get('pdf')
     files = [f for f in r.get('files', []) if f.get('mimeType') == 'application/pdf']
-    name = re.sub(r'[^\w .&()-]', '', (files[0].get('name') if files else '') or 'Psyche Report.pdf') or 'Psyche Report.pdf'
+    name = re.sub(r'[^\w .&()-]', '', r.get('pdfName') or (files[0].get('name') if files else '') or 'Psyche Report.pdf') or 'Psyche Report.pdf'
     # The save's time in the name, so each save's PDF is a new file to the chat, never taken for one sent before.
     name = re.sub(r'\.pdf$', '', name, flags=re.I) + ' ' + saved_at() + '.pdf'
     out = {'pdf': link}
@@ -109,7 +109,14 @@ def local_pdf(r):
         for old in os.listdir(OUT):
             if old.lower().endswith('.pdf'):
                 os.remove(os.path.join(OUT, old))
-        req = urllib.request.Request(link, headers={'Accept': 'application/pdf'})
+        parts = urllib.parse.urlsplit(link)
+        if parts.fragment:
+            # /report-pdf?m=<id>#<key>: the key goes in a header, never in an address a server or log keeps.
+            pid = urllib.parse.parse_qs(parts.query).get('m', [''])[0]
+            req = urllib.request.Request('%s://%s/api/import/pdf?id=%s' % (parts.scheme, parts.netloc, urllib.parse.quote(pid)),
+                                         headers={'Accept': 'application/pdf', 'X-Psyche-Key': parts.fragment})
+        else:
+            req = urllib.request.Request(link, headers={'Accept': 'application/pdf'})
         with urllib.request.urlopen(req, timeout=60) as res:
             body = res.read()
         if not body.startswith(b'%PDF'):
