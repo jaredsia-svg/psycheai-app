@@ -1004,9 +1004,14 @@ function signup(email, d) {
     const long = cardSvg({ ...ctx.card, values: ['Honesty in how things are described', 'Loyalty to a small circle', 'Claims should be checked against what actually happened'],
       interests: ['Future technology and AI', 'Dogs and animals', 'Music, film and books', 'Food and dining'] }, null);
     const chipRects = [...long.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="(\d+)" rx="14" fill="#[0-9a-fA-F]+"\/><text/g)].map(m => m.slice(1).map(Number));
-    check('the card image sets values and interests as chips the way psycheai.io does: a long one wraps inside its chip, nothing past the panel\'s edge or bottom',
-      /Honesty in how things are<\/text>/.test(long) && />described<\/text>/.test(long) && chipRects.length >= 4 &&
-      chipRects.every(([x, y, w, h]) => x + w <= 1032 && y + h <= 1596) && !/…<\/text>/.test(long.slice(long.indexOf('VALUES'), long.indexOf('SHOWS CARE'))));
+    check('the card image sets values and interests as chips the way psycheai.io does: every one shown, a long one wrapping inside its chip, none past its column',
+      /Honesty in how things are described<\/text>|Honesty in how things are<\/text>/.test(long) && chipRects.length === 7 &&
+      chipRects.every(([x, , w]) => (x < 540 ? x + w <= 530 : x + w <= 1020)) && !/…<\/text>/.test(long.slice(long.indexOf('VALUES'), long.indexOf('SHOWS CARE'))));
+    const crowded = cardSvg({ ...ctx.card, why: 'A long write-up that runs on. '.repeat(12), patterns: ['A pattern name long enough to wrap onto two lines here', 'Two', 'Three'],
+      values: ['One value that is long', 'Two', 'Three', 'Four values'], interests: ['Emerging technology and driverless cars', 'Investing and private markets', 'Dogs and animal rescue', 'Specialty dining and travel', 'Tennis'] }, null);
+    check('a card with more than fits is scaled down whole, as psycheai.io\'s is, never cut: the whole write-up and an interest past 30 characters are drawn',
+      /<g transform="translate\([\d.]+,[\d.]+\) scale\(0\.\d+\)">/.test(crowded) && (crowded.match(/runs on\./g) || []).length >= 1 && !/…/.test(crowded) &&
+      />driverless cars<\/text>|>Emerging technology and driverless cars<\/text>/.test(crowded) && !/<g transform="translate\([\d.]+,[\d.]+\) scale\(0\.\d+\)">/.test(cardSvg({ ...ctx.card, why: 'Short.' }, null)));
   }
   check('nobody else can open a psyche card', weekly.cardContext('u_other', user.id, Date.now(), 'psyche') === null);
 
