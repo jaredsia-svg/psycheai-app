@@ -52,7 +52,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 19
+RELEASE = 22
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -345,6 +345,14 @@ def check_digest(path=DIGEST):
                         i + 1, c['chars'], aim, 'Page further back' if i < 4 else 'Read more of its recent pages'))
                 elif i < 4 and not c['whole']:
                     room.append('Conversation %d: page further back next read, towards its first year.' % (i + 1))
+            # Their own messages in all: short threads ("(whole thread)") excuse one conversation, never the total,
+            # while the inbox has more to read (README "Busiest, measured").
+            whole = 4 * t['top'] + 6 * t['rest']
+            mine = sizes.get('Messages', 0)
+            if inbox and int(inbox.group(1).replace(',', '')) > len(convos) and mine < SHORT * whole:
+                goal['Messages'] = [mine, whole]
+                problems.append('Messages: %d of about %d characters of their own across %d conversations. Measure the inbox, which lists newest first, '
+                                'and read the next busiest conversations until the total is reached.' % (mine, whole, len(convos)))
     else:
         # Where a Deep Psyche's sample is well short of its share: read more there, if there is more.
         for name, share in SHARES.items():
