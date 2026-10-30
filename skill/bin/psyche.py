@@ -52,7 +52,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 8
+RELEASE = 10
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1060,10 +1060,33 @@ def answer_problems(answer):
     return problems[:20]
 
 
+# The website's confidence rubric (psycheai.io lib/prompts.js CONFIDENCE_SCORING, README "Confidence follows
+# the rubric"): Instagram, its messages included, is one strong source and stops at 79; Facebook (posts or
+# Messenger) or WhatsApp chats lift it to 86, both to 90. Checked here because the score is a number, not a judgement.
+def confidence_problems(answer):
+    conf = answer.get('confidence') if isinstance(answer, dict) else None
+    if not isinstance(conf, dict) or not isinstance(conf.get('score'), (int, float)):
+        return []
+    head = ''
+    if os.path.exists(DIGEST):
+        with open(DIGEST, encoding='utf-8') as f:
+            head = '\n'.join(f.read().splitlines()[:6])
+    sources = (re.search(r'sources:\s*([^\n·]+)', head) or [0, 'instagram'])[1].lower()
+    strong = 1 + bool(re.search(r'facebook|messenger', sources)) + os.path.exists(os.path.join(SOURCES, 'whatsapp.txt'))
+    cap, read = {1: 79, 2: 86}.get(strong, 90), {1: 'Instagram alone', 2: 'two strong sources'}.get(strong, 'Instagram, Facebook and WhatsApp')
+    score, problems = conf['score'], []
+    if score > cap:
+        problems.append('confidence.score is %d: from %s it is at most %d (65 to 79 for Instagram, its messages included; 72 to 86 with Facebook or WhatsApp chats; 76 to 90 with both).' % (score, read, cap))
+    level = 'high' if score >= 75 else 'moderate' if score >= 60 else 'low' if score >= 40 else 'very low'
+    if conf.get('level') and conf['level'] != level and score <= cap:
+        problems.append('confidence.level is "%s" for a score of %d: it is "%s" (high from 75, moderate 60 to 74, low 40 to 59, very low under 40).' % (conf['level'], score, level))
+    return problems
+
+
 def before_publish(args):
     """Why a new Psyche isn't saved yet, or None: the report holds what it can't, the digest still has
     problems, or it's mostly the report already saved although what it's read from has changed since."""
-    leaving = answer_problems(args.get('answer'))
+    leaving = answer_problems(args.get('answer')) + confidence_problems(args.get('answer'))
     if leaving:
         return {'saved': False, 'report': 'not ready', 'problems': leaving}
     if not os.path.exists(DIGEST):

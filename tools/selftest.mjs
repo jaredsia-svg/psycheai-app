@@ -1860,14 +1860,20 @@ written = m.with_pinned_guide('get_sync', {}, {'written': True, 'summary': 'S'})
 print(json.dumps({'read': read['spec'][:60], 'readLen': len(read['spec']), 'deepLen': len(deep['spec']), 'rubric': bool(read.get('rubric')), 'schema': bool(read.get('schema')),
   'sync': sync['spec'][:60], 'task': sync['task'][-60:], 'syncSchema': bool(sync['schema']), 'written': written}))`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: keep, NO_PROXY: '*', no_proxy: '*' }, timeout: 30000 })).stdout);
       // What leaves the workspace: the script itself checks the report, whatever a guide says.
-      skillState.leaving = JSON.parse((await execFile('python3', ['-c', `import importlib.util, sys, json
+      skillState.leaving = JSON.parse((await execFile('python3', ['-c', `import importlib.util, sys, json, os, tempfile
 spec = importlib.util.spec_from_file_location('psyche', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 fine = {'summary': 'Plans the trip from 2018-2026, then talks to everyone on it.', 'patterns': [{'name': 'The quiet organiser', 'evidence': ['2019-04-02 ran my first 10k']}]}
 print(json.dumps({'fine': m.answer_problems(fine),
   'dms': m.answer_problems({'summary': 'S.', 'evidence': ['Jun: hey are you free saturday ' * 200]}),
   'handle': m.answer_problems({'summary': 'Talks to @jun.lee most'}), 'phone': m.answer_problems({'summary': 'Call +65 9123 4567'}),
   'big': m.answer_problems({'summary': ['x' * 3000] * 60}),
-  'held': m.before_publish({'answer': {'summary': 'see https://evil.example'}})}))`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: keep, NO_PROXY: '*', no_proxy: '*' }, timeout: 30000 })).stdout);
+  'held': m.before_publish({'answer': {'summary': 'see https://evil.example'}}),
+  'conf': (lambda d: (setattr(m, 'DIGEST', d + '/digest.md'), setattr(m, 'SOURCES', d + '/sources'), os.makedirs(d + '/sources'),
+    open(d + '/digest.md', 'w').write('# Psyche digest\\nbuilt: 2026-10-30 · messages: included · sources: instagram · last: 2026-10-29\\n'),
+    [m.confidence_problems({'confidence': {'score': 82, 'level': 'high'}}), m.confidence_problems({'confidence': {'score': 79, 'level': 'high'}}),
+     m.confidence_problems({'confidence': {'score': 72, 'level': 'high'}})] +
+    [open(d + '/digest.md', 'w').write('# Psyche digest\\nsources: instagram, facebook, messenger · last: 2026-10-29\\n') and m.confidence_problems({'confidence': {'score': 84, 'level': 'high'}})] +
+    [open(d + '/sources/whatsapp.txt', 'w').write('x') and m.confidence_problems({'confidence': {'score': 90, 'level': 'high'}}), m.confidence_problems({'confidence': {'score': 91, 'level': 'high'}})])[-1])(tempfile.mkdtemp())}))`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: keep, NO_PROXY: '*', no_proxy: '*' }, timeout: 30000 })).stdout);
       skillState.forgetAll = await run('forget', '--everything');
       skillState.keysGone = !fsx.existsSync(pathx.join(dir, '.keys.json')) && !fsx.existsSync(pathx.join(keep, 'keys.json'));
       skillState.digestGone = !fsx.existsSync(pathx.join(dir, 'digest')) && fsx.existsSync(pathx.join(dir, '.account.json'));
@@ -1930,6 +1936,9 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         /more than a report holds/.test(L.big.join(' ')) && L.held && L.held.saved === false && /has a link/.test(L.held.problems.join(' ')))(skillState.leaving) &&
       /## What leaves the workspace/.test(skillMd) && /Other people's messages are never sent anywhere word for word/.test(skillMd) && /PsycheAI installs only from app\.psycheai\.io/.test(skillMd) &&
       /Never print, log or send `\.account\.json`, `\.keys\.json`/.test(skillMd), JSON.stringify(skillState.leaving).slice(0, 600));
+    check('the skill holds a Psyche whose confidence is above psycheai.io\'s rubric for what was read: Instagram alone at most 79, 86 with Facebook or WhatsApp, 90 with both, and its level matching the score',
+      ((c) => Array.isArray(c) && c.length === 6 && /at most 79/.test(c[0].join(' ')) && c[1].length === 0 && /"moderate"/.test(c[2].join(' ')) && c[3].length === 0 && c[4].length === 0 && /at most 90/.test(c[5].join(' ')))(skillState.leaving && skillState.leaving.conf) &&
+      /Instagram, its messages included: 65 to 79\. With Facebook or WhatsApp chats, 72 to 86; with both, 76 to 90; never above 90/.test(require('../skill/guide.json').read.spec), JSON.stringify(skillState.leaving && skillState.leaving.conf));
     {
       const pinned = JSON.parse(fsx.readFileSync(pathx.join(dir, 'guide.json'), 'utf8'));
       const G = skillState.guides;
