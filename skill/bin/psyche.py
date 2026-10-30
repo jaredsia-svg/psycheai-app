@@ -11,8 +11,8 @@
                                        saved), for answering their questions in later chats
   bin/psyche.py prep FILE... [--me NAME] [--deep]
                                        WhatsApp chats they exported (.zip or .txt), made
-                                       ready here, on their device: only their own messages,
-                                       dated, everyone else "Friend A", "Friend B"..., numbers,
+                                       ready here, on their device: their own messages, dated,
+                                       after what they answer, everyone else "Friend A", "Friend B"..., numbers,
                                        emails, links and handles taken out. Writes
                                        sources/whatsapp.txt; the export itself is never read
                                        for the report and never sent anywhere
@@ -52,7 +52,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 15
+RELEASE = 19
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -178,8 +178,8 @@ def saved(out):
 # plan's shares, kept instead of the raw pulls. Muse writes it; this checks it.
 
 DIGEST_LIMITS = {
-    'normal': {'total': 215000, 'Messages': 115000, 'Interests': 16000, 'Comments': 16000},
-    'deep': {'total': 830000, 'Messages': 450000, 'Interests': 31000, 'Comments': 41000},
+    'normal': {'total': 275000, 'Messages': 115000, 'Context': 60000, 'Interests': 16000, 'Comments': 16000},
+    'deep': {'total': 1050000, 'Messages': 450000, 'Context': 220000, 'Interests': 31000, 'Comments': 41000},
 }
 SECTIONS = ['Posts and stories', 'Comments', 'Messages', 'Interests']
 LEAKS = [
@@ -194,14 +194,14 @@ TIMED = re.compile(r'^\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}\b')
 # The plan's share for each section, to say where a Deep Psyche has room for more.
 SHARES = {'Posts and stories': 85000, 'Messages': 110000, 'Comments': 15000, 'Interests': 15000}
 # What one read reaches (README "Targets, not ceilings"): a first read about
-# 80,000 characters, each later one about 40,000 more, towards the plan's shares.
+# 110,000 characters (with what replies answer), each later one about 40,000 more, towards the plan's shares.
 SHORT = 0.7                 # under this share of a target is a problem, not room
 
 
 def targets(reads, messages_in):
     k = max(0, reads - 1)
     posts = min(85000, 35000 + 15000 * k)
-    top, rest = min(15000, 8000 + 2500 * k), min(6000, 2000 + 1500 * k)
+    top, rest = min(16000, 9000 + 2500 * k), min(6500, 2300 + 1500 * k)
     if not messages_in:
         posts = min(195000, 80000 + 40000 * k)
     return {'posts': posts, 'top': top, 'rest': rest}
@@ -249,6 +249,7 @@ def check_digest(path=DIGEST):
     captioned = re.search(r'([\d,]+)\s+captioned', head)
     problems, sizes, section, dates, leaks, room = [], {}, None, [], [], []
     post_dates, convos, said, timed, all_read, stamps = [], [], {}, 0, False, []
+    context = 0
     messages_in = not re.search(r'messages:\s*(not included|excluded|no)\b', head)
     if not lines or not lines[0].startswith('# Psyche digest'):
         problems.append('The first line must be "# Psyche digest".')
@@ -267,6 +268,13 @@ def check_digest(path=DIGEST):
             continue
         # The header (before the first section) and headings aren't items.
         if not line.strip() or line.startswith('#') or section is None:
+            continue
+        # What a reply answers ("> Friend: …"): context, not their words, so no date and not in their counts.
+        if section == 'Messages' and line.startswith('>'):
+            context += len(line) + 1
+            for what, rx in LEAKS:
+                if rx.search(line):
+                    leaks.append('Line %d has %s: take it out.' % (n, what))
             continue
         sizes[section] = sizes.get(section, 0) + len(line) + 1
         if section == 'Messages' and convos:
@@ -295,12 +303,16 @@ def check_digest(path=DIGEST):
         for what, rx in LEAKS:
             if rx.search(body):
                 leaks.append('Line %d has %s: take it out.' % (n, what))
-    total = sum(sizes.values())
+    total = sum(sizes.values()) + context
     if total > limits['total']:
         problems.append('%d characters in all, over about %d: thin it evenly across the years.' % (total, limits['total']))
     for name in ('Messages', 'Interests', 'Comments'):
         if sizes.get(name, 0) > limits[name]:
             problems.append('%s has %d characters, over about %d.' % (name, sizes[name], limits[name]))
+    # What their replies answer is there to read the replies by: it never outweighs them.
+    if context > limits['Context'] or context > sizes.get('Messages', 0):
+        problems.append('What their replies answer ("> " lines) is %d characters, more than %s: keep only what each reply needs.' % (
+            context, 'their own messages' if context > sizes.get('Messages', 0) else 'about %d' % limits['Context']))
     problems += leaks[:10]
     if len(leaks) > 10:
         problems.append('…and %d more lines like those.' % (len(leaks) - 10))
@@ -351,7 +363,7 @@ def check_digest(path=DIGEST):
                 room.append('Posts and stories: %d%% are from %s and %s. Go back through the earlier years too.' % (round(100 * recent / len(post_dates)), int(years[-1]) - 1, years[-1]))
     return {'ok': not problems, 'depth': depth, 'reads': reads, 'characters': total, 'sections': sizes, 'targets': goal,
             'span': [min(dates), max(dates)] if dates else None, 'last': last.group(1) if last else None,
-            'rhythm': rhythm(stamps), 'problems': problems, 'room': room}
+            'context': context, 'rhythm': rhythm(stamps), 'problems': problems, 'room': room}
 
 
 # ---------- WhatsApp chats, made ready on the device (prep) ----------
@@ -508,9 +520,12 @@ def keep_ends(text):
 # messages, and in each a mix of long (120+ characters), ordinary and short
 # ones (50/40/10), the most telling first: an opener, an apology or a feeling
 # counts 2, a question 1. Ties break on a hash, so a chat always gives the
-# same sample. Only their own words: what they replied to is never kept.
+# same sample. Each keeps what it answered, as psycheai.io's do (ctx,
+# docs/instagram.js): the other side's last messages before it, within
+# 12 hours, de-identified, context only, never longer than their own.
 
 MSG_FLOOR, MSG_LONG, MSG_CREDIT = 30, 120, 280
+CTX_CHARS, CTX_WINDOW, CTX_SHARE = 240, 12 * 3600, 1.0
 MSG_MIX = [50, 40, 10]
 PERIODS = 10
 OPENER_GAP = 6 * 3600
@@ -556,9 +571,11 @@ def allocate(weights, total, caps):
 def choose_messages(messages, owner, cap):
     """(their messages, the ones picked, oldest first) for a chat, within about cap characters."""
     import zlib
-    units, merged, prev = [], [], None
+    units, merged, prev, theirs = [], [], None, []
     for x in messages:
         mine = x['sender'] == owner
+        if not mine:
+            theirs = (theirs + [x])[-2:]
         if mine:
             gap = (x['t'] - prev['t']).total_seconds() if prev else None
             last = merged[-1] if merged else None
@@ -567,7 +584,9 @@ def choose_messages(messages, owner, cap):
                 last['text'] += ' / ' + x['text']
                 last['_last'] = x
             else:
-                merged.append({'t': x['t'], 'text': x['text'], 'opener': gap is None or gap >= OPENER_GAP, '_last': x})
+                ctx = [y for y in theirs if (x['t'] - y['t']).total_seconds() <= CTX_WINDOW]
+                merged.append({'t': x['t'], 'text': x['text'], 'opener': gap is None or gap >= OPENER_GAP, '_last': x, 'ctx': ctx})
+            theirs = []
         prev = x
     mine_all = [x for x in messages if x['sender'] == owner]
     seen = set()
@@ -587,7 +606,7 @@ def choose_messages(messages, owner, cap):
             continue
         seen.add(key)
         score = (2 if m['opener'] else 0) + (2 if APOLOGY.search(text) else 0) + (2 if FEELING.search(text) else 0) + (1 if '?' in text else 0)
-        units.append({'t': m['t'], 'text': text, 'len': len(text), 'score': score, 'hash': zlib.crc32(text.encode())})
+        units.append({'t': m['t'], 'text': text, 'len': len(text), 'score': score, 'hash': zlib.crc32(text.encode()), 'ctx': m.get('ctx') or []})
     if not units:
         return mine_all, []
     cost = lambda u: min(u['len'], 483) + 13
@@ -618,6 +637,13 @@ def choose_messages(messages, owner, cap):
         step = len(chosen) / drop
         gone = {int(k * step) for k in range(drop)}
         chosen = [u for i, u in enumerate(chosen) if i not in gone]
+    # Context never outweighs their own words: past their length, the least telling lines keep none.
+    room = CTX_SHARE * sum(cost(u) for u in chosen)
+    for u in sorted(chosen, key=lambda u: (-u['score'], u['hash'])):
+        size = sum(min(len(y['text']), CTX_CHARS) + 12 for y in u['ctx'])
+        if size > room:
+            u['ctx'] = []
+        room -= size if u['ctx'] else 0
     return mine_all, chosen
 
 
@@ -647,35 +673,43 @@ def prep(paths, me=None, deep=False):
         # Their own messages, picked as psycheai.io's digest picks them
         # (docs/digest.js sampleConversations): see choose_messages.
         mine, chosen = choose_messages(c['messages'], owner, cap)
-        lines = []
-        for x in chosen:
-            text = x['text']
-            for name, lab in names:
+        # In what they answer, their own name goes too, as psycheai.io's context does.
+        own = [(owner, '[you]')] + ([(owner.split(' ')[0], '[you]')] if len(owner.split(' ')[0]) >= 3 and ' ' in owner else [])
+
+        def clean(text, pairs):
+            for name, lab in pairs:
                 text, n = re.subn(r'(?<!\w)' + re.escape(name) + r'(?!\w)', lab, text, flags=re.I)
                 removed['names'] += n
             for (rx, sub), kind in zip(SCRUB, ('links', 'emails', 'handles', 'numbers')):
                 text, n = rx.subn(sub, text)
                 removed[kind] += n
-            lines.append(x['t'].strftime('%Y-%m-%d') + '  ' + keep_ends(text))
+            return text
+        lines, answered = [], 0
+        for x in chosen:
+            for y in x['ctx']:
+                said = clean(re.sub(r'\s+', ' ', y['text']).strip(), sorted(names + own, key=lambda n: -len(n[0])))
+                lines.append('> %s: %s' % (label.get(y['sender'], 'Friend'), said if len(said) <= CTX_CHARS else said[:CTX_CHARS].rstrip() + ' …'))
+                answered += 1
+            lines.append(x['t'].strftime('%Y-%m-%d') + '  ' + keep_ends(clean(x['text'], names)))
         first, last = (mine[0]['t'], mine[-1]['t']) if mine else (None, None)
         group = len(others) > 1
         head = 'Chat %d: %s, %d of their messages from %s to %s, %d kept here' % (
             i + 1, 'a group chat of %d people' % (len(others) + 1) if group else 'a one-to-one chat', len(mine),
-            first.strftime('%b %Y') if first else '-', last.strftime('%b %Y') if last else '-', len(lines))
+            first.strftime('%b %Y') if first else '-', last.strftime('%b %Y') if last else '-', len(chosen))
         out.append('# ' + head + '\n' + '\n'.join(lines))
-        summary.append({'chat': i + 1, 'kind': 'group' if group else 'one-to-one', 'theirMessages': len(mine), 'kept': len(lines),
+        summary.append({'chat': i + 1, 'kind': 'group' if group else 'one-to-one', 'theirMessages': len(mine), 'kept': len(chosen), 'answered': answered,
                         'from': first.strftime('%Y-%m') if first else None, 'to': last.strftime('%Y-%m') if last else None})
     os.makedirs(SOURCES, exist_ok=True)
     os.chmod(SOURCES, 0o700)
     target = os.path.join(SOURCES, 'whatsapp.txt')
     with open(target, 'w', encoding='utf-8') as f:
-        f.write('WhatsApp chats, made ready on this device: only their own messages, everyone else as Friend A, B..., '
-                'numbers, emails, links and handles taken out.\n\n' + '\n\n'.join(out) + '\n')
+        f.write('WhatsApp chats, made ready on this device: their own messages, each after what it answers as "> " lines '
+                '(context only, never quoted), everyone else as Friend A, B..., numbers, emails, links and handles taken out.\n\n' + '\n\n'.join(out) + '\n')
     os.chmod(target, 0o600)
     # What happened, not what to do next: a result telling the assistant what
     # to read and to delete the export failed Muse's safety check.
     return {'ok': True, 'deidentified': True, 'file': os.path.relpath(target, HERE), 'chats': summary,
-            'othersMessages': 'left out', 'removed': removed, 'characters': sum(len(o) for o in out)}
+            'othersMessages': 'only what each kept message answers, as context', 'removed': removed, 'characters': sum(len(o) for o in out)}
 
 
 
@@ -1109,10 +1143,31 @@ def confidence_problems(answer):
     return problems
 
 
+# What others wrote is context in the digest, never quoted in the report (README "Threads, never quoted"):
+# six words in a row from a "> " line, anywhere in the answer, holds it.
+def quote_problems(answer):
+    if not isinstance(answer, dict):
+        return []
+    said = []
+    for path in (DIGEST, os.path.join(SOURCES, 'whatsapp.txt')):
+        if os.path.exists(path):
+            with open(path, encoding='utf-8') as f:
+                said += [re.findall(r"[\w']+", l.lower().split(':', 1)[-1]) for l in f if l.startswith('>')]
+    runs = {' '.join(w[i:i + 6]) for w in said for i in range(len(w) - 5)}
+    if not runs:
+        return []
+    problems = []
+    for at, text in strings_in(answer):
+        w = re.findall(r"[\w']+", text.lower())
+        if any(' '.join(w[i:i + 6]) in runs for i in range(len(w) - 5)):
+            problems.append('%s quotes what someone else wrote in a thread: it is context only, never quoted.' % at)
+    return problems[:10]
+
+
 def before_publish(args):
     """Why a new Psyche isn't saved yet, or None: the report holds what it can't, the digest still has
     problems, or it's mostly the report already saved although what it's read from has changed since."""
-    leaving = answer_problems(args.get('answer')) + confidence_problems(args.get('answer'))
+    leaving = answer_problems(args.get('answer')) + confidence_problems(args.get('answer')) + quote_problems(args.get('answer'))
     if leaving:
         return {'saved': False, 'report': 'not ready', 'problems': leaving}
     if not os.path.exists(DIGEST):
