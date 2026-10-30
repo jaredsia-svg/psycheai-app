@@ -954,7 +954,7 @@ function signup(email, d) {
     !/What your Instagram shows that you might not/.test(instructions.MUSE_PROCEDURE) && /attach the report's PDF \(its file\): its first page is their Psyche Card/.test(instructions.MUSE_PROCEDURE) &&
     pub.story === 'https://psycheai.io/?m=AAAAAAAAAAAAAAAA&story=1#' + 'k'.repeat(43) && /story opens the card full screen on psycheai\.io, where they can share it themselves if they want/.test(pub.show) && !/Share your card to your Instagram Story: <story>/.test(instructions.MUSE_PROCEDURE) && /image is their Psyche Card as a picture/.test(pub.show) &&
     /"Your Psyche is ready\." Then their Psyche Card as a picture \(publish_psyche's image; with the PsycheAI skill, the file bin\/psyche\.py show card saves, or its image link if it saved none\), right under that line/.test(instructions.MUSE_PROCEDURE) &&
-    /On "Share my card to Instagram Story": their Psyche Card picture \(the same one shown under "Your Psyche is ready", from bin\/psyche\.py show card: the tall 1080×1920 card made for a Story\), then "Here's your card, ready for your Story: <story>"/.test(instructions.MUSE_PROCEDURE) &&
+    !/Share my card to Instagram Story/.test(instructions.MUSE_PROCEDURE + JSON.stringify(pub.nextStep || {})) &&
     /The Psyche Card is always this picture: the PDF's first page is the report's cover, never shown or shared as the card\./.test(instructions.MUSE_PROCEDURE));
   {
     const viaMcp = await mcp.handle(user, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'publish_psyche', arguments: { answer: fakeAnswer, name: 'Mei Tan' } } });
@@ -1643,7 +1643,7 @@ function signup(email, d) {
     check('Sync with someone named goes on with no extra tap: synced has no next step to wait on, and the guide sends the link\'s invite straight away',
       nextFor('sync_with', { status: 'synced' }) === null &&
       /call sync_link and send its invite to that person as an Instagram message straight away \(naming them was the user's yes\)/.test(instructions.MUSE_PROCEDURE));
-    check('results end with a next step: a line and buttons', pubNext.asButtons && JSON.stringify(pubNext.buttons) === '["Share my card to Instagram Story","Reveal my roast 🔥","Ask PsycheAI questions about myself","Sync with a friend","Add WhatsApp or Facebook as data source","Find potential romantic matches"]' && /whenever they ask what else they can do: call start/.test(instructions.MUSE_PROCEDURE) && /Anything you offer is a button/.test(instructions.MUSE_PROCEDURE) &&
+    check('results end with a next step: a line and buttons', pubNext.asButtons && JSON.stringify(pubNext.buttons) === '["Reveal my roast 🔥","Ask PsycheAI questions about myself","Sync with a friend","Add WhatsApp or Facebook as data source","Find potential romantic matches"]' && /whenever they ask what else they can do: call start/.test(instructions.MUSE_PROCEDURE) && /Anything you offer is a button/.test(instructions.MUSE_PROCEDURE) &&
       /On "Reveal my roast 🔥": "Your roast 🔥", then their report's send-up \(bonus\.harsh\) word for word/.test(instructions.MUSE_PROCEDURE) &&
       nextFor('get_weekly_matches', { cards: [{ firstName: 'Mei' }, { firstName: 'Jun', picked: true }], picksLeft: 2 }).buttons[0] === 'Pick Mei' &&
       nextFor('get_syncs', { incoming: [], syncs: [] }).buttons[0] === 'Sync with a friend' && nextFor('publish_psyche', { error: 'x' }) === null &&
