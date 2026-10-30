@@ -1,0 +1,11 @@
+{
+  "version": "5a8339b58ae9",
+  "release": 4,
+  "hashes": {
+    "SKILL.md": "2523c56716508dc4710020564a72e07f1abb687959f580bca649cbc5c1a4f9f8",
+    "bin/psyche.py": "9e9d3ce34f4897430e3326211fdc2bd37ec216605ea75c7fd1dcfd68b7f0d77e",
+    "guide.json": "b434ae2f2dccc3441cfb56b02c5bf72a9474178278edcca1f56e06d5161d3418"
+  },
+  "signature": "sDw3bLcthqiGjTDEW2J5z-F7MsykB-8fAPQs_ZfXqA1C8CuixemJGt4uPhuwi_8KCfk_7K1xYYfH7G4kLgdEAA",
+  "signature2": "6TCeEbTaCeEs8f4r3vOzl4JUBexADqtfy0aV0PwAYaltfBPgMmn0S85w-8pkUcg23jifiOEK8TbGEAV2SKuVCw"
+}

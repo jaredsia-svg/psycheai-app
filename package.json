@@ -1,0 +1,17 @@
+{
+  "name": "psycheai-app",
+  "version": "0.1.0",
+  "description": "Psyche Pair: a matchmaking connector for Meta Muse (and ChatGPT) that matches people on needs, lifestyle, future plans and personality",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "PSYCHE_DEV=1 PSYCHE_DATA_FILE=.data.json node server.js",
+    "test": "node tools/selftest.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2"
+  }
+}

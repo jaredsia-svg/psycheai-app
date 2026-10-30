@@ -1,0 +1,82 @@
+# Render blueprint for the PsycheAI plugin server at app.psycheai.io
+# (the Muse connector, sign-in, cards and Psyche Pair).
+# Free plan: the instance sleeps after ~15 idle minutes; an UptimeRobot
+# monitor on /health every 5 minutes keeps it awake. A free workspace has
+# about 750 instance hours a month, enough for ONE always-on service, so
+# keep PsycheAI in a different workspace or on a paid plan.
+services:
+  - type: web
+    name: psycheai-app
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PSYCHE_BASE_URL
+        value: https://app.psycheai.io
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        value: PsycheAI <app@psycheai.io>
+      - key: PSYCHE_CHAT_KEY
+        generateValue: true
+      - key: PSYCHE_LINK_SECRET
+        generateValue: true
+      - key: PSYCHE_STORE_KEY
+        generateValue: true
+      # Where PsycheAI is, and the secret both servers share: set the same
+      # PSYCHEAI_IMPORT_SECRET on the psycheai.io service.
+      # One-tap sign-in; each is off until its client id is set.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: APPLE_CLIENT_ID
+        sync: false
+      - key: PSYCHEAI_URL
+        value: https://psycheai.io
+      - key: PSYCHEAI_IMPORT_SECRET
+        sync: false
+      # Psyche Pair Plus (lib/plus.js); off until all four are set. The webhook
+      # is https://app.psycheai.io/stripe/webhook, sending checkout.session.completed
+      # and customer.subscription.created / updated / deleted.
+      # Meta's directory review (SUBMISSION.md, lib/demo.js): set both for the
+      # review, remove after.
+      - key: PSYCHE_REVIEWER_EMAIL
+        sync: false
+      - key: PSYCHE_REVIEWER_CODE
+        sync: false
+      # 1 shows the email sign-in page to everyone (the review); unset, connecting
+      # makes an invisible account (README "No sign-in to type").
+      - key: PSYCHE_EMAIL_SIGNIN
+        sync: false
+      # 1 opens Psyche Pair; unset, it's closed and the menu offers its waitlist
+      # (lib/waitlist.js, README "Pair behind a switch").
+      - key: PSYCHE_PAIR
+        sync: false
+      # Or city by city (README "Pair opens city by city"): a list of cities,
+      # and/or how many waiting open a city on their own.
+      - key: PSYCHE_PAIR_CITIES
+        sync: false
+      - key: PSYCHE_PAIR_AUTO
+        sync: false
+      # The reel shown while a card is written: an Instagram reel link on
+      # @psycheai.io; unset, the one set in lib/mcp.js.
+      - key: PSYCHE_REEL_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_YEARLY
+        sync: false
