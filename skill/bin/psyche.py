@@ -52,7 +52,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 11
+RELEASE = 12
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -211,6 +211,30 @@ def words_of(line):
     return re.sub(r'^\[[^\]]*\]\s*', '', STAMP.sub('', line)).strip()
 
 
+# When they're active, counted from the times on the digest's lines (README "Rhythm is counted"): only what
+# was read, so the read says so, but a count rather than an impression. None under 30 timed lines.
+def rhythm(stamps):
+    if len(stamps) < 30:
+        return None
+    n = len(stamps)
+    bands = [('late night (00-04)', range(0, 5)), ('morning (05-11)', range(5, 12)), ('afternoon (12-17)', range(12, 18)), ('evening (18-23)', range(18, 24))]
+    hours = [0] * 24
+    for _, h in stamps:
+        hours[h % 24] += 1
+    peak = max(range(24), key=lambda h: hours[h] + hours[(h + 1) % 24] + hours[(h + 2) % 24])
+    days = [0] * 7
+    for d, _ in stamps:
+        try:
+            days[datetime.strptime(d, '%Y-%m-%d').weekday()] += 1
+        except ValueError:
+            pass
+    names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    return {'of': '%d timed lines read, not all their activity' % n,
+            'hours': ', '.join('%s %d%%' % (b, round(100 * sum(hours[h] for h in r) / n)) for b, r in bands),
+            'peak': '%02d:00 to %02d:00' % (peak, (peak + 3) % 24),
+            'busiest day': names[max(range(7), key=lambda i: days[i])], 'weekend': '%d%%' % round(100 * (days[5] + days[6]) / max(1, sum(days)))}
+
+
 def check_digest(path=DIGEST):
     if not os.path.exists(path):
         return {'ok': False, 'problems': ['No digest yet: build digest/digest.md as the reading plan says.']}
@@ -224,7 +248,7 @@ def check_digest(path=DIGEST):
     inbox = re.search(r'([\d,]+)\s+conversations', head)
     captioned = re.search(r'([\d,]+)\s+captioned', head)
     problems, sizes, section, dates, leaks, room = [], {}, None, [], [], []
-    post_dates, convos, said, timed, all_read = [], [], {}, 0, False
+    post_dates, convos, said, timed, all_read, stamps = [], [], {}, 0, False, []
     messages_in = not re.search(r'messages:\s*(not included|excluded|no)\b', head)
     if not lines or not lines[0].startswith('# Psyche digest'):
         problems.append('The first line must be "# Psyche digest".')
@@ -252,7 +276,9 @@ def check_digest(path=DIGEST):
                 problems.append('Line %d: an item starts with its date, YYYY-MM-DD.' % n)
             else:
                 dates.append(line[:10])
-                timed += bool(TIMED.match(line))
+                if TIMED.match(line):
+                    timed += 1
+                    stamps.append((line[:10], int(line[11:13].rstrip(':'))))
                 if section == 'Posts and stories':
                     post_dates.append(line[:10])
                 text = words_of(line)
@@ -325,7 +351,7 @@ def check_digest(path=DIGEST):
                 room.append('Posts and stories: %d%% are from %s and %s. Go back through the earlier years too.' % (round(100 * recent / len(post_dates)), int(years[-1]) - 1, years[-1]))
     return {'ok': not problems, 'depth': depth, 'reads': reads, 'characters': total, 'sections': sizes, 'targets': goal,
             'span': [min(dates), max(dates)] if dates else None, 'last': last.group(1) if last else None,
-            'problems': problems, 'room': room}
+            'rhythm': rhythm(stamps), 'problems': problems, 'room': room}
 
 
 # ---------- WhatsApp chats, made ready on the device (prep) ----------

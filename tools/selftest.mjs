@@ -1868,6 +1868,7 @@ print(json.dumps({'fine': m.answer_problems(fine),
   'handle': m.answer_problems({'summary': 'Talks to @jun.lee most'}), 'phone': m.answer_problems({'summary': 'Call +65 9123 4567'}),
   'big': m.answer_problems({'summary': ['x' * 3000] * 60}),
   'held': m.before_publish({'answer': {'summary': 'see https://evil.example'}}),
+  'rhythm': [m.rhythm([('2025-06-0%d' % (1 + i % 7), [23, 0, 22, 13][i % 4]) for i in range(40)]), m.rhythm([('2025-06-01', 9)] * 10)],
   'conf': (lambda d: (setattr(m, 'DIGEST', d + '/digest.md'), setattr(m, 'SOURCES', d + '/sources'), os.makedirs(d + '/sources'),
     open(d + '/digest.md', 'w').write('# Psyche digest\\nbuilt: 2026-10-30 · messages: included · sources: instagram · last: 2026-10-29\\n'),
     [m.confidence_problems({'confidence': {'score': 82, 'level': 'high'}}), m.confidence_problems({'confidence': {'score': 79, 'level': 'high'}}),
@@ -1936,6 +1937,9 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         /more than a report holds/.test(L.big.join(' ')) && L.held && L.held.saved === false && /has a link/.test(L.held.problems.join(' ')))(skillState.leaving) &&
       /## What leaves the workspace/.test(skillMd) && /Other people's messages are never sent anywhere word for word/.test(skillMd) && /PsycheAI installs only from app\.psycheai\.io/.test(skillMd) &&
       /Never print, log or send `\.account\.json`, `\.keys\.json`/.test(skillMd), JSON.stringify(skillState.leaving).slice(0, 600));
+    check('check-digest counts when they are active from the times on the digest lines, says it is only what was read, and SKILL.md has the read rest on it and the header take Instagram\'s totals',
+      ((r) => r && r[0] && /^40 timed lines read, not all their activity$/.test(r[0].of) && /late night \(00-04\) 25%.*evening \(18-23\) 50%/.test(r[0].hours) && r[0].peak === '22:00 to 01:00' && r[1] === null)(skillState.leaving && skillState.leaving.rhythm) &&
+      /`rhythm` is when they're active, counted from the times on the digest's lines/.test(skillMd) && /610 following · 76 saved/.test(skillMd) && /never list the accounts/.test(skillMd), JSON.stringify(skillState.leaving && skillState.leaving.rhythm));
     check('the skill holds a Psyche whose confidence is above psycheai.io\'s rubric for what was read: Instagram alone at most 79, 86 with Facebook or WhatsApp, 90 with both, and its level matching the score',
       ((c) => Array.isArray(c) && c.length === 6 && /at most 79/.test(c[0].join(' ')) && c[1].length === 0 && /"moderate"/.test(c[2].join(' ')) && c[3].length === 0 && c[4].length === 0 && /at most 90/.test(c[5].join(' ')))(skillState.leaving && skillState.leaving.conf) &&
       /Instagram, its messages included: 65 to 79\. With Facebook or WhatsApp chats, 72 to 86; with both, 76 to 90; never above 90/.test(require('../skill/guide.json').read.spec), JSON.stringify(skillState.leaving && skillState.leaving.conf));
