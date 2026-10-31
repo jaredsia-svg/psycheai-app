@@ -25,6 +25,10 @@
                                        what that finding rests on, from the report and the digest
   bin/psyche.py correct [ID not-me|partly|used-to-be --note TEXT]
                                        what they say is off (kept here only); no ID lists them
+  bin/psyche.py build-digest           digest/digest.md built from work/items.jsonl and work/meta.json
+                                       (what was read, saved as it was read), then checked
+  bin/psyche.py check-answer FILE      the answer file checked as publish_psyche will take it:
+                                       JSON, the schema, and what may leave the workspace
   bin/psyche.py republish              save their kept report (report.json) to PsycheAI again,
                                        for a fresh link, card and PDF, with no new read
   bin/psyche.py check-digest           check digest/digest.md, the summary of their own
@@ -59,7 +63,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 27
+RELEASE = 36
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -272,7 +276,7 @@ def check_digest(path=DIGEST):
     last = re.search(r'last:\s*(\d{4}-\d{2}-\d{2})', head)
     reads = int((re.search(r'reads:\s*(\d+)', head) or [0, '1'])[1]) or 1
     inbox = re.search(r'([\d,]+)\s+conversations', head)
-    captioned = re.search(r'([\d,]+)\s+captioned', head)
+    captioned = re.search(r'([\d,]+)\s+(?:captioned|with words)', head)
     problems, sizes, section, dates, leaks, room = [], {}, None, [], [], []
     post_dates, convos, said, timed, all_read, stamps = [], [], {}, 0, False, []
     context = 0
@@ -1052,6 +1056,268 @@ def pinned_guide():
     return guide if isinstance(guide, dict) and isinstance(guide.get('read'), dict) and isinstance(guide.get('sync'), dict) else None
 
 
+# ---------- the digest, built from what was read (README "The skill builds the digest") ----------
+# As Muse reads, it saves each item as one JSON line in work/items.jsonl:
+#   {"kind": "post"|"story"|"comment"|"message", "date": "2024-05-01 21:14", "text": "...",
+#    "thread": "t1", "mine": true, "with": ["Kai Ng"]}      (thread, mine, with: messages only)
+# and work/meta.json: {"me": their name, "bio", "messages": true|false, "sources", "counts": {"conversations",
+# "followers", "following", "saved"}, "interests": [...], "complete": ["t1", ...]} (threads read
+# back to their first message). build-digest picks and de-identifies as psycheai.io's digest does,
+# writes digest/digest.md and checks it, so Muse never writes the digest by hand.
+ITEMS = os.path.join(WORK, 'items.jsonl')
+META = os.path.join(WORK, 'meta.json')
+POSTS_MAX, COMMENTS_MAX, MESSAGES_MAX, THREADS_MAX = 85000, 15000, 115000, 30
+
+
+def when(value):
+    """A date as datetime, from "2024-05-01", "2024-05-01 21:14", ISO with T/Z, or unix seconds."""
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value / 1000 if value > 1e11 else value)
+        except (OverflowError, OSError, ValueError):
+            return None
+    v = str(value or '').strip().replace('T', ' ').rstrip('Z')
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(v[:len(datetime(2000, 1, 1).strftime(fmt))], fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def scrub(text, names=()):
+    for name, lab in names:
+        text = re.sub(r'(?<!\w)' + re.escape(name) + r'(?!\w)', lab, text, flags=re.I)
+    for rx, sub in SCRUB:
+        text = rx.sub(sub, text)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+def thin(lines, cap):
+    """Lines within about cap characters, dropped evenly through time rather than cut at one end."""
+    total = sum(len(l) + 1 for l in lines)
+    if total <= cap or not lines:
+        return lines
+    keep = max(1, int(len(lines) * cap / total))
+    step = len(lines) / keep
+    return [lines[int(k * step)] for k in range(keep)]
+
+
+def build_digest():
+    if not os.path.exists(ITEMS):
+        return {'ok': False, 'problems': ['No work/items.jsonl yet: save what you read there as you go, one JSON line per item.']}
+    # It builds a first digest (or one after starting over): rebuilding from work/ alone would drop what earlier reads kept.
+    if os.path.exists(DIGEST) and not os.path.exists(os.path.join(os.path.dirname(DIGEST), '.built')):
+        return {'ok': False, 'problems': ['A digest from an earlier read is already here: add what is new to it as SKILL.md says for a later read; build-digest makes a first one.']}
+    items, bad = [], 0
+    with open(ITEMS, encoding='utf-8') as f:
+        for line in f:
+            try:
+                x = json.loads(line)
+            except ValueError:
+                bad += line.strip() != ''
+                continue
+            t = when(x.get('date'))
+            if isinstance(x, dict) and t and x.get('kind') in ('post', 'story', 'comment', 'message'):
+                x['t'] = t
+                items.append(x)
+    meta = read_first([META]) or {}
+    reads = 1
+    messages_in = meta.get('messages', True) is not False
+    t = targets(reads, messages_in)
+    stamp = lambda x: x['t'].strftime('%Y-%m-%d %H:%M') if (x['t'].hour or x['t'].minute) else x['t'].strftime('%Y-%m-%d')
+    # Posts and stories, and their comments: every one with words, thinned evenly past the ceiling.
+    seen, posts, words = set(), [], 0
+    no_words = {}
+    for x in sorted((x for x in items if x['kind'] in ('post', 'story')), key=lambda x: x['t']):
+        text = scrub(str(x.get('text') or ''))
+        if not re.search(r'\w', text):
+            no_words[x['t'].year] = no_words.get(x['t'].year, 0) + 1
+            continue
+        key = norm_text(text) + stamp(x)[:10]
+        if key in seen:
+            continue
+        seen.add(key)
+        words += 1
+        posts.append('%s [%s] %s' % (stamp(x), x['kind'], keep_ends(text) if len(text) > 1500 else text))
+    all_posts = len(posts)
+    posts = thin(posts, POSTS_MAX)
+    comments = thin(['%s %s' % (stamp(x), scrub(str(x.get('text') or ''))) for x in sorted((x for x in items if x['kind'] == 'comment'), key=lambda x: x['t'])
+                     if re.search(r'\w', str(x.get('text') or ''))], COMMENTS_MAX)
+    # Conversations: busiest first by how much of their own is in each, then the plan's targets, past ten
+    # until their own messages reach the total; what each reply answers kept as context.
+    threads = {}
+    for x in items:
+        if x['kind'] == 'message':
+            threads.setdefault(str(x.get('thread') or 'thread'), []).append(x)
+    mine_size = lambda msgs: sum(len(str(m.get('text') or '')) for m in msgs if m.get('mine'))
+    ranked = sorted(threads.items(), key=lambda kv: -mine_size(kv[1]))
+    complete = set(str(c) for c in meta.get('complete') or [])
+    whole_target, convo_blocks, own_total = 4 * t['top'] + 6 * t['rest'], [], 0
+    # Their own name, in what others wrote to them, is "[you]", as psycheai.io's context does.
+    me = str(meta.get('me') or '').strip()
+    own_names = [(me, '[you]')] + ([(me.split(' ')[0], '[you]')] if ' ' in me and len(me.split(' ')[0]) >= 3 else []) if me else []
+    said_once = set()   # a message sent word for word to several people is one thing they did, kept once
+    if messages_in:
+        for i, (tid, msgs) in enumerate(ranked[:THREADS_MAX]):
+            if i >= 10 and own_total >= whole_target:
+                break
+            if own_total >= MESSAGES_MAX:
+                break
+            others = sorted({str(n) for m in msgs for n in (m.get('with') or []) if n})
+            label = {n: ('Friend' if len(others) <= 1 else 'Friend ' + chr(65 + j)) for j, n in enumerate(others[:26])}
+            names = []
+            for n in others:
+                names.append((n, label.get(n, 'Friend')))
+                first = n.split(' ')[0]
+                if len(first) >= 3 and first != n:
+                    names.append((first, label.get(n, 'Friend')))
+            names.sort(key=lambda n: -len(n[0]))
+            parsed = [{'t': m['t'], 'sender': 'me' if m.get('mine') else str((m.get('with') or ['Friend'])[0]), 'text': str(m.get('text') or '')}
+                      for m in sorted(msgs, key=lambda m: m['t']) if str(m.get('text') or '').strip()]
+            mine, chosen = choose_messages(parsed, 'me', t['top'] if i < 4 else t['rest'])
+            if not chosen:
+                continue
+            lines = []
+            for u in chosen:
+                key = norm_text(u['text'])
+                if len(key) >= 25 and key in said_once:
+                    continue
+                said_once.add(key)
+                for y in u['ctx']:
+                    said = scrub(y['text'], sorted(names + own_names, key=lambda n: -len(n[0])))
+                    lines.append('> %s: %s' % (label.get(y['sender'], 'Friend'), said if len(said) <= CTX_CHARS else said[:CTX_CHARS].rstrip() + ' …'))
+                lines.append('%s %s' % (u['t'].strftime('%Y-%m-%d %H:%M'), keep_ends(scrub(u['text'], names))))
+            own_total += sum(len(l) + 1 for l in lines if not l.startswith('>'))
+            first_t, last_t = (mine[0]['t'], mine[-1]['t']) if mine else (chosen[0]['t'], chosen[-1]['t'])
+            convo_blocks.append('### Conversation %d: %s, %s to %s%s\n%s' % (
+                len(convo_blocks) + 1, 'one-to-one' if len(others) <= 1 else 'a group of %d' % (len(others) + 1),
+                first_t.strftime('%Y-%m'), last_t.strftime('%Y-%m'), ' (whole thread)' if tid in complete else '', '\n'.join(lines)))
+    interests = ['- ' + scrub(str(i)) for i in (meta.get('interests') or []) if str(i).strip()][:40]
+    every = [x['t'] for x in items]
+    counts = meta.get('counts') or {}
+    head_counts = ['%d posts and stories' % (all_posts + sum(no_words.values())), '%d with words' % words, '%d comments' % len(comments)]
+    for k in ('conversations', 'followers', 'following', 'saved'):
+        if isinstance(counts.get(k), int):
+            head_counts.append('%s %s' % ('{:,}'.format(counts[k]), k))
+    if no_words:
+        head_counts.append('without words: ' + ' · '.join('%d %d' % (y, n) for y, n in sorted(no_words.items())))
+    out = ['# Psyche digest',
+           'built: %s · reads: %d · depth: normal · messages: %s · sources: %s · span: %s to %s · last: %s' % (
+               datetime.now().strftime('%Y-%m-%d'), reads, 'included' if messages_in else 'not included', meta.get('sources') or 'instagram',
+               min(every).strftime('%Y-%m') if every else '-', max(every).strftime('%Y-%m') if every else '-', max(every).strftime('%Y-%m-%d') if every else '-'),
+           'counts: ' + ' · '.join(head_counts)]
+    if meta.get('bio'):
+        out.append('bio: ' + scrub(str(meta['bio']))[:300])
+    out.append('## Posts and stories' + (' (all read)' if len(posts) == all_posts else ''))
+    out += posts
+    if comments:
+        out += ['## Comments'] + comments
+    if convo_blocks:
+        out += ['## Messages'] + convo_blocks
+    if interests:
+        out += ['## Interests'] + interests
+    os.makedirs(os.path.dirname(DIGEST), exist_ok=True)
+    # Built in this read, so building again (after reading more) may replace it; publishing ends that.
+    open(os.path.join(os.path.dirname(DIGEST), '.built'), 'w').close()
+    write_text = '\n'.join(out) + '\n'
+    with open(DIGEST, 'w', encoding='utf-8') as f:
+        f.write(write_text)
+    os.chmod(DIGEST, 0o600)
+    result = check_digest()
+    result['built'] = {'items': len(items), 'unreadable lines': bad, 'conversations': len(convo_blocks), 'posts and stories': len(posts)}
+    return result
+
+
+# ---------- the report's outline and a local check (README "A faster read") ----------
+# The schema runs to about 33,000 characters; the outline is each section and
+# its fields on a line (a "?" marks one that may be left out, [..]N-M a list's
+# length), so the report is written from it and the schema only looked up.
+
+def schema_ref(node, defs):
+    return defs.get(node['$ref'].split('/')[-1], {}) if isinstance(node, dict) and '$ref' in node else node
+
+
+def outline_of(node, defs, depth=0):
+    node = schema_ref(node, defs)
+    kind = node.get('type')
+    if kind == 'object' and 'properties' in node and depth < 4:
+        req = set(node.get('required', []))
+        parts = []
+        for k, v in node['properties'].items():
+            inner = outline_of(v, defs, depth + 1)
+            parts.append(k + ('' if k in req else '?') + (':' + inner if inner else ''))
+        return '{' + ', '.join(parts) + '}'
+    if kind == 'array':
+        size = '%s-%s' % (node.get('minItems', ''), node.get('maxItems', '')) if ('minItems' in node or 'maxItems' in node) else ''
+        return '[' + outline_of(node.get('items', {}), defs, depth + 1) + ']' + size
+    if 'enum' in node and len(node['enum']) <= 6:
+        return '|'.join(str(e) for e in node['enum'])
+    return ''
+
+
+def schema_outline(schema):
+    defs = schema.get('$defs', {})
+    req = set(schema.get('required', []))
+    return '\n'.join('%s%s: %s' % (k, '' if k in req else '?', outline_of(v, defs)) for k, v in schema.get('properties', {}).items())
+
+
+def schema_problems(value, node, defs, at='answer', out=None):
+    """Where an answer doesn't fit the schema: missing or unknown fields, wrong types, values outside a list, list sizes."""
+    out = [] if out is None else out
+    if len(out) >= 20:
+        return out
+    node = schema_ref(node, defs)
+    kind = node.get('type')
+    kinds = {'object': dict, 'array': list, 'string': str, 'integer': int, 'number': (int, float), 'boolean': bool}
+    if kind in kinds and (not isinstance(value, kinds[kind]) or (kind in ('integer', 'number') and isinstance(value, bool))):
+        out.append('%s should be %s' % (at, 'an ' + kind if kind[0] in 'aeiou' else 'a ' + kind))
+        return out
+    if 'enum' in node and value not in node['enum']:
+        out.append('%s is "%s", not one of the allowed values' % (at, str(value)[:40]))
+    if kind == 'object':
+        props = node.get('properties', {})
+        for k in node.get('required', []):
+            if k not in value:
+                out.append('%s is missing %s' % (at, k))
+        for k, v in value.items():
+            if k in props:
+                schema_problems(v, props[k], defs, at + '.' + k, out)
+    if kind == 'array':
+        if 'minItems' in node and len(value) < node['minItems']:
+            out.append('%s has %d items, fewer than %d' % (at, len(value), node['minItems']))
+        if 'maxItems' in node and len(value) > node['maxItems']:
+            out.append('%s has %d items, more than %d' % (at, len(value), node['maxItems']))
+        for i, v in enumerate(value[:50]):
+            schema_problems(v, node.get('items', {}), defs, '%s[%d]' % (at, i), out)
+    return out
+
+
+def check_answer(path):
+    """bin/psyche.py check-answer FILE: the answer file as publish_psyche will take it, checked here first."""
+    try:
+        with open(path.lstrip('@'), encoding='utf-8') as f:
+            raw = f.read()
+        args = json.loads(raw)
+    except OSError:
+        return {'ok': False, 'problems': ['No file at %s.' % path]}
+    except ValueError as err:
+        return {'ok': False, 'problems': ['Not valid JSON: %s.' % err]}
+    answer = args.get('answer') if isinstance(args, dict) and 'answer' in args else args
+    if not isinstance(answer, dict):
+        return {'ok': False, 'problems': ['The answer is not a JSON object.']}
+    guide = pinned_guide()
+    schema = guide['read']['schema'] if guide else {}
+    # What would stop or hold the publish: these are fixed first.
+    problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
+    problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
+    if isinstance(args, dict) and 'answer' in args and not args.get('name'):
+        problems.append('name is empty: put their full name from their Meta account details.')
+    # Where it differs from the guide's schema below the top: worth fixing, but publish_psyche is the judge.
+    notes = [n for n in schema_problems(answer, schema, schema.get('$defs', {})) if not n.startswith('answer is missing ')] if schema else []
+    return {'ok': not problems, 'problems': problems[:25], 'schema': notes[:20]}
+
+
 def read_starting(now=None):
     """Whether this get_report_guide call starts a read: none other in the last half hour (its own mark is the latest)."""
     now = now or time.time()
@@ -1072,6 +1338,7 @@ def with_pinned_guide(tool, args, out):
         read = guide['read']
         deep = isinstance(args, dict) and args.get('depth') == 'deep'
         out = {'spec': read['spec'] + (guide.get('deepSpec', '') if deep else ''), 'rubric': read.get('rubric'), 'schema': read['schema']}
+        out['outline'] = schema_outline(read['schema'])
         # The first guide call of a read is where reading starts: the line saying how long it takes goes out
         # before it, as its own message (README "The wait line comes first"), not at the end with the card.
         if read_starting():
@@ -1093,7 +1360,7 @@ def with_pinned_guide(tool, args, out):
 # skill knows, or one of the few that carry a name or a count.
 UNSIGNED = ('show', 'after', 'first', 'namesFirst')
 LABELS = frozenset([
-    'Generate my Psyche. DMs included (Recommended)', 'Generate my Psyche. DMs excluded', 'What will I learn?', 'Is it private?',
+    'Generate my Psyche', 'Generate my Psyche. DMs included (Recommended)', 'Generate my Psyche. DMs excluded', 'What will I learn?', 'Is it private?',
     'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Not now',
     'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
@@ -1102,7 +1369,7 @@ LABELS = frozenset([
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
-    'Explain why you said this', 'Correct something'])
+    'Explain why you said this', 'Correct something', 'More'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$')]
 
 
@@ -1417,6 +1684,9 @@ def correct(args):
     kept = read_first([REPORT, REPORT_KEPT])
     found = findings(kept['report']) if kept and isinstance(kept.get('report'), dict) else []
     f = next((x for x in found if x['id'] == args[0]), None)
+    # A 👎 on a section of "Your report in short": the section's title stands in for a finding.
+    if not f and args[0].startswith('section:') and args[0][8:].strip():
+        f = {'id': args[0], 'label': args[0][8:].strip()[:60], 'said': ''}
     how = args[1] if len(args) > 1 else ''
     if not f or how not in ('not-me', 'partly', 'used-to-be'):
         return {'error': 'Use: correct ID not-me|partly|used-to-be --note TEXT, with an ID from bin/psyche.py why.'}
@@ -1431,7 +1701,7 @@ def main(argv):
     if not argv or argv[0] in ('-h', '--help'):
         print(__doc__)
         return
-    if argv[0] in ('status', 'update', 'check-digest', 'prep', 'republish', 'report', 'checkin', 'why', 'correct') or (argv[0] in ('call', 'show') and len(argv) >= 2):
+    if argv[0] in ('status', 'update', 'check-digest', 'build-digest', 'prep', 'republish', 'report', 'checkin', 'why', 'correct') or (argv[0] in ('call', 'show') and len(argv) >= 2):
         mark(argv[0] if argv[0] not in ('call', 'show') else argv[0] + ':' + re.sub(r'[^a-z_]', '', argv[1].lower())[:30])
     if argv[0] == 'status':
         account()
@@ -1464,6 +1734,9 @@ def main(argv):
         # Their report stays in this workspace for Ask PsycheAI in later chats.
         if argv[1] == 'publish_psyche' and out.get('ok') and isinstance(args.get('answer'), dict):
             write_private([REPORT, REPORT_KEPT], {'name': args.get('name'), 'report': args['answer']})
+            built = os.path.join(os.path.dirname(DIGEST), '.built')
+            if os.path.exists(built):
+                os.remove(built)
             # What was pulled from Instagram for it goes now: the digest and the report stay.
             shutil.rmtree(WORK, ignore_errors=True)
             out = saved(out)
@@ -1514,6 +1787,12 @@ def main(argv):
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))
+        return
+    if argv[0] == 'build-digest':
+        print(json.dumps(build_digest(), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'check-answer' and len(argv) >= 2:
+        print(json.dumps(check_answer(argv[1]), ensure_ascii=False, indent=1))
         return
     if argv[0] in ('why', 'correct'):
         print(json.dumps((why if argv[0] == 'why' else correct)(argv[1:]), ensure_ascii=False, indent=1))
