@@ -63,7 +63,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 36
+RELEASE = 37
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -189,7 +189,7 @@ def local_card(r):
 
 PARTS = {
     'card': local_card,
-    'summary': lambda r: {'sections': r.get('sections', [])},
+    'summary': lambda r: {'sections': r.get('sections', []), 'view': r.get('view')},
     'pdf': local_pdf,
     'links': lambda r: {'url': r.get('url'), 'story': r.get('story')},
     'next': lambda r: {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')},

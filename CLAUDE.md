@@ -24,7 +24,7 @@ npm start      # production: Upstash, Resend and OAuth from the environment (ren
 - **Secrets are stored hashed.** Tokens, sign-in codes and auth codes go through `store.hash`. Never store or log one in the clear.
 - **Email is a nudge, not a channel.** Product events go through `notify.note`, never straight to `mail.send`. Only sign-in codes are sent immediately.
 - **Stated-only fields stay stated-only.** Religion (required), ethnicity, height, politics and drugs come only from the user (`statedOnly` in `lib/schema.js`). Never add code or instructions that fill them in by inference.
-- **Keep the chat short.** The instructions pin the flow: four messages on the first visit at most, buttons for choices, card images instead of descriptions, and the read as a PDF and never pasted. Changes to the flow need matching selftest updates.
+- **Keep the chat short.** The instructions pin the flow: four messages on the first visit at most, buttons for choices, card images instead of descriptions, and the read never pasted as text: the full read is the PDF, and Muse shows the report only as one collapsed widget drawn from `view`, without the evidence. Changes to the flow need matching selftest updates.
 - **The store is encrypted at rest and emails live apart.** Never put an email on a user record or in a Redis key. Use `store.emailOf` and `store.emailKey`.
 - **PLAN.md is the agreed roadmap.** Check it before starting new work, and tick items off as they land.
 - **Every store write goes through `lib/store.js`,** which marks the record for the Upstash flush. Mutating an object you got from the store without calling its setter will not be saved.
