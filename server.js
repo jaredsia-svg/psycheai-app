@@ -379,7 +379,9 @@ async function route(req, res) {
       return send(res, 200, require('./lib/timing').record(await readJson(req)));
     }
     if (url.pathname === '/skill/account' && req.method === 'POST') {
-      const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+      // The address the edge saw, which a client can't set; the first X-Forwarded-For entry it can.
+      const ip = String(req.headers['cf-connecting-ip'] || req.headers['true-client-ip'] || '').trim()
+        || String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || req.socket.remoteAddress;
       const r = skill.account(ip);
       return send(res, r.status, r.body);
     }

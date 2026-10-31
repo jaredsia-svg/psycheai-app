@@ -18,6 +18,13 @@
                                        for the report and never sent anywhere
   bin/psyche.py show PART              one part of what publish_psyche gave back, kept here:
                                        card (saved as a picture), summary, pdf (saved as a file), links or next (README "One part at a time")
+  bin/psyche.py checkin [ID done|not-yet|drop] [--note TEXT]
+                                       their plan from the kept report and where each step
+                                       stands; with an ID, record their answer (kept here only)
+  bin/psyche.py why [ID]               the report's main findings to pick from; with an ID,
+                                       what that finding rests on, from the report and the digest
+  bin/psyche.py correct [ID not-me|partly|used-to-be --note TEXT]
+                                       what they say is off (kept here only); no ID lists them
   bin/psyche.py republish              save their kept report (report.json) to PsycheAI again,
                                        for a fresh link, card and PDF, with no new read
   bin/psyche.py check-digest           check digest/digest.md, the summary of their own
@@ -52,7 +59,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 22
+RELEASE = 27
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -63,6 +70,12 @@ REPORT = os.path.join(HERE, 'report.json')
 KEEP = os.environ.get('PSYCHEAI_HOME') or os.path.join(os.path.expanduser('~'), '.psycheai')
 ACCOUNT_KEPT = os.path.join(KEEP, 'account.json')
 REPORT_KEPT = os.path.join(KEEP, 'report.json')
+# Weekly check-ins on their plan (README "Check-ins"): what they said, in this workspace only, never sent.
+COACH = os.path.join(HERE, 'coach.json')
+COACH_KEPT = os.path.join(KEEP, 'coach.json')
+# What they said is off in a report (README "Explain and correct"): their own words, kept here only.
+CORRECTIONS = os.path.join(HERE, 'corrections.json')
+CORRECTIONS_KEPT = os.path.join(KEEP, 'corrections.json')
 # The keys PsycheAI keeps nothing readable without (README "Nothing readable
 # kept"): their card summary's key, from each publish, and the Sync codes
 # from their own Psyche links and the ones they used. Sent with each call and
@@ -94,6 +107,19 @@ def saved_at():
         return datetime.now().strftime('%H%M')
 
 
+# Where the card and PDF may be fetched from (README "Fetched only from PsycheAI"): a server
+# answer can't send this workspace, or the PDF's key, anywhere else. Off production (tests,
+# a local server) any address is allowed.
+FETCH_HOSTS = ('app.psycheai.io', 'psycheai.io')
+
+
+def fetchable(link):
+    if BASE != 'https://app.psycheai.io':
+        return True
+    parts = urllib.parse.urlsplit(link or '')
+    return parts.scheme == 'https' and parts.hostname in FETCH_HOSTS
+
+
 def local_pdf(r):
     """The report's PDF saved in out/, so it's attached as a file rather than linked."""
     link = r.get('pdf')
@@ -102,7 +128,7 @@ def local_pdf(r):
     # The save's time in the name, so each save's PDF is a new file to the chat, never taken for one sent before.
     name = re.sub(r'\.pdf$', '', name, flags=re.I) + ' ' + saved_at() + '.pdf'
     out = {'pdf': link}
-    if not link:
+    if not link or not fetchable(link):
         return out
     try:
         os.makedirs(OUT, exist_ok=True)
@@ -135,7 +161,7 @@ def local_card(r):
     """Their Psyche Card as a picture saved in out/, so it's attached as an image rather than a link preview."""
     link = r.get('image')
     out = {'image': link}
-    if not link:
+    if not link or not fetchable(link):
         return out
     try:
         os.makedirs(OUT, exist_ok=True)
@@ -1026,6 +1052,17 @@ def pinned_guide():
     return guide if isinstance(guide, dict) and isinstance(guide.get('read'), dict) and isinstance(guide.get('sync'), dict) else None
 
 
+def read_starting(now=None):
+    """Whether this get_report_guide call starts a read: none other in the last half hour (its own mark is the latest)."""
+    now = now or time.time()
+    try:
+        with open(TIMING) as f:
+            marks = json.load(f)
+    except (OSError, ValueError):
+        return True
+    return sum(1 for m in marks if isinstance(m, list) and len(m) == 2 and m[0] == 'call:get_report_guide' and now - m[1] < 1800) <= 1
+
+
 def with_pinned_guide(tool, args, out):
     """get_report_guide and get_sync, with the guide from this signed release in place of a server's."""
     guide = pinned_guide()
@@ -1034,12 +1071,59 @@ def with_pinned_guide(tool, args, out):
             return {'error': 'The guide that comes with the skill is missing: run bin/psyche.py update.'}
         read = guide['read']
         deep = isinstance(args, dict) and args.get('depth') == 'deep'
-        return {'spec': read['spec'] + (guide.get('deepSpec', '') if deep else ''), 'rubric': read.get('rubric'), 'schema': read['schema']}
+        out = {'spec': read['spec'] + (guide.get('deepSpec', '') if deep else ''), 'rubric': read.get('rubric'), 'schema': read['schema']}
+        # The first guide call of a read is where reading starts: the line saying how long it takes goes out
+        # before it, as its own message (README "The wait line comes first"), not at the end with the card.
+        if read_starting():
+            out['sayFirst'] = ('Before reading anything: if step 1\'s line ("On it. ... takes about 5 to 10 minutes ...") is not '
+                               'already in the chat for this read, send it now as its own message, then read.')
+        return out
     if tool == 'get_sync' and isinstance(out, dict) and 'spec' in out:
         if not guide:
             return {'error': 'The guide that comes with the skill is missing: run bin/psyche.py update.'}
         sync = guide['sync']
         out.update(spec=sync['spec'], schema=sync['schema'], task=sync['brief'] + SYNC_TASK)
+    return out
+
+
+# ---------- result lines (README "Result lines are signed") ----------
+# A result's own lines on how to show it, and its buttons, come live from the
+# server, unsigned. Its show, after and first lines are left out (SKILL.md
+# carries the signed ones), and a button stays only if its label is one this
+# skill knows, or one of the few that carry a name or a count.
+UNSIGNED = ('show', 'after', 'first', 'namesFirst')
+LABELS = frozenset([
+    'Generate my Psyche. DMs included (Recommended)', 'Generate my Psyche. DMs excluded', 'What will I learn?', 'Is it private?',
+    'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Not now',
+    'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
+    'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
+    'Facebook and Messenger', 'Facebook posts only', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
+    'Done', 'Yes', 'No thanks', 'Someone else', 'I\'ll share it myself', 'Sync with someone else', 'Sync with someone new', 'Write it again',
+    'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
+    'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
+    'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
+    'Explain why you said this', 'Correct something'])
+LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$')]
+
+
+def known_label(label):
+    return isinstance(label, str) and (label in LABELS or any(f.match(label) for f in LABEL_FORMS))
+
+
+def clean_result(value):
+    """The result with its unsigned lines left out and only known buttons kept."""
+    if isinstance(value, list):
+        return [clean_result(v) for v in value if not (isinstance(v, dict) and 'label' in v and not known_label(v['label']))]
+    if not isinstance(value, dict):
+        return value
+    out = {}
+    for k, v in value.items():
+        if k in UNSIGNED:
+            continue
+        if k == 'buttons' and isinstance(v, list):
+            out[k] = [b for b in v if known_label(b)]
+            continue
+        out[k] = clean_result(v)
     return out
 
 
@@ -1062,7 +1146,7 @@ def call(tool, args):
         keep_keys(card=out.pop('cardKey'))
     if tool == 'sync_link' and out.get('url'):
         keep_keys(text=out['url'])
-    out = with_pinned_guide(tool, args, out)
+    out = clean_result(with_pinned_guide(tool, args, out))
     files = [c for c in result.get('content', []) if c.get('type') == 'resource_link']
     if files:
         out['files'] = files
@@ -1200,11 +1284,154 @@ def before_publish(args):
     return None
 
 
+# ---------- check-ins (README "Check-ins") ----------
+# The plan their report made (develop steps, career actions, wellness
+# suggestions), one step at a time, and what they said about each, kept only
+# here. A step closes on done or drop; "not yet" keeps it open.
+
+def plan_of(report):
+    out = []
+    dev = (report.get('development') or {}).get('develop') or []
+    for d in dev:
+        for a in d.get('actions') or []:
+            if a.get('step'):
+                out.append({'horizon': a.get('horizon') or '', 'step': a['step'], 'from': d.get('title') or ''})
+    for a in (report.get('careerAssessment') or {}).get('actions') or []:
+        if a.get('title'):
+            out.append({'horizon': a.get('horizon') or '', 'step': a['title'] + (': ' + a['detail'] if a.get('detail') else ''), 'from': 'How you work'})
+    for a in (report.get('wellness') or {}).get('suggestions') or []:
+        if a.get('title'):
+            out.append({'horizon': 'this week', 'step': a['title'] + (': ' + a['detail'] if a.get('detail') else ''), 'from': 'Wellbeing'})
+    order = {'this week': 0, 'this quarter': 1, 'this year': 2}
+    out.sort(key=lambda x: order.get(x['horizon'], 3))
+    for i, x in enumerate(out):
+        x['id'] = 'p%d' % (i + 1)
+    return out
+
+
+def checkin(args):
+    kept = read_first([REPORT, REPORT_KEPT])
+    if not kept or not isinstance(kept.get('report'), dict):
+        return {'error': 'No Psyche Report kept here yet, so there is no plan to check in on. Make one first.'}
+    plan = plan_of(kept['report'])
+    coach = read_first([COACH, COACH_KEPT]) or {}
+    saved_at = max((os.path.getmtime(f) for f in (REPORT, REPORT_KEPT) if os.path.exists(f)), default=time.time())
+    # A new Psyche makes a new plan: answers about the old one don't carry over.
+    if coach.get('report') != int(saved_at):
+        coach = {'report': int(saved_at), 'steps': {}, 'notes': []}
+    if args:
+        sid, said = args[0], (args[1] if len(args) > 1 else '')
+        if sid not in {x['id'] for x in plan} or said not in ('done', 'not-yet', 'drop'):
+            return {'error': 'Use: checkin ID done|not-yet|drop [--note TEXT], with an ID from the plan.'}
+        note = args[args.index('--note') + 1][:500] if '--note' in args and args.index('--note') + 1 < len(args) else ''
+        today = datetime.now().strftime('%Y-%m-%d')
+        coach['steps'][sid] = {'status': said, 'on': today}
+        if note:
+            coach['notes'] = (coach.get('notes') or [])[-19:] + [{'on': today, 'step': sid, 'said': note}]
+        write_private([COACH, COACH_KEPT], coach)
+    status = coach.get('steps') or {}
+    for x in plan:
+        x['status'] = (status.get(x['id']) or {}).get('status', 'open')
+    open_ = [x for x in plan if x['status'] in ('open', 'not-yet')]
+    weeks = int((time.time() - saved_at) / (7 * 86400))
+    return {'ok': True, 'next': open_[0] if open_ else None, 'open': len(open_), 'done': sum(1 for x in plan if x['status'] == 'done'),
+            'plan': plan, 'lastNotes': (coach.get('notes') or [])[-3:], 'weeksSincePsyche': weeks, 'freshDue': weeks >= 4}
+
+
+# ---------- explain and correct (README "Explain and correct") ----------
+# The report's main findings, each with what it rests on: its own evidence and
+# the digest lines of theirs it came from (never anyone else's words), and,
+# for a type letter, what pulled the other way.
+AXES_NAMES = {'E': 'Extraversion', 'I': 'Introversion', 'N': 'Intuition', 'S': 'Sensing', 'T': 'Thinking', 'F': 'Feeling', 'J': 'Judging', 'P': 'Perceiving'}
+MONTHS = {m: i + 1 for i, m in enumerate(['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'])}
+
+
+def findings(report):
+    out = []
+    ess = report.get('essence') or {}
+    if ess.get('character'):
+        out.append({'id': 'character', 'label': 'Most like %s' % ess['character'], 'said': ess.get('why') or '', 'evidence': []})
+    for l in (report.get('mbti') or {}).get('letters') or []:
+        axis, pick = l.get('axis') or '', l.get('choice') or ''
+        other = ''.join(c for c in axis if c.isalpha() and c != pick)[:1]
+        if pick:
+            out.append({'id': 'type-' + pick, 'label': '%s over %s' % (AXES_NAMES.get(pick, pick), AXES_NAMES.get(other, other)), 'said': l.get('why') or '',
+                        'evidence': l.get('evidence') or [], 'otherWay': [r.get('note') for r in l.get('ledger') or [] if r.get('pointsTo') == other and r.get('note')][:3]})
+    for i, pt in enumerate(report.get('patterns') or []):
+        if pt.get('name'):
+            out.append({'id': 'pattern-%d' % (i + 1), 'label': pt['name'], 'said': pt.get('line') or '', 'evidence': pt.get('evidence') or []})
+    att = report.get('attachment') or {}
+    if att.get('style'):
+        out.append({'id': 'attachment', 'label': 'Attachment: %s' % att['style'], 'said': att.get('why') or '', 'evidence': att.get('derivedFrom') or []})
+    top = report.get('topMotivators') or []
+    if top:
+        out.append({'id': 'drive', 'label': 'Top drive: %s' % str(top[0]).capitalize(), 'said': (report.get('motivators') or {}).get('reading') or '', 'evidence': []})
+    edge = (report.get('careerAssessment') or {}).get('edge') or {}
+    if edge.get('headline'):
+        out.append({'id': 'career', 'label': 'Your edge at work', 'said': edge['headline'] + ('. ' + edge['detail'] if edge.get('detail') else ''), 'evidence': edge.get('evidence') or []})
+    return out
+
+
+def digest_lines_for(evidence, limit=3):
+    """Their own digest lines behind evidence phrases ("your June 2026 comment ..."): same month, shared words."""
+    if not os.path.exists(DIGEST):
+        return []
+    with open(DIGEST, encoding='utf-8') as f:
+        lines = [l.rstrip('\n') for l in f if DATED.match(l)]
+    out = []
+    for item in evidence:
+        m = re.search(r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})', str(item).lower())
+        stems = lambda t: {w[:4] for w in re.findall(r'[a-z]{4,}', t.lower())} - {'your', 'with', 'from', 'that', 'this', 'they', 'thei', 'abou', 'mess', 'post', 'stor', 'comm'}
+        words = stems(str(item))
+        best = None
+        for l in lines:
+            if m and not l.startswith('%s-%02d' % (m.group(2), MONTHS[m.group(1)])):
+                continue
+            score = len(words & stems(l))
+            if score >= 2 and (best is None or score > best[0]):
+                best = (score, l)
+        if best and best[1] not in out:
+            out.append(best[1][:400])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def why(args):
+    kept = read_first([REPORT, REPORT_KEPT])
+    if not kept or not isinstance(kept.get('report'), dict):
+        return {'error': 'No Psyche Report kept here yet. Make one first.'}
+    found = findings(kept['report'])
+    if not args:
+        return {'ok': True, 'pick': [{'id': f['id'], 'label': f['label']} for f in found]}
+    f = next((x for x in found if x['id'] == args[0]), None)
+    if not f:
+        return {'error': 'Pick one of: ' + ', '.join(x['id'] for x in found)}
+    return {'ok': True, **f, 'fromTheirOwnWords': digest_lines_for(f['evidence'])}
+
+
+def correct(args):
+    data = read_first([CORRECTIONS, CORRECTIONS_KEPT]) or {'corrections': []}
+    if not args:
+        return {'ok': True, 'corrections': data.get('corrections') or []}
+    kept = read_first([REPORT, REPORT_KEPT])
+    found = findings(kept['report']) if kept and isinstance(kept.get('report'), dict) else []
+    f = next((x for x in found if x['id'] == args[0]), None)
+    how = args[1] if len(args) > 1 else ''
+    if not f or how not in ('not-me', 'partly', 'used-to-be'):
+        return {'error': 'Use: correct ID not-me|partly|used-to-be --note TEXT, with an ID from bin/psyche.py why.'}
+    note = args[args.index('--note') + 1][:500] if '--note' in args and args.index('--note') + 1 < len(args) else ''
+    entry = {'on': datetime.now().strftime('%Y-%m-%d'), 'finding': f['label'], 'said': f['said'][:300], 'how': how, 'theirWords': note}
+    data['corrections'] = [c for c in data.get('corrections') or [] if c.get('finding') != f['label']][-29:] + [entry]
+    write_private([CORRECTIONS, CORRECTIONS_KEPT], data)
+    return {'ok': True, 'saved': entry}
+
+
 def main(argv):
     if not argv or argv[0] in ('-h', '--help'):
         print(__doc__)
         return
-    if argv[0] in ('status', 'update', 'check-digest', 'prep', 'republish', 'report') or (argv[0] in ('call', 'show') and len(argv) >= 2):
+    if argv[0] in ('status', 'update', 'check-digest', 'prep', 'republish', 'report', 'checkin', 'why', 'correct') or (argv[0] in ('call', 'show') and len(argv) >= 2):
         mark(argv[0] if argv[0] not in ('call', 'show') else argv[0] + ':' + re.sub(r'[^a-z_]', '', argv[1].lower())[:30])
     if argv[0] == 'status':
         account()
@@ -1283,10 +1510,16 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT):
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT):
                 if os.path.exists(f):
                     os.remove(f)
-        print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys'] if everything else [])}))
+        print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))
+        return
+    if argv[0] in ('why', 'correct'):
+        print(json.dumps((why if argv[0] == 'why' else correct)(argv[1:]), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'checkin':
+        print(json.dumps(checkin(argv[1:]), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'report':
         kept = read_first([REPORT, REPORT_KEPT])
