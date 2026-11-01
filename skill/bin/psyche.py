@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 54
+RELEASE = 55
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -617,6 +617,83 @@ def widget_html(view):
             '<title>Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr" data-id="' + hashlib.sha256(json.dumps(view, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12] + '">'
             '<div class="pr-head"><h1>Psyche Report</h1><span>PsycheAI</span></div>'
             + ''.join(parts) + conf + '</main><script>' + W_JS + '</script></body></html>')
+
+
+# ---------- the phone check (README "The phone check") ----------
+# A test page, not the report: shown once when someone asks for it, it measures
+# what the chat app lets a widget do (see the chat scroll, scroll the chat to a
+# point, collapse without the chat jumping), so the report's phone behaviour can
+# be built on what works rather than guesses. It sends nothing anywhere.
+PROBE_HTML = '''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Phone check</title><style>
+:root{color-scheme:light}*{box-sizing:border-box;font-family:inherit}
+html,body{margin:0;background:#faf7fb}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;color:#241a2e;font-size:15px;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:12px}
+h1{font-size:17px;margin:2px 4px 10px}
+.card{background:#fff;border:1px solid #e2d8e9;border-radius:14px;padding:12px 14px;margin:0 0 12px}
+.res div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid #f0eaf4;font-size:14px}
+.res div:last-child{border-bottom:0}
+.res b{font-weight:700;text-align:right}
+.ok{color:#2f7d5b}.no{color:#b3261e}.wait{color:#9a5b12}
+button{all:unset;box-sizing:border-box;display:block;width:100%;text-align:center;padding:12px;border-radius:12px;background:#7b3fa0;color:#fff;font-weight:700;margin:8px 0;cursor:pointer;touch-action:manipulation}
+.step{font-size:14px;color:#5a4f66}
+.tall{height:1400px;border-radius:12px;background:repeating-linear-gradient(#f3e9f8 0 60px,#fff 60px 120px);display:flex;align-items:center;justify-content:center;color:#6b6076;font-size:13px}
+.tall.gone{height:0;overflow:hidden}
+#target{padding:14px;border-radius:12px;background:#e3f4ec;border:1px solid #bfe3cf;font-weight:700}
+</style></head><body><main>
+<h1>Phone check</h1>
+<div class="card res" id="res"></div>
+<div class="card"><p class="step"><b>1.</b> Scroll the chat up and down a little, past this box and back.</p>
+<p class="step"><b>2.</b> Tap "Jump to the green box". It's far below; see whether the chat moves there.</p>
+<button id="jump" type="button">Jump to the green box</button>
+<p class="step"><b>3.</b> Scroll down to "Collapse the block above" and tap it. Note whether the button stays under your finger.</p>
+<p class="step"><b>4.</b> Come back up and take a screenshot of the results above.</p></div>
+<div class="tall" id="block">A tall block (1,400px) to collapse in step 3</div>
+<button id="collapse" type="button">Collapse the block above</button>
+<div style="height:900px"></div>
+<div id="target">The green box: step 2 jumps here</div>
+<div style="height:200px"></div>
+</main><script>
+(function(){
+var r={}, order=[];
+function set(k,v,c){if(order.indexOf(k)<0)order.push(k);r[k]=[v,c||''];draw();}
+function draw(){var el=document.getElementById('res');el.innerHTML='';order.forEach(function(k){var d=document.createElement('div');var a=document.createElement('span');a.textContent=k;var b=document.createElement('b');b.textContent=r[k][0];if(r[k][1])b.className=r[k][1];d.appendChild(a);d.appendChild(b);el.appendChild(d);});}
+var inFrame=false;try{inFrame=window.top!==window;}catch(e){inFrame=true;}
+set('In a frame',inFrame?'yes':'no');
+set('Frame size',innerWidth+' x '+innerHeight+' px');
+set('Page height',document.documentElement.scrollHeight+' px');
+set('Frame grows to the page',document.documentElement.scrollHeight<=innerHeight+4?'yes (the chat scrolls)':'no (it scrolls inside)');
+set('Touch screen',(window.matchMedia&&matchMedia('(hover: none) and (pointer: coarse)').matches)?'yes':'no');
+set('1. Sees the chat scroll','waiting: scroll a little','wait');
+set('2. Jump moves the chat','not tried yet','wait');
+set('3. Collapse keeps your place','not tried yet','wait');
+var moved=0,last=null,block=document.getElementById('block');
+var hasIO='IntersectionObserver' in window;
+if(!hasIO)set('1. Sees the chat scroll','no (no IntersectionObserver)','no');
+var th=[];for(var i=0;i<=40;i++)th.push(i/40);
+var target=document.getElementById('target');
+// How much of the tall block is on screen changes as the chat scrolls, even when the
+// frame itself never scrolls: that is what tells a widget where the reader is.
+if(hasIO){
+  new IntersectionObserver(function(es){es.forEach(function(e){
+    if(last!==null&&Math.abs(e.intersectionRatio-last)>0.01)moved++;last=e.intersectionRatio;
+    set('1. Sees the chat scroll',moved>0?'yes ('+moved+' changes seen)':'waiting: scroll a little',moved>0?'ok':'wait');
+  });},{threshold:th}).observe(block);
+  new IntersectionObserver(function(es){es.forEach(function(e){
+    if(e.isIntersecting&&window.__jumped&&!window.__jumpDone){window.__jumpDone=true;set('2. Jump moves the chat','yes: the green box came into view','ok');}
+  });},{threshold:[0,0.5]}).observe(target);
+}
+document.getElementById('jump').addEventListener('click',function(){
+  window.__jumped=true;window.__jumpDone=false;var y0=window.scrollY;
+  try{target.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){target.scrollIntoView(true);}
+  setTimeout(function(){if(!window.__jumpDone)set('2. Jump moves the chat',window.scrollY!==y0?'inside the frame only':'no: nothing moved','no');},1500);
+});
+document.getElementById('collapse').addEventListener('click',function(){
+  block.classList.add('gone');
+  set('3. Collapse keeps your place','tapped: tell me whether the button stayed under your finger or the chat jumped','wait');
+});
+})();
+</script></body></html>'''
 
 
 def local_widget(r):
@@ -2286,6 +2363,9 @@ def main(argv):
             return
         out = call('publish_psyche', {'answer': kept['report'], 'name': kept.get('name') or ''})
         print(json.dumps(saved(out) if out.get('ok') else out, ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'show' and len(argv) >= 2 and argv[1] == 'probe':
+        print(json.dumps({'widget': PROBE_HTML, 'show': 'The phone check: show widget as one interactive HTML widget, exactly as given.'}, ensure_ascii=False))
         return
     if argv[0] == 'show' and len(argv) >= 2:
         last = read_first([LAST])

@@ -2676,6 +2676,21 @@ print(json.dumps({'page': m.widget_html(v), 'empty': [m.widget_html(x) for x in 
   check('every open section ends with 👍 and 👎, and 👎 opens "What\'s off?"', (page.match(/class="rate"/g) || []).length === 6 && (page.match(/What\\'s off\?|What's off\?/g) || []).length === 6);
 }
 
+// ---------- the phone check (README "The phone check") ----------
+{
+  const { execFileSync } = require('node:child_process');
+  const pathp = require('node:path');
+  const script = pathp.join(pathp.dirname(new URL(import.meta.url).pathname), '..', 'skill', 'bin', 'psyche.py');
+  let probe = {};
+  try { probe = JSON.parse(execFileSync('python3', ['-I', script, 'show', 'probe'], { timeout: 30000, env: { ...process.env, PSYCHEAI_HOME: require('node:os').tmpdir() } }).toString()); } catch (e) { probe = { error: String(e.message).slice(0, 200) }; }
+  const page = probe.widget || '';
+  const skillMdText = require('../lib/skill.js').skillMd();
+  check('the phone check is a test page the skill shows only when asked: it measures scrolling, jumping and collapsing, and sends nothing anywhere',
+    /^<!DOCTYPE html>/.test(page) && ['1. Sees the chat scroll', '2. Jump moves the chat', '3. Collapse keeps your place'].every(t => page.includes(t)) &&
+    !/fetch\(|XMLHttpRequest|sendBeacon|navigator\.share|https?:\/\/|<img|<link|src=/.test(page) &&
+    /\*\*The phone check\.\*\* Only when they ask for "the phone check": run `bin\/psyche\.py show probe`/.test(skillMdText), probe.error);
+}
+
 // ---------- summary ----------
 
 console.log(`${passed} passed, ${failures.length} failed`);
