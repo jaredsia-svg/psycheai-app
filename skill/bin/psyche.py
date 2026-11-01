@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 72
+RELEASE = 73
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1973,7 +1973,7 @@ IGM_CLI = os.environ.get('PSYCHEAI_IGM_CLI') or '/opt/hatch/bin/instagram-messag
 COLLECT_TYPES = (('POST,REEL', 'post'), ('STORY,HIGHLIGHT', 'story'))
 COLLECT_PAGES = 60          # a list's pages at most
 COLLECT_THREADS = 20        # their busiest contacts read
-THREAD_PAGES = 8            # a thread's pages at most
+THREAD_PAGES = 8            # a thread's pages at most (20 for the 4 busiest, which the plan wants most from)
 
 
 class RateLimited(Exception):
@@ -2005,8 +2005,20 @@ def ig(cli, *args, timeout=120):
     return got
 
 
+def caption_of(p):
+    """A post's words, wherever its answer puts them (post_caption, as the docs say, or a caption object)."""
+    for v in (p.get('post_caption'), p.get('caption'), p.get('text')):
+        if isinstance(v, dict):
+            v = v.get('text')
+        if isinstance(v, str) and v.strip():
+            return v
+    return ''
+
+
 def local_time(stamp, raw=None):
     """A post's or message's time: the user's local time, else UTC, else the raw provider time."""
+    if stamp is not None and not isinstance(stamp, dict):
+        stamp, raw = None, stamp if raw in (None, '') else raw
     for v in ((stamp or {}).get('user_local'), (stamp or {}).get('utc')) if isinstance(stamp, dict) else ():
         if when(v):
             return when(v)
@@ -2065,11 +2077,11 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                                   lambda p: p.get('next_cursor') if p.get('has_next_page') and p.get('posts') else None):
                     for p in page.get('posts') or []:
                         pid = str(p.get('post_id') or '')
-                        t = local_time(p.get('post_created_at'))
+                        t = local_time(p.get('post_created_at') or p.get('created_at'), p.get('taken_at') or p.get('timestamp'))
                         if not t or (pid and pid in seen):
                             continue
                         seen.add(pid)
-                        items.append({'kind': kind, 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': str(p.get('post_caption') or '')})
+                        items.append({'kind': kind, 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': caption_of(p)})
                         read['posts' if kind == 'post' else 'stories'] += 1
                     if page.get('provider_error'):
                         note(kind + 's' if kind == 'post' else 'stories', 'a page came back partial')
@@ -2155,7 +2167,7 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                         for page in pages(lambda after: ig(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', th['thread_fbid'], '--first', 50,
                                                            *(('--after', after) if after else ())),
                                           lambda p: (p.get('messages_page_info') or {}).get('end_cursor') if (p.get('messages_page_info') or {}).get('has_next_page') else None,
-                                          limit=THREAD_PAGES):
+                                          limit=THREAD_PAGES if i >= 4 else 20):
                             for msg in page.get('messages') or []:
                                 text = str(((msg.get('content') or {}).get('text_body')) or '')
                                 when_sent = local_time(msg.get('message_sent_at'), msg.get('timestamp'))
