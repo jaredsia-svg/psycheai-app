@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 52
+RELEASE = 53
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -462,6 +462,11 @@ def _items(xs):
     return out
 
 
+def _titles(xs):
+    """Just each item's first line: its title, without the detail or reason under it."""
+    return [x if isinstance(x, str) else x.get('title') for x in _l(xs) if isinstance(x, str) or (isinstance(x, dict) and x.get('title'))]
+
+
 def _pair(good_title, good, hard_title, hard):
     """Two boxes side by side (stacked on a phone): what helps, with ✓, and what's hard, with !."""
     g, h = _items(good), _items(hard)
@@ -543,7 +548,7 @@ def _connect(v):
     conflict = '<p>' + _e(_s(v, 'conflict')) + '</p>' if _s(v, 'conflict') else ''
     friction = _pair('What you bring', _s(v, 'bring') or _s(v, 'atYourBest'), 'Where it gets hard', _s(v, 'hard') or _s(v, 'watchFor'))
     suits = (('<p>' + _e(_s(v, 'whoSuits') or _s(v, 'bestPartner')) + '</p>') if (_s(v, 'whoSuits') or _s(v, 'bestPartner')) else '') \
-        + _pair('What you actually need', _s(v, 'needs') or _s(v, 'partnerNeeds'), 'What to be careful of', _s(v, 'careful') or _s(v, 'carefulOf'))
+        + _pair('What you actually need', _titles(_s(v, 'needs') or _s(v, 'partnerNeeds')), 'What to be careful of', _titles(_s(v, 'careful') or _s(v, 'carefulOf')))
     first = next((l.get('language') for l in _l(_s(ll, 'receiving')) if isinstance(l, dict)), '')
     tease = ' · '.join(x for x in [first, _s(v, 'attachment')] if x)
     return (_block('How you want to be loved', _langs(_s(ll, 'receiving'))) + _block('How you show love', _langs(_s(ll, 'giving')))
@@ -558,7 +563,7 @@ def _work(v):
     others = _s(v, 'others') or ([x for x in _l(_s(v, 'strengths'))] + (['Not yet using: ' + _s(v, 'underused')] if _s(v, 'underused') else []))
     holding = _s(v, 'holding') or ([_s(v, 'holdingBack')] if _s(v, 'holdingBack') else [])
     sides = _pair('Your other strengths', others, 'What holds you back', holding)
-    fit = _pair('Suits you best', _s(v, 'suitsFull') or _s(v, 'suits'), 'Likely to drain you', _s(v, 'drainsFull') or _s(v, 'drains'))
+    fit = _pair('Suits you best', _titles(_s(v, 'suitsFull') or _s(v, 'suits')), 'Likely to drain you', _titles(_s(v, 'drainsFull') or _s(v, 'drains')))
     return edge + sides + _block('Careers that suit you', fit), _s(v, 'edge')
 
 
