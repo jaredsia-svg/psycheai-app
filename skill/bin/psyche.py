@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 60
+RELEASE = 61
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -257,13 +257,18 @@ p{margin:0 0 8px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px}
 .chip{padding:5px 11px;border-radius:999px;background:#f3e9f8;color:#4c2766;font-size:13px;font-weight:600;border:1px solid #e6d6ef}
 .radar{display:block;width:100%%;max-width:420px;height:auto;margin:0 auto;overflow:visible}
-.radar text{font-family:%(font)s;font-size:11.5px;fill:#5a4f66;cursor:pointer}
+.radar text{font-family:%(font)s;font-size:11.5px;fill:#5a4f66}
 .radar text.top{font-weight:800;fill:var(--c);font-size:12.5px}
-.radar .pt{cursor:pointer}
-.radar{touch-action:manipulation}
-.radar .hit{fill:transparent;pointer-events:all;cursor:pointer}
-.tip{height:66px;overflow:hidden;box-sizing:border-box;margin:6px 0 4px;padding:10px 12px;border-radius:12px;background:#faf5fc;border:1px solid #efe5f4;font-size:14px;color:#5a4f66}
-.tip b{color:#241a2e}
+.mots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 4px}
+.mots.low{grid-template-columns:repeat(2,1fr)}
+@media (max-width:520px){.mots{grid-template-columns:1fr}.mots.low{grid-template-columns:1fr 1fr}}
+.mot{border-radius:12px;padding:9px 11px;border:1px solid #efe5f4;background:#fdfbfe}
+.mot.hi{background:#fdf3ec;border-color:#f3d9c6}
+.mot b{display:flex;justify-content:space-between;gap:6px;font-weight:700;font-size:14px;line-height:1.3}
+.mot b i{font-style:normal;color:var(--c)}
+.mots.low .mot b i{color:#6b6076}
+.mot span{display:block;margin-top:2px;color:#5a4f66;font-size:13px;line-height:1.35}
+.motlabel{margin:10px 0 0;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6b6076}
 .callout{padding:12px 14px;border-radius:12px;background:#f3e9f8;color:#3b2a49;font-size:14px;margin:10px 0 4px}
 .lang{display:grid;grid-template-columns:28px 1fr;column-gap:8px;padding:9px 0;border-bottom:1px solid #f0eaf4}
 .lang:last-child{border-bottom:0}
@@ -372,12 +377,6 @@ try{localStorage.getItem('x');setInterval(poll,600);}catch(e){}
   up.addEventListener('click',function(){var on=up.getAttribute('aria-pressed')!=='true';up.setAttribute('aria-pressed',on);down.setAttribute('aria-pressed','false');off.classList.remove('show');});
   down.addEventListener('click',function(){var on=down.getAttribute('aria-pressed')!=='true';down.setAttribute('aria-pressed',on);up.setAttribute('aria-pressed','false');off.classList.toggle('show',on);if(on)off.querySelector('textarea').focus({preventScroll:true});});
 });
-var tip=document.getElementById('mtip');
-function show(m){if(!tip||!m)return;tip.innerHTML='';var b=document.createElement('b');b.textContent=m[0]+' \\u00b7 '+m[1];tip.appendChild(b);if(m[2])tip.appendChild(document.createTextNode(' \\u2013 '+m[2]));}
-show(st.m);
-[].slice.call(document.querySelectorAll('[data-m]')).forEach(function(el){
-  el.addEventListener('click',function(){st.m=JSON.parse(el.getAttribute('data-m'));show(st.m);save();});
-});
 })();
 '''
 
@@ -451,26 +450,19 @@ def _radar(mots, top):
     out.append('<polygon points="%s" fill="var(--c)" fill-opacity=".16" stroke="var(--c)" stroke-width="2" stroke-linejoin="round"/>' % shape)
     for i, m in enumerate(mots):
         s, a, hot = _num(m['score']), ang(i), m['name'] in tops
-        data = _e(json.dumps([m['name'], s, m.get('meaning') or ''], ensure_ascii=False))
         x, y = R * s / 100 * math.cos(a), R * s / 100 * math.sin(a)
         if hot:
-            out.append('<circle class="pt" data-m="%s" cx="%s" cy="%s" r="7" fill="var(--c)" stroke="#fff" stroke-width="2"/>' % (data, f(x), f(y)))
+            out.append('<circle class="pt" cx="%s" cy="%s" r="7" fill="var(--c)" stroke="#fff" stroke-width="2"/>' % (f(x), f(y)))
         else:
-            out.append('<circle class="pt" data-m="%s" cx="%s" cy="%s" r="3.5" fill="#fff" stroke="#9a8fa6" stroke-width="1.5"/>' % (data, f(x), f(y)))
-        out.append('<circle class="hit" data-m="%s" cx="%s" cy="%s" r="14"/>' % (data, f(x), f(y)))
+            out.append('<circle class="pt" cx="%s" cy="%s" r="3.5" fill="#fff" stroke="#9a8fa6" stroke-width="1.5"/>' % (f(x), f(y)))
         lx, ly = (R + 14) * math.cos(a), (R + 14) * math.sin(a)
         anchor = 'middle' if abs(math.cos(a)) < 0.3 else ('start' if math.cos(a) > 0 else 'end')
         lines = _wrap(m['name'])
         dy0 = -13 * (len(lines) - 1) if math.sin(a) < -0.3 else (10 if math.sin(a) > 0.3 else 4 - 6.5 * (len(lines) - 1))
         spans = ''.join('<tspan x="%s" dy="%s">%s</tspan>' % (f(lx), f(dy0) if k == 0 else '13', _e(t)) for k, t in enumerate(lines))
-        out.append('<text class="%s" data-m="%s" x="%s" y="%s" text-anchor="%s">%s</text>' % ('top' if hot else '', data, f(lx), f(ly), anchor, spans))
-        # A tap area over the label, bigger than its letters, so a finger finds it.
-        w, h = max(len(t) for t in lines) * 7 + 14, 13 * len(lines) + 14
-        x0 = lx - w / 2 if anchor == 'middle' else (lx - 7 if anchor == 'start' else lx - w + 7)
-        y0 = ly + dy0 - 13
-        out.append('<rect class="hit" data-m="%s" x="%s" y="%s" width="%s" height="%s"/>' % (data, f(x0), f(y0), f(w), f(h)))
+        out.append('<text class="%s" x="%s" y="%s" text-anchor="%s">%s</text>' % ('top' if hot else '', f(lx), f(ly), anchor, spans))
     return ('<svg class="radar" viewBox="-200 -150 400 300" role="img" aria-label="What motivates you: your top three are highlighted">'
-            + ''.join(out) + '</svg><div class="tip" id="mtip">Tap a point or a name to see its score.</div>')
+            + ''.join(out) + '</svg>')
 
 
 def _rate():
@@ -554,8 +546,22 @@ def _who(v):
     return _block('MBTI', mbti) + _block('Big Five', five) + _block('Wellbeing', well), tease
 
 
+def _motive_boxes(mots, top):
+    """Under the radar: the top three, then the lowest two, each its score and a short meaning (README "Strongest and weakest")."""
+    ms = [m for m in _l(mots) if isinstance(m, dict) and m.get('name') and _num(m.get('score')) is not None]
+    if len(ms) < 5:
+        return ''
+    by = {m['name']: m for m in ms}
+    tops = [by[t] for t in _l(top) if isinstance(t, str) and t in by][:3] or sorted(ms, key=lambda m: -_num(m['score']))[:3]
+    low = [m for m in sorted(ms, key=lambda m: _num(m['score'])) if m not in tops][:2]
+    box = lambda m, hi: ('<div class="mot%s"><b>%s<i>%d</i></b>%s</div>' % (' hi' if hi else '', _e(m['name']), _num(m['score']),
+                         ('<span>' + _e(m.get('meaning')) + '</span>') if m.get('meaning') else ''))
+    return ('<p class="motlabel">Strongest</p><div class="mots">' + ''.join(box(m, True) for m in tops) + '</div>'
+            + '<p class="motlabel">Weakest</p><div class="mots low">' + ''.join(box(m, False) for m in low) + '</div>')
+
+
 def _drives(v):
-    radar = _radar(_s(v, 'motivators'), _s(v, 'top'))
+    radar = _radar(_s(v, 'motivators'), _s(v, 'top')) + _motive_boxes(_s(v, 'motivators'), _s(v, 'top'))
     reading = '<div class="callout">' + _e(_s(v, 'reading')) + '</div>' if _s(v, 'reading') else ''
     vb = _l(_s(v, 'values')) + _l(_s(v, 'beliefs'))
     tease = ' · '.join(t for t in _l(_s(v, 'top')) if isinstance(t, str))
