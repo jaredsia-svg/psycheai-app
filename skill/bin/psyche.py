@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 90
+RELEASE = 91
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -100,6 +100,7 @@ SOURCES = os.path.join(HERE, 'sources')
 NOTES = os.path.join(HERE, 'notes')
 WORK = os.path.join(HERE, 'work')        # what was pulled from Instagram for a read; deleted once it's published
 DIGEST = os.path.join(HERE, 'digest', 'digest.md')
+LAST_COLLECT = os.path.join(os.path.dirname(DIGEST), 'last-collect.json')
 LAST = os.path.join(HERE, 'last-psyche.json')   # what the latest publish gave back, shown a part at a time
 
 # A saved Psyche's result in parts, so the chat can show each on its own: one
@@ -3067,7 +3068,14 @@ def main(argv):
         out = collect(opts.get('--account-id'), opts.get('--messages-account-id'), opts.get('--me'), n, not opts.get('no'))
         if out.get('ok') is not False or out.get('built'):
             mark('check-digest')    # the digest is built and checked: the read's reading stage ends here
+        # What it read, kept beside the digest (counts and notes only: no ID, cursor or message), so
+        # "last-collect" can show it after a helper ran it (README "The last collect, kept").
+        if out.get('read'):
+            write_private([LAST_COLLECT], {'at': datetime.now().strftime('%Y-%m-%d %H:%M'), **{k: out[k] for k in ('ok', 'read', 'notes', 'stopped', 'problems', 'characters') if k in out}})
         print(json.dumps(out, ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'last-collect':
+        print(json.dumps(read_first([LAST_COLLECT]) or {'error': 'No collect has run here yet.'}, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'check-answer' and len(argv) >= 2:
         print(json.dumps(check_answer(argv[1]), ensure_ascii=False, indent=1))

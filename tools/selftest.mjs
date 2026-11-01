@@ -2242,6 +2242,26 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       skillState.bare && !/answer must be the JSON object/.test(skillState.bare.error || '') && (skillState.bare.ok === true || /not connected/.test(skillState.bare.error || '')) &&
       /args = \{'answer': args, 'name': name\}/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) && skillState.bareCheck && /call publish_psyche @answer\.json --name "<their full name>" \(a bare answer needs --name\)/.test(skillState.bareCheck.publish || ''),
       JSON.stringify({ bare: skillState.bare, check: skillState.bareCheck && skillState.bareCheck.publish }).slice(0, 400));
+    {
+      // The last collect, kept beside the digest: run from a fresh folder against the stand-in tools.
+      const { execFileSync } = require('node:child_process');
+      const tmp = fsx.mkdtempSync(pathx.join(os.tmpdir(), 'lastcollect-'));
+      fsx.mkdirSync(pathx.join(tmp, 'bin'));
+      fsx.copyFileSync(new URL('../skill/bin/psyche.py', import.meta.url), pathx.join(tmp, 'bin', 'psyche.py'));
+      const fakes = pathx.join(pathx.dirname(new URL(import.meta.url).pathname), 'fakeig');
+      const env = { ...process.env, PSYCHEAI_IG_CLI: pathx.join(fakes, 'instagram-cli'), PSYCHEAI_IGM_CLI: pathx.join(fakes, 'instagram-messages-cli'), FAKEIG_LOG: pathx.join(tmp, 'calls.log'), PSYCHEAI_HOME: tmp };
+      let ran = null, kept = null, raw = '';
+      try {
+        ran = JSON.parse(execFileSync('python3', ['-I', pathx.join(tmp, 'bin', 'psyche.py'), 'collect', '--account-id', 'ACC1', '--me', 'Mei Tan'], { env, timeout: 60000 }).toString());
+        kept = JSON.parse(execFileSync('python3', ['-I', pathx.join(tmp, 'bin', 'psyche.py'), 'last-collect'], { env, timeout: 30000 }).toString());
+        raw = fsx.readFileSync(pathx.join(tmp, 'digest', 'last-collect.json'), 'utf8');
+      } catch (e) { kept = { error: String(e.message).slice(0, 300) }; }
+      check('the last collect is kept beside the digest (its read, notes and stopped: counts only, no ID or message), and last-collect shows it after a helper ran collect',
+        ran && ran.ok === true && kept && JSON.stringify(kept.read) === JSON.stringify(ran.read) && /pages, \d+ messages a page on average, 100 asked/.test(kept.read['conversation pages'] || '') &&
+        !/ACC1|T0|T1|T2|U0|Kai|Ana|Jun|Saturday/.test(raw) && (fsx.statSync(pathx.join(tmp, 'digest', 'last-collect.json')).mode & 0o777) === 0o600 &&
+        /bin\/psyche\.py last-collect +# what the last collect read/.test(skillMd), JSON.stringify(kept).slice(0, 400));
+      fsx.rmSync(tmp, { recursive: true, force: true });
+    }
     check('show ready: the card and the report file saved and What\'s next given in one call, the PDF fetched beside them (not on the way to the card), and SKILL.md delivers with it on the helper\'s return, before anything else',
       ((R) => R && R.say === 'Your Psyche Card and Report are ready.' && /\/out\/Psyche Card( - [^/]+)? - \d{8}\.png$/.test((R.card || {}).file || '') && R.summary && R.next && R.next.nextStep.buttons[0] === 'Reveal my roast 🔥')(skillState.parts && skillState.parts.ready) &&
       skillState.readyPdf === 1 && /is put together in one call: `bin\/psyche\.py show ready` saves the card and the report file and gives What's next/.test(skillMd) &&
