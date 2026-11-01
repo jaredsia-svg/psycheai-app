@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 62
+RELEASE = 63
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -233,6 +233,11 @@ body{font-family:__FONT__;color:var(--ink);font-size:15.5px;line-height:1.55;-we
 .ring{position:relative;width:46px;height:46px;flex:none}
 .ring svg{width:46px;height:46px;transform:rotate(-90deg)}
 .ring i{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:14px}
+.cardbtn{all:unset;flex:none;cursor:zoom-in;-webkit-tap-highlight-color:transparent}
+.viewer{position:fixed;inset:0;z-index:20;background:rgba(20,8,30,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+.viewer[hidden]{display:none}
+.viewer img{max-width:100%;max-height:calc(100% - 40px);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.viewer span{margin-top:12px;color:#fff;opacity:.8;font-size:13px}
 .cardpic{flex:none;width:118px;border-radius:14px;box-shadow:0 10px 30px rgba(20,0,40,.35);transform:rotate(3deg);border:3px solid rgba(255,255,255,.85)}
 @media (max-width:480px){.cardpic{width:92px}.banner h1{font-size:24px}}
 nav{position:sticky;top:0;z-index:5;margin:0 -14px 14px;padding:10px 14px;background:rgba(250,247,251,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
@@ -279,16 +284,14 @@ p{margin:0 0 10px}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:#f3e9f8;color:#6a3590;vertical-align:middle}
 .pill.prim{background:var(--c);color:#fff}
 .pill.g{background:#eef1f4;color:#4d5866}
-details.ev{margin-top:8px}
-details.ev summary{list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--c);padding:3px 10px;border-radius:999px;background:#faf5fc;border:1px solid #efe3f4;-webkit-tap-highlight-color:transparent}
-details.ev summary::-webkit-details-marker{display:none}
-details.ev summary:before{content:"\\25B8";font-size:10px;transition:transform .15s}
-details.ev[open] summary:before{transform:rotate(90deg)}
-details.ev ul{margin:8px 0 2px;padding:0 0 0 2px;list-style:none}
-details.ev li{position:relative;margin:5px 0;padding-left:16px;font-size:14px;color:#3b2a49}
-details.ev li:before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--c);opacity:.55}
-details.ev .kv{margin:8px 0 0;font-size:14px;color:#3b2a49}
-details.ev .kv small{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.ev{margin-top:9px;padding:9px 12px;border-radius:12px;background:#faf6fc;border:1px solid #f0e6f5}
+.ev>small{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--c)}
+.ev ul{margin:4px 0 0;padding:0;list-style:none}
+.ev li{position:relative;margin:4px 0;padding-left:15px;font-size:14px;color:#3b2a49}
+.ev li:before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--c);opacity:.55}
+.ev .kv{margin:6px 0 0;font-size:14px;color:#3b2a49}
+.ev small+.kv{margin-top:4px}
+.ev .kv small{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
 .letter{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--c);color:#fff;font-weight:800;font-size:15px;margin-right:10px;vertical-align:middle}
 .type{display:flex;align-items:baseline;gap:10px;margin:14px 0 2px}
 .type b{font-size:30px;font-weight:800;letter-spacing:.06em;color:var(--c)}
@@ -307,6 +310,13 @@ details.ev .kv small{display:block;font-size:11px;font-weight:800;letter-spacing
 .radar{display:block;width:100%;max-width:440px;height:auto;margin:6px auto 0;overflow:visible}
 .radar text{font-family:__FONT__;font-size:11.5px;fill:#5a4f66}
 .radar text.top{font-weight:800;fill:var(--c);font-size:12.5px}
+.radar text,.radar .pt,.radar .hit{cursor:pointer}
+.radar .hit{fill:transparent;pointer-events:all}
+.radar{touch-action:manipulation}
+.radar .on{stroke:var(--ink);stroke-width:2.5}
+.tip{margin:8px 0 2px;padding:11px 14px;border-radius:14px;background:#faf6fc;border:1px solid #efe5f4;font-size:14px;color:var(--soft);min-height:46px}
+.tip b{color:var(--ink)}
+.tip i{display:block;font-style:normal;margin-top:3px;color:#3b2a49}
 .mots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 4px}
 .mots.low{grid-template-columns:repeat(2,1fr)}
 @media (max-width:540px){.mots{grid-template-columns:1fr}.mots.low{grid-template-columns:1fr 1fr}}
@@ -369,7 +379,19 @@ parts.forEach(function(p){p.querySelector('button').addEventListener('click',fun
 chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();var p=document.querySelector(c.getAttribute('href'));if(p)only(p);});});
 function all(){parts.forEach(function(q){set(q,false);});go(document.getElementById('top'));}
 [].slice.call(document.querySelectorAll('[data-fold]')).forEach(function(b){b.addEventListener('click',all);});
-window.addEventListener('beforeprint',function(){[].slice.call(document.querySelectorAll('details')).forEach(function(d){d.open=true;});});
+// The radar: a tap on a point or a name shows its score, what it is, and the reader's own line.
+var tip=document.getElementById('mtip'),pts=[].slice.call(document.querySelectorAll('.radar .pt'));
+[].slice.call(document.querySelectorAll('.radar [data-m]')).forEach(function(el){el.addEventListener('click',function(){
+  if(!tip)return;var m=JSON.parse(el.getAttribute('data-m'));tip.innerHTML='';
+  var b=document.createElement('b');b.textContent=m[0]+' \u00b7 '+m[1]+' / 100';tip.appendChild(b);
+  if(m[2]){var s=document.createElement('span');s.textContent=' \u2013 '+m[2];tip.appendChild(s);}
+  if(m[3]){var i=document.createElement('i');i.textContent=m[3];tip.appendChild(i);}
+  pts.forEach(function(p){p.classList.toggle('on',p.getAttribute('data-m')===el.getAttribute('data-m'));});
+});});
+// The card picture opens full screen; a tap anywhere closes it.
+var open=document.getElementById('cardopen'),view=document.getElementById('viewer');
+if(open&&view){open.addEventListener('click',function(){view.hidden=false;});view.addEventListener('click',function(){view.hidden=true;});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')view.hidden=true;});}
 })();
 '''
 
@@ -411,13 +433,12 @@ def _block(title, inner):
 
 
 def _ev(evidence, label='Evidence', extra=''):
-    """The evidence behind a finding, folded away: a small toggle, open on a tap."""
+    """The evidence behind a finding, shown under it in a light box with its label."""
     ev = [x for x in _l(evidence) if isinstance(x, str)]
     if not ev and not extra:
         return ''
-    head = label + (' · %d' % len(ev) if ev and label == 'Evidence' else '')
-    return ('<details class="ev"><summary>' + _e(head) + '</summary>' + ('<ul>' + ''.join('<li>' + _e(x) + '</li>' for x in ev) + '</ul>' if ev else '')
-            + extra + '</details>')
+    return ('<div class="ev"><small>' + _e(label) + '</small>' + ('<ul>' + ''.join('<li>' + _e(x) + '</li>' for x in ev) + '</ul>' if ev else '')
+            + extra + '</div>')
 
 
 def _items(xs, details=True):
@@ -475,28 +496,33 @@ def _radar(mots, top):
     for i, m in enumerate(mots):
         s, a, hot = _num(m['score']), ang(i), m['name'] in tops
         x, y = R * s / 100 * math.cos(a), R * s / 100 * math.sin(a)
-        out.append(('<circle cx="%s" cy="%s" r="7" fill="var(--c)" stroke="#fff" stroke-width="2"/>' if hot else '<circle cx="%s" cy="%s" r="3.5" fill="#fff" stroke="#9a8fa6" stroke-width="1.5"/>') % (f(x), f(y)))
+        data = _e(json.dumps([m['name'], s, m.get('meaning') or '', m.get('line') or ''], ensure_ascii=False))
+        out.append(('<circle class="pt" data-m="%s" cx="%s" cy="%s" r="7" fill="var(--c)" stroke="#fff" stroke-width="2"/>' if hot else '<circle class="pt" data-m="%s" cx="%s" cy="%s" r="3.5" fill="#fff" stroke="#9a8fa6" stroke-width="1.5"/>') % (data, f(x), f(y)))
+        out.append('<circle class="hit" data-m="%s" cx="%s" cy="%s" r="15"/>' % (data, f(x), f(y)))
         lx, ly = (R + 14) * math.cos(a), (R + 14) * math.sin(a)
         anchor = 'middle' if abs(math.cos(a)) < 0.3 else ('start' if math.cos(a) > 0 else 'end')
         lines = _wrap(m['name'])
         dy0 = -13 * (len(lines) - 1) if math.sin(a) < -0.3 else (10 if math.sin(a) > 0.3 else 4 - 6.5 * (len(lines) - 1))
         spans = ''.join('<tspan x="%s" dy="%s">%s</tspan>' % (f(lx), f(dy0) if k == 0 else '13', _e(t)) for k, t in enumerate(lines))
-        out.append('<text class="%s" x="%s" y="%s" text-anchor="%s">%s</text>' % ('top' if hot else '', f(lx), f(ly), anchor, spans))
-    return '<svg class="radar" viewBox="-200 -150 400 300" role="img" aria-label="What motivates you: your top three are highlighted">' + ''.join(out) + '</svg>'
+        out.append('<text class="%s" data-m="%s" x="%s" y="%s" text-anchor="%s">%s</text>' % ('top' if hot else '', data, f(lx), f(ly), anchor, spans))
+        w, h = max(len(t) for t in lines) * 7 + 14, 13 * len(lines) + 14
+        x0 = lx - w / 2 if anchor == 'middle' else (lx - 7 if anchor == 'start' else lx - w + 7)
+        out.append('<rect class="hit" data-m="%s" x="%s" y="%s" width="%s" height="%s"/>' % (data, f(x0), f(ly + dy0 - 13), f(w), f(h)))
+    return ('<svg class="radar" viewBox="-200 -150 400 300" role="img" aria-label="What motivates you: your top three are highlighted">' + ''.join(out) + '</svg>'
+            '<div class="tip" id="mtip" aria-live="polite">Tap any point or name on the chart to see its score and what it means.</div>')
 
 
 def _motive_boxes(mots, top):
-    """Under the radar: the top three, then the lowest two, each its score, meaning and, where written, their own line."""
+    """Under the radar: the top three, each its score, meaning and, where written, their own line."""
     ms = [m for m in _l(mots) if isinstance(m, dict) and m.get('name') and _num(m.get('score')) is not None]
     if len(ms) < 5:
         return ''
     by = {m['name']: m for m in ms}
     tops = [by[t] for t in _l(top) if isinstance(t, str) and t in by][:3] or sorted(ms, key=lambda m: -_num(m['score']))[:3]
-    low = [m for m in sorted(ms, key=lambda m: _num(m['score'])) if m not in tops][:2]
     box = lambda m, hi: ('<div class="mot%s"><b>%s<i>%d</i></b>%s</div>' % (' hi' if hi else '', _e(m['name']), _num(m['score']),
                          '<span>' + _e(m.get('line') or m.get('meaning')) + '</span>' if (m.get('line') or m.get('meaning')) else ''))
     return ('<p class="motlabel">Strongest</p><div class="mots">' + ''.join(box(m, True) for m in tops) + '</div>'
-            + '<p class="motlabel">Weakest</p><div class="mots low">' + ''.join(box(m, False) for m in low) + '</div>')
+)
 
 
 def _overview(v):
@@ -664,19 +690,19 @@ def report_html(view, name='', when='', card_png=None):
                      % (score, (' · ' + _e(c.get('level'))) if c.get('level') else '', score) if score is not None else '')
                   + ('<p>' + _e(m.get('rationale')) + '</p>' if m.get('rationale') else '')
                   + (('<p class="motlabel">Read from</p>' + _chips(c.get('basedOn'))) if _l(c.get('basedOn')) else '')
-                  + (('<p class="motlabel">How you show up online</p>' + _items(m.get('activity'))) if _l(m.get('activity')) else '') + '</div>')
+                  + '</div>')
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
-    kind = ' · '.join(x for x in [_s(ov, 'type'), _s(ov, 'nickname')] if x)
     banner = ('<header class="banner" id="top"><div class="row"><div class="txt"><div class="kicker">PsycheAI · Psyche Report</div><h1>' + _e(title) + '</h1>'
-              + ('<div class="sub">' + _e(when) + (' · ' + _e(kind) if kind else '') + '</div>' if (when or kind) else '')
+              + ('<div class="sub">' + _e(when) + '</div>' if when else '')
               + (('<div class="who">' + (_ring(score) if score is not None else '') + '<span>Most like <b>' + _e(_s(ov, 'character')) + '</b></span></div>') if _s(ov, 'character') else '')
-              + '</div>' + ('<img class="cardpic" alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '">' if card_png else '') + '</div></header>')
+              + '</div>' + ('<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card"><img class="cardpic" alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"></button>' if card_png else '') + '</div></header>')
     bar = '<nav aria-label="Sections">' + ''.join(nav) + '<button type="button" data-fold>Collapse all ▲</button></nav>'
+    viewer = ('<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"><span>Tap to close</span></div>') if card_png else ''
     foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>' + _e(title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method
-            + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div><script>' + W_JS + '</script></body></html>')
+            + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + '</script></body></html>')
 
 
 # ---------- the phone check (README "The phone check") ----------

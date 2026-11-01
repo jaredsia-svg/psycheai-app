@@ -2664,30 +2664,34 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   try { got = JSON.parse(execFileSync('python3', ['-I', '-c', py, script, JSON.stringify(full)], { timeout: 30000 }).toString()); } catch (e) { got = { error: String(e.message).slice(0, 300) }; }
   const page = got.page || '';
   const css = (page.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
-  check('the report file is one finished page with every section, a bar of section chips, the card picture and the reader\'s name',
+  check('the report file is one finished page with every section, a bar of section chips, and the reader\'s name and the date in the banner (no type there); its card picture opens full screen on a tap',
     /^<!DOCTYPE html>/.test(page) && ['Overview', 'Who you are', 'What drives you', 'How you connect', 'How you work', 'Putting it together'].every(t => page.includes('data-section="' + t + '"') && page.includes('</i>' + t + '</a>')) &&
-    /<h1>Mei’s Psyche Report<\/h1>/.test(page) && /1 November 2026 · ENFJ · The Protagonist/.test(page) && /<img class="cardpic" alt="Your Psyche Card" src="data:image\/png;base64,iVBORw0KGgo=">/.test(page), got.error);
+    /<h1>Mei’s Psyche Report<\/h1>/.test(page) && /<div class="sub">1 November 2026<\/div>/.test(page) && !/<header[^]*?(ENFJ|The Protagonist)[^]*?<\/header>/.test(page) &&
+    /<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card"><img class="cardpic" alt="Your Psyche Card" src="data:image\/png;base64,iVBORw0KGgo="><\/button>/.test(page) &&
+    /<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden>/.test(page) && /open\.addEventListener\('click',function\(\)\{view\.hidden=false;\}\)/.test(page), got.error);
   check('only Overview is open to start with; a tap closes the others first, then opens it and brings its title to the top under the bar; "Collapse all" closes all and goes back to the top',
     (page.match(/<section class="part open"/g) || []).length === 1 && /<section class="part open" id="p0"[^>]*data-section="Overview"/.test(page) &&
     /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);set\(p,true\);go\(p\);\}/.test(page) && /if\(p\.classList\.contains\('open'\)\)set\(p,false\);else only\(p\);/.test(page) &&
     /scrollIntoView\(\{block:'start',behavior:'smooth'\}\)/.test(page) && /scroll-margin-top:var\(--navh,62px\)/.test(css) && /--navh',\(bar\.offsetHeight\+10\)\+'px'/.test(page) &&
     (page.match(/data-fold/g) || []).length >= 3 && /go\(document\.getElementById\('top'\)\)/.test(page) && /nav\{position:sticky;top:0/.test(css));
-  check('every write-up and its evidence is in it, the evidence folded away under a small toggle; the develop areas\' early signs, counter-move and question folded the same way',
+  check('every write-up and its evidence is in it, shown under each finding in a light box (nothing folded), the develop areas\' early signs, counter-move and question the same way; no "How you show up online"',
     ['WHY-WRITEUP', 'PARA-ONE', 'PARA-TWO', 'PAT-EVIDENCE-1', 'PAT-EVIDENCE-2', 'MBTI-READING', 'IN-PRACTICE', 'MBTI-EVIDENCE', 'MBTI-CAVEAT', 'FIVE-READING', 'FIVE-EVIDENCE', 'AREA-READING', 'AREA-EVIDENCE', 'TOGETHER',
       'OWN-LINE', 'VALUE-DETAIL', 'VALUE-EVIDENCE', 'BELIEF-DETAIL', 'INTEREST-DETAIL', 'INTEREST-EVIDENCE', 'LOVE-WHY', 'LOVE-CAVEAT', 'TONE', 'ATTACH-READING', 'ATTACH-FROM', 'IMPLICATION', 'CONFLICT-WRITEUP',
       'BRING-DETAIL', 'HARD-DETAIL', 'WHO-SUITS', 'NEED-DETAIL', 'CAREFUL-DETAIL', 'SITUATION', 'EDGE-WRITEUP', 'EDGE-EVIDENCE', 'OTHER-DETAIL', 'HOLD-DETAIL', 'WORK-STYLE', 'WATCH-OUTS', 'Your follow-through',
-      'BUILD-DETAIL', 'DEV-DETAIL', 'SIGN-A · SIGN-B', 'COUNTER', 'REFLECT', 'STEP-DETAIL', 'RATIONALE', 'ACTIVITY-DETAIL'].every(x => page.includes(x)) &&
-    /<details class="ev"><summary>Evidence · 2<\/summary><ul><li>PAT-EVIDENCE-1<\/li><li>PAT-EVIDENCE-2<\/li><\/ul><\/details>/.test(page) && /<summary>When it shows up<\/summary>/.test(page) && !page.includes('NOT-IN-THE-REPORT'));
-  check('the radar marks the top three; under it the strongest three and the weakest two; a reader\'s own line stands in for the general meaning',
+      'BUILD-DETAIL', 'DEV-DETAIL', 'SIGN-A · SIGN-B', 'COUNTER', 'REFLECT', 'STEP-DETAIL', 'RATIONALE'].every(x => page.includes(x)) && !/ACTIVITY-DETAIL|How you show up online|<details|<summary/.test(page) &&
+    /<div class="ev"><small>Evidence<\/small><ul><li>PAT-EVIDENCE-1<\/li><li>PAT-EVIDENCE-2<\/li><\/ul><\/div>/.test(page) && /<div class="ev"><small>When it shows up<\/small><p class="kv"><small>Early signs<\/small>SIGN-A · SIGN-B<\/p>/.test(page) &&
+    /<div class="ev"><small>Why<\/small><ul><li>LOVE-WHY<\/li><\/ul><\/div>/.test(page) && !page.includes('NOT-IN-THE-REPORT'));
+  check('the radar marks the top three, and every point and name can be tapped to show its score, what it is and the reader\'s own line; under it, the strongest three only',
     (page.match(/r="7" fill="var\(--c\)"/g) || []).length === 3 && (page.match(/<text class="top"/g) || []).length === 3 && /Strongest<\/p><div class="mots">/.test(page) &&
-    /<div class="mot hi"><b>Care for your people<i>76<\/i><\/b><span>OWN-LINE<\/span>/.test(page) && /Weakest<\/p><div class="mots low"><div class="mot"><b>Self-direction<i>20<\/i>/.test(page));
+    /<div class="mot hi"><b>Care for your people<i>76<\/i><\/b><span>OWN-LINE<\/span>/.test(page) && !/Weakest|mots low/.test(page) &&
+    (page.match(/<circle class="hit" data-m=/g) || []).length === 10 && (page.match(/<rect class="hit" data-m=/g) || []).length === 10 &&
+    /<div class="tip" id="mtip" aria-live="polite">Tap any point or name on the chart to see its score and what it means\.<\/div>/.test(page) && /\.radar \.hit\{fill:transparent;pointer-events:all\}/.test(css));
   check('the file escapes every string, loads nothing and keeps nothing: no links out, no storage, no requests',
     !page.includes(evil) && !/<img src=x|onerror=1>/.test(page) && (page.match(/<script>/g) || []).length === 1 &&
     !/https?:\/\/|fetch\(|XMLHttpRequest|sendBeacon|localStorage|sessionStorage|BroadcastChannel|window\.name|@import|<link /.test(page) && /PsycheAI keeps no copy of your report\./.test(page));
-  check('one sans-serif font everywhere, the chart\'s labels too, on a light page; printing opens every section and every fold',
+  check('one sans-serif font everywhere, the chart\'s labels too, on a light page; printing opens every section',
     /body\{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;/.test(css) && /\.radar text\{font-family:-apple-system/.test(css) &&
-    !/serif;?\s*[^-]/.test(css.replace(/sans-serif/g, '')) && /color-scheme:light/.test(css) && /@media print\{nav,\.foldall\{display:none\}\.part \.body\{display:block!important\}/.test(css) &&
-    /addEventListener\('beforeprint',function\(\)\{\[\]\.slice\.call\(document\.querySelectorAll\('details'\)\)\.forEach\(function\(d\)\{d\.open=true;\}\);\}\)/.test(page));
+    !/serif;?\s*[^-]/.test(css.replace(/sans-serif/g, '')) && /color-scheme:light/.test(css) && /@media print\{nav,\.foldall\{display:none\}\.part \.body\{display:block!important\}/.test(css));
   check('scores are clamped, and an empty view makes no file', /<u style="left:100%">/.test(page) && Array.isArray(got.empty) && got.empty.every(x => x === null));
   check('the chat shows the card, then the report as a file, then "What\'s next?" with "Get the PDF": no widget, no PDF unless asked (README "The report as a file")',
     /their whole report is a file: right under the card picture, attach the HTML file bin\/psyche\.py show summary saves \(report\), their Psyche Report, as a file they open, never as a widget and never pasted; it is never skipped\./.test(instructions.CORE_MUSE) &&
