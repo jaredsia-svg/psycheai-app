@@ -53,6 +53,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import socket
 import sys
 import time
@@ -65,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 80
+RELEASE = 82
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2011,6 +2013,7 @@ IG_CLI = os.environ.get('PSYCHEAI_IG_CLI') or '/opt/hatch/bin/instagram-cli'
 IGM_CLI = os.environ.get('PSYCHEAI_IGM_CLI') or '/opt/hatch/bin/instagram-messages-cli'
 COLLECT_TYPES = (('POST,REEL', 'post'), ('STORY,HIGHLIGHT', 'story'))
 COLLECT_PAGES = 60          # a list's pages at most
+COLLECT_WORKERS = 3          # conversations read at once (README "Three at a time")
 COLLECT_THREADS = CONVO_TOP + CONVO_SPARE   # their busiest contacts read, as the site's 10 and 5 spares
 THREAD_PAGES = 8            # a thread's pages at most (20 for the 4 busiest, which the plan wants most from)
 
@@ -2216,16 +2219,25 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                                    'others': {str(v) for u in others for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v},
                                    'mine': 0, 'whole': False, 'after': None, 'used': set(), 'pages': 0, 'failed': False})
 
+                # Three conversations at a time, each read in order with its own cursor; a rate limit in
+                # any one stops them all (no call starts after it) and the read stops as it always has.
+                lock, halt = threading.Lock(), threading.Event()
+
                 def read_thread(st, want, limit):
-                    while not st['whole'] and not st['failed'] and st['mine'] < want and st['pages'] < limit:
+                    while not halt.is_set() and not st['whole'] and not st['failed'] and st['mine'] < want and st['pages'] < limit:
                         try:
                             page = ig(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', st['fbid'], '--first', 50,
                                       *(('--after', st['after']) if st['after'] else ()))
+                        except RateLimited:
+                            halt.set()
+                            return
                         except RuntimeError as err:
                             st['failed'] = True
-                            note('a conversation', err)
+                            with lock:
+                                note('a conversation', err)
                             return
                         st['pages'] += 1
+                        got, own = [], 0
                         for msg in page.get('messages') or []:
                             text = str(((msg.get('content') or {}).get('text_body')) or '')
                             when_sent = local_time(msg.get('message_sent_at'), msg.get('timestamp'))
@@ -2233,11 +2245,14 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                                 continue
                             sender = str(msg.get('sender_fbid') or '')
                             mine = sender in (account, m_account) or (bool(st['others']) and sender not in st['others'])
-                            items.append({'kind': 'message', 'date': when_sent.strftime('%Y-%m-%d %H:%M'), 'text': text,
-                                          'thread': st['tid'], 'mine': mine, 'with': st['names']})
+                            got.append({'kind': 'message', 'date': when_sent.strftime('%Y-%m-%d %H:%M'), 'text': text,
+                                        'thread': st['tid'], 'mine': mine, 'with': st['names']})
                             if mine:
                                 st['mine'] += len(text)
-                                read['own messages'] += 1
+                                own += 1
+                        with lock:
+                            items.extend(got)
+                            read['own messages'] += own
                         info = page.get('messages_page_info') or {}
                         nxt = info.get('end_cursor') if info.get('has_next_page') else None
                         if not nxt or nxt in st['used']:
@@ -2246,15 +2261,24 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                         st['used'].add(nxt)
                         st['after'] = nxt
 
-                for st in states:
-                    read_thread(st, t['convos'] / CONVO_TOP * 1.3, THREAD_PAGES)
-                left = t['convos'] * 1.3 - sum(st['mine'] for st in states)
+                def at_once(jobs, limit):
+                    with ThreadPoolExecutor(COLLECT_WORKERS) as pool:
+                        list(pool.map(lambda job: read_thread(job[0], job[1], limit), jobs))
+                    if halt.is_set():
+                        raise RateLimited()
+
+                at_once([(st, t['convos'] / CONVO_TOP * 1.3) for st in states], THREAD_PAGES)
+                # The room left, given out busiest first before any is read, so the three can run together.
+                left, deeper = t['convos'] * 1.3 - sum(st['mine'] for st in states), []
                 for st in sorted(states, key=lambda x: -x['mine'])[:CONVO_TOP]:
                     if left <= 0:
                         break
-                    before = st['mine']
-                    read_thread(st, min(t['cap'] * 1.3, st['mine'] + left), 30)
-                    left -= st['mine'] - before
+                    if st['whole'] or st['failed']:
+                        continue
+                    want = min(t['cap'] * 1.3, st['mine'] + left)
+                    left -= want - st['mine']
+                    deeper.append((st, want))
+                at_once(deeper, 30)
                 for st in states:
                     if st['pages']:
                         read['threads'] += 1
@@ -2340,6 +2364,83 @@ def schema_problems(value, node, defs, at='answer', out=None):
     return out
 
 
+# The checks psycheai.io runs when a read is saved (lib/museimport.js eiProblems, planProblems,
+# listProblems), run here first so a rewrite happens before the first publish, not after it
+# (README "Saved checks, checked first"). Same words, same thresholds: keep the two in step.
+CLOSE_CIRCLE = re.compile(r'\b(close|small|tight|tight-knit|trusted|familiar)\b[\w ,:-]{0,32}\b(circle|core)\b', re.I)
+PRIVATE_ACCOUNT = re.compile(r'\b(private account|account is private)\b', re.I)
+SAME_COMMON = set('the and you your one this that with for from into next week weeks month year quarter each before after then them their what when will would more than about which have has its are was were can could just only also'.split())
+SAME_FRAME = set('a an of to in on at as so or be by is it not but no too very strength strengths pressure under becomes become behind tired turns'.split())
+
+
+def ei_problems(data):
+    letters = ((data.get('mbti') or {}).get('letters') or []) if isinstance(data.get('mbti'), dict) else []
+    letter = next((l for l in letters if isinstance(l, dict) and re.fullmatch(r'[EI]', str(l.get('choice') or ''))), None)
+    if not letter:
+        return []
+    said = ' '.join(str(x) for x in [letter.get('why') or ''] + list(letter.get('evidence') or []))
+    out = []
+    if CLOSE_CIRCLE.search(said):
+        out.append('mbti E/I: its reasons rest on a close circle, which is loyalty rather than energy: it follows who starts things, the groups and new people they join, and how they recharge')
+    if PRIVATE_ACCOUNT.search(said):
+        out.append('mbti E/I: whether the account is private is not a reason for either letter')
+    return out
+
+
+def same_point(a, b):
+    stems = lambda t: [w[:5] for w in re.findall(r'[a-z]{3,}', str(t or '').lower()) if w not in SAME_COMMON]
+    words = lambda t: re.findall(r'[a-z0-9]+', str(t or '').lower())
+    text_of = lambda x: str(x.get('title')) + ' ' + str(x.get('detail') or '')
+
+    def title_in(x, y):
+        t = list(dict.fromkeys(stems(x.get('title'))))
+        other = set(stems(text_of(y) if len(t) >= 4 else y.get('title')))
+        return len(t) >= 2 and sum(1 for w in t if w in other) / len(t) >= 0.75
+    if title_in(a, b) or title_in(b, a):
+        return True
+    wa, wb = words(text_of(a)), words(text_of(b))
+    weighty = lambda run: sum(1 for w in run if w not in SAME_COMMON and w not in SAME_FRAME) >= 3
+    runs = {' '.join(wa[i:i + 6]) for i in range(len(wa) - 5) if weighty(wa[i:i + 6])}
+    return any(' '.join(wb[i:i + 6]) in runs for i in range(len(wb) - 5))
+
+
+def first_same(items, what):
+    xs = [x for x in items if isinstance(x, dict) and isinstance(x.get('title'), str) and x['title'].strip()]
+    for i in range(len(xs)):
+        for j in range(i + 1, len(xs)):
+            if same_point(xs[i], xs[j]):
+                return ['%s: "%s" and "%s" make the same point; %s' % (what, xs[i]['title'][:60], xs[j]['title'][:60],
+                        'the plan keeps one of them and gives the other place to a different step' if what == 'the plan' else 'the list keeps one of them and gives the other place to a different point')]
+    return []
+
+
+def plan_problems(data):
+    dev = data.get('development') if isinstance(data.get('development'), dict) else {}
+    car = data.get('careerAssessment') if isinstance(data.get('careerAssessment'), dict) else {}
+    well = data.get('wellness') if isinstance(data.get('wellness'), dict) else {}
+    acts = [a for d in (dev.get('develop') or []) if isinstance(d, dict) for a in (d.get('actions') or [])]
+    return first_same(acts + list(car.get('actions') or []) + list(well.get('suggestions') or []), 'the plan')
+
+
+def list_problems(data):
+    out = []
+
+    def walk(node, path):
+        if out or not isinstance(node, (dict, list)):
+            return
+        if isinstance(node, list):
+            if len(node) > 1 and all(isinstance(x, dict) and isinstance(x.get('title'), str) for x in node):
+                out.extend(first_same(node, path))
+            for x in node:
+                walk(x, path)
+            return
+        for k, v in node.items():
+            if k not in ('actions', 'suggestions'):
+                walk(v, path + '.' + k if path else k)
+    walk(data, '')
+    return out[:1]
+
+
 def check_answer(path):
     """bin/psyche.py check-answer FILE: the answer file as publish_psyche will take it, checked here first."""
     try:
@@ -2358,6 +2459,7 @@ def check_answer(path):
     # What would stop or hold the publish: these are fixed first.
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
+    problems += ei_problems(answer) + plan_problems(answer) + list_problems(answer)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
     # Where it differs from the guide's schema below the top: worth fixing, but publish_psyche is the judge.
