@@ -369,6 +369,15 @@ async function route(req, res) {
       const b = reads.box(read[1]);
       return b ? send(res, 200, b) : send(res, 404, { error: 'expired' });
     }
+    // A Muse report's PDF, held in memory until Muse attaches it (lib/pdfhold.js): never stored.
+    const heldPdf = /^\/report\/([A-Za-z0-9_-]{32})\.pdf$/.exec(url.pathname);
+    if (heldPdf && req.method === 'GET') {
+      const pdf = require('./lib/pdfhold').take(heldPdf[1]);
+      if (!pdf) return send(res, 404, { error: 'This PDF was already fetched or has expired. Republish to make a new one.' });
+      res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': pdf.length, 'Cache-Control': 'private, no-store',
+        'Content-Disposition': 'inline; filename="Psyche Report.pdf"', 'X-Robots-Tag': 'noindex' });
+      return res.end(pdf);
+    }
     // PsycheAI as a Muse skill (lib/skill.js): its files, and its account.
     const skillPath = /^\/skill\/(SKILL\.md|bin\/psyche\.py|guide\.json)$/.exec(url.pathname);
     if (skillPath && req.method === 'GET') {
@@ -435,6 +444,7 @@ async function main() {
     chat.sweep();
     reads.sweep();
     psyche.sweep();
+    require('./lib/pdfhold').sweep();
     sync.sweep();
     join.sweep();
     require('./lib/waitlist').announce();
