@@ -2672,15 +2672,16 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   check('only Overview is open to start with; a tap closes the others first, then opens it and brings its title to the top under the bar; "Collapse all" closes all and goes back to the top',
     (page.match(/<section class="part open"/g) || []).length === 1 && /<section class="part open" id="p0"[^>]*data-section="Overview"/.test(page) &&
     /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);set\(p,true\);go\(p\);\}/.test(page) && /if\(p\.classList\.contains\('open'\)\)set\(p,false\);else only\(p\);/.test(page) &&
-    /scrollIntoView\(\{block:'start',behavior:'smooth'\}\)/.test(page) && /scroll-margin-top:var\(--navh,62px\)/.test(css) && /--navh',\(bar\.offsetHeight\+10\)\+'px'/.test(page) &&
+    /scrollIntoView\(\{block:'start',behavior:'instant'\}\)/.test(page) && /scroll-margin-top:var\(--navh,62px\)/.test(css) && /--navh',\(bar\.offsetHeight\+10\)\+'px'/.test(page) &&
     (page.match(/data-fold/g) || []).length >= 3 && /go\(document\.getElementById\('top'\)\)/.test(page) && /nav\{position:sticky;top:0/.test(css));
-  check('every write-up and its evidence is in it, shown under each finding in a light box (nothing folded), the develop areas\' early signs, counter-move and question the same way; no "How you show up online"',
+  check('every write-up and its evidence is in it, the evidence as small grey bullets under each finding (no heading, no box, nothing folded), the develop areas\' early signs, counter-move and question the same way; no "How you show up online"',
     ['WHY-WRITEUP', 'PARA-ONE', 'PARA-TWO', 'PAT-EVIDENCE-1', 'PAT-EVIDENCE-2', 'MBTI-READING', 'IN-PRACTICE', 'MBTI-EVIDENCE', 'MBTI-CAVEAT', 'FIVE-READING', 'FIVE-EVIDENCE', 'AREA-READING', 'AREA-EVIDENCE', 'TOGETHER',
       'OWN-LINE', 'VALUE-DETAIL', 'VALUE-EVIDENCE', 'BELIEF-DETAIL', 'INTEREST-DETAIL', 'INTEREST-EVIDENCE', 'LOVE-WHY', 'LOVE-CAVEAT', 'TONE', 'ATTACH-READING', 'ATTACH-FROM', 'IMPLICATION', 'CONFLICT-WRITEUP',
       'BRING-DETAIL', 'HARD-DETAIL', 'WHO-SUITS', 'NEED-DETAIL', 'CAREFUL-DETAIL', 'SITUATION', 'EDGE-WRITEUP', 'EDGE-EVIDENCE', 'OTHER-DETAIL', 'HOLD-DETAIL', 'WORK-STYLE', 'WATCH-OUTS', 'Your follow-through',
-      'BUILD-DETAIL', 'DEV-DETAIL', 'SIGN-A · SIGN-B', 'COUNTER', 'REFLECT', 'STEP-DETAIL', 'RATIONALE'].every(x => page.includes(x)) && !/ACTIVITY-DETAIL|How you show up online|<details|<summary/.test(page) &&
-    /<div class="ev"><small>Evidence<\/small><ul><li>PAT-EVIDENCE-1<\/li><li>PAT-EVIDENCE-2<\/li><\/ul><\/div>/.test(page) && /<div class="ev"><small>When it shows up<\/small><p class="kv"><small>Early signs<\/small>SIGN-A · SIGN-B<\/p>/.test(page) &&
-    /<div class="ev"><small>Why<\/small><ul><li>LOVE-WHY<\/li><\/ul><\/div>/.test(page) && !page.includes('NOT-IN-THE-REPORT'));
+      'BUILD-DETAIL', 'DEV-DETAIL', 'SIGN-A; SIGN-B', 'COUNTER', 'REFLECT', 'STEP-DETAIL', 'RATIONALE'].every(x => page.includes(x)) && !/ACTIVITY-DETAIL|How you show up online|<details|<summary/.test(page) &&
+    /<ul class="ev"><li>PAT-EVIDENCE-1<\/li><li>PAT-EVIDENCE-2<\/li><\/ul>/.test(page) && /<ul class="ev"><li><b>Early signs:<\/b> SIGN-A; SIGN-B<\/li><li><b>Counter-move:<\/b> COUNTER<\/li><li><b>Ask yourself:<\/b> REFLECT<\/li><\/ul>/.test(page) &&
+    /<ul class="ev"><li>LOVE-WHY<\/li><\/ul>/.test(page) && /<ul class="ev"><li>ATTACH-FROM<\/li><\/ul>/.test(page) && !/>(Evidence|Read from|When it shows up|Why)</.test(page) &&
+    /<span class="where">Shows up in Big Five · How you work<\/span>/.test(page) && !/class="pill g"/.test(page) && !page.includes('NOT-IN-THE-REPORT'));
   check('the radar marks the top three, and every point and name can be tapped to show its score, what it is and the reader\'s own line; under it, the strongest three only',
     (page.match(/r="7" fill="var\(--c\)"/g) || []).length === 3 && (page.match(/<text class="top"/g) || []).length === 3 && /Strongest<\/p><div class="mots">/.test(page) &&
     /<div class="mot hi"><b>Care for your people<i>76<\/i><\/b><span>OWN-LINE<\/span>/.test(page) && !/Weakest|mots low/.test(page) &&
@@ -2689,9 +2690,9 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   check('the file escapes every string, loads nothing and keeps nothing: no links out, no storage, no requests',
     !page.includes(evil) && !/<img src=x|onerror=1>/.test(page) && (page.match(/<script>/g) || []).length === 1 &&
     !/https?:\/\/|fetch\(|XMLHttpRequest|sendBeacon|localStorage|sessionStorage|BroadcastChannel|window\.name|@import|<link /.test(page) && /PsycheAI keeps no copy of your report\./.test(page));
-  check('one sans-serif font everywhere, the chart\'s labels too, on a light page; printing opens every section',
+  check('one sans-serif font everywhere, the chart\'s labels too, on a light page; no scrolling motion or fade when a section opens; printing opens every section',
     /body\{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;/.test(css) && /\.radar text\{font-family:-apple-system/.test(css) &&
-    !/serif;?\s*[^-]/.test(css.replace(/sans-serif/g, '')) && /color-scheme:light/.test(css) && /@media print\{nav,\.foldall\{display:none\}\.part \.body\{display:block!important\}/.test(css));
+    !/serif;?\s*[^-]/.test(css.replace(/sans-serif/g, '')) && /color-scheme:light/.test(css) && !/scroll-behavior:smooth|@keyframes|animation:/.test(css) && !/behavior:'smooth'/.test(page) && /behavior:'instant'/.test(page) && /@media print\{nav,\.foldall\{display:none\}\.part \.body\{display:block!important\}/.test(css));
   check('scores are clamped, and an empty view makes no file', /<u style="left:100%">/.test(page) && Array.isArray(got.empty) && got.empty.every(x => x === null));
   check('the chat shows the card, then the report as a file, then "What\'s next?" with "Get the PDF": no widget, no PDF unless asked (README "The report as a file")',
     /their whole report is a file: right under the card picture, attach the HTML file bin\/psyche\.py show summary saves \(report\), their Psyche Report, as a file they open, never as a widget and never pasted; it is never skipped\./.test(instructions.CORE_MUSE) &&

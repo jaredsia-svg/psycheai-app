@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 63
+RELEASE = 64
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -217,9 +217,9 @@ W_BANDS = {'steady': ('#2f7d5b', '#e3f4ec'), 'mixed': ('#9a5b12', '#fdf1e2'), 'u
 W_CSS = '''
 :root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--mute:#6b6076;--line:#ece4f1;--accent:#7b3fa0;--accent2:#d1477a}
 *{box-sizing:border-box;font-family:inherit}
-html{scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#cdb6dd transparent}
+html{scrollbar-width:thin;scrollbar-color:#cdb6dd transparent}
 html,body{margin:0;padding:0;background:#faf7fb}
-body{font-family:__FONT__;color:var(--ink);font-size:15.5px;line-height:1.55;-webkit-text-size-adjust:100%;text-rendering:optimizeLegibility}
+body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;text-rendering:optimizeLegibility}
 .wrap{max-width:760px;margin:0 auto;padding:0 14px 40px}
 .banner{position:relative;overflow:hidden;margin:0 -14px;padding:26px 20px 24px;color:#fff;background:linear-gradient(135deg,#5b2a86 0%,#7b3fa0 45%,#c2366d 100%)}
 .banner:before{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,230,190,.55),rgba(255,230,190,0) 70%)}
@@ -260,22 +260,22 @@ nav button{flex:none;margin-left:auto;padding:6px 12px;border-radius:999px;color
 .chev{grid-row:1/span 2;grid-column:3;width:24px;height:24px;color:var(--mute);transition:transform .2s}
 .part.open .chev{transform:rotate(180deg)}
 .body{display:none;padding:2px 18px 18px;border-top:1px solid #f1eaf5}
-.part.open .body{display:block;animation:in .25s ease}
-@keyframes in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.part.open .body{display:block}
 h3{margin:22px 0 10px;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:8px}
 h3:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#efe6f3,transparent)}
 p{margin:0 0 10px}
 .soft{color:var(--soft);font-size:14.5px}
 .lead{font-size:16.5px;font-weight:650;line-height:1.45}
+.intro{font-size:16px;line-height:1.55;color:var(--ink)}
 .hero{margin-top:16px;padding:16px;border-radius:16px;background:linear-gradient(135deg,#f3e9f8,#fdf0f6);border:1px solid #ead9f1}
 .hero small{display:block;font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
 .hero b{display:block;margin:2px 0;font-size:26px;line-height:1.15;letter-spacing:-.02em;background:linear-gradient(135deg,#7b3fa0,#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero span{display:block;color:var(--mute);font-size:13.5px;margin-bottom:8px}
 .hero p{margin:0;color:#3b2a49}
-.it{padding:12px 0;border-bottom:1px solid #f2ecf5}
+.it{padding:11px 0;border-bottom:1px solid #f4eff7}
 .it:last-child{border-bottom:0}
 .it>b{display:block;font-weight:700;line-height:1.35}
-.it>span{display:block;margin-top:3px;color:var(--soft);font-size:14.5px}
+.it>span{display:block;margin-top:3px;color:var(--soft);font-size:14px}
 .pat{display:grid;grid-template-columns:34px 1fr;gap:12px;padding:14px 0;border-bottom:1px solid #f2ecf5}
 .pat:last-child{border-bottom:0}
 .pat .n{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:linear-gradient(135deg,#7b3fa0,#d1477a)}
@@ -284,14 +284,10 @@ p{margin:0 0 10px}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:#f3e9f8;color:#6a3590;vertical-align:middle}
 .pill.prim{background:var(--c);color:#fff}
 .pill.g{background:#eef1f4;color:#4d5866}
-.ev{margin-top:9px;padding:9px 12px;border-radius:12px;background:#faf6fc;border:1px solid #f0e6f5}
-.ev>small{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--c)}
-.ev ul{margin:4px 0 0;padding:0;list-style:none}
-.ev li{position:relative;margin:4px 0;padding-left:15px;font-size:14px;color:#3b2a49}
-.ev li:before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--c);opacity:.55}
-.ev .kv{margin:6px 0 0;font-size:14px;color:#3b2a49}
-.ev small+.kv{margin-top:4px}
-.ev .kv small{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.ev{margin:6px 0 0;padding:0;list-style:none}
+.ev li{position:relative;margin:3px 0;padding-left:14px;font-size:13px;line-height:1.45;color:#776b84}
+.ev li:before{content:"";position:absolute;left:3px;top:.6em;width:4px;height:4px;border-radius:50%;background:#b9a6c7}
+.ev li b{color:#5a4f66;font-weight:700}
 .letter{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--c);color:#fff;font-weight:800;font-size:15px;margin-right:10px;vertical-align:middle}
 .type{display:flex;align-items:baseline;gap:10px;margin:14px 0 2px}
 .type b{font-size:30px;font-weight:800;letter-spacing:.06em;color:var(--c)}
@@ -332,7 +328,11 @@ p{margin:0 0 10px}
 .lang .ico{font-size:24px;line-height:1.2}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 @media (max-width:560px){.cols{grid-template-columns:1fr}}
-.box{border:1px solid #efe8f3;border-radius:16px;padding:12px 14px;background:#fdfbfe}
+.box{border-radius:16px;padding:12px 14px;background:#faf8fb}
+.box.good{background:#f3faf6}
+.box.hard{background:#fdf7ef}
+.where,.it>span.where{display:block;margin-top:5px;font-size:12.5px;color:#8a7f96}
+.fine{margin:10px 0 0;font-size:12.5px;line-height:1.45;color:#8a7f96}
 .box h4{display:flex;align-items:center;gap:7px;margin:2px 0 4px;font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--mute)}
 .box h4 i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;font-size:11px;color:#fff}
 .box.good h4 i{background:#2f7d5b}
@@ -372,8 +372,8 @@ var parts=[].slice.call(document.querySelectorAll('.part')),chips=[].slice.call(
 function navh(){if(bar)document.documentElement.style.setProperty('--navh',(bar.offsetHeight+10)+'px');}navh();window.addEventListener('resize',navh);
 function set(p,open){p.classList.toggle('open',open);p.querySelector('button').setAttribute('aria-expanded',open?'true':'false');
   chips.forEach(function(c){if(c.getAttribute('href')==='#'+p.id){c.setAttribute('aria-current',open?'true':'false');
-    if(open){var n=c.parentNode;n.scrollTo?n.scrollTo({left:Math.max(0,c.offsetLeft-n.clientWidth/2+c.clientWidth/2),behavior:'smooth'}):(n.scrollLeft=c.offsetLeft);}}});}
-function go(el){requestAnimationFrame(function(){requestAnimationFrame(function(){try{el.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){el.scrollIntoView(true);}});});}
+    if(open){var n=c.parentNode;n.scrollLeft=Math.max(0,c.offsetLeft-n.clientWidth/2+c.clientWidth/2);}}});}
+function go(el){requestAnimationFrame(function(){requestAnimationFrame(function(){try{el.scrollIntoView({block:'start',behavior:'instant'});}catch(e){el.scrollIntoView(true);}});});}
 function only(p){parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);go(p);}
 parts.forEach(function(p){p.querySelector('button').addEventListener('click',function(){if(p.classList.contains('open'))set(p,false);else only(p);});});
 chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();var p=document.querySelector(c.getAttribute('href'));if(p)only(p);});});
@@ -432,13 +432,12 @@ def _block(title, inner):
     return '<h3>' + _e(title) + '</h3>' + inner if inner else ''
 
 
-def _ev(evidence, label='Evidence', extra=''):
-    """The evidence behind a finding, shown under it in a light box with its label."""
+def _ev(evidence, label='', extra=''):
+    """The evidence behind a finding: small grey bullet points under it, no heading and no box."""
     ev = [x for x in _l(evidence) if isinstance(x, str)]
     if not ev and not extra:
         return ''
-    return ('<div class="ev"><small>' + _e(label) + '</small>' + ('<ul>' + ''.join('<li>' + _e(x) + '</li>' for x in ev) + '</ul>' if ev else '')
-            + extra + '</div>')
+    return '<ul class="ev">' + ''.join('<li>' + _e(x) + '</li>' for x in ev) + extra + '</ul>'
 
 
 def _items(xs, details=True):
@@ -449,8 +448,7 @@ def _items(xs, details=True):
             x = {'title': x}
         if isinstance(x, dict) and x.get('title'):
             d = _cap(x.get('detail')) if details else ''
-            pills = ''.join('<span class="pill g">' + _e(_cap(x.get(k))) + '</span>' for k in ('intensity', 'trajectory') if x.get(k))
-            out += ('<div class="it"><b>' + _e(x['title']) + (' ' + pills if pills else '') + '</b>' + ('<span>' + _e(d) + '</span>' if d else '')
+            out += ('<div class="it"><b>' + _e(x['title']) + '</b>' + ('<span>' + _e(d) + '</span>' if d else '')
                     + _ev(x.get('evidence')) + '</div>')
     return out
 
@@ -531,10 +529,10 @@ def _overview(v):
         hero = ('<div class="hero"><small>You are most like</small><b>' + _e(_s(v, 'character')) + '</b>'
                 + ('<span>' + _e(_s(v, 'source')) + '</span>' if _s(v, 'source') else '') + ('<p>' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else '') + '</div>')
     paras = [p for p in _l(_s(v, 'summaryFull')) if isinstance(p, str)] or [x for x in [_s(v, 'summary')] if x]
-    summ = ''.join('<p%s>%s</p>' % (' class="lead"' if i == 0 else '', _e(p)) for i, p in enumerate(paras))
+    summ = ''.join('<p%s>%s</p>' % (' class="intro"' if i == 0 else '', _e(p)) for i, p in enumerate(paras))
     pats = ''.join('<div class="pat"><span class="n">%d</span><div><b>%s</b>%s%s%s</div></div>' % (
         i + 1, _e(p.get('name')), '<span class="soft">' + _e(p.get('line')) + '</span>' if p.get('line') else '',
-        ('<div class="pills">' + ''.join('<span class="pill">' + _e(x) + '</span>' for x in _l(p.get('showsUpIn')) if isinstance(x, str)) + '</div>') if _l(p.get('showsUpIn')) else '',
+        ('<span class="where">Shows up in ' + _e(' · '.join(x for x in _l(p.get('showsUpIn')) if isinstance(x, str))) + '</span>') if _l(p.get('showsUpIn')) else '',
         _ev(p.get('evidence')))
         for i, p in enumerate(p for p in _l(_s(v, 'patterns')) if isinstance(p, dict) and p.get('name')))
     return hero + _block('Executive summary', summ) + _block('Your signature patterns', pats), _s(v, 'character')
@@ -547,8 +545,8 @@ def _who(v, nickname=''):
         '<div class="it"><b><span class="letter">' + _e(l.get('letter')) + '</span>' + _e(l.get('name'))
         + (' <span class="pill">' + _e(l.get('strength')) + '</span>' if l.get('strength') else '') + '</b>'
         + ('<span>' + _e(l.get('reading') or l.get('line')) + '</span>' if (l.get('reading') or l.get('line')) else '')
-        + ('<span><i>In practice:</i> ' + _e(l.get('inPractice')) + '</span>' if l.get('inPractice') else '') + _ev(l.get('evidence')) + '</div>'
-        for l in letters) + ('<p class="soft" style="margin-top:8px;font-size:13px">' + _e(_s(v, 'mbtiCaveat')) + '</p>' if _s(v, 'mbtiCaveat') else '')
+        + ('<span class="where">In practice: ' + _e(l.get('inPractice')) + '</span>' if l.get('inPractice') else '') + _ev(l.get('evidence')) + '</div>'
+        for l in letters) + ('<p class="fine">' + _e(_s(v, 'mbtiCaveat')) + '</p>' if _s(v, 'mbtiCaveat') else '')
     five = ''
     for t in _l(_s(v, 'bigFive')):
         s = _num(t.get('score')) if isinstance(t, dict) else None
@@ -559,7 +557,7 @@ def _who(v, nickname=''):
                  + ('<div class="soft">' + _e(t.get('reading') or t.get('line')) + '</div>' if (t.get('reading') or t.get('line')) else '') + _ev(t.get('evidence')) + '</div>')
     wb = _s(v, 'wellbeing') or {}
     band = lambda a: '<span class="band" style="color:%s;background:%s">%s</span>' % (W_BANDS.get(a.get('band'), ('#5a4f66', '#f1edf4')) + (_e(a.get('band')),))
-    well = ''.join('<div class="it"><b>' + _e(a.get('area')) + band(a) + (' <span class="pill g">confidence ' + _e(a.get('confidence')) + '</span>' if a.get('confidence') else '') + '</b>'
+    well = ''.join('<div class="it"><b>' + _e(a.get('area')) + band(a)  + '</b>'
                    + ('<span>' + _e(a.get('reading')) + '</span>' if a.get('reading') else '') + _ev(a.get('evidence')) + '</div>'
                    for a in _l(_s(wb, 'areas')) if isinstance(a, dict) and a.get('area'))
     together = _s(wb, 'together') or _s(wb, 'summary')
@@ -583,7 +581,7 @@ def _langs(xs):
     return ''.join('<div class="lang"><span class="ico">' + _e(l.get('icon') or '💗') + '</span><div><b>' + _e(l.get('language')) + '</b> '
                    + '<span class="pill' + (' prim' if l.get('strength') == 'primary' else '') + '">' + _e(l.get('strength') or 'secondary') + '</span>'
                    + ('<div class="soft">' + _e(l.get('line')) + '</div>' if l.get('line') else '')
-                   + _ev([l.get('why')] if l.get('why') else [], 'Why') + '</div></div>'
+                   + _ev([l.get('why')] if l.get('why') else []) + '</div></div>'
                    for l in _l(xs) if isinstance(l, dict) and l.get('language'))
 
 
@@ -591,16 +589,16 @@ def _connect(v):
     ll = _s(v, 'loveLanguages') or {}
     attach = ''
     if _s(v, 'attachment'):
-        read_from = ('<p class="motlabel">Read from</p><div class="pills">' + ''.join('<span class="pill g">' + _e(x) + '</span>' for x in _l(_s(v, 'derivedFrom')) if isinstance(x, str)) + '</div>') if _l(_s(v, 'derivedFrom')) else ''
+        read_from = _ev(_s(v, 'derivedFrom'))
         attach = ('<p class="lead">' + _e(_s(v, 'attachment')) + '</p>' + ('<p>' + _e(_s(v, 'attachmentTone')) + '</p>' if _s(v, 'attachmentTone') else '')
                   + ('<p class="soft">' + _e(_s(v, 'attachmentReading')) + '</p>' if _s(v, 'attachmentReading') else '') + read_from
-                  + _items(_s(v, 'implications')) + ('<p class="soft" style="font-size:13px">' + _e(_s(v, 'attachmentCaveat')) + '</p>' if _s(v, 'attachmentCaveat') else ''))
+                  + _items(_s(v, 'implications')) + ('<p class="fine">' + _e(_s(v, 'attachmentCaveat')) + '</p>' if _s(v, 'attachmentCaveat') else ''))
     conflict = '<p>' + _e(_s(v, 'conflict')) + '</p>' if _s(v, 'conflict') else ''
     friction = _pair('What you bring', _s(v, 'bring') or _s(v, 'atYourBest'), 'Where it gets hard', _s(v, 'hard') or _s(v, 'watchFor'))
     suits = (('<p>' + _e(_s(v, 'whoSuits') or _s(v, 'bestPartner')) + '</p>') if (_s(v, 'whoSuits') or _s(v, 'bestPartner')) else '') \
         + _pair('What you actually need', _s(v, 'needs') or _s(v, 'partnerNeeds'), 'What to be careful of', _s(v, 'careful') or _s(v, 'carefulOf'))
     love = _block('How you want to be loved', _langs(_s(ll, 'receiving'))) + _block('How you show love', _langs(_s(ll, 'giving'))) \
-        + ('<p class="soft" style="font-size:13px">' + _e(_s(ll, 'caveat')) + '</p>' if _s(ll, 'caveat') else '')
+        + ('<p class="fine">' + _e(_s(ll, 'caveat')) + '</p>' if _s(ll, 'caveat') else '')
     first = next((l.get('language') for l in _l(_s(ll, 'receiving')) if isinstance(l, dict)), '')
     tease = ' · '.join(x for x in [first, _s(v, 'attachment')] if x)
     return (love + _block('Attachment style', attach) + _block('How you deal with conflict', conflict)
@@ -608,7 +606,7 @@ def _connect(v):
 
 
 def _work(v):
-    situation = '<p class="lead" style="margin-top:14px">' + _e(_s(v, 'situation')) + '</p>' if _s(v, 'situation') else ''
+    situation = '<p class="intro" style="margin-top:14px">' + _e(_s(v, 'situation')) + '</p>' if _s(v, 'situation') else ''
     edge = ''
     if _s(v, 'edge'):
         edge = ('<div class="edge"><small>Your edge</small><b>' + _e(_s(v, 'edge')) + '</b>' + ('<p>' + _e(_s(v, 'edgeDetail')) + '</p>' if _s(v, 'edgeDetail') else '')
@@ -628,11 +626,11 @@ def _together(v):
         if not isinstance(d, dict) or not d.get('title'):
             continue
         signs = [x for x in _l(d.get('signs')) if isinstance(x, str)]
-        more = (('<p class="kv"><small>Early signs</small>' + _e(' · '.join(signs)) + '</p>' if signs else '')
-                + ('<p class="kv"><small>Counter-move</small>' + _e(d.get('counterMove')) + '</p>' if d.get('counterMove') else '')
-                + ('<p class="kv"><small>Worth asking yourself</small><i>' + _e(d.get('reflect')) + '</i></p>' if d.get('reflect') else ''))
+        more = (('<li><b>Early signs:</b> ' + _e('; '.join(signs)) + '</li>' if signs else '')
+                + ('<li><b>Counter-move:</b> ' + _e(d.get('counterMove')) + '</li>' if d.get('counterMove') else '')
+                + ('<li><b>Ask yourself:</b> ' + _e(d.get('reflect')) + '</li>' if d.get('reflect') else ''))
         dev += ('<div class="it"><b>' + _e(d['title']) + '</b>' + ('<span>' + _e(d.get('detail')) + '</span>' if d.get('detail') else '')
-                + (_ev([], 'When it shows up', more) if more else '') + '</div>')
+                + (_ev([], '', more) if more else '') + '</div>')
     if not dev:
         dev = _items(_s(v, 'workOn'))
     steps = [p for p in _l(_s(v, 'steps')) if isinstance(p, dict) and p.get('step')] or [p for p in _l(_s(v, 'plan')) if isinstance(p, dict) and p.get('step')]
@@ -689,7 +687,7 @@ def report_html(view, name='', when='', card_png=None):
                   + ('<div class="big"><b>%d%%</b><span class="soft">confidence%s</span></div><div class="bar"><i style="width:%d%%"></i></div>'
                      % (score, (' · ' + _e(c.get('level'))) if c.get('level') else '', score) if score is not None else '')
                   + ('<p>' + _e(m.get('rationale')) + '</p>' if m.get('rationale') else '')
-                  + (('<p class="motlabel">Read from</p>' + _chips(c.get('basedOn'))) if _l(c.get('basedOn')) else '')
+                  + _ev(c.get('basedOn'))
                   + '</div>')
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
