@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 74
+RELEASE = 75
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2829,6 +2829,7 @@ def main(argv):
             n = max(1, min(30, int(opts.get('--threads') or COLLECT_THREADS)))
         except ValueError:
             n = COLLECT_THREADS
+        mark('collect')             # a read starts here: an earlier attempt's marks don't count (lib/timing.js)
         out = collect(opts.get('--account-id'), opts.get('--messages-account-id'), opts.get('--me'), n, not opts.get('no'))
         if out.get('ok') is not False or out.get('built'):
             mark('check-digest')    # the digest is built and checked: the read's reading stage ends here

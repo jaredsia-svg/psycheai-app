@@ -2123,7 +2123,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       require('../lib/timing.js').stages([['call:get_report_guide', -300], ['build-digest', -200], ['check-digest', -150], ['call:publish_psyche', -10]]).fixing === 50 &&
       /`bin\/psyche\.py build-digest` picks the sample, keeps what each reply answers, takes out names, handles, links and numbers/.test(skillMd) && /Fetch what doesn't depend on anything else together, at once where Muse allows it/.test(skillMd),
       JSON.stringify(skillState.leaving && skillState.leaving.build && [skillState.leaving.build[0].problems, skillState.leaving.build[1].slice(0, 400), skillState.leaving.build[4]]).slice(0, 700));
-    check('collect: a first read in one command, through Muse\'s own Instagram tools: posts, stories, comments, saved, interests and the busiest conversations (by score, each to the smaller target first, then the 4 they write most in further back, never a cursor reused), names and handles out, no message kept as it came, every call stopped at a 429 (a failed call, never their data that happens to say 429), no messages call when they said no; SKILL.md runs it before reading by hand',
+    check('collect: a first read in one command, through Muse\'s own Instagram tools: posts, stories, comments, saved, interests and the busiest conversations (by score, each to the smaller target first, then the 4 they write most in further back, never a cursor reused), names and handles out, no message kept as it came, every call stopped at a 429 (a failed call, never their data that happens to say 429), no messages call when they said no; SKILL.md runs it before reading by hand; read timings start at the last collect',
       ((c) => Array.isArray(c) && c.length === 5 && c[0].r.ok === true && c[0].r.read.threads === 3 && c[0].r.read.posts === 9 && c[0].r.read.stories === 6 && c[0].r.read.comments === 2 &&
         c[0].r.rhythm && /^58 timed lines/.test(c[0].r.rhythm.of) &&
         ((t2) => t2.length === 12 && new Set(t2).size === 12 && / --after 8$/.test(t2[8]))(c[0].calls.filter(x => / T2 /.test(x))) &&
@@ -2134,6 +2134,9 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         c[1].r.ok === true && /too many requests/.test(c[1].r.stopped) && /^M thread /.test(c[1].calls[c[1].calls.length - 1]) && c[1].r.read.threads === 0 &&
         c[2].r.ok === true && !c[2].calls.some(x => /^M /.test(x)) && /^--account-id must be/.test(c[3].r.problems[0]) && c[3].calls.length === 0 &&
         /already here/.test(c[4].r.problems[0]))(skillState.leaving && skillState.leaving.collect) &&
+      ((g) => g.reading === 60 && g.fixing === 0 && g.writing === 240 && g.total === 310 && g.checks === 1)(require('../lib/timing.js').stages([['collect', -1900], ['check-digest', -1800], ['collect', -310],
+        ['call:get_report_guide', -280], ['check-digest', -250], ['call:publish_psyche', -10]])) &&
+      /mark\('collect'\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
       /\*\*A first read in one command: collect\.\*\* For a first read \(or after starting over\), don't read Instagram yourself: run `bin\/psyche\.py collect --account-id/.test(skillMd) &&
       /Use its `rhythm` as given/.test(skillMd) && /It keeps no message as it came: what reaches disk is the digest/.test(skillMd) && /bin\/psyche\.py collect --account-id ID \[--messages-account-id ID\]/.test(skillMd),
       JSON.stringify(skillState.leaving && skillState.leaving.collect && skillState.leaving.collect.map(x => ({ r: x.r, calls: x.calls.length, digest: x.digest.slice(0, 300) }))).slice(0, 900));
