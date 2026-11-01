@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 64
+RELEASE = 65
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -225,21 +225,17 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webk
 .banner:before{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,230,190,.55),rgba(255,230,190,0) 70%)}
 .banner .row{position:relative;display:flex;gap:18px;align-items:center}
 .banner .txt{flex:1;min-width:0}
-.kicker{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.85}
-.banner h1{margin:4px 0 2px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
-.banner .sub{font-size:14px;opacity:.9}
-.banner .who{margin-top:14px;display:inline-flex;gap:10px;align-items:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:6px 14px 6px 8px;font-size:14px}
-.banner .who b{font-size:15px}
-.ring{position:relative;width:46px;height:46px;flex:none}
-.ring svg{width:46px;height:46px;transform:rotate(-90deg)}
-.ring i{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:14px}
+.facts{display:inline-block;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.lede{margin:6px 0 0;font-size:14.5px;line-height:1.5;opacity:.92;max-width:34em}
+.banner h1{margin:10px 0 2px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
+.banner .sub{margin-top:8px;font-size:12.5px;opacity:.75}
 .cardbtn{all:unset;flex:none;cursor:zoom-in;-webkit-tap-highlight-color:transparent}
 .viewer{position:fixed;inset:0;z-index:20;background:rgba(20,8,30,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
 .viewer[hidden]{display:none}
 .viewer img{max-width:100%;max-height:calc(100% - 40px);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .viewer span{margin-top:12px;color:#fff;opacity:.8;font-size:13px}
 .cardpic{flex:none;width:118px;border-radius:14px;box-shadow:0 10px 30px rgba(20,0,40,.35);transform:rotate(3deg);border:3px solid rgba(255,255,255,.85)}
-@media (max-width:480px){.cardpic{width:92px}.banner h1{font-size:24px}}
+@media (max-width:480px){.cardpic{width:92px}.banner h1{font-size:24px}.facts{font-size:9.5px;letter-spacing:.04em;padding:4px 9px;white-space:nowrap}.lede{font-size:13.5px}}
 nav{position:sticky;top:0;z-index:5;margin:0 -14px 14px;padding:10px 14px;background:rgba(250,247,251,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
 @media (min-width:700px){nav{flex-wrap:wrap;overflow:visible}}
@@ -651,15 +647,7 @@ W_BUILD = {'overview': _overview, 'whoYouAre': _who, 'whatDrivesYou': _drives, '
 W_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
 
-def _ring(score):
-    import math
-    c = 2 * math.pi * 19
-    return ('<span class="ring"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="5"/>'
-            '<circle cx="23" cy="23" r="19" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-dasharray="%.1f %.1f"/></svg><i>%d</i></span>'
-            % (c * score / 100, c, score))
-
-
-def report_html(view, name='', when='', card_png=None):
+def report_html(view, name='', when='', card_png=None, pages=None):
     """The whole report as one self-contained HTML file, from view (full, with the evidence, when given)."""
     if not isinstance(view, dict):
         return None
@@ -691,9 +679,10 @@ def report_html(view, name='', when='', card_png=None):
                   + '</div>')
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
-    banner = ('<header class="banner" id="top"><div class="row"><div class="txt"><div class="kicker">PsycheAI · Psyche Report</div><h1>' + _e(title) + '</h1>'
+    facts = ' · '.join(x for x in ['%d parts' % len(parts), ('%d pages' % pages) if pages else '', ('%d%% signal strength' % score) if score is not None else ''] if x)
+    banner = ('<header class="banner" id="top"><div class="row"><div class="txt"><div class="facts">' + _e(facts) + '</div><h1>' + _e(title) + '</h1>'
+              + '<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it.</p>'
               + ('<div class="sub">' + _e(when) + '</div>' if when else '')
-              + (('<div class="who">' + (_ring(score) if score is not None else '') + '<span>Most like <b>' + _e(_s(ov, 'character')) + '</b></span></div>') if _s(ov, 'character') else '')
               + '</div>' + ('<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card"><img class="cardpic" alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"></button>' if card_png else '') + '</div></header>')
     bar = '<nav aria-label="Sections">' + ''.join(nav) + '<button type="button" data-fold>Collapse all ▲</button></nav>'
     viewer = ('<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"><span>Tap to close</span></div>') if card_png else ''
@@ -806,7 +795,17 @@ def local_report(r):
         when = datetime.fromtimestamp(os.path.getmtime(LAST)).strftime('%-d %B %Y')
     except (OSError, ValueError):
         when = ''
-    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card)
+    # The PDF's page count, from its page tree, for the banner (the PDF is saved here at publish).
+    pages = None
+    try:
+        pdfs = [f for f in os.listdir(OUT) if f.lower().endswith('.pdf')]
+        if pdfs:
+            with open(os.path.join(OUT, pdfs[0]), 'rb') as f:
+                counts = [int(n) for n in re.findall(rb'/Count\s+(\d+)', f.read())]
+            pages = max(counts) if counts else None
+    except (OSError, ValueError):
+        pages = None
+    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages)
     if not page:
         return out
     try:

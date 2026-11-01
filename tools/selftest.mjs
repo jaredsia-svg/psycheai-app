@@ -2664,11 +2664,13 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   try { got = JSON.parse(execFileSync('python3', ['-I', '-c', py, script, JSON.stringify(full)], { timeout: 30000 }).toString()); } catch (e) { got = { error: String(e.message).slice(0, 300) }; }
   const page = got.page || '';
   const css = (page.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
-  check('the report file is one finished page with every section, a bar of section chips, and the reader\'s name and the date in the banner (no type there); its card picture opens full screen on a tap',
+  check('the report file is one finished page with every section and a bar of section chips; its banner has the parts, pages and signal strength, the reader\'s name, the line on what the report is, and the date (no type, no "most like"); its card picture opens full screen on a tap',
     /^<!DOCTYPE html>/.test(page) && ['Overview', 'Who you are', 'What drives you', 'How you connect', 'How you work', 'Putting it together'].every(t => page.includes('data-section="' + t + '"') && page.includes('</i>' + t + '</a>')) &&
     /<h1>Mei’s Psyche Report<\/h1>/.test(page) && /<div class="sub">1 November 2026<\/div>/.test(page) && !/<header[^]*?(ENFJ|The Protagonist)[^]*?<\/header>/.test(page) &&
     /<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card"><img class="cardpic" alt="Your Psyche Card" src="data:image\/png;base64,iVBORw0KGgo="><\/button>/.test(page) &&
-    /<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden>/.test(page) && /open\.addEventListener\('click',function\(\)\{view\.hidden=false;\}\)/.test(page), got.error);
+    /<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden>/.test(page) && /open\.addEventListener\('click',function\(\)\{view\.hidden=false;\}\)/.test(page) &&
+    /<div class="facts">6 parts · 71% signal strength<\/div>/.test(page) && /<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it\.<\/p>/.test(page) &&
+    !/Most like|class="ring"/.test(page) && /pages = max\(counts\) if counts else None/.test(fsw.readFileSync(script, 'utf8')) && /'%d pages' % pages/.test(fsw.readFileSync(script, 'utf8')), got.error);
   check('only Overview is open to start with; a tap closes the others first, then opens it and brings its title to the top under the bar; "Collapse all" closes all and goes back to the top',
     (page.match(/<section class="part open"/g) || []).length === 1 && /<section class="part open" id="p0"[^>]*data-section="Overview"/.test(page) &&
     /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);set\(p,true\);go\(p\);\}/.test(page) && /if\(p\.classList\.contains\('open'\)\)set\(p,false\);else only\(p\);/.test(page) &&
