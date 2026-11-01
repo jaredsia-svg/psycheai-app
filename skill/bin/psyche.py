@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 73
+RELEASE = 74
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2068,25 +2068,35 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                 meta['me'] = str(prof.get('full_name') or prof.get('name') or '')
         except RuntimeError as err:
             note('profile', err)
-        # Posts, reels, stories and highlights, every page, each kept once.
+        # Posts, reels, stories and highlights, every page, each kept once. When a type gives
+        # nothing usable, notes say what came back (none on the account, or none with a time).
         seen = set()
         for types, kind in COLLECT_TYPES:
-            try:
-                for page in pages(lambda after: ig(IG_CLI, 'posts', '--account-id', account, '--post-types', types, '--sort-order', 'desc', '--limit', 100,
-                                                   *(('--after', after) if after else ())),
-                                  lambda p: p.get('next_cursor') if p.get('has_next_page') and p.get('posts') else None):
-                    for p in page.get('posts') or []:
-                        pid = str(p.get('post_id') or '')
-                        t = local_time(p.get('post_created_at') or p.get('created_at'), p.get('taken_at') or p.get('timestamp'))
-                        if not t or (pid and pid in seen):
-                            continue
-                        seen.add(pid)
-                        items.append({'kind': kind, 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': caption_of(p)})
-                        read['posts' if kind == 'post' else 'stories'] += 1
-                    if page.get('provider_error'):
-                        note(kind + 's' if kind == 'post' else 'stories', 'a page came back partial')
-            except RuntimeError as err:
-                note(kind + 's' if kind == 'post' else 'stories', err)
+            label = 'posts' if kind == 'post' else 'stories'
+            for ask in [types]:
+                got = {'returned': 0, 'without a time': 0}
+                try:
+                    for page in pages(lambda after: ig(IG_CLI, 'posts', '--account-id', account, '--post-types', ask, '--sort-order', 'desc', '--limit', 100,
+                                                       *(('--after', after) if after else ())),
+                                      lambda p: p.get('next_cursor') if p.get('has_next_page') and p.get('posts') else None):
+                        for p in page.get('posts') or []:
+                            got['returned'] += 1
+                            pid = str(p.get('post_id') or '')
+                            t = local_time(p.get('post_created_at') or p.get('created_at'), p.get('taken_at') or p.get('timestamp'))
+                            if not t:
+                                got['without a time'] += 1
+                                continue
+                            if pid and pid in seen:
+                                continue
+                            seen.add(pid)
+                            items.append({'kind': kind, 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': caption_of(p)})
+                            read[label] += 1
+                        if page.get('provider_error'):
+                            note(label, 'a page came back partial')
+                except RuntimeError as err:
+                    note(label, err)
+                if not read[label]:
+                    note(label, 'none on the account' if not got['returned'] else '%(returned)d returned, none with a time' % got)
         # Their own comments: the posts they commented on, then their comments on those.
         try:
             commented = []
@@ -2157,38 +2167,54 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                     if len(ranked) >= threads:
                         break
                 ranked.sort(key=lambda th: -score.get(str(th.get('score_map_key')), 0))
+                # Two passes: every thread to the smaller target first, then, ranked by their own words
+                # as the digest ranks them, the 4 busiest further back. Cursors stay in memory.
+                states = []
                 for i, th in enumerate(ranked[:threads]):
                     others = [u for u in th.get('users') or [] if str(u.get('id')) != account and str(u.get('id')) != m_account]
-                    names = [str(u.get('full_name') or u.get('username') or 'Friend') for u in others] or ['Friend']
-                    other_ids = {str(v) for u in others for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v}
-                    want = (t['top'] if i < 4 else t['rest']) * 1.3
-                    mine_chars, whole = 0, False
-                    try:
-                        for page in pages(lambda after: ig(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', th['thread_fbid'], '--first', 50,
-                                                           *(('--after', after) if after else ())),
-                                          lambda p: (p.get('messages_page_info') or {}).get('end_cursor') if (p.get('messages_page_info') or {}).get('has_next_page') else None,
-                                          limit=THREAD_PAGES if i >= 4 else 20):
-                            for msg in page.get('messages') or []:
-                                text = str(((msg.get('content') or {}).get('text_body')) or '')
-                                when_sent = local_time(msg.get('message_sent_at'), msg.get('timestamp'))
-                                if not text.strip() or not when_sent:
-                                    continue
-                                sender = str(msg.get('sender_fbid') or '')
-                                mine = sender in (account, m_account) or (bool(other_ids) and sender not in other_ids)
-                                items.append({'kind': 'message', 'date': when_sent.strftime('%Y-%m-%d %H:%M'), 'text': text,
-                                              'thread': 't%d' % (i + 1), 'mine': mine, 'with': names})
-                                if mine:
-                                    mine_chars += len(text)
-                                    read['own messages'] += 1
-                            if not (page.get('messages_page_info') or {}).get('has_next_page'):
-                                whole = True
-                            if mine_chars >= want:
-                                break
+                    states.append({'tid': 't%d' % (i + 1), 'fbid': th['thread_fbid'], 'names': [str(u.get('full_name') or u.get('username') or 'Friend') for u in others] or ['Friend'],
+                                   'others': {str(v) for u in others for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v},
+                                   'mine': 0, 'whole': False, 'after': None, 'used': set(), 'pages': 0, 'failed': False})
+
+                def read_thread(st, want, limit):
+                    while not st['whole'] and not st['failed'] and st['mine'] < want and st['pages'] < limit:
+                        try:
+                            page = ig(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', st['fbid'], '--first', 50,
+                                      *(('--after', st['after']) if st['after'] else ()))
+                        except RuntimeError as err:
+                            st['failed'] = True
+                            note('a conversation', err)
+                            return
+                        st['pages'] += 1
+                        for msg in page.get('messages') or []:
+                            text = str(((msg.get('content') or {}).get('text_body')) or '')
+                            when_sent = local_time(msg.get('message_sent_at'), msg.get('timestamp'))
+                            if not text.strip() or not when_sent:
+                                continue
+                            sender = str(msg.get('sender_fbid') or '')
+                            mine = sender in (account, m_account) or (bool(st['others']) and sender not in st['others'])
+                            items.append({'kind': 'message', 'date': when_sent.strftime('%Y-%m-%d %H:%M'), 'text': text,
+                                          'thread': st['tid'], 'mine': mine, 'with': st['names']})
+                            if mine:
+                                st['mine'] += len(text)
+                                read['own messages'] += 1
+                        info = page.get('messages_page_info') or {}
+                        nxt = info.get('end_cursor') if info.get('has_next_page') else None
+                        if not nxt or nxt in st['used']:
+                            st['whole'] = not nxt
+                            return
+                        st['used'].add(nxt)
+                        st['after'] = nxt
+
+                for st in states:
+                    read_thread(st, t['rest'] * 1.3, THREAD_PAGES)
+                for st in sorted(states, key=lambda x: -x['mine'])[:4]:
+                    read_thread(st, t['top'] * 1.3, 20)
+                for st in states:
+                    if st['pages']:
                         read['threads'] += 1
-                        if whole:
-                            meta['complete'].append('t%d' % (i + 1))
-                    except RuntimeError as err:
-                        note('a conversation', err)
+                    if st['whole']:
+                        meta['complete'].append(st['tid'])
                 meta['counts']['conversations'] = len(ranked)
             except RuntimeError as err:
                 note('messages', err)

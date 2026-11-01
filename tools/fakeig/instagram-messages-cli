@@ -19,7 +19,7 @@ elif cmd == 'thread':
         msgs.append({'content': {'text_body': ('%s, are we still on for the run on Saturday? %s %d.%d' % (['Kai', 'Ana', 'Jun'][i], tid, page, j)) if mine else ('Yes! See you at 7, Mei %s %d.%d' % (tid, page, j))},
                      'content_type': 'text', 'message_id': 'mid', 'message_sent_at': {'utc': '2025-0%d-1%dT12:%02d:00Z' % (1 + page, j // 2, 5 * (j % 2)), 'user_local': '2025-0%d-1%d 20:%02d:00' % (1 + page, j // 2, 5 * (j % 2)), 'user_timezone': 'Asia/Singapore'},
                      'sender_fbid': ME if mine else 'U%d' % i, 'timestamp': '1736000000000'})
-    print(json.dumps({'is_group': False, 'messages': msgs, 'messages_page_info': {'end_cursor': str(page + 1), 'has_next_page': page < 1},
+    print(json.dumps({'is_group': False, 'messages': msgs, 'messages_page_info': {'end_cursor': str(page + 1), 'has_next_page': page < (11 if tid == 'T2' else 1)},
                       'thread_fbid': tid, 'users': [{'full_name': ['Kai Ng', 'Ana Cruz', 'Jun Lee'][i], 'id': 'U%d' % i, 'interop_messaging_user_fbid': 'I%d' % i, 'username': 'u%d' % i}]}))
 else:
     print('unknown', file=sys.stderr); sys.exit(3)
