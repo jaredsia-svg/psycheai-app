@@ -2156,9 +2156,15 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
     check('the skill\'s files and manifest go out with their exact length, never chunked',
       ['/skill/files', '/skill/SKILL.md', '/skill/bin/psyche.py', '/skill/guide.json'].every(u => skillState.cutLengths && skillState.cutLengths[u] && skillState.cutLengths[u][0] === skillState.cutLengths[u][1] && skillState.cutLengths[u][1] > 0 && !skillState.cutLengths[u][2]),
       JSON.stringify(skillState.cutLengths));
-    check('an update whose Python downloads always arrive cut short is fetched with curl and installed, since the signed hashes decide (README "Updates that arrive whole")',
+    check('every request goes through curl when it is there, with the token and the PDF key on curl\'s standard input, never its command line',
+      (() => { const py = fsx.readFileSync(pathx.join(dir, 'bin', 'psyche.py'), 'utf8');
+        return /def fetch\(method, url, headers, data=None, timeout=60\):/.test(py) && /subprocess\.run\(\[curl, '--config', '-'\], input=/.test(py) &&
+          /status, raw = fetch\('POST', BASE \+ path, headers, data, timeout=120\)/.test(py) && /status, body = fetch\('GET', BASE \+ path,/.test(py) &&
+          /fetch\('GET', '%s:\/\/%s\/api\/import\/pdf\?id=%s'/.test(py) && !/subprocess\.run\(\[curl[^\]]*(Authorization|X-Psyche-Key|token)/.test(py) &&
+          (py.match(/urllib\.request\.urlopen\(/g) || []).length === 2; })());
+    check('on a network that cuts every Python download short, the script fetches through curl and the update installs, since the signed hashes decide (README "Answers that arrive whole")',
       skillState.cutShort && skillState.cutShort.updated === true && skillState.cutShort.signed === true &&
-      ['/skill/SKILL.md', '/skill/bin/psyche.py', '/skill/guide.json'].every(u => skillState.cutHits[u] === 2), JSON.stringify({ r: skillState.cutShort, h: skillState.cutHits }));
+      ['/skill/files', '/skill/SKILL.md', '/skill/bin/psyche.py', '/skill/guide.json'].every(u => skillState.cutHits[u] === 1), JSON.stringify({ r: skillState.cutShort, h: skillState.cutHits }));
     check('the Muse skill updates itself only from a signed release: unsigned, signed with another key, or not matching its hashes, nothing is installed',
       skillState.unsigned && skillState.unsigned.updated === false && /isn't signed by PsycheAI/.test(skillState.unsigned.error) &&
       skillState.wrongKey && skillState.wrongKey.updated === false && skillState.updated && skillState.updated.signed === true && skillState.mismatch === true &&
