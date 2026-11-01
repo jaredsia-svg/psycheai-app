@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 75
+RELEASE = 77
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -584,8 +584,14 @@ def _langs(xs):
     return ''.join('<div class="lang"><span class="ico">' + _e(l.get('icon') or '💗') + '</span><div><b>' + _e(l.get('language')) + '</b> '
                    + '<span class="pill' + (' prim' if l.get('strength') == 'primary' else '') + '">' + _e(l.get('strength') or 'secondary') + '</span>'
                    + ('<div class="soft">' + _e(l.get('line')) + '</div>' if l.get('line') else '')
-                   + _ev([l.get('why')] if l.get('why') else []) + '</div></div>'
+                   + _ev([l.get('why')] if l.get('why') and not _says_same(l.get('why'), l.get('line')) else []) + '</div></div>'
                    for l in _l(xs) if isinstance(l, dict) and l.get('language'))
+
+
+def _says_same(a, b):
+    """Whether two lines say the same thing (most of the shorter one's words in the other): shown once."""
+    wa, wb = set(re.findall(r"[\w']+", str(a or '').lower())), set(re.findall(r"[\w']+", str(b or '').lower()))
+    return bool(wa and wb) and len(wa & wb) >= 0.7 * min(len(wa), len(wb))
 
 
 def _connect(v):
@@ -629,7 +635,7 @@ def _together(v):
         if not isinstance(d, dict) or not d.get('title'):
             continue
         signs = [x for x in _l(d.get('signs')) if isinstance(x, str)]
-        more = (('<li><b>Early signs:</b> ' + _e('; '.join(signs)) + '</li>' if signs else '')
+        more = (''.join('<li>' + ('<b>Early signs:</b> ' if not k else '') + _e(x.strip().rstrip(';')) + '</li>' for k, x in enumerate(signs))
                 + ('<li><b>Counter-move:</b> ' + _e(d.get('counterMove')) + '</li>' if d.get('counterMove') else '')
                 + ('<li><b>Ask yourself:</b> ' + _e(d.get('reflect')) + '</li>' if d.get('reflect') else ''))
         dev += ('<div class="it"><b>' + _e(d['title']) + '</b>' + ('<span>' + _e(d.get('detail')) + '</span>' if d.get('detail') else '')
@@ -1851,7 +1857,8 @@ def build_digest(given=None, given_meta=None):
     no_words = {}
     for x in sorted((x for x in items if x['kind'] in ('post', 'story')), key=lambda x: x['t']):
         text = scrub(str(x.get('text') or ''))
-        if not re.search(r'\w', text):
+        # Only tags ("[handle] [handle]") is a story without words: nothing of theirs to read.
+        if not re.search(r'\w', re.sub(r'\[(handle|link|email|number)\]', '', text)):
             no_words[x['t'].year] = no_words.get(x['t'].year, 0) + 1
             continue
         key = norm_text(text) + stamp(x)[:10]
@@ -1928,6 +1935,9 @@ def build_digest(given=None, given_meta=None):
     for k in ('conversations', 'followers', 'following', 'saved'):
         if isinstance(counts.get(k), int):
             head_counts.append('%s %s' % ('{:,}'.format(counts[k]), k))
+        if k == 'conversations' and messages_in:
+            # What "How this was read" cites: read off here, never remembered from a tool's output.
+            head_counts.append('{:,} own messages read'.format(sum(1 for x in items if x['kind'] == 'message' and x.get('mine'))))
     if no_words:
         head_counts.append('without words: ' + ' · '.join('%d %d' % (y, n) for y, n in sorted(no_words.items())))
     out = ['# Psyche digest',

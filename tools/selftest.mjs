@@ -2118,7 +2118,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       /Without a widget: the same findings as buttons/.test(instructions.MUSE_PROCEDURE) && /When Muse can show a widget, the check-in is one: the step, those four as options and a box for a line/.test(instructions.MUSE_PROCEDURE));
     check('build-digest: a first digest from what was read, checked, with names, handles and numbers out, their own name as [you] in what others wrote, what each reply answers kept, a broadcast kept once, rebuilt within a read, never over an earlier read\'s digest; a build counts as a check in read timings',
       ((b) => b && b[0].ok === true && !/Kai|Mei|@kai|9123/.test(b[1]) && /^> Friend: Hey \[you\], free for tennis on Saturday\? call Friend on \[number\]/m.test(b[1]) &&
-        (b[1].match(/Pls help me like and follow/g) || []).length === 1 && /^counts: 13 posts and stories · 12 with words · 1 comments · 3 conversations · without words: 2022 1$/m.test(b[1]) &&
+        (b[1].match(/Pls help me like and follow/g) || []).length === 1 && /^counts: 13 posts and stories · 12 with words · 1 comments · 3 conversations · 123 own messages read · without words: 2022 1$/m.test(b[1]) &&
         /^## Posts and stories \(all read\)$/m.test(b[1]) && b[2] === true && b[4].ok === false && /already here/.test(b[4].problems[0]))(skillState.leaving && skillState.leaving.build) &&
       require('../lib/timing.js').stages([['call:get_report_guide', -300], ['build-digest', -200], ['check-digest', -150], ['call:publish_psyche', -10]]).fixing === 50 &&
       /`bin\/psyche\.py build-digest` picks the sample, keeps what each reply answers, takes out names, handles, links and numbers/.test(skillMd) && /Fetch what doesn't depend on anything else together, at once where Muse allows it/.test(skillMd),
@@ -2130,7 +2130,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         (c[0].digest.match(/\(whole thread\)/g) || []).length === 3 && c[0].work === false && !c[0].r.stopped && /gate \[number\] regular|gate 429 regular/.test(c[0].digest) &&
         JSON.stringify(c[0].calls.filter(x => / thread /.test(x)).map(x => x.match(/T\d/)[0]).filter((x, i, a) => a.indexOf(x) === i)) === '["T1","T0","T2"]' &&
         !/Kai|Ana|Jun|Mei|mei\.t|@|U\d|I\d/.test(c[0].digest) && /^### Conversation 1: one-to-one, .*\(whole thread\)$/m.test(c[0].digest) && /^## Interests\n- Distance running$/m.test(c[0].digest) &&
-        /^counts: 15 posts and stories .* 440 followers · 636 following · 10 saved$/m.test(c[0].digest) &&
+        /^counts: 15 posts and stories .* 3 conversations · 48 own messages read · 440 followers · 636 following · 10 saved$/m.test(c[0].digest) &&
         c[1].r.ok === true && /too many requests/.test(c[1].r.stopped) && /^M thread /.test(c[1].calls[c[1].calls.length - 1]) && c[1].r.read.threads === 0 &&
         c[2].r.ok === true && !c[2].calls.some(x => /^M /.test(x)) && /^--account-id must be/.test(c[3].r.problems[0]) && c[3].calls.length === 0 &&
         /already here/.test(c[4].r.problems[0]))(skillState.leaving && skillState.leaving.collect) &&
@@ -2718,12 +2718,12 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);set\(p,true\);go\(p\);\}/.test(page) && /if\(p\.classList\.contains\('open'\)\)set\(p,false\);else only\(p\);/.test(page) &&
     /scrollIntoView\(\{block:'start',behavior:'instant'\}\)/.test(page) && /scroll-margin-top:var\(--navh,62px\)/.test(css) && /--navh',\(bar\.offsetHeight\+10\)\+'px'/.test(page) &&
     (page.match(/data-fold/g) || []).length >= 3 && /go\(document\.getElementById\('top'\)\)/.test(page) && /nav\{position:sticky;top:0/.test(css));
-  check('every write-up and its evidence is in it, the evidence as small grey bullets under each finding (no heading, no box, nothing folded), the develop areas\' early signs, counter-move and question the same way; no "How you show up online"',
+  check('every write-up and its evidence is in it, the evidence as small grey bullets under each finding (no heading, no box, nothing folded), the develop areas\' early signs (one bullet each), counter-move and question the same way; no "How you show up online"',
     ['WHY-WRITEUP', 'PARA-ONE', 'PARA-TWO', 'PAT-EVIDENCE-1', 'PAT-EVIDENCE-2', 'MBTI-READING', 'IN-PRACTICE', 'MBTI-EVIDENCE', 'MBTI-CAVEAT', 'FIVE-READING', 'FIVE-EVIDENCE', 'AREA-READING', 'AREA-EVIDENCE', 'TOGETHER',
       'OWN-LINE', 'VALUE-DETAIL', 'VALUE-EVIDENCE', 'BELIEF-DETAIL', 'INTEREST-DETAIL', 'INTEREST-EVIDENCE', 'LOVE-WHY', 'LOVE-CAVEAT', 'TONE', 'ATTACH-READING', 'ATTACH-FROM', 'IMPLICATION', 'CONFLICT-WRITEUP',
       'BRING-DETAIL', 'HARD-DETAIL', 'WHO-SUITS', 'NEED-DETAIL', 'CAREFUL-DETAIL', 'SITUATION', 'EDGE-WRITEUP', 'EDGE-EVIDENCE', 'OTHER-DETAIL', 'HOLD-DETAIL', 'WORK-STYLE', 'WATCH-OUTS', 'Your follow-through',
-      'BUILD-DETAIL', 'DEV-DETAIL', 'SIGN-A; SIGN-B', 'COUNTER', 'REFLECT', 'STEP-DETAIL', 'RATIONALE'].every(x => page.includes(x)) && !/ACTIVITY-DETAIL|How you show up online|<details|<summary/.test(page) &&
-    /<ul class="ev"><li>PAT-EVIDENCE-1<\/li><li>PAT-EVIDENCE-2<\/li><\/ul>/.test(page) && /<ul class="ev"><li><b>Early signs:<\/b> SIGN-A; SIGN-B<\/li><li><b>Counter-move:<\/b> COUNTER<\/li><li><b>Ask yourself:<\/b> REFLECT<\/li><\/ul>/.test(page) &&
+      'BUILD-DETAIL', 'DEV-DETAIL', 'SIGN-A', 'SIGN-B', 'COUNTER', 'REFLECT', 'STEP-DETAIL', 'RATIONALE'].every(x => page.includes(x)) && !/ACTIVITY-DETAIL|How you show up online|<details|<summary/.test(page) &&
+    /<ul class="ev"><li>PAT-EVIDENCE-1<\/li><li>PAT-EVIDENCE-2<\/li><\/ul>/.test(page) && /<ul class="ev"><li><b>Early signs:<\/b> SIGN-A<\/li><li>SIGN-B<\/li><li><b>Counter-move:<\/b> COUNTER<\/li><li><b>Ask yourself:<\/b> REFLECT<\/li><\/ul>/.test(page) &&
     /<ul class="ev"><li>LOVE-WHY<\/li><\/ul>/.test(page) && /<ul class="ev"><li>ATTACH-FROM<\/li><\/ul>/.test(page) && !/>(Evidence|Read from|When it shows up|Why)</.test(page) &&
     /<div class="areas"><span>Shows up in<\/span><i>Big Five<\/i><i>How you work<\/i><\/div>/.test(page) && !/class="pill g"/.test(page) && !page.includes('NOT-IN-THE-REPORT'));
   check('the radar marks the top three, and every point and name can be tapped to show its score, what it is and the reader\'s own line; under it, the strongest three only',
