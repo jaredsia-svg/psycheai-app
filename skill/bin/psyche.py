@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 88
+RELEASE = 90
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -840,7 +840,21 @@ def local_report(r):
     return out
 
 
+def local_ready(r):
+    """show ready: the card and the report file saved, and What's next, in one call; the PDF fetched
+    and the read's timings sent beside them, so none of it waits on the others (README "Straight to the card")."""
+    side = [threading.Thread(target=local_pdf, args=(r,)), threading.Thread(target=send_timing)]
+    for t in side:
+        t.start()
+    card, report = local_card(r), local_report(r)
+    for t in side:
+        t.join(15)
+    return {'say': 'Your Psyche Card and Report are ready.', 'card': card, 'summary': report,
+            'next': {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')}}
+
+
 PARTS = {
+    'ready': local_ready,
     'card': local_card,
     'summary': local_report,
     'pdf': local_pdf,
@@ -853,9 +867,8 @@ def saved(out):
     # The last Psyche's PDF goes, so only this one's can be attached: show pdf fetches it.
     shutil.rmtree(OUT, ignore_errors=True)
     write_private([LAST], out)
-    # The PDF is fetched now, while its link works (it lasts 30 minutes), and attached only
-    # when they ask for it (show pdf): it stays here in the meantime.
-    local_pdf(out)
+    # The PDF (its link lasts 30 minutes) is fetched by show ready, beside the card and report,
+    # or by show pdf if that comes first: never on the way to the card.
     return {'ok': True, 'saved': True, 'parts': list(PARTS)}
 
 # ---------- the digest (README "The digest in the workspace") ----------
@@ -2245,7 +2258,7 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
 
                     # Three conversations at a time, each read in order with its own cursor; a rate limit in
                     # any one stops them all (no call starts after it) and the read stops as it always has.
-                    lock, size = threading.Lock(), {'n': THREAD_FIRST}
+                    lock, size, paged = threading.Lock(), {'n': THREAD_FIRST}, {'pages': 0, 'messages': 0}
 
                     def read_thread(st, want, limit):
                         while not halt.is_set() and not st['whole'] and not st['failed'] and st['mine'] < want and st['pages'] < limit:
@@ -2285,6 +2298,8 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                             with lock:
                                 items.extend(got)
                                 read['own messages'] += own
+                                paged['pages'] += 1
+                                paged['messages'] += len(page.get('messages') or [])
                             info = page.get('messages_page_info') or {}
                             nxt = info.get('end_cursor') if info.get('has_next_page') else None
                             if not nxt or nxt in st['used']:
@@ -2332,6 +2347,10 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                             meta['complete'].append(st['tid'])
                     meta['counts']['conversations'] = len(ranked)
                     meta['sampled'] = True
+                    # How many messages a page actually came back, against how many were asked for (README "Bigger pages").
+                    if paged['pages']:
+                        read['conversation pages'] = '%d pages, %d messages a page on average, %d asked' % (
+                            paged['pages'], round(paged['messages'] / paged['pages']), size['n'])
                 except RuntimeError as err:
                     note('messages', err)
         finally:
@@ -2513,9 +2532,16 @@ def check_answer(path):
     problems += ei_problems(answer) + plan_problems(answer) + list_problems(answer)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
+    if isinstance(args, dict) and 'answer' not in args:
+        notes_first = 'publish it as bin/psyche.py call publish_psyche @answer.json --name "<their full name>" (a bare answer needs --name), or wrap it as {"answer": ..., "name": "<their full name>"}'
+    else:
+        notes_first = None
     # Where it differs from the guide's schema below the top: worth fixing, but publish_psyche is the judge.
     notes = [n for n in schema_problems(answer, schema, schema.get('$defs', {})) if not n.startswith('answer is missing ')] if schema else []
-    return {'ok': not problems, 'problems': problems[:25], 'schema': notes[:20]}
+    out = {'ok': not problems, 'problems': problems[:25], 'schema': notes[:20]}
+    if notes_first:
+        out['publish'] = notes_first
+    return out
 
 
 def read_starting(now=None):
@@ -2940,6 +2966,12 @@ def main(argv):
             with open(raw[1:]) as f:
                 raw = f.read()
         args = json.loads(raw)
+        # A bare answer file is taken as the answer, with --name "<their full name>" (README "Straight to the card").
+        if argv[1] == 'publish_psyche' and isinstance(args, dict) and 'answer' not in args:
+            name = argv[argv.index('--name') + 1] if '--name' in argv[:-1] else ''
+            args = {'answer': args, 'name': name}
+        if argv[1] == 'publish_psyche' and isinstance(args, dict) and '--name' in argv[:-1] and not args.get('name'):
+            args['name'] = argv[argv.index('--name') + 1]
         if argv[1] == 'save_sync' and answer_problems(args.get('answer')):
             print(json.dumps({'saved': False, 'problems': answer_problems(args.get('answer'))}, ensure_ascii=False, indent=1))
             return
@@ -2960,7 +2992,6 @@ def main(argv):
             shutil.rmtree(WORK, ignore_errors=True)
             drop_context()
             out = saved(out)
-            send_timing()
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'prep' and len(argv) >= 2:
@@ -2995,7 +3026,9 @@ def main(argv):
         if not last or argv[1] not in PARTS:
             print(json.dumps({'error': 'Nothing saved to show yet.' if not last else 'Parts: ' + ', '.join(PARTS)}))
             return
-        print(json.dumps(PARTS[argv[1]](last), ensure_ascii=False, indent=1))
+        print(json.dumps(PARTS[argv[1]](last), ensure_ascii=False, indent=1), flush=True)
+        if os.path.exists(TIMING) and argv[1] != 'ready':
+            send_timing()
         return
     if argv[0] == 'check-digest':
         print(json.dumps(check_digest(), ensure_ascii=False, indent=1))

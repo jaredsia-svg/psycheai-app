@@ -1891,6 +1891,10 @@ m.saved({'ok': True})`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...proces
       skillState.heldPatched = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'));
       fsx.writeFileSync(pathx.join(dir, 'answer.json'), JSON.stringify({ answer: { summary: passage('New A'), essence: { why: passage('New B') }, card: { headline: passage('C') }, mbti: { caveat: passage('New D') } }, name: 'Mei' }));
       skillState.freshEnough = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'));
+      // A bare answer file: check-answer says how to publish it, and publish takes it with --name.
+      fsx.writeFileSync(pathx.join(dir, 'answer.json'), JSON.stringify({ summary: passage('Bare A'), essence: { why: passage('Bare B') }, card: { headline: passage('C') }, mbti: { caveat: passage('Bare D') } }));
+      skillState.bareCheck = await run('check-answer', '@' + pathx.join(dir, 'answer.json'));
+      skillState.bare = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'), '--name', 'Mei Tan');
       fsx.rmSync(pathx.join(dir, 'report.json'));
       fsx.writeFileSync(pathx.join(dir, 'digest', 'digest.md'), good);
       skillState.forgetWork = await run('forget');
@@ -2042,6 +2046,8 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         for (const f of fsx.readdirSync(pathx.join(dir, 'out'))) if (/\.pdf$/i.test(f)) fsx.rmSync(pathx.join(dir, 'out', f));
       }
       skillState.parts = {};
+      skillState.parts.ready = await run('show', 'ready');
+      skillState.readyPdf = fsx.readdirSync(pathx.join(dir, 'out')).filter(f => /\.pdf$/i.test(f)).length;
       for (const part of ['card', 'summary', 'pdf', 'links', 'next', 'nope']) skillState.parts[part] = await run('show', part);
       skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche Card( - .+)? - \d{8}\.png$/.test(f));
       skillState.pdfLocal = skillState.parts.pdf && skillState.parts.pdf.file ? fsx.readFileSync(skillState.parts.pdf.file, 'utf8') : null;
@@ -2134,7 +2140,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       /`bin\/psyche\.py build-digest` picks the sample, keeps what each reply answers, takes out names, handles, links and numbers/.test(skillMd) && /Fetch what doesn't depend on anything else together, at once where Muse allows it/.test(skillMd),
       JSON.stringify(skillState.leaving && skillState.leaving.build && [skillState.leaving.build[0].problems, skillState.leaving.build[1].slice(0, 400), skillState.leaving.build[4]]).slice(0, 700));
     check('collect: a first read in one command, through Muse\'s own Instagram tools: posts, stories, comments, saved, interests and the busiest conversations (15 by score as the site\'s 10 and 5 spares, three at a time and beside the posts, 100 messages a page or 50 if refused, each to an even share first, then the room left to the busiest with more, never a cursor reused), names and handles out, no message kept as it came, every call stopped at a 429 (a failed call, never their data that happens to say 429), no messages call when they said no; SKILL.md runs it before reading by hand; read timings start at the last collect',
-      ((c) => Array.isArray(c) && c.length === 6 && c[0].calls.filter(x => / thread /.test(x)).every(x => / --first 100( |$)/.test(x)) && !c[0].r.notes &&
+      ((c) => Array.isArray(c) && c.length === 6 && c[0].calls.filter(x => / thread /.test(x)).every(x => / --first 100( |$)/.test(x)) && !c[0].r.notes && /^\d+ pages, 6 messages a page on average, 100 asked$/.test(c[0].r.read['conversation pages'] || '') && / 50 asked$/.test(c[5].r.read['conversation pages'] || '') &&
         c[5].r.ok === true && c[5].r.read.threads === 3 && c[5].r.read['own messages'] === c[0].r.read['own messages'] && /^conversations: 100 messages a page refused \(exit 2\), read 50 a page$/.test((c[5].r.notes || []).join('|')) &&
         c[5].calls.filter(x => / --first 100( |$)/.test(x)).length <= 3 && c[5].calls.some(x => / --first 50( |$)/.test(x)) &&
         c[0].r.ok === true && c[0].r.read.threads === 3 && c[0].r.read.posts === 9 && c[0].r.read.stories === 6 && c[0].r.read.comments === 2 &&
@@ -2166,7 +2172,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       JSON.stringify(skillState.leaving && skillState.leaving.saved));
     check('a first read starts collect the moment the account is picked (no status, help, memory or workspace first; a helper gets the exact command) and delivers before any housekeeping; collect --help prints its usage',
       /The moment they pick the account \(or straight after the go-ahead with one\), run collect: no status again, no help, no memory search, and nothing from the workspace/.test(skillMd) &&
-      /pass it the exact collect command so it starts at once rather than re-reading this file/.test(skillMd) &&
+      /hand the read to one helper with the brief in "First run, in order", so it starts collect at once and reads the guide while collect runs, rather than re-reading this file/.test(skillMd) &&
       /Deliver as soon as show has saved the card and report: anything else \(a note to memory, a check of out\/\) comes after the ready message, never before it/.test(skillMd) &&
       /'usage': 'bin\/psyche\.py collect --account-id/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
     check('the report is written with one home per theme (no two items on the same theme in a list, no step repeated across horizons), told up front rather than left to the checks; a collect digest says its conversations are the busiest read, not the inbox; room a conversation leaves goes on to the next',
@@ -2228,10 +2234,21 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       const P = skillState.parts || {};
       check('a saved Psyche is shown a part at a time: card (saved as a picture, kept beside the PDF), summary, pdf (saved as a file here, so it opens in Muse), next, each with only its own piece, and no links part: nothing is kept to link to',
         P.summary && P.summary.sections[0].title === 'Overview' && !P.summary.url && P.pdf && /\/out\/Psyche Report( - [^/]+)? - \d{8}\.pdf$/.test(P.pdf.file || '') && skillState.pdfLocal === '%PDF-1.4 a report' &&
-        P.links && /^Parts: card, summary, pdf, next$/.test(P.links.error || '') && P.next && P.next.nextStep.buttons[0] === 'Reveal my roast 🔥' && P.nope && /Parts: card, summary/.test(P.nope.error) &&
+        P.links && /^Parts: ready, card, summary, pdf, next$/.test(P.links.error || '') && P.next && P.next.nextStep.buttons[0] === 'Reveal my roast 🔥' && P.nope && /Parts: ready, card, summary/.test(P.nope.error) &&
         P.card && /\/out\/Psyche Card( - [^/]+)? - \d{8}\.png$/.test(P.card.file || '') && skillState.cardKept === true && /`bin\/psyche\.py show card` \(their Psyche Card as a picture/.test(skillMd) && /never a file sent earlier in the chat, which would be the last Psyche/.test(skillMd) &&
         /\*\*After publish_psyche \(or republish\)\*\* the script answers only that it's saved/.test(skillMd), JSON.stringify(P).slice(0, 500));
     }
+    check('a bare answer file publishes with --name (no failed first publish for want of {"answer", "name"}), and check-answer says so before publishing',
+      skillState.bare && !/answer must be the JSON object/.test(skillState.bare.error || '') && (skillState.bare.ok === true || /not connected/.test(skillState.bare.error || '')) &&
+      /args = \{'answer': args, 'name': name\}/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) && skillState.bareCheck && /call publish_psyche @answer\.json --name "<their full name>" \(a bare answer needs --name\)/.test(skillState.bareCheck.publish || ''),
+      JSON.stringify({ bare: skillState.bare, check: skillState.bareCheck && skillState.bareCheck.publish }).slice(0, 400));
+    check('show ready: the card and the report file saved and What\'s next given in one call, the PDF fetched beside them (not on the way to the card), and SKILL.md delivers with it on the helper\'s return, before anything else',
+      ((R) => R && R.say === 'Your Psyche Card and Report are ready.' && /\/out\/Psyche Card( - [^/]+)? - \d{8}\.png$/.test((R.card || {}).file || '') && R.summary && R.next && R.next.nextStep.buttons[0] === 'Reveal my roast 🔥')(skillState.parts && skillState.parts.ready) &&
+      skillState.readyPdf === 1 && /is put together in one call: `bin\/psyche\.py show ready` saves the card and the report file and gives What's next/.test(skillMd) &&
+      /## First run, in order\n/.test(skillMd) && /4\. When the helper returns: deliver at once, before anything else \(no listing out\/, no reading the report back, no note to memory\)/.test(skillMd) &&
+      /The helper's brief, sent as written with the <…> filled in:\n"Write a fresh Psyche for <their full name>\. Send the user nothing, and read neither SKILL\.md nor any earlier report: this brief is all you need\./.test(skillMd) &&
+      /2\) While it runs, run bin\/psyche\.py call get_report_guide and read all of it/.test(skillMd) && /5\) bin\/psyche\.py call publish_psyche @answer\.json --name "<their full name>"/.test(skillMd) && /6\) bin\/psyche\.py show ready\. Return only its result\."/.test(skillMd),
+      JSON.stringify(skillState.parts && skillState.parts.ready).slice(0, 400));
     check('the skill\'s account outlives its folder: a spare copy outside it (readable only by the workspace) brings back the same account after a reinstall',
       skillState.afterReinstall && skillState.afterReinstall.ok && skillState.sameAccount === true && JSON.stringify(skillState.keptMode) === '[448,384]' &&
       /a spare copy in `~\/\.psycheai\/`/.test(skillMd), JSON.stringify(skillState.keptMode));
@@ -2777,7 +2794,7 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     /"Explain why you said this", "Reveal my roast 🔥", "Get the PDF", "Sync with a friend", "More"/.test(instructions.CORE_MUSE) &&
     /`show summary` \(their whole Psyche Report as one HTML file in out\/, report, every write-up with its evidence: attach that file right after the card/.test(require('../lib/skill.js').skillMd()) &&
     /attached only when they ask for it \("Get the PDF"\): then `show pdf`/.test(require('../lib/skill.js').skillMd()) && /'Get the PDF'/.test(fsw.readFileSync(script, 'utf8')) &&
-    /args = dict\(args, forFile=True\)/.test(fsw.readFileSync(script, 'utf8')) && /local_pdf\(out\)\n    return \{'ok': True, 'saved': True, 'parts': list\(PARTS\)\}/.test(fsw.readFileSync(script, 'utf8')));
+    /args = dict\(args, forFile=True\)/.test(fsw.readFileSync(script, 'utf8')) && /side = \[threading\.Thread\(target=local_pdf, args=\(r,\)\), threading\.Thread\(target=send_timing\)\]/.test(fsw.readFileSync(script, 'utf8')));
 }
 
 // ---------- the phone check (README "The phone check") ----------
