@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 86
+RELEASE = 87
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2099,211 +2099,236 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
     def note(what, err):
         notes.append('%s: %s' % (what, err))
 
-    try:
-        # Profile: their bio and counts.
+    # Posts, stories, comments, saved and interests are read beside the conversations, at the same
+    # time (README "Posts beside messages"); a rate limit in either stops both before another call.
+    halt = threading.Event()
+
+    def igc(*args):
+        if halt.is_set():
+            raise RateLimited()
         try:
-            prof = (ig(IG_CLI, 'profile', '--account-id', account).get('profiles') or [{}])[0]
-            meta['bio'] = str(prof.get('bio') or '')[:300]
-            for key, names in (('followers', ('follower_count', 'followers_count', 'followers')), ('following', ('following_count', 'follows_count', 'following'))):
-                v = next((prof.get(n) for n in names if isinstance(prof.get(n), int)), None)
-                if v is not None:
-                    meta['counts'][key] = v
-            if not meta['me']:
-                meta['me'] = str(prof.get('full_name') or prof.get('name') or '')
-        except RuntimeError as err:
-            note('profile', err)
-        # Posts, reels, stories and highlights, every page, each kept once. When a type gives
-        # nothing usable, notes say what came back (none on the account, or none with a time).
-        seen = set()
-        for types, kind in COLLECT_TYPES:
-            label = 'posts' if kind == 'post' else 'stories'
-            for ask in [types]:
-                got = {'returned': 0, 'without a time': 0}
+            return ig(*args)
+        except RateLimited:
+            halt.set()
+            raise
+
+    def public():
+        try:
+                # Profile: their bio and counts.
                 try:
-                    for page in pages(lambda after: ig(IG_CLI, 'posts', '--account-id', account, '--post-types', ask, '--sort-order', 'desc', '--limit', 100,
-                                                       *(('--after', after) if after else ())),
-                                      lambda p: p.get('next_cursor') if p.get('has_next_page') and p.get('posts') else None):
-                        for p in page.get('posts') or []:
-                            got['returned'] += 1
-                            pid = str(p.get('post_id') or '')
-                            t = local_time(p.get('post_created_at') or p.get('created_at'), p.get('taken_at') or p.get('timestamp'))
-                            if not t:
-                                got['without a time'] += 1
-                                continue
-                            if pid and pid in seen:
-                                continue
-                            seen.add(pid)
-                            items.append({'kind': kind, 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': caption_of(p)})
-                            read[label] += 1
-                        if page.get('provider_error'):
-                            note(label, 'a page came back partial')
+                    prof = (igc(IG_CLI, 'profile', '--account-id', account).get('profiles') or [{}])[0]
+                    meta['bio'] = str(prof.get('bio') or '')[:300]
+                    for key, names in (('followers', ('follower_count', 'followers_count', 'followers')), ('following', ('following_count', 'follows_count', 'following'))):
+                        v = next((prof.get(n) for n in names if isinstance(prof.get(n), int)), None)
+                        if v is not None:
+                            meta['counts'][key] = v
+                    if not meta['me']:
+                        meta['me'] = str(prof.get('full_name') or prof.get('name') or '')
                 except RuntimeError as err:
-                    note(label, err)
-                if not read[label]:
-                    note(label, 'none on the account' if not got['returned'] else '%(returned)d returned, none with a time' % got)
-        # Their own comments: the posts they commented on, then their comments on those.
-        try:
-            commented = []
-            for page in pages(lambda after: ig(IG_CLI, 'recently-commented-posts', '--account-id', account, '--limit', 50, *(('--after', after) if after else ())),
-                              lambda p: (p.get('next_cursor') or p.get('end_cursor') or (p.get('page_info') or {}).get('end_cursor'))
-                              if (p.get('has_next_page') or (p.get('page_info') or {}).get('has_next_page')) else None, limit=6):
-                for p in page.get('posts') or page.get('items') or []:
-                    pid = str(p.get('post_id') or p.get('media_id') or p.get('id') or '')
-                    if pid and pid not in commented:
-                        commented.append(pid)
-            for i in range(0, min(len(commented), 100), 10):
-                got = ig(IG_CLI, 'fetch-post-comments', '--account-id', account, '--post-ids', ','.join(commented[i:i + 10]), '--author-ids', account)
-                for group in got.get('post_groups') or []:
-                    for c in group.get('comments') or []:
-                        t = local_time(c.get('created_at') if isinstance(c.get('created_at'), dict) else c.get('comment_created_at'),
-                                       c.get('created_at') if not isinstance(c.get('created_at'), dict) else c.get('timestamp'))
-                        text = str(c.get('comment_text') or '')
-                        if t and text.strip():
-                            items.append({'kind': 'comment', 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': text})
-                            read['comments'] += 1
-        except RuntimeError as err:
-            note('comments', err)
-        # Saved (a count) and their interests (topics only).
-        try:
-            n = 0
-            for page in pages(lambda after: ig(IG_CLI, 'saved-posts', '--account-id', account, '--limit', 50, *(('--after', after) if after else ())),
-                              lambda p: (p.get('end_cursor') or p.get('next_cursor') or (p.get('page_info') or {}).get('end_cursor'))
-                              if (p.get('has_next_page') or (p.get('page_info') or {}).get('has_next_page')) else None, limit=10):
-                n += len(page.get('posts') or page.get('items') or [])
-            meta['counts']['saved'] = n
-        except RuntimeError as err:
-            note('saved', err)
-        try:
-            got = ig(IG_CLI, 'current-interests', '--account-id', account)
-            found = []
-
-            def topics(v):
-                if isinstance(v, str) and 1 < len(v) <= 80:
-                    found.append(v)
-                elif isinstance(v, list):
-                    for x in v:
-                        topics(x)
-                elif isinstance(v, dict):
-                    for k in ('text', 'topic', 'name', 'title'):
-                        if isinstance(v.get(k), str):
-                            return topics(v[k])
-                    for k, x in v.items():
-                        if k not in ('_meta', 'model_response_guidance', 'retrieved_at', 'status', 'type', 'id'):
-                            topics(x)
-            topics(got)
-            meta['interests'] = list(dict.fromkeys(found))[:40]
-        except RuntimeError as err:
-            note('interests', err)
-        # Messages: their busiest contacts, one thread at a time, only as far as needed.
-        if with_messages:
-            t = targets(1, True)
-            try:
-                ranked, score = [], {}
-                for page in pages(lambda after: ig(IGM_CLI, 'top-recipients', '--account-id', m_account, '--count', threads, *(('--page-max-id', after) if after else ())),
-                                  lambda p: p.get('page_max_id') if p.get('has_next_page') else None, limit=3):
-                    for r in page.get('ranking') or []:
-                        for s in r.get('score_map') or []:
-                            if isinstance(s.get('score'), (int, float)):
-                                score[str(s.get('key'))] = max(score.get(str(s.get('key')), 0), s['score'])
-                    for th in (page.get('entities') or {}).get('thread') or []:
-                        if th.get('thread_fbid') and th['thread_fbid'] not in [x['thread_fbid'] for x in ranked]:
-                            ranked.append(th)
-                    if len(ranked) >= threads:
-                        break
-                ranked.sort(key=lambda th: -score.get(str(th.get('score_map_key')), 0))
-                # Two passes: every thread to an even share of the room first, then, ranked by their own
-                # words as the digest ranks them, the room left goes to the busiest with more to read,
-                # none past the site's ceiling. Cursors stay in memory.
-                states = []
-                for i, th in enumerate(ranked[:threads]):
-                    others = [u for u in th.get('users') or [] if str(u.get('id')) != account and str(u.get('id')) != m_account]
-                    states.append({'tid': 't%d' % (i + 1), 'fbid': th['thread_fbid'], 'names': [str(u.get('full_name') or u.get('username') or 'Friend') for u in others] or ['Friend'],
-                                   'others': {str(v) for u in others for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v},
-                                   'mine': 0, 'whole': False, 'after': None, 'used': set(), 'pages': 0, 'failed': False})
-
-                # Three conversations at a time, each read in order with its own cursor; a rate limit in
-                # any one stops them all (no call starts after it) and the read stops as it always has.
-                lock, halt = threading.Lock(), threading.Event()
-
-                def read_thread(st, want, limit):
-                    while not halt.is_set() and not st['whole'] and not st['failed'] and st['mine'] < want and st['pages'] < limit:
+                    note('profile', err)
+                # Posts, reels, stories and highlights, every page, each kept once. When a type gives
+                # nothing usable, notes say what came back (none on the account, or none with a time).
+                seen = set()
+                for types, kind in COLLECT_TYPES:
+                    label = 'posts' if kind == 'post' else 'stories'
+                    for ask in [types]:
+                        got = {'returned': 0, 'without a time': 0}
                         try:
-                            page = ig(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', st['fbid'], '--first', 50,
-                                      *(('--after', st['after']) if st['after'] else ()))
-                        except RateLimited:
-                            halt.set()
-                            return
+                            for page in pages(lambda after: igc(IG_CLI, 'posts', '--account-id', account, '--post-types', ask, '--sort-order', 'desc', '--limit', 100,
+                                                               *(('--after', after) if after else ())),
+                                              lambda p: p.get('next_cursor') if p.get('has_next_page') and p.get('posts') else None):
+                                for p in page.get('posts') or []:
+                                    got['returned'] += 1
+                                    pid = str(p.get('post_id') or '')
+                                    t = local_time(p.get('post_created_at') or p.get('created_at'), p.get('taken_at') or p.get('timestamp'))
+                                    if not t:
+                                        got['without a time'] += 1
+                                        continue
+                                    if pid and pid in seen:
+                                        continue
+                                    seen.add(pid)
+                                    items.append({'kind': kind, 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': caption_of(p)})
+                                    read[label] += 1
+                                if page.get('provider_error'):
+                                    note(label, 'a page came back partial')
                         except RuntimeError as err:
-                            st['failed'] = True
+                            note(label, err)
+                        if not read[label]:
+                            note(label, 'none on the account' if not got['returned'] else '%(returned)d returned, none with a time' % got)
+                # Their own comments: the posts they commented on, then their comments on those.
+                try:
+                    commented = []
+                    for page in pages(lambda after: igc(IG_CLI, 'recently-commented-posts', '--account-id', account, '--limit', 50, *(('--after', after) if after else ())),
+                                      lambda p: (p.get('next_cursor') or p.get('end_cursor') or (p.get('page_info') or {}).get('end_cursor'))
+                                      if (p.get('has_next_page') or (p.get('page_info') or {}).get('has_next_page')) else None, limit=6):
+                        for p in page.get('posts') or page.get('items') or []:
+                            pid = str(p.get('post_id') or p.get('media_id') or p.get('id') or '')
+                            if pid and pid not in commented:
+                                commented.append(pid)
+                    for i in range(0, min(len(commented), 100), 10):
+                        got = igc(IG_CLI, 'fetch-post-comments', '--account-id', account, '--post-ids', ','.join(commented[i:i + 10]), '--author-ids', account)
+                        for group in got.get('post_groups') or []:
+                            for c in group.get('comments') or []:
+                                t = local_time(c.get('created_at') if isinstance(c.get('created_at'), dict) else c.get('comment_created_at'),
+                                               c.get('created_at') if not isinstance(c.get('created_at'), dict) else c.get('timestamp'))
+                                text = str(c.get('comment_text') or '')
+                                if t and text.strip():
+                                    items.append({'kind': 'comment', 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': text})
+                                    read['comments'] += 1
+                except RuntimeError as err:
+                    note('comments', err)
+                # Saved (a count) and their interests (topics only).
+                try:
+                    n = 0
+                    for page in pages(lambda after: igc(IG_CLI, 'saved-posts', '--account-id', account, '--limit', 50, *(('--after', after) if after else ())),
+                                      lambda p: (p.get('end_cursor') or p.get('next_cursor') or (p.get('page_info') or {}).get('end_cursor'))
+                                      if (p.get('has_next_page') or (p.get('page_info') or {}).get('has_next_page')) else None, limit=10):
+                        n += len(page.get('posts') or page.get('items') or [])
+                    meta['counts']['saved'] = n
+                except RuntimeError as err:
+                    note('saved', err)
+                try:
+                    got = igc(IG_CLI, 'current-interests', '--account-id', account)
+                    found = []
+
+                    def topics(v):
+                        if isinstance(v, str) and 1 < len(v) <= 80:
+                            found.append(v)
+                        elif isinstance(v, list):
+                            for x in v:
+                                topics(x)
+                        elif isinstance(v, dict):
+                            for k in ('text', 'topic', 'name', 'title'):
+                                if isinstance(v.get(k), str):
+                                    return topics(v[k])
+                            for k, x in v.items():
+                                if k not in ('_meta', 'model_response_guidance', 'retrieved_at', 'status', 'type', 'id'):
+                                    topics(x)
+                    topics(got)
+                    meta['interests'] = list(dict.fromkeys(found))[:40]
+                except RuntimeError as err:
+                    note('interests', err)
+        except RateLimited:
+            halt.set()
+
+    try:
+        side = threading.Thread(target=public)
+        side.start()
+        try:
+            # Messages: their busiest contacts, one thread at a time, only as far as needed.
+            if with_messages:
+                t = targets(1, True)
+                try:
+                    ranked, score = [], {}
+                    for page in pages(lambda after: igc(IGM_CLI, 'top-recipients', '--account-id', m_account, '--count', threads, *(('--page-max-id', after) if after else ())),
+                                      lambda p: p.get('page_max_id') if p.get('has_next_page') else None, limit=3):
+                        for r in page.get('ranking') or []:
+                            for s in r.get('score_map') or []:
+                                if isinstance(s.get('score'), (int, float)):
+                                    score[str(s.get('key'))] = max(score.get(str(s.get('key')), 0), s['score'])
+                        for th in (page.get('entities') or {}).get('thread') or []:
+                            if th.get('thread_fbid') and th['thread_fbid'] not in [x['thread_fbid'] for x in ranked]:
+                                ranked.append(th)
+                        if len(ranked) >= threads:
+                            break
+                    ranked.sort(key=lambda th: -score.get(str(th.get('score_map_key')), 0))
+                    # Two passes: every thread to an even share of the room first, then, ranked by their own
+                    # words as the digest ranks them, the room left goes to the busiest with more to read,
+                    # none past the site's ceiling. Cursors stay in memory.
+                    states = []
+                    for i, th in enumerate(ranked[:threads]):
+                        others = [u for u in th.get('users') or [] if str(u.get('id')) != account and str(u.get('id')) != m_account]
+                        states.append({'tid': 't%d' % (i + 1), 'fbid': th['thread_fbid'], 'names': [str(u.get('full_name') or u.get('username') or 'Friend') for u in others] or ['Friend'],
+                                       'others': {str(v) for u in others for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v},
+                                       'mine': 0, 'whole': False, 'after': None, 'used': set(), 'pages': 0, 'failed': False})
+
+                    # Three conversations at a time, each read in order with its own cursor; a rate limit in
+                    # any one stops them all (no call starts after it) and the read stops as it always has.
+                    lock = threading.Lock()
+
+                    def read_thread(st, want, limit):
+                        while not halt.is_set() and not st['whole'] and not st['failed'] and st['mine'] < want and st['pages'] < limit:
+                            try:
+                                page = igc(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', st['fbid'], '--first', 50,
+                                          *(('--after', st['after']) if st['after'] else ()))
+                            except RateLimited:
+                                halt.set()
+                                return
+                            except RuntimeError as err:
+                                st['failed'] = True
+                                with lock:
+                                    note('a conversation', err)
+                                return
+                            st['pages'] += 1
+                            got, own = [], 0
+                            for msg in page.get('messages') or []:
+                                text = str(((msg.get('content') or {}).get('text_body')) or '')
+                                when_sent = local_time(msg.get('message_sent_at'), msg.get('timestamp'))
+                                if not text.strip() or not when_sent:
+                                    continue
+                                sender = str(msg.get('sender_fbid') or '')
+                                mine = sender in (account, m_account) or (bool(st['others']) and sender not in st['others'])
+                                got.append({'kind': 'message', 'date': when_sent.strftime('%Y-%m-%d %H:%M'), 'text': text,
+                                            'thread': st['tid'], 'mine': mine, 'with': st['names']})
+                                if mine:
+                                    st['mine'] += len(text)
+                                    own += 1
                             with lock:
-                                note('a conversation', err)
-                            return
-                        st['pages'] += 1
-                        got, own = [], 0
-                        for msg in page.get('messages') or []:
-                            text = str(((msg.get('content') or {}).get('text_body')) or '')
-                            when_sent = local_time(msg.get('message_sent_at'), msg.get('timestamp'))
-                            if not text.strip() or not when_sent:
-                                continue
-                            sender = str(msg.get('sender_fbid') or '')
-                            mine = sender in (account, m_account) or (bool(st['others']) and sender not in st['others'])
-                            got.append({'kind': 'message', 'date': when_sent.strftime('%Y-%m-%d %H:%M'), 'text': text,
-                                        'thread': st['tid'], 'mine': mine, 'with': st['names']})
-                            if mine:
-                                st['mine'] += len(text)
-                                own += 1
-                        with lock:
-                            items.extend(got)
-                            read['own messages'] += own
-                        info = page.get('messages_page_info') or {}
-                        nxt = info.get('end_cursor') if info.get('has_next_page') else None
-                        if not nxt or nxt in st['used']:
-                            st['whole'] = not nxt
-                            return
-                        st['used'].add(nxt)
-                        st['after'] = nxt
+                                items.extend(got)
+                                read['own messages'] += own
+                            info = page.get('messages_page_info') or {}
+                            nxt = info.get('end_cursor') if info.get('has_next_page') else None
+                            if not nxt or nxt in st['used']:
+                                st['whole'] = not nxt
+                                return
+                            st['used'].add(nxt)
+                            st['after'] = nxt
 
-                def at_once(jobs, limit):
-                    with ThreadPoolExecutor(COLLECT_WORKERS) as pool:
-                        list(pool.map(lambda job: read_thread(job[0], job[1], limit), jobs))
-                    if halt.is_set():
-                        raise RateLimited()
+                    def at_once(jobs, limit):
+                        with ThreadPoolExecutor(COLLECT_WORKERS) as pool:
+                            list(pool.map(lambda job: read_thread(job[0], job[1], limit), jobs))
+                        if halt.is_set():
+                            raise RateLimited()
 
-                at_once([(st, t['convos'] / CONVO_TOP * 1.3) for st in states], THREAD_PAGES)
-                # The room left, given out busiest first before any is read, so the three can run together.
-                left, deeper = t['convos'] * 1.3 - sum(st['mine'] for st in states), []
-                for st in sorted(states, key=lambda x: -x['mine'])[:CONVO_TOP]:
-                    if left <= 0:
-                        break
-                    if st['whole'] or st['failed']:
-                        continue
-                    want = min(t['cap'] * 1.3, st['mine'] + left)
-                    left -= want - st['mine']
-                    deeper.append((st, want))
-                at_once(deeper, 30)
-                # Room set aside for one that ran out goes to the next with more, for two more rounds.
-                for _ in range(2):
+                    at_once([(st, t['convos'] / CONVO_TOP * 1.3) for st in states], THREAD_PAGES)
+                    # The room left, given out busiest first before any is read, so the three can run together.
                     left, deeper = t['convos'] * 1.3 - sum(st['mine'] for st in states), []
                     for st in sorted(states, key=lambda x: -x['mine'])[:CONVO_TOP]:
                         if left <= 0:
                             break
-                        if st['whole'] or st['failed'] or st['pages'] >= 30 or st['mine'] >= t['cap'] * 1.3:
+                        if st['whole'] or st['failed']:
                             continue
                         want = min(t['cap'] * 1.3, st['mine'] + left)
                         left -= want - st['mine']
                         deeper.append((st, want))
-                    if not deeper:
-                        break
                     at_once(deeper, 30)
-                for st in states:
-                    if st['pages']:
-                        read['threads'] += 1
-                    if st['whole']:
-                        meta['complete'].append(st['tid'])
-                meta['counts']['conversations'] = len(ranked)
-                meta['sampled'] = True
-            except RuntimeError as err:
-                note('messages', err)
+                    # Room set aside for one that ran out goes to the next with more, for two more rounds.
+                    for _ in range(2):
+                        left, deeper = t['convos'] * 1.3 - sum(st['mine'] for st in states), []
+                        for st in sorted(states, key=lambda x: -x['mine'])[:CONVO_TOP]:
+                            if left <= 0:
+                                break
+                            if st['whole'] or st['failed'] or st['pages'] >= 30 or st['mine'] >= t['cap'] * 1.3:
+                                continue
+                            want = min(t['cap'] * 1.3, st['mine'] + left)
+                            left -= want - st['mine']
+                            deeper.append((st, want))
+                        if not deeper:
+                            break
+                        at_once(deeper, 30)
+                    for st in states:
+                        if st['pages']:
+                            read['threads'] += 1
+                        if st['whole']:
+                            meta['complete'].append(st['tid'])
+                    meta['counts']['conversations'] = len(ranked)
+                    meta['sampled'] = True
+                except RuntimeError as err:
+                    note('messages', err)
+        finally:
+            side.join()
+        if halt.is_set():
+            raise RateLimited()
     except RateLimited:
         stopped = 'Instagram said too many requests, so every call stopped there, as its docs ask: the digest has what came before.'
     if not items:
