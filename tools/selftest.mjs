@@ -2683,7 +2683,7 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
       'BUILD-DETAIL', 'DEV-DETAIL', 'SIGN-A; SIGN-B', 'COUNTER', 'REFLECT', 'STEP-DETAIL', 'RATIONALE'].every(x => page.includes(x)) && !/ACTIVITY-DETAIL|How you show up online|<details|<summary/.test(page) &&
     /<ul class="ev"><li>PAT-EVIDENCE-1<\/li><li>PAT-EVIDENCE-2<\/li><\/ul>/.test(page) && /<ul class="ev"><li><b>Early signs:<\/b> SIGN-A; SIGN-B<\/li><li><b>Counter-move:<\/b> COUNTER<\/li><li><b>Ask yourself:<\/b> REFLECT<\/li><\/ul>/.test(page) &&
     /<ul class="ev"><li>LOVE-WHY<\/li><\/ul>/.test(page) && /<ul class="ev"><li>ATTACH-FROM<\/li><\/ul>/.test(page) && !/>(Evidence|Read from|When it shows up|Why)</.test(page) &&
-    /<span class="where">Shows up in Big Five · How you work<\/span>/.test(page) && !/class="pill g"/.test(page) && !page.includes('NOT-IN-THE-REPORT'));
+    /<div class="areas"><span>Shows up in<\/span><i>Big Five<\/i><i>How you work<\/i><\/div>/.test(page) && !/class="pill g"/.test(page) && !page.includes('NOT-IN-THE-REPORT'));
   check('the radar marks the top three, and every point and name can be tapped to show its score, what it is and the reader\'s own line; under it, the strongest three only',
     (page.match(/r="7" fill="var\(--c\)"/g) || []).length === 3 && (page.match(/<text class="top"/g) || []).length === 3 && /Strongest<\/p><div class="mots">/.test(page) &&
     /<div class="mot hi"><b>Care for your people<i>76<\/i><\/b><span>OWN-LINE<\/span>/.test(page) && !/Weakest|mots low/.test(page) &&

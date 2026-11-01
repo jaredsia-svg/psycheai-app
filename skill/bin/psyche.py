@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 65
+RELEASE = 66
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -328,6 +328,9 @@ p{margin:0 0 10px}
 .box.good{background:#f3faf6}
 .box.hard{background:#fdf7ef}
 .where,.it>span.where{display:block;margin-top:5px;font-size:12.5px;color:#8a7f96}
+.areas{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px}
+.areas span{font-size:12px;color:#8a7f96;margin-right:2px}
+.areas i{font-style:normal;padding:2px 9px;border-radius:999px;background:#f4eef8;color:#6a3590;font-size:11.5px;font-weight:650}
 .fine{margin:10px 0 0;font-size:12.5px;line-height:1.45;color:#8a7f96}
 .box h4{display:flex;align-items:center;gap:7px;margin:2px 0 4px;font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--mute)}
 .box h4 i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;font-size:11px;color:#fff}
@@ -528,7 +531,7 @@ def _overview(v):
     summ = ''.join('<p%s>%s</p>' % (' class="intro"' if i == 0 else '', _e(p)) for i, p in enumerate(paras))
     pats = ''.join('<div class="pat"><span class="n">%d</span><div><b>%s</b>%s%s%s</div></div>' % (
         i + 1, _e(p.get('name')), '<span class="soft">' + _e(p.get('line')) + '</span>' if p.get('line') else '',
-        ('<span class="where">Shows up in ' + _e(' · '.join(x for x in _l(p.get('showsUpIn')) if isinstance(x, str))) + '</span>') if _l(p.get('showsUpIn')) else '',
+        ('<div class="areas"><span>Shows up in</span>' + ''.join('<i>' + _e(x) + '</i>' for x in _l(p.get('showsUpIn')) if isinstance(x, str)) + '</div>') if _l(p.get('showsUpIn')) else '',
         _ev(p.get('evidence')))
         for i, p in enumerate(p for p in _l(_s(v, 'patterns')) if isinstance(p, dict) and p.get('name')))
     return hero + _block('Executive summary', summ) + _block('Your signature patterns', pats), _s(v, 'character')
