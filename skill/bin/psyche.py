@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 82
+RELEASE = 83
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2491,7 +2491,7 @@ def with_pinned_guide(tool, args, out):
         # The first guide call of a read is where reading starts: the line saying how long it takes goes out
         # before it, as its own message (README "The wait line comes first"), not at the end with the card.
         if read_starting():
-            out['sayFirst'] = ('Before reading anything: if step 1\'s line ("On it. ... takes about 5 to 10 minutes ...") is not '
+            out['sayFirst'] = ('Before reading anything: if step 1\'s line ("On it. ... takes about 5 minutes ...") is not '
                                'already in the chat for this read, send it now as its own message, then read.')
         return out
     if tool == 'get_sync' and isinstance(out, dict) and 'spec' in out:
@@ -2964,6 +2964,9 @@ def main(argv):
         print(json.dumps(build_digest(), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'collect':
+        if '--help' in argv or '-h' in argv:
+            print(json.dumps({'usage': 'bin/psyche.py collect --account-id <instagram-cli user_fbid> [--messages-account-id <instagram-messages-cli user_fbid>] [--me "<their full name>"] [--no-messages]'}, indent=1))
+            return
         opts, i = {}, 1
         while i < len(argv):
             if argv[i] == '--no-messages':
