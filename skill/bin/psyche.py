@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 93
+RELEASE = 94
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2529,6 +2529,28 @@ def ei_problems(data):
     return out
 
 
+TRAIT_OF = {'E/I': ('extraversion', 'E'), 'N/S': ('openness', 'N'), 'T/F': ('agreeableness', 'F'), 'J/P': ('conscientiousness', 'J')}
+
+
+def trait_problems(data):
+    """A Big Five trait on the other side of 50 from the letter it tracks, worded as psycheai.io's traitProblems."""
+    out = []
+    letters = (data.get('mbti') or {}).get('letters') or [] if isinstance(data.get('mbti'), dict) else []
+    five = data.get('bigFive') if isinstance(data.get('bigFive'), dict) else {}
+    for l in letters:
+        pair = TRAIT_OF.get(l.get('axis')) if isinstance(l, dict) else None
+        if not pair or not re.fullmatch(r'[EINSTFJP]', str(l.get('choice') or '')):
+            continue
+        score = (five.get(pair[0]) or {}).get('score') if isinstance(five.get(pair[0]), dict) else None
+        if not isinstance(score, (int, float)) or isinstance(score, bool):
+            continue
+        high = l['choice'] == pair[1]
+        if (score < 50) if high else (score > 50):
+            out.append('bigFive.%s: %s is on the other side of 50 from the letter %s: %s follows %s, so with %s it is %s (or, if the evidence says otherwise, the letter changes)'
+                       % (pair[0], score if score != int(score) else int(score), l['choice'], pair[0], l['axis'], l['choice'], '50 or above' if high else '50 or below'))
+    return out
+
+
 def same_point(a, b):
     stems = lambda t: [w[:5] for w in re.findall(r'[a-z]{3,}', str(t or '').lower()) if w not in SAME_COMMON]
     words = lambda t: re.findall(r'[a-z0-9]+', str(t or '').lower())
@@ -2601,7 +2623,7 @@ def check_answer(path):
     # What would stop or hold the publish: these are fixed first.
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
-    problems += ei_problems(answer) + plan_problems(answer) + list_problems(answer)
+    problems += ei_problems(answer) + trait_problems(answer) + plan_problems(answer) + list_problems(answer)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
     if isinstance(args, dict) and 'answer' not in args:
