@@ -63,7 +63,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 47
+RELEASE = 48
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -267,16 +267,39 @@ p{margin:0 0 8px}
 .lang{display:grid;grid-template-columns:28px 1fr;column-gap:8px;padding:9px 0;border-bottom:1px solid #f0eaf4}
 .lang:last-child{border-bottom:0}
 .lang .ico{font-size:20px;line-height:1.3}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 @media (max-width:520px){.cols{grid-template-columns:1fr}}
 .box{border:1px solid #efe8f3;border-radius:12px;padding:10px 12px;background:#fdfbfe}
 .box h3{margin-top:2px}
 ul{margin:0;padding-left:18px}
 li{margin:3px 0}
+.it{padding:8px 0;border-bottom:1px solid #f0eaf4}
+.it:last-child{border-bottom:0}
+.it b{display:block;font-weight:650;line-height:1.35}
+.it>span{display:block;margin-top:2px;color:#5a4f66;font-size:14px}
+.box h4{display:flex;align-items:center;gap:6px;margin:2px 0 4px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b6076}
+.box h4 i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%%;font-size:11px;color:#fff}
+.box.good h4 i{background:#2f7d5b}
+.box.hard h4 i{background:#b26a14}
+.box .it{padding:6px 0}
+.hero .why{margin:8px 0 0;color:#3b2a49;font-size:14px}
+.slider b em{font-style:normal;font-weight:500;color:#6b6076}
+.lead{font-weight:700;margin:0 0 4px}
+.edge{margin-top:14px;padding:12px 14px;border-radius:12px;background:#f2f6fc;border:1px solid #dde6f3}
+.edge small{display:block;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--c)}
+.edge b{display:block;font-size:16px;margin:2px 0 4px}
+.edge p{margin:0;color:#3b3550;font-size:14px}
+.kv{margin:6px 0 0;font-size:14px;color:#3b2a49}
+.kv small{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6b6076}
+.kv.ask{font-style:italic}
 .plan{position:relative;margin:4px 0 0 6px;padding-left:18px;border-left:2px solid #e2d8e9}
-.plan div{position:relative;padding:4px 0 10px}
-.plan div:before{content:"";position:absolute;left:-26px;top:8px;width:12px;height:12px;border-radius:50%%;background:var(--c);border:2px solid #fff;box-shadow:0 0 0 1px var(--c)}
+.plan>div{position:relative;padding:2px 0 8px}
+.plan>div:before{content:"";position:absolute;left:-26px;top:5px;width:12px;height:12px;border-radius:50%%;background:var(--c);border:2px solid #fff;box-shadow:0 0 0 1px var(--c)}
 .plan small{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b6076}
+.plan p{margin:4px 0 6px}
+.plan p b{display:block;font-weight:650;line-height:1.35}
+.plan p span{display:block;color:#5a4f66;font-size:14px}
+.plan p em{display:inline-block;margin-top:3px;padding:0 7px;border-radius:999px;background:#f3e9f8;color:#6a3590;font-size:11px;font-style:normal;font-weight:600}
 .rate{display:flex;gap:6px;margin-top:14px}
 .rate button{all:unset;cursor:pointer;padding:4px 10px;border:1px solid #e2d8e9;border-radius:999px;background:#fff;font-size:15px;line-height:1.3}
 .rate button[aria-pressed=true]{background:#f3e9f8;border-color:var(--c)}
@@ -425,39 +448,73 @@ def _rate():
             '<div class="off"><label>What\'s off?</label><textarea></textarea></div>')
 
 
+def _items(xs):
+    """Title-and-detail items (a write-up's points), each its title in bold and its detail under it."""
+    out = ''
+    for x in _l(xs):
+        if isinstance(x, str):
+            x = {'title': x}
+        if isinstance(x, dict) and x.get('title'):
+            d = str(x.get('detail') or '')
+            d = d[:1].upper() + d[1:]
+            out += '<div class="it"><b>' + _e(x['title']) + '</b>' + ('<span>' + _e(d) + '</span>' if d else '') + '</div>'
+    return out
+
+
+def _pair(good_title, good, hard_title, hard):
+    """Two boxes side by side (stacked on a phone): what helps, with ✓, and what's hard, with !."""
+    g, h = _items(good), _items(hard)
+    if not g and not h:
+        return ''
+    box = lambda cls, mark, t, inner: ('<div class="box ' + cls + '"><h4><i>' + mark + '</i>' + _e(t) + '</h4>' + inner + '</div>') if inner else ''
+    return '<div class="cols">' + box('good', '✓', good_title, g) + box('hard', '!', hard_title, h) + '</div>'
+
+
 def _overview(v):
     who = _e(_s(v, 'character'))
-    kind = ' · '.join(x for x in [_e(_s(v, 'type')), _e(_s(v, 'nickname'))] if x)
-    hero = ('<div class="hero"><div><small>You are most like</small><b>' + who + '</b><span>' + kind + '</span></div></div>') if who or kind else ''
-    head = '<p style="margin-top:12px;font-weight:650">' + _e(_s(v, 'headline')) + '</p>' if _s(v, 'headline') else ''
-    summ = '<p class="soft">' + _e(_s(v, 'summary')) + '</p>' if _s(v, 'summary') else ''
-    pats = ''.join('<div class="row"><b>' + _e(p.get('name')) + '</b><div class="soft">' + _e(p.get('line')) + '</div></div>'
-                   for p in _l(_s(v, 'patterns')) if isinstance(p, dict) and p.get('name'))
+    kind = ' · '.join(x for x in [_e(_s(v, 'source')), _e(_s(v, 'type')), _e(_s(v, 'nickname'))] if x)
+    hero = ''
+    if who or kind:
+        hero = ('<div class="hero"><div><small>You are most like</small><b>' + who + '</b>'
+                + '<span>' + kind + '</span>'
+                + ('<p class="why">' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else '') + '</div></div>')
+    paras = [p for p in _l(_s(v, 'summaryFull')) if isinstance(p, str)]
+    if paras:
+        summ = ''.join('<p>' + _e(p) + '</p>' for p in paras)
+    else:
+        summ = ('<p style="font-weight:650">' + _e(_s(v, 'headline')) + '</p>' if _s(v, 'headline') else '') + ('<p>' + _e(_s(v, 'summary')) + '</p>' if _s(v, 'summary') else '')
+    pats = _items([{'title': p.get('name'), 'detail': p.get('line')} for p in _l(_s(v, 'patterns')) if isinstance(p, dict) and p.get('name')])
     tease = ' · '.join(x for x in [_s(v, 'character'), _s(v, 'type')] if x)
-    return hero + head + summ + _block('Your three patterns', pats), tease
+    return hero + _block('Executive summary', summ) + _block('Your signature patterns', pats), tease
 
 
 def _who(v):
+    letters = [l for l in _l(_s(v, 'mbti')) if isinstance(l, dict) and l.get('letter')]
+    types = ''.join(l.get('letter', '') for l in letters)
     mbti = ''.join('<div class="row"><span class="letter">' + _e(l.get('letter')) + '</span><b>' + _e(l.get('name')) + '</b>'
                    + ('<span class="pill">' + _e(l.get('strength')) + '</span>' if l.get('strength') else '')
-                   + ('<div class="soft">' + _e(l.get('line')) + '</div>' if l.get('line') else '') + '</div>'
-                   for l in _l(_s(v, 'mbti')) if isinstance(l, dict) and l.get('letter'))
+                   + ('<div class="soft">' + _e(l.get('reading') or l.get('line')) + '</div>' if (l.get('reading') or l.get('line')) else '') + '</div>'
+                   for l in letters)
     five = ''
     for t in _l(_s(v, 'bigFive')):
         s = _num(t.get('score')) if isinstance(t, dict) else None
         if s is None:
             continue
-        five += ('<div class="slider"><b>' + _e(t.get('trait')) + '</b><span class="score">' + str(s) + '</span>'
+        five += ('<div class="slider"><b>' + _e(t.get('trait')) + (' <em>· ' + _e(t.get('band')) + '</em>' if t.get('band') else '') + '</b><span class="score">' + str(s) + '</span>'
                  '<div class="track"><i style="left:' + str(s) + '%"></i></div>'
-                 + ('<div class="soft">' + _e(t.get('line')) + '</div>' if t.get('line') else '') + '</div>')
+                 + ('<div class="soft">' + _e(t.get('reading') or t.get('line')) + '</div>' if (t.get('reading') or t.get('line')) else '') + '</div>')
     wb = _s(v, 'wellbeing') or {}
-    bands = ''.join('<span class="band" style="color:%s;background:%s">%s<em>%s</em></span>' % (W_BANDS.get(a.get('band'), ('#5a4f66', '#f1edf4')) + (_e(a.get('area')), _e(a.get('band'))))
-                    for a in _l(_s(wb, 'areas')) if isinstance(a, dict) and a.get('area'))
-    well = (('<div class="bands">' + bands + '</div>') if bands else '') + ('<p class="soft">' + _e(_s(wb, 'summary')) + '</p>' if _s(wb, 'summary') else '')
-    types = ''.join(l.get('letter', '') for l in _l(_s(v, 'mbti')) if isinstance(l, dict))
+    areas = [a for a in _l(_s(wb, 'areas')) if isinstance(a, dict) and a.get('area')]
+    band = lambda a: '<span class="band" style="color:%s;background:%s">%s</span>' % (W_BANDS.get(a.get('band'), ('#5a4f66', '#f1edf4')) + (_e(a.get('band')),))
+    if any(a.get('reading') for a in areas):
+        well = ''.join('<div class="row"><b>' + _e(a.get('area')) + '</b> ' + band(a) + ('<div class="soft">' + _e(a.get('reading')) + '</div>' if a.get('reading') else '') + '</div>' for a in areas)
+    else:
+        well = '<div class="bands">' + ''.join('<span class="band" style="color:%s;background:%s">%s<em>%s</em></span>' % (W_BANDS.get(a.get('band'), ('#5a4f66', '#f1edf4')) + (_e(a.get('area')), _e(a.get('band')))) for a in areas) + '</div>' if areas else ''
+    together = _s(wb, 'together') or _s(wb, 'summary')
+    well += ('<div class="callout"><b>Taken together.</b> ' + _e(together) + '</div>') if together else ''
     fives = [t for t in _l(_s(v, 'bigFive')) if isinstance(t, dict) and _num(t.get('score')) is not None]
     fives.sort(key=lambda t: -_num(t.get('score')))
-    tease = ' · '.join([types] + ['%s %d' % (t.get('trait'), _num(t.get('score'))) for t in fives[:2]] if types else ['%s %d' % (t.get('trait'), _num(t.get('score'))) for t in fives[:2]])
+    tease = ' · '.join(([types] if types else []) + ['%s %d' % (t.get('trait'), _num(t.get('score'))) for t in fives[:2]])
     return _block('MBTI', mbti) + _block('Big Five', five) + _block('Wellbeing', well), tease
 
 
@@ -478,34 +535,55 @@ def _langs(xs):
 
 def _connect(v):
     ll = _s(v, 'loveLanguages') or {}
-    best = _bullets(_s(v, 'atYourBest'))
-    watch = _bullets(_s(v, 'watchFor'))
-    pair = ('<div class="cols">' + ('<div class="box">' + _block('At your best', best) + '</div>' if best else '')
-            + ('<div class="box">' + _block('Watch for', watch) + '</div>' if watch else '') + '</div>') if best or watch else ''
-    needs = _bullets(_s(v, 'partnerNeeds')) + ('<p class="soft" style="margin-top:6px">' + _e(_s(v, 'bestPartner')) + '</p>' if _s(v, 'bestPartner') else '')
+    attach = ''
+    if _s(v, 'attachment'):
+        attach = ('<p class="lead">' + _e(_s(v, 'attachment')) + '</p>' + ('<p>' + _e(_s(v, 'attachmentTone')) + '</p>' if _s(v, 'attachmentTone') else '')
+                  + ('<p class="soft">' + _e(_s(v, 'attachmentReading')) + '</p>' if _s(v, 'attachmentReading') else ''))
+    conflict = '<p>' + _e(_s(v, 'conflict')) + '</p>' if _s(v, 'conflict') else ''
+    friction = _pair('What you bring', _s(v, 'bring') or _s(v, 'atYourBest'), 'Where it gets hard', _s(v, 'hard') or _s(v, 'watchFor'))
+    suits = (('<p>' + _e(_s(v, 'whoSuits') or _s(v, 'bestPartner')) + '</p>') if (_s(v, 'whoSuits') or _s(v, 'bestPartner')) else '') \
+        + _pair('What you actually need', _s(v, 'needs') or _s(v, 'partnerNeeds'), 'What to be careful of', _s(v, 'careful') or _s(v, 'carefulOf'))
     first = next((l.get('language') for l in _l(_s(ll, 'receiving')) if isinstance(l, dict)), '')
     tease = ' · '.join(x for x in [first, _s(v, 'attachment')] if x)
     return (_block('How you want to be loved', _langs(_s(ll, 'receiving'))) + _block('How you show love', _langs(_s(ll, 'giving')))
-            + _block('Attachment', '<p>' + _e(_s(v, 'attachment')) + '</p>' if _s(v, 'attachment') else '') + pair
-            + _block('What you need from a partner', needs)), tease
+            + _block('Attachment style', attach) + _block('How you deal with conflict', conflict)
+            + _block('Strengths and friction', friction) + _block('Who suits you', suits)), tease
 
 
 def _work(v):
-    tiles = ''.join('<div class="box"><h3>' + t + '</h3><p>' + _e(_s(v, k)) + '</p></div>'
-                    for k, t in (('edge', 'Your edge'), ('underused', 'Underused'), ('holdingBack', 'Holding you back')) if _s(v, k))
-    fit = ''.join('<div class="box">' + _block(t, _bullets(_s(v, k))) + '</div>' for k, t in (('suits', 'Suits you'), ('drains', 'Drains you')) if _bullets(_s(v, k)))
-    fit = '<div class="cols">' + fit + '</div>' if fit else ''
-    return ('<div class="cols" style="margin-top:14px">' + tiles + '</div>' if tiles else '') + fit, _s(v, 'edge')
+    edge = ''
+    if _s(v, 'edge'):
+        edge = '<div class="edge"><small>Your edge</small><b>' + _e(_s(v, 'edge')) + '</b>' + ('<p>' + _e(_s(v, 'edgeDetail')) + '</p>' if _s(v, 'edgeDetail') else '') + '</div>'
+    others = _s(v, 'others') or ([x for x in _l(_s(v, 'strengths'))] + (['Not yet using: ' + _s(v, 'underused')] if _s(v, 'underused') else []))
+    holding = _s(v, 'holding') or ([_s(v, 'holdingBack')] if _s(v, 'holdingBack') else [])
+    sides = _pair('Your other strengths', others, 'What holds you back', holding)
+    fit = _pair('Suits you best', _s(v, 'suitsFull') or _s(v, 'suits'), 'Likely to drain you', _s(v, 'drainsFull') or _s(v, 'drains'))
+    return edge + sides + _block('Careers that suit you', fit), _s(v, 'edge')
 
 
 def _together(v):
-    build = _bullets(_s(v, 'buildOn'))
-    work = _bullets(_s(v, 'workOn')) + ('<p class="soft" style="margin-top:6px">' + _e(_s(v, 'whenItShows')) + '</p>' if _s(v, 'whenItShows') else '')
-    two = ('<div class="cols" style="margin-top:14px">' + ('<div class="box">' + _block('Build on', build) + '</div>' if build else '')
-           + ('<div class="box">' + _block('Work on', work) + '</div>' if work else '') + '</div>') if build or work else ''
-    plan = ''.join('<div><small>' + _e(p.get('when')) + '</small>' + _e(p.get('step')) + '</div>' for p in _l(_s(v, 'plan')) if isinstance(p, dict) and p.get('step'))
-    return two + _block('Your plan', '<div class="plan">' + plan + '</div>' if plan else '') + _block('For your wellbeing', _bullets(_s(v, 'wellbeing'))), \
-        ' · '.join(t for t in _l(_s(v, 'workOn')) if isinstance(t, str))[:90]
+    build = _items(_s(v, 'build') or _s(v, 'buildOn'))
+    dev = ''
+    for d in _l(_s(v, 'develop')):
+        if not isinstance(d, dict) or not d.get('title'):
+            continue
+        signs = [x for x in _l(d.get('signs')) if isinstance(x, str)]
+        dev += ('<div class="it dev"><b>' + _e(d['title']) + '</b>' + ('<span>' + _e(d.get('detail')) + '</span>' if d.get('detail') else '')
+                + ('<p class="kv"><small>Early signs</small>' + _e(' · '.join(signs)) + '</p>' if signs else '')
+                + ('<p class="kv"><small>Counter-move</small>' + _e(d.get('counterMove')) + '</p>' if d.get('counterMove') else '')
+                + ('<p class="kv ask"><small>Worth asking yourself</small>' + _e(d.get('reflect')) + '</p>' if d.get('reflect') else '') + '</div>')
+    if not dev:
+        dev = _items(_s(v, 'workOn')) + ('<p class="soft">' + _e(_s(v, 'whenItShows')) + '</p>' if _s(v, 'whenItShows') else '')
+    steps = [p for p in _l(_s(v, 'steps')) if isinstance(p, dict) and p.get('step')] or [p for p in _l(_s(v, 'plan')) if isinstance(p, dict) and p.get('step')]
+    plan = ''
+    for when in ('This week', 'This quarter', 'This year'):
+        here = [p for p in steps if p.get('when') == when]
+        if here:
+            plan += '<div><small>' + when + '</small>' + ''.join(
+                '<p><b>' + _e(p['step']) + '</b>' + ('<span>' + _e(p.get('detail')) + '</span>' if p.get('detail') else '')
+                + ('<em>' + _e(p.get('from')) + '</em>' if p.get('from') else '') + '</p>' for p in here) + '</div>'
+    tease = ' · '.join(t for t in ([d.get('title') for d in _l(_s(v, 'develop')) if isinstance(d, dict)] or _l(_s(v, 'workOn'))) if isinstance(t, str))[:90]
+    return _block('Build on', build) + _block('Develop', dev) + _block('Your plan', '<div class="plan">' + plan + '</div>' if plan else ''), tease
 
 
 W_BUILD = {'overview': _overview, 'whoYouAre': _who, 'whatDrivesYou': _drives, 'howYouConnect': _connect, 'howYouWork': _work, 'puttingItTogether': _together}
