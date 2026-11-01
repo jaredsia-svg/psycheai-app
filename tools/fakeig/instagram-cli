@@ -8,7 +8,7 @@ if os.environ.get('FAKE_429') == cmd: print('HTTP 429 Too Many Requests', file=s
 if '--account-id' not in opt: print('needs --account-id', file=sys.stderr); sys.exit(2)
 def t(i, base=2021): return {'utc': '%d-%02d-%02dT10:%02d:00Z' % (base + i % 5, 1 + i % 12, 1 + i % 27, i % 60), 'user_local': '%d-%02d-%02d 18:%02d:00' % (base + i % 5, 1 + i % 12, 1 + i % 27, i % 60), 'user_timezone': 'Asia/Singapore'}
 if cmd == 'profile':
-    print(json.dumps({'profiles': [{'username': 'mei.t', 'full_name': 'Mei Tan', 'bio': 'runner, cook', 'follower_count': 440, 'following_count': 636}]}))
+    print(json.dumps({'profiles': [{'username': 'mei.t', 'full_name': 'Mei Tan', 'bio': 'runner, cook, gate 429 regular (too many requests for coffee)', 'follower_count': 440, 'following_count': 636}]}))
 elif cmd == 'posts':
     kind = opt['--post-types']; page = int(opt.get('--after', '0'))
     n = 3 if kind.startswith('POST') else 2

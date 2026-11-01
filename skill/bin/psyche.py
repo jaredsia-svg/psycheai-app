@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 71
+RELEASE = 72
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1986,15 +1986,23 @@ def ig(cli, *args, timeout=120):
         done = subprocess.run([cli] + [str(a) for a in args], capture_output=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as err:
         raise RuntimeError('could not run: ' + type(err).__name__)
-    said = (done.stdout or b'').decode('utf-8', 'replace') + (done.stderr or b'').decode('utf-8', 'replace')
-    if '429' in said and re.search(r'too many requests|rate.?limit|\b429\b', said, re.I):
-        raise RateLimited()
+    out = (done.stdout or b'').decode('utf-8', 'replace')
+    said = out + (done.stderr or b'').decode('utf-8', 'replace')
+    # Only a failed call, or an answer that is itself an error, is a rate limit: a caption,
+    # a message or a count that happens to say 429 is their data, never a reason to stop.
     if done.returncode != 0:
+        if re.search(r'too many requests|rate.?limit|\b429\b', said, re.I):
+            raise RateLimited()
         raise RuntimeError('exit %d%s' % (done.returncode, ' (server error)' if re.search(r'\b50\d\b', said) else ''))
     try:
-        return json.loads(done.stdout.decode('utf-8', 'replace') or '{}')
+        got = json.loads(out or '{}')
     except ValueError:
         raise RuntimeError('not JSON')
+    err = got.get('error') if isinstance(got, dict) else None
+    code = [got.get('status_code'), got.get('code')] + ([err.get('code'), err.get('status'), err.get('status_code')] if isinstance(err, dict) else [])
+    if isinstance(got, dict) and (429 in code or '429' in code or (isinstance(err, str) and re.search(r'too many requests|rate.?limit|\b429\b', err, re.I))):
+        raise RateLimited()
+    return got
 
 
 def local_time(stamp, raw=None):
