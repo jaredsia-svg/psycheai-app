@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 58
+RELEASE = 59
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -309,8 +309,7 @@ li{margin:3px 0}
 .conf{background:#fff;border:1px solid #e2d8e9;border-radius:16px;padding:14px 16px;margin-top:4px}
 .fold{all:unset;box-sizing:border-box;display:block;width:100%%;margin:12px 0 4px;padding:12px;border-radius:12px;border:1px solid #d9cde2;background:#fff;color:#6a3590;font-weight:700;font-size:14px;text-align:center;cursor:pointer;touch-action:manipulation}
 .fold[hidden]{display:none}
-.pr-head{align-items:center}
-.pr-head .top{all:unset;box-sizing:border-box;margin-left:auto;padding:7px 12px;border-radius:999px;border:1px solid #d9cde2;background:#fff;color:#6a3590;font-weight:700;font-size:13px;cursor:pointer;touch-action:manipulation;white-space:nowrap}
+@media (hover:none) and (pointer:coarse){.fold{display:none}}
 .conf b{font-size:18px}
 .bar{height:8px;border-radius:8px;background:#ece4f1;margin:8px 0;overflow:hidden}
 .bar i{display:block;height:100%%;border-radius:8px;background:linear-gradient(90deg,#7b3fa0,#d1477a)}
@@ -332,11 +331,8 @@ var id=document.querySelector('.pr').getAttribute('data-id');
 function load(){try{var s=JSON.parse(window.name||'{}');if(s&&s.psyche===id)return s;}catch(e){}return {psyche:id,closed:[],m:null};}
 var st=load();
 function save(){try{window.name=JSON.stringify(st);}catch(e){}}
-var fold=document.getElementById('fold'),top=document.getElementById('foldTop'),sets=[],opens=[];
-// The control at the top does both: on a phone, Muse passes taps only to roughly the top few
-// thousand pixels of a widget, so with every section open the end of the report can be read but
-// not tapped (README "Taps only near the top"). Above the sections, it changes only what's below it.
-function foldShown(){var any=!!document.querySelector('.part.open');if(fold)fold.hidden=!any;if(top)top.textContent=any?'Collapse all \u25b2':'Open all \u25bc';}
+var fold=document.getElementById('fold'),sets=[],opens=[];
+function foldShown(){if(fold)fold.hidden=!document.querySelector('.part.open');}
 [].slice.call(document.querySelectorAll('.part')).forEach(function(p){
   var b=p.querySelector('button'),key=p.getAttribute('data-section');
   function set(open){p.classList.toggle('open',open);b.setAttribute('aria-expanded',open?'true':'false');}
@@ -345,18 +341,32 @@ function foldShown(){var any=!!document.querySelector('.part.open');if(fold)fold
   if(st.closed.indexOf(key)>=0)set(false);
   b.addEventListener('click',function(){
     var open=!p.classList.contains('open');set(open);
-    st.closed=st.closed.filter(function(k){return k!==key;});if(!open)st.closed.push(key);save();foldShown();
+    st.closed=st.closed.filter(function(k){return k!==key;});if(!open)st.closed.push(key);save();foldShown();ack();
   });
 });
-// "Collapse the report", at the very end: every section closes to its title at once. On a
-// phone the chat keeps its place while the report above shrinks, so the reader lands
-// after the report, with its six titles just above (README "Collapse the report").
-if(fold)fold.addEventListener('click',function(){sets.forEach(function(f){f();});save();foldShown();});
-if(top)top.addEventListener('click',function(){
-  if(document.querySelector('.part.open'))sets.forEach(function(f){f();});else{opens.forEach(function(f){f();});st.closed=[];}
-  save();foldShown();
-});
+function collapse(){sets.forEach(function(f){f();});save();foldShown();ack();}
+function expand(){opens.forEach(function(f){f();});st.closed=[];save();foldShown();ack();}
+// "Collapse the report", at the very end, for a laptop: on a phone Muse passes taps only to
+// roughly the top few thousand pixels of a widget, so there it is hidden, and the report is
+// collapsed from a small widget of its own right under it (controls_html, README "The report's
+// own control"). That widget reaches this one any way the chat allows: a message to every frame
+// of the page, a BroadcastChannel, or shared storage, and this one answers so it can say so.
+if(fold)fold.addEventListener('click',collapse);
 foldShown();
+var chan=null;try{chan=new BroadcastChannel('psyche-'+id);}catch(e){}
+function ack(){
+  var m={psyche:id,ack:true,open:!!document.querySelector('.part.open')};
+  try{if(chan)chan.postMessage(m);}catch(e){}
+  try{localStorage.setItem('psyche-ack-'+id,JSON.stringify({open:m.open,t:Date.now()}));}catch(e){}
+  try{var fs=window.parent&&window.parent.frames;if(fs&&window.parent!==window)for(var i=0;i<fs.length;i++)if(fs[i]!==window)fs[i].postMessage(m,'*');}catch(e){}
+}
+var lastCmd=0;
+function run(m){if(!m||m.psyche!==id||!m.do||(m.t&&m.t<=lastCmd))return;lastCmd=m.t||Date.now();if(m.do==='collapse')collapse();else if(m.do==='open')expand();else ack();}
+window.addEventListener('message',function(e){run(e.data);});
+if(chan)chan.onmessage=function(e){run(e.data);};
+function poll(){try{var c=JSON.parse(localStorage.getItem('psyche-cmd-'+id)||'null');if(c)run(c);}catch(e){}}
+window.addEventListener('storage',function(e){if(e.key==='psyche-cmd-'+id)poll();});
+try{localStorage.getItem('x');setInterval(poll,600);}catch(e){}
 [].slice.call(document.querySelectorAll('.rate')).forEach(function(r){
   var up=r.children[0],down=r.children[1],off=r.nextElementSibling;
   up.addEventListener('click',function(){var on=up.getAttribute('aria-pressed')!=='true';up.setAttribute('aria-pressed',on);down.setAttribute('aria-pressed','false');off.classList.remove('show');});
@@ -564,7 +574,7 @@ def _connect(v):
     attach = ''
     if _s(v, 'attachment'):
         attach = ('<p class="lead">' + _e(_s(v, 'attachment')) + '</p>' + ('<p>' + _e(_s(v, 'attachmentTone')) + '</p>' if _s(v, 'attachmentTone') else '')
-                  + ('<p class="soft">' + _e(_s(v, 'attachmentReading')) + '</p>' if _s(v, 'attachmentReading') else ''))
+        )
     conflict = '<p>' + _e(_s(v, 'conflict')) + '</p>' if _s(v, 'conflict') else ''
     friction = _pair('What you bring', _s(v, 'bring') or _s(v, 'atYourBest'), 'Where it gets hard', _s(v, 'hard') or _s(v, 'watchFor'))
     suits = (('<p>' + _e(_s(v, 'whoSuits') or _s(v, 'bestPartner')) + '</p>') if (_s(v, 'whoSuits') or _s(v, 'bestPartner')) else '') \
@@ -612,6 +622,52 @@ W_BUILD = {'overview': _overview, 'whoYouAre': _who, 'whatDrivesYou': _drives, '
 W_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
 
+def _view_id(view):
+    """The report's id, the same in the report and its control widget, so one only ever moves the other."""
+    return hashlib.sha256(json.dumps(view, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
+
+
+# The report's own control (README "The report's own control"): a small widget shown right
+# under the report. On a phone Muse passes taps only to the top part of a widget, so a button
+# at the end of a long report can't be tapped; this one is short, so it always can. It asks the
+# report above to collapse or open, every way the chat might allow, and says whether it answered.
+CONTROLS_HTML = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Psyche Report</title><style>
+:root{color-scheme:light}*{box-sizing:border-box;font-family:inherit}
+html,body{margin:0;background:#faf7fb}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;color:#241a2e;font-size:14px}
+main{max-width:720px;margin:0 auto;padding:8px 12px}
+button{all:unset;box-sizing:border-box;display:block;width:100%;padding:12px;border-radius:12px;border:1px solid #d9cde2;background:#fff;color:#6a3590;font-weight:700;font-size:14px;text-align:center;cursor:pointer;touch-action:manipulation}
+p{margin:6px 2px 0;color:#6b6076;font-size:13px;min-height:18px;text-align:center}
+</style></head><body><main data-id="__ID__"><button type="button" id="go">Collapse the report above \u25b2</button><p id="note"></p></main><script>
+(function(){
+var id=document.querySelector('main').getAttribute('data-id'),go=document.getElementById('go'),note=document.getElementById('note');
+var open=true,waiting=null,chan=null;try{chan=new BroadcastChannel('psyche-'+id);}catch(e){}
+function label(){go.textContent=open?'Collapse the report above \u25b2':'Open the report above \u25bc';}
+function heard(m){if(!m||m.psyche!==id||!m.ack)return;open=!!m.open;label();if(waiting){clearTimeout(waiting);waiting=null;note.textContent=open?'Opened.':'Collapsed: tap a section title to read it again.';}}
+window.addEventListener('message',function(e){heard(e.data);});
+if(chan)chan.onmessage=function(e){heard(e.data);};
+var seen=0;function poll(){try{var a=JSON.parse(localStorage.getItem('psyche-ack-'+id)||'null');if(a&&a.t>seen){seen=a.t;heard({psyche:id,ack:true,open:a.open});}}catch(e){}}
+try{localStorage.getItem('x');setInterval(poll,500);}catch(e){}
+function send(m){
+  try{if(chan)chan.postMessage(m);}catch(e){}
+  try{localStorage.setItem('psyche-cmd-'+id,JSON.stringify(m));}catch(e){}
+  try{var fs=window.parent&&window.parent.frames;if(fs&&window.parent!==window)for(var i=0;i<fs.length;i++)if(fs[i]!==window)fs[i].postMessage(m,'*');}catch(e){}
+}
+go.addEventListener('click',function(){
+  note.textContent='';send({psyche:id,do:open?'collapse':'open',t:Date.now()});
+  if(waiting)clearTimeout(waiting);
+  waiting=setTimeout(function(){waiting=null;note.textContent='The report above didn’t answer here. Tap its section titles instead.';},2000);
+});
+label();
+})();
+</script></body></html>"""
+
+
+def controls_html(view):
+    """The report's control widget, for the report built from this view."""
+    return CONTROLS_HTML.replace('__ID__', _view_id(view)) if isinstance(view, dict) else None
+
+
 def widget_html(view):
     """The whole report as one self-contained page, from view and nothing else."""
     if not isinstance(view, dict):
@@ -634,8 +690,8 @@ def widget_html(view):
             % (score, (' (' + _e(c.get('level')) + ')') if c.get('level') else '', score,
                ('<div class="soft">Read from: ' + _e(', '.join(x for x in _l(c.get('basedOn')) if isinstance(x, str))) + '</div>') if _l(c.get('basedOn')) else '')) if score is not None else ''
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-            '<title>Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr" data-id="' + hashlib.sha256(json.dumps(view, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12] + '">'
-            '<div class="pr-head"><h1>Psyche Report</h1><span>PsycheAI</span><button type="button" class="top" id="foldTop">Collapse all ▲</button></div>'
+            '<title>Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr" data-id="' + _view_id(view) + '">'
+            '<div class="pr-head"><h1>Psyche Report</h1><span>PsycheAI</span></div>'
             + ''.join(parts) + conf + '<button type="button" class="fold" id="fold">Collapse the report ▲</button></main><script>' + W_JS + '</script></body></html>')
 
 
@@ -733,6 +789,7 @@ def local_widget(r):
     if not page:
         return out
     out['widget'] = page
+    out['controls'] = controls_html(r.get('view'))
     try:
         os.makedirs(OUT, exist_ok=True)
         for old in os.listdir(OUT):
