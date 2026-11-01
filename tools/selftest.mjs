@@ -2686,7 +2686,7 @@ print(json.dumps({'page': m.widget_html(v), 'empty': [m.widget_html(x) for x in 
   const page = probe.widget || '';
   const skillMdText = require('../lib/skill.js').skillMd();
   check('the phone check is a test page the skill shows only when asked: it measures scrolling, jumping and collapsing, and sends nothing anywhere',
-    /^<!DOCTYPE html>/.test(page) && ['1. Sees the chat scroll', '2. Jump moves the chat', '3. Collapse keeps your place'].every(t => page.includes(t)) &&
+    /^<!DOCTYPE html>/.test(page) && ['Taps received', '1. Sees the chat scroll', '2. Jump moves the chat', '3. Collapse keeps your place'].every(t => page.includes(t)) && /addEventListener\('pointerdown'/.test(page) && /addEventListener\('resize'/.test(page) &&
     !/fetch\(|XMLHttpRequest|sendBeacon|navigator\.share|https?:\/\/|<img|<link|src=/.test(page) &&
     /\*\*The phone check\.\*\* Only when they ask for "the phone check": run `bin\/psyche\.py show probe`/.test(skillMdText), probe.error);
 }

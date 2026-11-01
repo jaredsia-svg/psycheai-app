@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 55
+RELEASE = 56
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -647,11 +647,12 @@ button{all:unset;box-sizing:border-box;display:block;width:100%;text-align:cente
 <p class="step"><b>2.</b> Tap "Jump to the green box". It's far below; see whether the chat moves there.</p>
 <button id="jump" type="button">Jump to the green box</button>
 <p class="step"><b>3.</b> Scroll down to "Collapse the block above" and tap it. Note whether the button stays under your finger.</p>
-<p class="step"><b>4.</b> Come back up and take a screenshot of the results above.</p></div>
+<p class="step"><b>4.</b> Tap the green box at the very bottom too.</p>
+<p class="step"><b>5.</b> Come back up and take a screenshot of the results above.</p></div>
 <div class="tall" id="block">A tall block (1,400px) to collapse in step 3</div>
 <button id="collapse" type="button">Collapse the block above</button>
 <div style="height:900px"></div>
-<div id="target">The green box: step 2 jumps here</div>
+<div id="target">The green box: step 2 jumps here. Tap it (step 4).</div>
 <div style="height:200px"></div>
 </main><script>
 (function(){
@@ -664,9 +665,18 @@ set('Frame size',innerWidth+' x '+innerHeight+' px');
 set('Page height',document.documentElement.scrollHeight+' px');
 set('Frame grows to the page',document.documentElement.scrollHeight<=innerHeight+4?'yes (the chat scrolls)':'no (it scrolls inside)');
 set('Touch screen',(window.matchMedia&&matchMedia('(hover: none) and (pointer: coarse)').matches)?'yes':'no');
+set('Taps received','none yet: tap the buttons and the page lower down','wait');
 set('1. Sees the chat scroll','waiting: scroll a little','wait');
 set('2. Jump moves the chat','not tried yet','wait');
 set('3. Collapse keeps your place','not tried yet','wait');
+// Every tap the page receives, wherever it lands, with how far down the page it was:
+// if taps lower down never arrive, the chat app isn't passing them to the widget.
+var taps=0,lowest=0,sizes=0;
+function tapAt(y){taps++;lowest=Math.max(lowest,Math.round(y));set('Taps received',taps+' (lowest at '+lowest+' px of '+document.documentElement.scrollHeight+')',lowest>innerHeight0?'ok':'wait');}
+var innerHeight0=innerHeight;
+if(window.PointerEvent)document.addEventListener('pointerdown',function(e){tapAt(e.pageY);},true);
+else document.addEventListener('touchstart',function(e){if(e.touches&&e.touches[0])tapAt(e.touches[0].pageY);},{capture:true,passive:true});
+window.addEventListener('resize',function(){sizes++;set('Frame size',innerWidth+' x '+innerHeight+' px (changed '+sizes+' times, started '+innerHeight0+')');});
 var moved=0,last=null,block=document.getElementById('block');
 var hasIO='IntersectionObserver' in window;
 if(!hasIO)set('1. Sees the chat scroll','no (no IntersectionObserver)','no');
