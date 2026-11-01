@@ -2045,6 +2045,12 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         // A new save empties out/ (saved()), so a PDF there is always that save's own: clear the one above.
         for (const f of fsx.readdirSync(pathx.join(dir, 'out'))) if (/\.pdf$/i.test(f)) fsx.rmSync(pathx.join(dir, 'out', f));
       }
+      {
+        const fakes = pathx.join(pathx.dirname(new URL(import.meta.url).pathname), 'fakeig');
+        Object.assign(process.env, { PSYCHEAI_IG_CLI: pathx.join(fakes, 'instagram-cli'), PSYCHEAI_IGM_CLI: pathx.join(fakes, 'instagram-messages-cli'), FAKEIG_LOG: pathx.join(os.tmpdir(), 'firstrun-calls.log') });
+        try { skillState.firstRun = await run('first-run'); } catch (e) { skillState.firstRun = { error: String(e.message).slice(0, 300) }; }
+        for (const k of ['PSYCHEAI_IG_CLI', 'PSYCHEAI_IGM_CLI', 'FAKEIG_LOG']) delete process.env[k];
+      }
       skillState.parts = {};
       skillState.parts.ready = await run('show', 'ready');
       skillState.readyPdf = fsx.readdirSync(pathx.join(dir, 'out')).filter(f => /\.pdf$/i.test(f)).length;
@@ -2262,6 +2268,15 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         /bin\/psyche\.py last-collect +# what the last collect read/.test(skillMd), JSON.stringify(kept).slice(0, 400));
       fsx.rmSync(tmp, { recursive: true, force: true });
     }
+    check('first-run: the account, start and both account lists in one call: step 0\'s say, the question with "@name" and "@name (without my messages)" for an account whose messages are connected, business accounts left out, each button\'s collect command ready, and step 1\'s line word for word; SKILL.md opens with it',
+      ((f) => f && /^I'm PsycheAI/.test(f.say || '') && f.question === 'Which account should I read?' && JSON.stringify(f.buttons) === '["@mei.t","@mei.t (without my messages)","@mei.alt"]' &&
+        f.onTap['@mei.t'] === 'bin/psyche.py collect --account-id ACC1' && f.onTap['@mei.t (without my messages)'] === 'bin/psyche.py collect --account-id ACC1 --no-messages' && /^MESSAGES FIRST for this account/.test(f.onTap['@mei.alt']) &&
+        f.stepOne.startsWith(require('../lib/mcp.js').WAIT_LINE || "On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready. Here's what you'll get, in a minute, while you wait.\n▶ PsycheAI in a minute: "))(skillState.firstRun) &&
+      /^# PsycheAI\n\n## First run, in order\n/m.test(skillMd) && /1\. Install as below, then run `bin\/psyche\.py first-run`/.test(skillMd) &&
+      /Then send, as its own message, word for word: "On it\. Reading your Instagram and writing your Psyche takes about 5 minutes\./.test(skillMd) &&
+      /STEP_ONE = \("On it\. Reading your Instagram and writing your Psyche takes about 5 minutes\. I'll show it here when it's ready\. "\n\s+"Here's what you'll get, in a minute, while you wait\."\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
+      fsx.readFileSync(new URL('../lib/mcp.js', import.meta.url), 'utf8').includes("const WAIT = 'On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I\\'ll show it here when it\\'s ready. Here\\'s what you\\'ll get, in a minute, while you wait.';"),
+      JSON.stringify(skillState.firstRun).slice(0, 500));
     check('show ready: the card and the report file saved and What\'s next given in one call, the PDF fetched beside them (not on the way to the card), and SKILL.md delivers with it on the helper\'s return, before anything else',
       ((R) => R && R.say === 'Your Psyche Card and Report are ready.' && /\/out\/Psyche Card( - [^/]+)? - \d{8}\.png$/.test((R.card || {}).file || '') && R.summary && R.next && R.next.nextStep.buttons[0] === 'Reveal my roast 🔥')(skillState.parts && skillState.parts.ready) &&
       skillState.readyPdf === 1 && /is put together in one call: `bin\/psyche\.py show ready` saves the card and the report file and gives What's next/.test(skillMd) &&

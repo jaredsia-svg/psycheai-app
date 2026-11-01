@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 91
+RELEASE = 93
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1613,6 +1613,77 @@ def send_timing():
         pass
 
 
+# ---------- first-run: status, start and both account lists in one call (README "First run in one call") ----------
+STEP_ONE = ("On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready. "
+            "Here's what you'll get, in a minute, while you wait.")
+
+
+def instagram_accounts(data, messages=False):
+    """Each account in an accounts answer: its username, ID, whether it's professional, and (messages) connected.
+    Read defensively, since the tools don't document the shape: any dict with a username and an ID."""
+    found = []
+
+    def walk(v):
+        if isinstance(v, list):
+            for x in v:
+                walk(x)
+        elif isinstance(v, dict):
+            name = v.get('username') or v.get('user_name')
+            fbid = next((str(v[k]) for k in ('user_fbid', 'fbid', 'account_id', 'id') if v.get(k) not in (None, '')), None)
+            if isinstance(name, str) and name and fbid:
+                pro = next((bool(v[k]) for k in ('is_professional', 'professional', 'is_business', 'is_business_account') if k in v), False)
+                conn = next((bool(v[k]) for k in ('connected', 'is_connected', 'messaging_connected', 'messages_connected') if k in v), None)
+                found.append({'username': name.lstrip('@'), 'id': fbid, 'professional': pro, 'connected': conn})
+                return
+            for k, x in v.items():
+                if k != '_meta':
+                    walk(x)
+    walk(data)
+    return found
+
+
+def first_run():
+    account()
+    out = {'version': local_version()}
+    start = call('start', {})
+    out['say'], out['reel'] = start.get('say'), start.get('reel')
+    if start.get('error'):
+        out['error'] = start['error']
+        return out
+    try:
+        ig_list = [a for a in instagram_accounts(ig(IG_CLI, 'accounts')) if not a['professional']]
+        msg = {a['username']: a for a in instagram_accounts(ig(IGM_CLI, 'accounts'), True)}
+    except (RuntimeError, RateLimited) as err:
+        out['accounts'] = None
+        out['then'] = 'The account lists could not be read here (%s): run instagram-cli accounts and instagram-messages-cli accounts yourself, as step 0 says.' % type(err).__name__
+        return out
+    if not ig_list:
+        out['accounts'] = None
+        out['then'] = 'No personal Instagram account came back: run instagram-cli accounts yourself, as step 0 says.'
+        return out
+    buttons, on_tap = [], {}
+    for a in ig_list:
+        m = msg.get(a['username'])
+        base = 'bin/psyche.py collect --account-id %s' % a['id'] + ((' --messages-account-id %s' % m['id']) if m and m['id'] != a['id'] else '')
+        label = '@' + a['username']
+        buttons.append(label)
+        if m and m['connected']:
+            on_tap[label] = base
+            buttons.append(label + ' (without my messages)')
+            on_tap[label + ' (without my messages)'] = base + ' --no-messages'
+        else:
+            on_tap[label] = 'MESSAGES FIRST for this account (its messages aren\'t connected), then: ' + base + ' (add --no-messages on "Continue without messages")'
+    if len(buttons) > 1:
+        out['question'], out['buttons'] = 'Which account should I read?', buttons
+    out['stepOne'] = STEP_ONE + '\n▶ PsycheAI in a minute: ' + str(out.get('reel') or '')
+    out['onTap'] = on_tap
+    out['then'] = ('Send say, then question with buttons, as ONE message (with one button, no question: go on as if it was tapped). '
+                   'On their tap: start ONE helper with the brief in SKILL.md "First run, in order", with that button\'s collect command '
+                   'from onTap (add --me "<their full name>"), then send stepOne as its own message, word for word, and end the turn. '
+                   'IDs stay inside commands: never show one.')
+    return out
+
+
 def local_version():
     try:
         with open(os.path.join(HERE, 'SKILL.md')) as f:
@@ -2960,6 +3031,9 @@ def main(argv):
         return
     if argv[0] == 'update':
         print(json.dumps(update()))
+        return
+    if argv[0] == 'first-run':
+        print(json.dumps(first_run(), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'call' and len(argv) >= 2:
         raw = argv[2] if len(argv) > 2 else '{}'
