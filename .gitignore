@@ -3,3 +3,10 @@ node_modules/
 .data.json.tmp
 .env
 __pycache__/
+# What the skill writes when it runs (README "Measuring a read"), never part of a release
+skill/.timing.json
+skill/.account.json
+skill/.keys.json
+skill/last-psyche.json
+skill/out/
+skill/work/
