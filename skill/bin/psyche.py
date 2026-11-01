@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 66
+RELEASE = 71
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -105,12 +105,16 @@ LAST = os.path.join(HERE, 'last-psyche.json')   # what the latest publish gave b
 OUT = os.path.join(HERE, 'out')                 # the PDF as a file here, so the chat opens it in Muse, not a browser
 
 
-def saved_at():
-    """When the Psyche being shown was saved, as "1432" (its last-psyche.json's time)."""
+def file_label(kind):
+    """A saved file's name: "Psyche Report - Mei Tan - 01112026", their full name and the save's date
+    (as psycheai.io names its PDFs), never the time."""
+    kept = read_first([REPORT, REPORT_KEPT]) or {}
+    name = re.sub(r'[^\w .&()-]', '', str(kept.get('name') or '')).strip()[:60]
     try:
-        return datetime.fromtimestamp(os.path.getmtime(LAST)).strftime('%H%M')
+        day = datetime.fromtimestamp(os.path.getmtime(LAST)).strftime('%d%m%Y')
     except OSError:
-        return datetime.now().strftime('%H%M')
+        day = datetime.now().strftime('%d%m%Y')
+    return ' - '.join(x for x in [kind, name, day] if x)
 
 
 # Where the card and PDF may be fetched from (README "Fetched only from PsycheAI"): a server
@@ -132,7 +136,7 @@ def local_pdf(r):
     files = [f for f in r.get('files', []) if f.get('mimeType') == 'application/pdf']
     name = re.sub(r'[^\w .&()-]', '', r.get('pdfName') or (files[0].get('name') if files else '') or 'Psyche Report.pdf') or 'Psyche Report.pdf'
     # The save's time in the name, so each save's PDF is a new file to the chat, never taken for one sent before.
-    name = re.sub(r'\.pdf$', '', name, flags=re.I) + ' ' + saved_at() + '.pdf'
+    name = file_label('Psyche Report') + '.pdf'
     out = {'pdf': link}
     # Fetched already, right after the save (saved()): that copy is this save's, since out/ is
     # emptied at each save, and the link may have expired since.
@@ -184,7 +188,7 @@ def local_card(r):
         for old in os.listdir(OUT):
             if old.lower().endswith('.png'):
                 os.remove(os.path.join(OUT, old))
-        path = os.path.join(OUT, 'Psyche Card ' + saved_at() + '.png')
+        path = os.path.join(OUT, file_label('Psyche Card') + '.png')
         with open(path, 'wb') as f:
             f.write(body)
         os.chmod(path, 0o600)
@@ -389,7 +393,7 @@ var tip=document.getElementById('mtip'),pts=[].slice.call(document.querySelector
 });});
 // The card picture opens full screen; a tap anywhere closes it.
 var open=document.getElementById('cardopen'),view=document.getElementById('viewer');
-if(open&&view){open.addEventListener('click',function(){view.hidden=false;});view.addEventListener('click',function(){view.hidden=true;});
+if(open&&view){open.addEventListener('click',function(){var big=view.querySelector('img'),small=open.querySelector('img');if(big&&small&&!big.src)big.src=small.src;view.hidden=false;});view.addEventListener('click',function(){view.hidden=true;});
   document.addEventListener('keydown',function(e){if(e.key==='Escape')view.hidden=true;});}
 })();
 '''
@@ -650,7 +654,7 @@ W_BUILD = {'overview': _overview, 'whoYouAre': _who, 'whatDrivesYou': _drives, '
 W_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
 
-def report_html(view, name='', when='', card_png=None, pages=None):
+def report_html(view, name='', when='', card_png=None, pages=None, doc_title=None):
     """The whole report as one self-contained HTML file, from view (full, with the evidence, when given)."""
     if not isinstance(view, dict):
         return None
@@ -688,10 +692,11 @@ def report_html(view, name='', when='', card_png=None, pages=None):
               + ('<div class="sub">' + _e(when) + '</div>' if when else '')
               + '</div>' + ('<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card"><img class="cardpic" alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"></button>' if card_png else '') + '</div></header>')
     bar = '<nav aria-label="Sections">' + ''.join(nav) + '<button type="button" data-fold>Collapse all ▲</button></nav>'
-    viewer = ('<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"><span>Tap to close</span></div>') if card_png else ''
+    # The picture is embedded once, in the banner; the full-screen view borrows it when opened.
+    viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card"><span>Tap to close</span></div>' if card_png else ''
     foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-            '<title>' + _e(title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method
+            '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method
             + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + '</script></body></html>')
 
 
@@ -808,7 +813,7 @@ def local_report(r):
             pages = max(counts) if counts else None
     except (OSError, ValueError):
         pages = None
-    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages)
+    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages, file_label('Psyche Report'))
     if not page:
         return out
     try:
@@ -816,8 +821,7 @@ def local_report(r):
         for old in os.listdir(OUT):
             if old.lower().endswith('.html'):
                 os.remove(os.path.join(OUT, old))
-        first = re.sub(r'[^\w -]', '', str(kept.get('name') or '').split(' ')[0])[:30]
-        path = os.path.join(OUT, 'Psyche Report' + (' - ' + first if first else '') + ' ' + saved_at() + '.html')
+        path = os.path.join(OUT, file_label('Psyche Report') + '.html')
         with open(path, 'w', encoding='utf-8') as f:
             f.write(page)
         os.chmod(path, 0o600)
@@ -908,7 +912,8 @@ def rhythm(stamps):
             'busiest day': names[max(range(7), key=lambda i: days[i])], 'weekend': '%d%%' % round(100 * (days[5] + days[6]) / max(1, sum(days)))}
 
 
-def check_digest(path=DIGEST):
+def check_digest(path=None):
+    path = path or DIGEST
     if not os.path.exists(path):
         return {'ok': False, 'problems': ['No digest yet: build digest/digest.md as the reading plan says.']}
     with open(path, encoding='utf-8') as f:
@@ -1813,25 +1818,30 @@ def thin(lines, cap):
     return [lines[int(k * step)] for k in range(keep)]
 
 
-def build_digest():
-    if not os.path.exists(ITEMS):
+def build_digest(given=None, given_meta=None):
+    """The digest from work/items.jsonl and work/meta.json, or from items and meta handed in (collect)."""
+    if given is None and not os.path.exists(ITEMS):
         return {'ok': False, 'problems': ['No work/items.jsonl yet: save what you read there as you go, one JSON line per item.']}
     # It builds a first digest (or one after starting over): rebuilding from work/ alone would drop what earlier reads kept.
     if os.path.exists(DIGEST) and not os.path.exists(os.path.join(os.path.dirname(DIGEST), '.built')):
         return {'ok': False, 'problems': ['A digest from an earlier read is already here: add what is new to it as SKILL.md says for a later read; build-digest makes a first one.']}
     items, bad = [], 0
-    with open(ITEMS, encoding='utf-8') as f:
-        for line in f:
-            try:
-                x = json.loads(line)
-            except ValueError:
-                bad += line.strip() != ''
-                continue
-            t = when(x.get('date'))
-            if isinstance(x, dict) and t and x.get('kind') in ('post', 'story', 'comment', 'message'):
-                x['t'] = t
-                items.append(x)
-    meta = read_first([META]) or {}
+    if given is None:
+        with open(ITEMS, encoding='utf-8') as f:
+            lines = f.read().splitlines()
+    else:
+        lines = given
+    for line in lines:
+        try:
+            x = json.loads(line) if isinstance(line, str) else dict(line)
+        except (ValueError, TypeError):
+            bad += str(line).strip() != ''
+            continue
+        t = when(x.get('date')) if isinstance(x, dict) else None
+        if isinstance(x, dict) and t and x.get('kind') in ('post', 'story', 'comment', 'message'):
+            x['t'] = t
+            items.append(x)
+    meta = given_meta if given_meta is not None else (read_first([META]) or {})
     reads = 1
     messages_in = meta.get('messages', True) is not False
     t = targets(reads, messages_in)
@@ -1868,6 +1878,13 @@ def build_digest():
     me = str(meta.get('me') or '').strip()
     own_names = [(me, '[you]')] + ([(me.split(' ')[0], '[you]')] if ' ' in me and len(me.split(' ')[0]) >= 3 else []) if me else []
     said_once = set()   # a message sent word for word to several people is one thing they did, kept once
+    # Everyone read in any conversation: named in another one, they are "a friend" there too.
+    everyone = sorted({str(n) for x in items if x['kind'] == 'message' for n in (x.get('with') or []) if str(n).strip() and str(n) != 'Friend'})
+    elsewhere = []
+    for n in everyone:
+        elsewhere.append((n, 'a friend'))
+        if ' ' in n and len(n.split(' ')[0]) >= 3:
+            elsewhere.append((n.split(' ')[0], 'a friend'))
     if messages_in:
         for i, (tid, msgs) in enumerate(ranked[:THREADS_MAX]):
             if i >= 10 and own_total >= whole_target:
@@ -1882,6 +1899,7 @@ def build_digest():
                 first = n.split(' ')[0]
                 if len(first) >= 3 and first != n:
                     names.append((first, label.get(n, 'Friend')))
+            names += [e for e in elsewhere if e[0] not in {x[0] for x in names}]
             names.sort(key=lambda n: -len(n[0]))
             parsed = [{'t': m['t'], 'sender': 'me' if m.get('mine') else str((m.get('with') or ['Friend'])[0]), 'text': str(m.get('text') or '')}
                       for m in sorted(msgs, key=lambda m: m['t']) if str(m.get('text') or '').strip()]
@@ -1936,6 +1954,234 @@ def build_digest():
     os.chmod(DIGEST, 0o600)
     result = check_digest()
     result['built'] = {'items': len(items), 'unreadable lines': bad, 'conversations': len(convo_blocks), 'posts and stories': len(posts)}
+    return result
+
+
+# ---------- collect: a first read in one command (README "Collect in one command") ----------
+# A read spent most of its time between Muse's own tool calls: 43 of them, two scripts it
+# wrote and debugged, two that failed. `collect` does the reading itself, through the same
+# Instagram tools Muse uses (instagram-cli, instagram-messages-cli), as the connectors' docs
+# say to: every call's exit status checked, pages followed only while they add something and
+# never with a cursor already used, everything stopped at a rate limit, a read stopped after
+# repeated server errors. Messages are read in memory, from their busiest contacts only, one
+# thread at a time and only as far as the digest needs, and never written to a file as they
+# came: what reaches disk is the digest, built from them (names, handles, links and numbers
+# taken out) as build-digest builds it. IDs and cursors never leave this function.
+
+IG_CLI = os.environ.get('PSYCHEAI_IG_CLI') or '/opt/hatch/bin/instagram-cli'
+IGM_CLI = os.environ.get('PSYCHEAI_IGM_CLI') or '/opt/hatch/bin/instagram-messages-cli'
+COLLECT_TYPES = (('POST,REEL', 'post'), ('STORY,HIGHLIGHT', 'story'))
+COLLECT_PAGES = 60          # a list's pages at most
+COLLECT_THREADS = 20        # their busiest contacts read
+THREAD_PAGES = 8            # a thread's pages at most
+
+
+class RateLimited(Exception):
+    pass
+
+
+def ig(cli, *args, timeout=120):
+    """One Instagram tool call: its JSON, or raises. A 429 stops the whole collect."""
+    try:
+        done = subprocess.run([cli] + [str(a) for a in args], capture_output=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as err:
+        raise RuntimeError('could not run: ' + type(err).__name__)
+    said = (done.stdout or b'').decode('utf-8', 'replace') + (done.stderr or b'').decode('utf-8', 'replace')
+    if '429' in said and re.search(r'too many requests|rate.?limit|\b429\b', said, re.I):
+        raise RateLimited()
+    if done.returncode != 0:
+        raise RuntimeError('exit %d%s' % (done.returncode, ' (server error)' if re.search(r'\b50\d\b', said) else ''))
+    try:
+        return json.loads(done.stdout.decode('utf-8', 'replace') or '{}')
+    except ValueError:
+        raise RuntimeError('not JSON')
+
+
+def local_time(stamp, raw=None):
+    """A post's or message's time: the user's local time, else UTC, else the raw provider time."""
+    for v in ((stamp or {}).get('user_local'), (stamp or {}).get('utc')) if isinstance(stamp, dict) else ():
+        if when(v):
+            return when(v)
+    try:
+        return when(int(str(raw))) if raw not in (None, '') else None
+    except ValueError:
+        return when(raw)
+
+
+def pages(fetch, cursor_of, limit=COLLECT_PAGES):
+    """Each page of a list, following its cursor while pages add something, never reusing one."""
+    used, after = set(), None
+    for _ in range(limit):
+        page = fetch(after)
+        yield page
+        nxt = cursor_of(page)
+        if not nxt or nxt in used:
+            return
+        used.add(nxt)
+        after = nxt
+
+
+def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, with_messages=True):
+    if os.path.exists(DIGEST) and not os.path.exists(os.path.join(os.path.dirname(DIGEST), '.built')):
+        return {'ok': False, 'problems': ['A digest from an earlier read is already here: collect makes a first one. For a later read, add to it as SKILL.md says.']}
+    account = str(account or '').strip()
+    if not re.fullmatch(r'[\w-]{3,40}', account):
+        return {'ok': False, 'problems': ['--account-id must be their own user_fbid from instagram-cli accounts.']}
+    m_account = str(messages_account or account).strip()
+    items, notes, stopped = [], [], None
+    meta = {'me': me or '', 'messages': bool(with_messages), 'counts': {}, 'interests': [], 'complete': [], 'sources': 'instagram'}
+    read = {'posts': 0, 'stories': 0, 'comments': 0, 'threads': 0, 'own messages': 0}
+
+    def note(what, err):
+        notes.append('%s: %s' % (what, err))
+
+    try:
+        # Profile: their bio and counts.
+        try:
+            prof = (ig(IG_CLI, 'profile', '--account-id', account).get('profiles') or [{}])[0]
+            meta['bio'] = str(prof.get('bio') or '')[:300]
+            for key, names in (('followers', ('follower_count', 'followers_count', 'followers')), ('following', ('following_count', 'follows_count', 'following'))):
+                v = next((prof.get(n) for n in names if isinstance(prof.get(n), int)), None)
+                if v is not None:
+                    meta['counts'][key] = v
+            if not meta['me']:
+                meta['me'] = str(prof.get('full_name') or prof.get('name') or '')
+        except RuntimeError as err:
+            note('profile', err)
+        # Posts, reels, stories and highlights, every page, each kept once.
+        seen = set()
+        for types, kind in COLLECT_TYPES:
+            try:
+                for page in pages(lambda after: ig(IG_CLI, 'posts', '--account-id', account, '--post-types', types, '--sort-order', 'desc', '--limit', 100,
+                                                   *(('--after', after) if after else ())),
+                                  lambda p: p.get('next_cursor') if p.get('has_next_page') and p.get('posts') else None):
+                    for p in page.get('posts') or []:
+                        pid = str(p.get('post_id') or '')
+                        t = local_time(p.get('post_created_at'))
+                        if not t or (pid and pid in seen):
+                            continue
+                        seen.add(pid)
+                        items.append({'kind': kind, 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': str(p.get('post_caption') or '')})
+                        read['posts' if kind == 'post' else 'stories'] += 1
+                    if page.get('provider_error'):
+                        note(kind + 's' if kind == 'post' else 'stories', 'a page came back partial')
+            except RuntimeError as err:
+                note(kind + 's' if kind == 'post' else 'stories', err)
+        # Their own comments: the posts they commented on, then their comments on those.
+        try:
+            commented = []
+            for page in pages(lambda after: ig(IG_CLI, 'recently-commented-posts', '--account-id', account, '--limit', 50, *(('--after', after) if after else ())),
+                              lambda p: (p.get('next_cursor') or p.get('end_cursor') or (p.get('page_info') or {}).get('end_cursor'))
+                              if (p.get('has_next_page') or (p.get('page_info') or {}).get('has_next_page')) else None, limit=6):
+                for p in page.get('posts') or page.get('items') or []:
+                    pid = str(p.get('post_id') or p.get('media_id') or p.get('id') or '')
+                    if pid and pid not in commented:
+                        commented.append(pid)
+            for i in range(0, min(len(commented), 100), 10):
+                got = ig(IG_CLI, 'fetch-post-comments', '--account-id', account, '--post-ids', ','.join(commented[i:i + 10]), '--author-ids', account)
+                for group in got.get('post_groups') or []:
+                    for c in group.get('comments') or []:
+                        t = local_time(c.get('created_at') if isinstance(c.get('created_at'), dict) else c.get('comment_created_at'),
+                                       c.get('created_at') if not isinstance(c.get('created_at'), dict) else c.get('timestamp'))
+                        text = str(c.get('comment_text') or '')
+                        if t and text.strip():
+                            items.append({'kind': 'comment', 'date': t.strftime('%Y-%m-%d %H:%M'), 'text': text})
+                            read['comments'] += 1
+        except RuntimeError as err:
+            note('comments', err)
+        # Saved (a count) and their interests (topics only).
+        try:
+            n = 0
+            for page in pages(lambda after: ig(IG_CLI, 'saved-posts', '--account-id', account, '--limit', 50, *(('--after', after) if after else ())),
+                              lambda p: (p.get('end_cursor') or p.get('next_cursor') or (p.get('page_info') or {}).get('end_cursor'))
+                              if (p.get('has_next_page') or (p.get('page_info') or {}).get('has_next_page')) else None, limit=10):
+                n += len(page.get('posts') or page.get('items') or [])
+            meta['counts']['saved'] = n
+        except RuntimeError as err:
+            note('saved', err)
+        try:
+            got = ig(IG_CLI, 'current-interests', '--account-id', account)
+            found = []
+
+            def topics(v):
+                if isinstance(v, str) and 1 < len(v) <= 80:
+                    found.append(v)
+                elif isinstance(v, list):
+                    for x in v:
+                        topics(x)
+                elif isinstance(v, dict):
+                    for k in ('text', 'topic', 'name', 'title'):
+                        if isinstance(v.get(k), str):
+                            return topics(v[k])
+                    for k, x in v.items():
+                        if k not in ('_meta', 'model_response_guidance', 'retrieved_at', 'status', 'type', 'id'):
+                            topics(x)
+            topics(got)
+            meta['interests'] = list(dict.fromkeys(found))[:40]
+        except RuntimeError as err:
+            note('interests', err)
+        # Messages: their busiest contacts, one thread at a time, only as far as needed.
+        if with_messages:
+            t = targets(1, True)
+            try:
+                ranked, score = [], {}
+                for page in pages(lambda after: ig(IGM_CLI, 'top-recipients', '--account-id', m_account, '--count', threads, *(('--page-max-id', after) if after else ())),
+                                  lambda p: p.get('page_max_id') if p.get('has_next_page') else None, limit=3):
+                    for r in page.get('ranking') or []:
+                        for s in r.get('score_map') or []:
+                            if isinstance(s.get('score'), (int, float)):
+                                score[str(s.get('key'))] = max(score.get(str(s.get('key')), 0), s['score'])
+                    for th in (page.get('entities') or {}).get('thread') or []:
+                        if th.get('thread_fbid') and th['thread_fbid'] not in [x['thread_fbid'] for x in ranked]:
+                            ranked.append(th)
+                    if len(ranked) >= threads:
+                        break
+                ranked.sort(key=lambda th: -score.get(str(th.get('score_map_key')), 0))
+                for i, th in enumerate(ranked[:threads]):
+                    others = [u for u in th.get('users') or [] if str(u.get('id')) != account and str(u.get('id')) != m_account]
+                    names = [str(u.get('full_name') or u.get('username') or 'Friend') for u in others] or ['Friend']
+                    other_ids = {str(v) for u in others for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v}
+                    want = (t['top'] if i < 4 else t['rest']) * 1.3
+                    mine_chars, whole = 0, False
+                    try:
+                        for page in pages(lambda after: ig(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', th['thread_fbid'], '--first', 50,
+                                                           *(('--after', after) if after else ())),
+                                          lambda p: (p.get('messages_page_info') or {}).get('end_cursor') if (p.get('messages_page_info') or {}).get('has_next_page') else None,
+                                          limit=THREAD_PAGES):
+                            for msg in page.get('messages') or []:
+                                text = str(((msg.get('content') or {}).get('text_body')) or '')
+                                when_sent = local_time(msg.get('message_sent_at'), msg.get('timestamp'))
+                                if not text.strip() or not when_sent:
+                                    continue
+                                sender = str(msg.get('sender_fbid') or '')
+                                mine = sender in (account, m_account) or (bool(other_ids) and sender not in other_ids)
+                                items.append({'kind': 'message', 'date': when_sent.strftime('%Y-%m-%d %H:%M'), 'text': text,
+                                              'thread': 't%d' % (i + 1), 'mine': mine, 'with': names})
+                                if mine:
+                                    mine_chars += len(text)
+                                    read['own messages'] += 1
+                            if not (page.get('messages_page_info') or {}).get('has_next_page'):
+                                whole = True
+                            if mine_chars >= want:
+                                break
+                        read['threads'] += 1
+                        if whole:
+                            meta['complete'].append('t%d' % (i + 1))
+                    except RuntimeError as err:
+                        note('a conversation', err)
+                meta['counts']['conversations'] = len(ranked)
+            except RuntimeError as err:
+                note('messages', err)
+    except RateLimited:
+        stopped = 'Instagram said too many requests, so every call stopped there, as its docs ask: the digest has what came before.'
+    if not items:
+        return {'ok': False, 'read': read, 'notes': notes, 'stopped': stopped, 'problems': ['Nothing came back from Instagram to build a digest from.']}
+    result = build_digest(items, meta)
+    result['read'] = read
+    if notes:
+        result['notes'] = notes
+    if stopped:
+        result['stopped'] = stopped
     return result
 
 
@@ -2214,6 +2460,22 @@ def confidence_problems(answer):
     return problems
 
 
+# Once a report is published, what others wrote goes (README "Their own words stay"): the
+# "> " lines are context for writing a read, and every check that uses them runs before
+# publishing. Their own lines stay, for "explain" and for the next read to add to.
+def drop_context():
+    for path in (DIGEST, os.path.join(SOURCES, 'whatsapp.txt')):
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding='utf-8') as f:
+            lines = f.read().splitlines()
+        kept = [l for l in lines if not l.startswith('>')]
+        if len(kept) != len(lines):
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(kept) + '\n')
+            os.chmod(path, 0o600)
+
+
 # What others wrote is context in the digest, never quoted in the report (README "Threads, never quoted"):
 # six words in a row from a "> " line, anywhere in the answer, holds it.
 def quote_problems(answer):
@@ -2413,7 +2675,7 @@ def main(argv):
     if not argv or argv[0] in ('-h', '--help'):
         print(__doc__)
         return
-    if argv[0] in ('status', 'update', 'check-digest', 'build-digest', 'prep', 'republish', 'report', 'checkin', 'why', 'correct') or (argv[0] in ('call', 'show') and len(argv) >= 2):
+    if argv[0] in ('status', 'update', 'check-digest', 'build-digest', 'collect', 'prep', 'republish', 'report', 'checkin', 'why', 'correct') or (argv[0] in ('call', 'show') and len(argv) >= 2):
         mark(argv[0] if argv[0] not in ('call', 'show') else argv[0] + ':' + re.sub(r'[^a-z_]', '', argv[1].lower())[:30])
     if argv[0] == 'status':
         account()
@@ -2449,8 +2711,10 @@ def main(argv):
             built = os.path.join(os.path.dirname(DIGEST), '.built')
             if os.path.exists(built):
                 os.remove(built)
-            # What was pulled from Instagram for it goes now: the digest and the report stay.
+            # What was pulled from Instagram for it goes now, and what others wrote with it:
+            # the digest (their own words) and the report stay.
             shutil.rmtree(WORK, ignore_errors=True)
+            drop_context()
             out = saved(out)
             send_timing()
         print(json.dumps(out, ensure_ascii=False, indent=1))
@@ -2505,6 +2769,24 @@ def main(argv):
         return
     if argv[0] == 'build-digest':
         print(json.dumps(build_digest(), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'collect':
+        opts, i = {}, 1
+        while i < len(argv):
+            if argv[i] == '--no-messages':
+                opts['no'], i = True, i + 1
+            elif argv[i] in ('--account-id', '--messages-account-id', '--me', '--threads') and i + 1 < len(argv):
+                opts[argv[i]], i = argv[i + 1], i + 2
+            else:
+                i += 1
+        try:
+            n = max(1, min(30, int(opts.get('--threads') or COLLECT_THREADS)))
+        except ValueError:
+            n = COLLECT_THREADS
+        out = collect(opts.get('--account-id'), opts.get('--messages-account-id'), opts.get('--me'), n, not opts.get('no'))
+        if out.get('ok') is not False or out.get('built'):
+            mark('check-digest')    # the digest is built and checked: the read's reading stage ends here
+        print(json.dumps(out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'check-answer' and len(argv) >= 2:
         print(json.dumps(check_answer(argv[1]), ensure_ascii=False, indent=1))

@@ -1929,6 +1929,21 @@ print(json.dumps({'read': read['spec'][:60], 'readLen': len(read['spec']), 'deep
       })();
       skillState.leaving = JSON.parse((await execFile('python3', ['-c', `import importlib.util, sys, json, os, tempfile
 spec = importlib.util.spec_from_file_location('psyche', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+def collecting():
+    fakes = ${JSON.stringify(pathx.join(pathx.dirname(new URL(import.meta.url).pathname), 'fakeig'))}
+    m.IG_CLI, m.IGM_CLI = os.path.join(fakes, 'instagram-cli'), os.path.join(fakes, 'instagram-messages-cli')
+    out = []
+    for how in ('all', 'limited', 'no-messages', 'bad', 'again'):
+        d = tempfile.mkdtemp(); os.environ['FAKEIG_LOG'] = d + '/calls.log'; open(d + '/calls.log', 'w').close()
+        m.ITEMS, m.META, m.DIGEST = d + '/work/items.jsonl', d + '/work/meta.json', d + '/digest/digest.md'
+        if how == 'limited': os.environ['FAKE_429'] = 'thread'
+        r = m.collect('A1' if how == 'bad' else 'ACC1', with_messages=how != 'no-messages')
+        os.environ.pop('FAKE_429', None)
+        if how == 'again':
+            os.remove(d + '/digest/.built'); r = m.collect('ACC1')
+        out.append({'r': {k: r.get(k) for k in ('ok', 'problems', 'read', 'notes', 'stopped', 'rhythm')}, 'calls': open(d + '/calls.log').read().splitlines(),
+                    'digest': open(m.DIGEST).read() if os.path.exists(m.DIGEST) else '', 'work': os.path.exists(d + '/work')})
+    return out
 fine = {'summary': 'Plans the trip from 2018-2026, then talks to everyone on it.', 'patterns': [{'name': 'The quiet organiser', 'evidence': ['2019-04-02 ran my first 10k']}]}
 print(json.dumps({'fine': m.answer_problems(fine),
   'dms': m.answer_problems({'summary': 'S.', 'evidence': ['Jun: hey are you free saturday ' * 200]}),
@@ -1972,6 +1987,11 @@ print(json.dumps({'fine': m.answer_problems(fine),
       [{'kind': 'message', 'date': '2024-02-0%d 09:00' % (1 + th), 'text': 'Pls help me like and follow my new side project account, much appreciated!!', 'thread': 't%d' % th, 'mine': True} for th in range(3)])),
     json.dump({'me': 'Mei Tan', 'bio': 'hi', 'messages': True, 'counts': {'conversations': 3}, 'interests': ['Tennis'], 'complete': ['t0', 't1', 't2']}, open(d + '/work/meta.json', 'w')),
     (lambda r: (r, open(d + '/digest/digest.md').read(), m.build_digest()['ok'], os.remove(d + '/digest/.built'), m.build_digest()))(m.build_digest()))[-1])(tempfile.mkdtemp()),
+  'collect': collecting(),
+  'context': (lambda d: (os.makedirs(d + '/digest'), os.makedirs(d + '/sources'), setattr(m, 'DIGEST', d + '/digest/digest.md'), setattr(m, 'SOURCES', d + '/sources'),
+    open(d + '/digest/digest.md', 'w').write('# Psyche digest\\n## Messages\\n### Conversation 1\\n> Friend: Hey [you], tennis Saturday?\\n2024-01-02 10:00 Yes, I will book the court\\n'),
+    open(d + '/sources/whatsapp.txt', 'w').write('> Friend: dinner at 7?\\n2024-02-02 19:00 On my way\\n'), m.drop_context(),
+    [open(d + '/digest/digest.md').read(), open(d + '/sources/whatsapp.txt').read(), oct(os.stat(d + '/digest/digest.md').st_mode & 0o777)])[-1])(tempfile.mkdtemp()),
   'rhythm': [m.rhythm([('2025-06-0%d' % (1 + i % 7), [23, 0, 22, 13][i % 4]) for i in range(40)]), m.rhythm([('2025-06-01', 9)] * 10)],
   'conf': (lambda d: (setattr(m, 'DIGEST', d + '/digest.md'), setattr(m, 'SOURCES', d + '/sources'), os.makedirs(d + '/sources'),
     open(d + '/digest.md', 'w').write('# Psyche digest\\nbuilt: 2026-10-30 · messages: included · sources: instagram · last: 2026-10-29\\n'),
@@ -2013,7 +2033,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       }
       skillState.parts = {};
       for (const part of ['card', 'summary', 'pdf', 'links', 'next', 'nope']) skillState.parts[part] = await run('show', part);
-      skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche Card \d{4}\.png$/.test(f));
+      skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche Card( - .+)? - \d{8}\.png$/.test(f));
       skillState.pdfLocal = skillState.parts.pdf && skillState.parts.pdf.file ? fsx.readFileSync(skillState.parts.pdf.file, 'utf8') : null;
       // The skill folder's account deleted, as when the skill is removed and installed again: the spare copy keeps the same account.
       const before = JSON.parse(fsx.readFileSync(pathx.join(dir, '.account.json'), 'utf8')).refresh_token;
@@ -2103,6 +2123,23 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       require('../lib/timing.js').stages([['call:get_report_guide', -300], ['build-digest', -200], ['check-digest', -150], ['call:publish_psyche', -10]]).fixing === 50 &&
       /`bin\/psyche\.py build-digest` picks the sample, keeps what each reply answers, takes out names, handles, links and numbers/.test(skillMd) && /Fetch what doesn't depend on anything else together, at once where Muse allows it/.test(skillMd),
       JSON.stringify(skillState.leaving && skillState.leaving.build && [skillState.leaving.build[0].problems, skillState.leaving.build[1].slice(0, 400), skillState.leaving.build[4]]).slice(0, 700));
+    check('collect: a first read in one command, through Muse\'s own Instagram tools: posts, stories, comments, saved, interests and the busiest conversations (by score, each only as far as needed), names and handles out, no message kept as it came, every call stopped at a 429, no messages call when they said no; SKILL.md runs it before reading by hand',
+      ((c) => Array.isArray(c) && c.length === 5 && c[0].r.ok === true && c[0].r.read.threads === 3 && c[0].r.read.posts === 9 && c[0].r.read.stories === 6 && c[0].r.read.comments === 2 &&
+        c[0].r.rhythm && /^34 timed lines/.test(c[0].r.rhythm.of) && c[0].work === false &&
+        JSON.stringify(c[0].calls.filter(x => / thread /.test(x)).map(x => x.match(/T\d/)[0]).filter((x, i, a) => a.indexOf(x) === i)) === '["T1","T0","T2"]' &&
+        !/Kai|Ana|Jun|Mei|mei\.t|@|U\d|I\d/.test(c[0].digest) && /^### Conversation 1: one-to-one, .*\(whole thread\)$/m.test(c[0].digest) && /^## Interests\n- Distance running$/m.test(c[0].digest) &&
+        /^counts: 15 posts and stories .* 440 followers · 636 following · 10 saved$/m.test(c[0].digest) &&
+        c[1].r.ok === true && /too many requests/.test(c[1].r.stopped) && /^M thread /.test(c[1].calls[c[1].calls.length - 1]) && c[1].r.read.threads === 0 &&
+        c[2].r.ok === true && !c[2].calls.some(x => /^M /.test(x)) && /^--account-id must be/.test(c[3].r.problems[0]) && c[3].calls.length === 0 &&
+        /already here/.test(c[4].r.problems[0]))(skillState.leaving && skillState.leaving.collect) &&
+      /\*\*A first read in one command: collect\.\*\* For a first read \(or after starting over\), don't read Instagram yourself: run `bin\/psyche\.py collect --account-id/.test(skillMd) &&
+      /Use its `rhythm` as given/.test(skillMd) && /It keeps no message as it came: what reaches disk is the digest/.test(skillMd) && /bin\/psyche\.py collect --account-id ID \[--messages-account-id ID\]/.test(skillMd),
+      JSON.stringify(skillState.leaving && skillState.leaving.collect && skillState.leaving.collect.map(x => ({ r: x.r, calls: x.calls.length, digest: x.digest.slice(0, 300) }))).slice(0, 900));
+    check('their own words stay: once a report is published, what others wrote ("> " lines) goes from the digest and the WhatsApp source, their own lines stay, and SKILL.md says so',
+      ((c) => Array.isArray(c) && c[0] === '# Psyche digest\n## Messages\n### Conversation 1\n2024-01-02 10:00 Yes, I will book the court\n' && c[1] === '2024-02-02 19:00 On my way\n' && c[2] === '0o600')(skillState.leaving && skillState.leaving.context) &&
+      /shutil\.rmtree\(WORK, ignore_errors=True\)\n\s+drop_context\(\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
+      /Once the report is published, bin\/psyche\.py takes the context \("> " lines, what others wrote\) out of it and out of sources\/whatsapp\.txt: only their own words stay/.test(skillMd),
+      JSON.stringify(skillState.leaving && skillState.leaving.context));
     check('the skill holds a Psyche whose confidence is above psycheai.io\'s rubric for what was read: Instagram alone at most 79, 86 with Facebook or WhatsApp, 90 with both, and its level matching the score',
       ((c) => Array.isArray(c) && c.length === 6 && /at most 79/.test(c[0].join(' ')) && c[1].length === 0 && /"moderate"/.test(c[2].join(' ')) && c[3].length === 0 && c[4].length === 0 && /at most 90/.test(c[5].join(' ')))(skillState.leaving && skillState.leaving.conf) &&
       /Instagram, its messages included: 65 to 79\. With Facebook or WhatsApp chats, 72 to 86; with both, 76 to 90; never above 90/.test(require('../skill/guide.json').read.spec), JSON.stringify(skillState.leaving && skillState.leaving.conf));
@@ -2124,7 +2161,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       }
     }
     check('show pdf saves a /report-pdf link\'s PDF with its key in a header: the address it asks for never holds the key',
-      ((H) => H && H.got.body === '%PDF-1.4 from the header' && /Psyche Report - Mei Tan - 30102026 \d{4}\.pdf$/.test(H.got.file) && H.asked.length === 1 &&
+      ((H) => H && H.got.body === '%PDF-1.4 from the header' && /Psyche Report( - [^/]+)? - \d{8}\.pdf$/.test(H.got.file) && !/ \d{4}\.pdf$/.test(H.got.file) && H.asked.length === 1 &&
         !H.asked[0].url.includes('KKKK') && H.asked[0].key === 'K'.repeat(43))(skillState.headerPdf), JSON.stringify(skillState.headerPdf));
     check('the skill keeps its keys in the workspace (the card key, and each Sync code once), sends them with every call, and forget --everything deletes them',
       skillState.keyCalls.headers['X-Psyche-Card-Key'] === 'C'.repeat(43) && skillState.keyCalls.headers['X-Psyche-Sync-Keys'] === 'AbCdEfGhIjKlMnOpQrStUv' &&
@@ -2152,9 +2189,9 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
     {
       const P = skillState.parts || {};
       check('a saved Psyche is shown a part at a time: card (saved as a picture, kept beside the PDF), summary, pdf (saved as a file here, so it opens in Muse), next, each with only its own piece, and no links part: nothing is kept to link to',
-        P.summary && P.summary.sections[0].title === 'Overview' && !P.summary.url && P.pdf && /\/out\/Psyche Report - Mei Tan( - \d{8})? \d{4}\.pdf$/.test(P.pdf.file || '') && skillState.pdfLocal === '%PDF-1.4 a report' &&
+        P.summary && P.summary.sections[0].title === 'Overview' && !P.summary.url && P.pdf && /\/out\/Psyche Report( - [^/]+)? - \d{8}\.pdf$/.test(P.pdf.file || '') && skillState.pdfLocal === '%PDF-1.4 a report' &&
         P.links && /^Parts: card, summary, pdf, next$/.test(P.links.error || '') && P.next && P.next.nextStep.buttons[0] === 'Reveal my roast 🔥' && P.nope && /Parts: card, summary/.test(P.nope.error) &&
-        P.card && /\/out\/Psyche Card \d{4}\.png$/.test(P.card.file || '') && skillState.cardKept === true && /`bin\/psyche\.py show card` \(their Psyche Card as a picture/.test(skillMd) && /never a file sent earlier in the chat, which would be the last Psyche/.test(skillMd) &&
+        P.card && /\/out\/Psyche Card( - [^/]+)? - \d{8}\.png$/.test(P.card.file || '') && skillState.cardKept === true && /`bin\/psyche\.py show card` \(their Psyche Card as a picture/.test(skillMd) && /never a file sent earlier in the chat, which would be the last Psyche/.test(skillMd) &&
         /\*\*After publish_psyche \(or republish\)\*\* the script answers only that it's saved/.test(skillMd), JSON.stringify(P).slice(0, 500));
     }
     check('the skill\'s account outlives its folder: a spare copy outside it (readable only by the workspace) brings back the same account after a reinstall',
@@ -2668,7 +2705,7 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     /^<!DOCTYPE html>/.test(page) && ['Overview', 'Who you are', 'What drives you', 'How you connect', 'How you work', 'Putting it together'].every(t => page.includes('data-section="' + t + '"') && page.includes('</i>' + t + '</a>')) &&
     /<h1>Mei’s Psyche Report<\/h1>/.test(page) && /<div class="sub">1 November 2026<\/div>/.test(page) && !/<header[^]*?(ENFJ|The Protagonist)[^]*?<\/header>/.test(page) &&
     /<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card"><img class="cardpic" alt="Your Psyche Card" src="data:image\/png;base64,iVBORw0KGgo="><\/button>/.test(page) &&
-    /<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden>/.test(page) && /open\.addEventListener\('click',function\(\)\{view\.hidden=false;\}\)/.test(page) &&
+    /<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card"><span>/.test(page) && (page.match(/data:image\/png;base64,/g) || []).length === 1 && /if\(big&&small&&!big\.src\)big\.src=small\.src;view\.hidden=false;/.test(page) &&
     /<div class="facts">6 parts · 71% signal strength<\/div>/.test(page) && /<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it\.<\/p>/.test(page) &&
     !/Most like|class="ring"/.test(page) && /pages = max\(counts\) if counts else None/.test(fsw.readFileSync(script, 'utf8')) && /'%d pages' % pages/.test(fsw.readFileSync(script, 'utf8')), got.error);
   check('only Overview is open to start with; a tap closes the others first, then opens it and brings its title to the top under the bar; "Collapse all" closes all and goes back to the top',
