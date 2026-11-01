@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 77
+RELEASE = 80
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -887,7 +887,30 @@ def targets(reads, messages_in):
     top, rest = min(16000, 9000 + 2500 * k), min(6500, 2300 + 1500 * k)
     if not messages_in:
         posts = min(195000, 80000 + 40000 * k)
-    return {'posts': posts, 'top': top, 'rest': rest}
+    # Conversations as psycheai.io's digest takes them (README "Conversations as the site reads them"):
+    # the 10 busiest, up to 5 more when those run short, the room shared by how much is in each,
+    # none over `cap`, and room a short one leaves going to the ones with more.
+    return {'posts': posts, 'top': top, 'rest': rest, 'convos': 4 * top + 6 * rest, 'cap': max(15000, top)}
+
+
+CONVO_TOP, CONVO_SPARE = 10, 5
+
+
+def convo_quotas(sizes, total, cap):
+    """Each conversation's share of `total`: by how much is in it, none over cap or over what it has."""
+    quota, left, open_ = [0] * len(sizes), total, [i for i, n in enumerate(sizes) if n > 0]
+    while open_ and left > 0:
+        pool = sum(sizes[i] for i in open_)
+        done = [i for i in open_ if left * sizes[i] / pool >= min(sizes[i], cap)]
+        if not done:
+            for i in open_:
+                quota[i] = int(left * sizes[i] / pool)
+            break
+        for i in done:
+            quota[i] = min(sizes[i], cap)
+            left -= quota[i]
+        open_ = [i for i in open_ if i not in done]
+    return quota
 
 
 def words_of(line):
@@ -1022,16 +1045,17 @@ def check_digest(path=None):
                 problems.append('Conversations go busiest first: Conversation %d holds more than Conversation %d. Put the 4 they write in most at the top.' % (
                     4 + 1 + max(range(len(rest)), key=lambda j: rest[j]['chars']), 1 + min(range(len(top)), key=lambda j: top[j]['chars'])))
             for i, c in enumerate(convos[:10]):
-                aim = t['top'] if i < 4 else t['rest']
+                # A conversation with more to read holds at least an even share of the room.
+                aim = min(t['cap'], t['convos'] // 10)
                 goal['Conversation %d' % (i + 1)] = [c['chars'], aim]
                 if c['chars'] < SHORT * aim and not c['whole']:
                     problems.append('Conversation %d: %d of about %d characters. %s (or mark it "(whole thread)" if it has no more).' % (
-                        i + 1, c['chars'], aim, 'Page further back' if i < 4 else 'Read more of its recent pages'))
+                        i + 1, c['chars'], aim, 'Page further back'))
                 elif i < 4 and not c['whole']:
                     room.append('Conversation %d: page further back next read, towards its first year.' % (i + 1))
             # Their own messages in all: short threads ("(whole thread)") excuse one conversation, never the total,
             # while the inbox has more to read (README "Busiest, measured").
-            whole = 4 * t['top'] + 6 * t['rest']
+            whole = t['convos']
             mine = sizes.get('Messages', 0)
             if inbox and int(inbox.group(1).replace(',', '')) > len(convos) and mine < SHORT * whole:
                 goal['Messages'] = [mine, whole]
@@ -1871,8 +1895,8 @@ def build_digest(given=None, given_meta=None):
     posts = thin(posts, POSTS_MAX)
     comments = thin(['%s %s' % (stamp(x), scrub(str(x.get('text') or ''))) for x in sorted((x for x in items if x['kind'] == 'comment'), key=lambda x: x['t'])
                      if re.search(r'\w', str(x.get('text') or ''))], COMMENTS_MAX)
-    # Conversations: busiest first by how much of their own is in each, then the plan's targets, past ten
-    # until their own messages reach the total; what each reply answers kept as context.
+    # Conversations: busiest first by how much of their own is in each, the room shared as the site
+    # shares it (convo_quotas); what each reply answers kept as context.
     threads = {}
     for x in items:
         if x['kind'] == 'message':
@@ -1880,7 +1904,14 @@ def build_digest(given=None, given_meta=None):
     mine_size = lambda msgs: sum(len(str(m.get('text') or '')) for m in msgs if m.get('mine'))
     ranked = sorted(threads.items(), key=lambda kv: -mine_size(kv[1]))
     complete = set(str(c) for c in meta.get('complete') or [])
-    whole_target, convo_blocks, own_total = 4 * t['top'] + 6 * t['rest'], [], 0
+    convo_blocks, own_total = [], 0
+    # The 10 busiest, and up to 5 more while those hold less than the room (as the site's spare threads).
+    sizes = [mine_size(m) for _, m in ranked]
+    keep = CONVO_TOP
+    while keep < min(len(ranked), CONVO_TOP + CONVO_SPARE) and sum(sizes[:keep]) < t['convos']:
+        keep += 1
+    ranked = ranked[:keep]
+    quotas = convo_quotas(sizes[:keep], t['convos'], t['cap'])
     # Their own name, in what others wrote to them, is "[you]", as psycheai.io's context does.
     me = str(meta.get('me') or '').strip()
     own_names = [(me, '[you]')] + ([(me.split(' ')[0], '[you]')] if ' ' in me and len(me.split(' ')[0]) >= 3 else []) if me else []
@@ -1893,9 +1924,7 @@ def build_digest(given=None, given_meta=None):
         if ' ' in n and len(n.split(' ')[0]) >= 3:
             elsewhere.append((n.split(' ')[0], 'a friend'))
     if messages_in:
-        for i, (tid, msgs) in enumerate(ranked[:THREADS_MAX]):
-            if i >= 10 and own_total >= whole_target:
-                break
+        for i, (tid, msgs) in enumerate(ranked):
             if own_total >= MESSAGES_MAX:
                 break
             others = sorted({str(n) for m in msgs for n in (m.get('with') or []) if n})
@@ -1910,7 +1939,7 @@ def build_digest(given=None, given_meta=None):
             names.sort(key=lambda n: -len(n[0]))
             parsed = [{'t': m['t'], 'sender': 'me' if m.get('mine') else str((m.get('with') or ['Friend'])[0]), 'text': str(m.get('text') or '')}
                       for m in sorted(msgs, key=lambda m: m['t']) if str(m.get('text') or '').strip()]
-            mine, chosen = choose_messages(parsed, 'me', t['top'] if i < 4 else t['rest'])
+            mine, chosen = choose_messages(parsed, 'me', max(quotas[i], 300) if quotas[i] < sizes[i] else 2 * sizes[i] + 300)
             if not chosen:
                 continue
             lines = []
@@ -1982,7 +2011,7 @@ IG_CLI = os.environ.get('PSYCHEAI_IG_CLI') or '/opt/hatch/bin/instagram-cli'
 IGM_CLI = os.environ.get('PSYCHEAI_IGM_CLI') or '/opt/hatch/bin/instagram-messages-cli'
 COLLECT_TYPES = (('POST,REEL', 'post'), ('STORY,HIGHLIGHT', 'story'))
 COLLECT_PAGES = 60          # a list's pages at most
-COLLECT_THREADS = 20        # their busiest contacts read
+COLLECT_THREADS = CONVO_TOP + CONVO_SPARE   # their busiest contacts read, as the site's 10 and 5 spares
 THREAD_PAGES = 8            # a thread's pages at most (20 for the 4 busiest, which the plan wants most from)
 
 
@@ -2177,8 +2206,9 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                     if len(ranked) >= threads:
                         break
                 ranked.sort(key=lambda th: -score.get(str(th.get('score_map_key')), 0))
-                # Two passes: every thread to the smaller target first, then, ranked by their own words
-                # as the digest ranks them, the 4 busiest further back. Cursors stay in memory.
+                # Two passes: every thread to an even share of the room first, then, ranked by their own
+                # words as the digest ranks them, the room left goes to the busiest with more to read,
+                # none past the site's ceiling. Cursors stay in memory.
                 states = []
                 for i, th in enumerate(ranked[:threads]):
                     others = [u for u in th.get('users') or [] if str(u.get('id')) != account and str(u.get('id')) != m_account]
@@ -2217,9 +2247,14 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                         st['after'] = nxt
 
                 for st in states:
-                    read_thread(st, t['rest'] * 1.3, THREAD_PAGES)
-                for st in sorted(states, key=lambda x: -x['mine'])[:4]:
-                    read_thread(st, t['top'] * 1.3, 20)
+                    read_thread(st, t['convos'] / CONVO_TOP * 1.3, THREAD_PAGES)
+                left = t['convos'] * 1.3 - sum(st['mine'] for st in states)
+                for st in sorted(states, key=lambda x: -x['mine'])[:CONVO_TOP]:
+                    if left <= 0:
+                        break
+                    before = st['mine']
+                    read_thread(st, min(t['cap'] * 1.3, st['mine'] + left), 30)
+                    left -= st['mine'] - before
                 for st in states:
                     if st['pages']:
                         read['threads'] += 1
