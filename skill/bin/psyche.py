@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 87
+RELEASE = 88
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2015,6 +2015,7 @@ IG_CLI = os.environ.get('PSYCHEAI_IG_CLI') or '/opt/hatch/bin/instagram-cli'
 IGM_CLI = os.environ.get('PSYCHEAI_IGM_CLI') or '/opt/hatch/bin/instagram-messages-cli'
 COLLECT_TYPES = (('POST,REEL', 'post'), ('STORY,HIGHLIGHT', 'story'))
 COLLECT_PAGES = 60          # a list's pages at most
+THREAD_FIRST, THREAD_FIRST_SAFE = 100, 50   # messages a page: 100 asked first, 50 if the tool refuses it (README "Bigger pages")
 COLLECT_WORKERS = 3          # conversations read at once (README "Three at a time")
 COLLECT_THREADS = CONVO_TOP + CONVO_SPARE   # their busiest contacts read, as the site's 10 and 5 spares
 THREAD_PAGES = 8            # a thread's pages at most (20 for the 4 busiest, which the plan wants most from)
@@ -2244,17 +2245,25 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
 
                     # Three conversations at a time, each read in order with its own cursor; a rate limit in
                     # any one stops them all (no call starts after it) and the read stops as it always has.
-                    lock = threading.Lock()
+                    lock, size = threading.Lock(), {'n': THREAD_FIRST}
 
                     def read_thread(st, want, limit):
                         while not halt.is_set() and not st['whole'] and not st['failed'] and st['mine'] < want and st['pages'] < limit:
+                            first = size['n']
                             try:
-                                page = igc(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', st['fbid'], '--first', 50,
+                                page = igc(IGM_CLI, 'thread', '--account-id', m_account, '--thread-fbid', st['fbid'], '--first', first,
                                           *(('--after', st['after']) if st['after'] else ()))
                             except RateLimited:
                                 halt.set()
                                 return
                             except RuntimeError as err:
+                                # The docs give no most a page: a refusal at 100 is read again at 50, for the rest of the read.
+                                if first > THREAD_FIRST_SAFE:
+                                    with lock:
+                                        if size['n'] > THREAD_FIRST_SAFE:
+                                            size['n'] = THREAD_FIRST_SAFE
+                                            note('conversations', '%d messages a page refused (%s), read %d a page' % (first, err, THREAD_FIRST_SAFE))
+                                    continue
                                 st['failed'] = True
                                 with lock:
                                     note('a conversation', err)

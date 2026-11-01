@@ -1935,12 +1935,14 @@ def collecting():
     fakes = ${JSON.stringify(pathx.join(pathx.dirname(new URL(import.meta.url).pathname), 'fakeig'))}
     m.IG_CLI, m.IGM_CLI = os.path.join(fakes, 'instagram-cli'), os.path.join(fakes, 'instagram-messages-cli')
     out = []
-    for how in ('all', 'limited', 'no-messages', 'bad', 'again'):
+    for how in ('all', 'limited', 'no-messages', 'bad', 'again', 'small'):
         d = tempfile.mkdtemp(); os.environ['FAKEIG_LOG'] = d + '/calls.log'; open(d + '/calls.log', 'w').close()
         m.ITEMS, m.META, m.DIGEST = d + '/work/items.jsonl', d + '/work/meta.json', d + '/digest/digest.md'
         if how == 'limited': os.environ['FAKE_429'] = 'thread'
+        if how == 'small': os.environ['FAKE_MAX_FIRST'] = '50'
         r = m.collect('A1' if how == 'bad' else 'ACC1', with_messages=how != 'no-messages')
         os.environ.pop('FAKE_429', None)
+        os.environ.pop('FAKE_MAX_FIRST', None)
         if how == 'again':
             os.remove(d + '/digest/.built'); r = m.collect('ACC1')
         out.append({'r': {k: r.get(k) for k in ('ok', 'problems', 'read', 'notes', 'stopped', 'rhythm')}, 'calls': open(d + '/calls.log').read().splitlines(),
@@ -2131,8 +2133,11 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       require('../lib/timing.js').stages([['call:get_report_guide', -300], ['build-digest', -200], ['check-digest', -150], ['call:publish_psyche', -10]]).fixing === 50 &&
       /`bin\/psyche\.py build-digest` picks the sample, keeps what each reply answers, takes out names, handles, links and numbers/.test(skillMd) && /Fetch what doesn't depend on anything else together, at once where Muse allows it/.test(skillMd),
       JSON.stringify(skillState.leaving && skillState.leaving.build && [skillState.leaving.build[0].problems, skillState.leaving.build[1].slice(0, 400), skillState.leaving.build[4]]).slice(0, 700));
-    check('collect: a first read in one command, through Muse\'s own Instagram tools: posts, stories, comments, saved, interests and the busiest conversations (15 by score as the site\'s 10 and 5 spares, three at a time and beside the posts, each to an even share first, then the room left to the busiest with more, never a cursor reused), names and handles out, no message kept as it came, every call stopped at a 429 (a failed call, never their data that happens to say 429), no messages call when they said no; SKILL.md runs it before reading by hand; read timings start at the last collect',
-      ((c) => Array.isArray(c) && c.length === 5 && c[0].r.ok === true && c[0].r.read.threads === 3 && c[0].r.read.posts === 9 && c[0].r.read.stories === 6 && c[0].r.read.comments === 2 &&
+    check('collect: a first read in one command, through Muse\'s own Instagram tools: posts, stories, comments, saved, interests and the busiest conversations (15 by score as the site\'s 10 and 5 spares, three at a time and beside the posts, 100 messages a page or 50 if refused, each to an even share first, then the room left to the busiest with more, never a cursor reused), names and handles out, no message kept as it came, every call stopped at a 429 (a failed call, never their data that happens to say 429), no messages call when they said no; SKILL.md runs it before reading by hand; read timings start at the last collect',
+      ((c) => Array.isArray(c) && c.length === 6 && c[0].calls.filter(x => / thread /.test(x)).every(x => / --first 100( |$)/.test(x)) && !c[0].r.notes &&
+        c[5].r.ok === true && c[5].r.read.threads === 3 && c[5].r.read['own messages'] === c[0].r.read['own messages'] && /^conversations: 100 messages a page refused \(exit 2\), read 50 a page$/.test((c[5].r.notes || []).join('|')) &&
+        c[5].calls.filter(x => / --first 100( |$)/.test(x)).length <= 3 && c[5].calls.some(x => / --first 50( |$)/.test(x)) &&
+        c[0].r.ok === true && c[0].r.read.threads === 3 && c[0].r.read.posts === 9 && c[0].r.read.stories === 6 && c[0].r.read.comments === 2 &&
         c[0].r.rhythm && /^58 timed lines/.test(c[0].r.rhythm.of) &&
         ((t2) => t2.length === 12 && new Set(t2).size === 12 && / --after 8$/.test(t2[8]))(c[0].calls.filter(x => / T2 /.test(x))) &&
         (c[0].digest.match(/\(whole thread\)/g) || []).length === 3 && c[0].work === false && !c[0].r.stopped && /gate \[number\] regular|gate 429 regular/.test(c[0].digest) &&
