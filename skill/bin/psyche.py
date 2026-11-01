@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 94
+RELEASE = 96
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -850,8 +850,18 @@ def local_ready(r):
     card, report = local_card(r), local_report(r)
     for t in side:
         t.join(15)
-    return {'say': 'Your Psyche Card and Report are ready.', 'card': card, 'summary': report,
-            'next': {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')}}
+    # Short, so a helper passes it on as it is: the two files (named only once saved, with their size:
+    # this is the check, nothing to list after it) and What's next. The report's text is in the file.
+    files = {}
+    for key, part in (('card', card), ('report', report)):
+        f = (part.get('file') or part.get('report')) if isinstance(part, dict) else None
+        if f and os.path.exists(f):
+            files[key] = {'file': f, 'bytes': os.path.getsize(f)}
+    out = {'say': 'Your Psyche Card and Report are ready.', **files,
+           'next': {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')}}
+    if len(files) < 2:
+        out['missing'] = [k for k in ('card', 'report') if k not in files]
+    return out
 
 
 PARTS = {
