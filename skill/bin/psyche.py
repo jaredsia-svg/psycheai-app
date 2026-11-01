@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 51
+RELEASE = 52
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -221,7 +221,7 @@ body{font-family:%(font)s;color:#241a2e;font-size:15px;line-height:1.5;-webkit-t
 .pr-head span{color:#6b6076;font-size:13px}
 .part{background:#fff;border:1px solid #e2d8e9;border-radius:16px;margin:0 0 12px;box-shadow:0 1px 2px rgba(36,26,46,.05),0 6px 20px rgba(36,26,46,.05);overflow:hidden}
 .part.open{border-top:3px solid var(--c)}
-.part>button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:12px;width:100%%;padding:14px 16px;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.part>button{all:unset;box-sizing:border-box;touch-action:manipulation;display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:12px;width:100%%;padding:14px 16px;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
 .part>button:focus-visible{outline:2px solid var(--c);outline-offset:-2px;border-radius:14px}
 .num{font-size:22px;font-weight:800;line-height:1;color:var(--c);font-variant-numeric:tabular-nums;letter-spacing:-.02em;grid-row:1/span 2}
 .ttl{font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -260,8 +260,9 @@ p{margin:0 0 8px}
 .radar text{font-family:%(font)s;font-size:11.5px;fill:#5a4f66;cursor:pointer}
 .radar text.top{font-weight:800;fill:var(--c);font-size:12.5px}
 .radar .pt{cursor:pointer}
-.radar .hit{fill:transparent;cursor:pointer}
-.tip{min-height:44px;margin:6px 0 4px;padding:10px 12px;border-radius:12px;background:#faf5fc;border:1px solid #efe5f4;font-size:14px;color:#5a4f66}
+.radar{touch-action:manipulation}
+.radar .hit{fill:transparent;pointer-events:all;cursor:pointer}
+.tip{height:66px;overflow:hidden;box-sizing:border-box;margin:6px 0 4px;padding:10px 12px;border-radius:12px;background:#faf5fc;border:1px solid #efe5f4;font-size:14px;color:#5a4f66}
 .tip b{color:#241a2e}
 .callout{padding:12px 14px;border-radius:12px;background:#f3e9f8;color:#3b2a49;font-size:14px;margin:10px 0 4px}
 .lang{display:grid;grid-template-columns:28px 1fr;column-gap:8px;padding:9px 0;border-bottom:1px solid #f0eaf4}
@@ -289,9 +290,6 @@ li{margin:3px 0}
 .edge small{display:block;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--c)}
 .edge b{display:block;font-size:16px;margin:2px 0 4px}
 .edge p{margin:0;color:#3b3550;font-size:14px}
-.kv{margin:6px 0 0;font-size:14px;color:#3b2a49}
-.kv small{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6b6076}
-.kv.ask{font-style:italic}
 .plan{position:relative;margin:4px 0 0 6px;padding-left:18px;border-left:2px solid #e2d8e9}
 .plan>div{position:relative;padding:2px 0 8px}
 .plan>div:before{content:"";position:absolute;left:-26px;top:5px;width:12px;height:12px;border-radius:50%%;background:var(--c);border:2px solid #fff;box-shadow:0 0 0 1px var(--c)}
@@ -323,11 +321,20 @@ li{margin:3px 0}
 # On a laptop Muse gives the widget a fixed height and the page shows a slim scrollbar.
 W_JS = '''
 (function(){
+// What's closed and which radar point is shown are kept in the frame's own name, which
+// outlasts a reload of the same frame, so if the chat redraws the widget (as a phone may
+// when its height changes) it comes back as the reader left it. Only this report's state.
+var id=document.querySelector('.pr').getAttribute('data-id');
+function load(){try{var s=JSON.parse(window.name||'{}');if(s&&s.psyche===id)return s;}catch(e){}return {psyche:id,closed:[],m:null};}
+var st=load();
+function save(){try{window.name=JSON.stringify(st);}catch(e){}}
 [].slice.call(document.querySelectorAll('.part')).forEach(function(p){
-  var b=p.querySelector('button');
+  var b=p.querySelector('button'),key=p.getAttribute('data-section');
+  function set(open){p.classList.toggle('open',open);b.setAttribute('aria-expanded',open?'true':'false');}
+  if(st.closed.indexOf(key)>=0)set(false);
   b.addEventListener('click',function(){
-    var open=!p.classList.contains('open');
-    p.classList.toggle('open',open);b.setAttribute('aria-expanded',open?'true':'false');
+    var open=!p.classList.contains('open');set(open);
+    st.closed=st.closed.filter(function(k){return k!==key;});if(!open)st.closed.push(key);save();
   });
 });
 [].slice.call(document.querySelectorAll('.rate')).forEach(function(r){
@@ -336,8 +343,10 @@ W_JS = '''
   down.addEventListener('click',function(){var on=down.getAttribute('aria-pressed')!=='true';down.setAttribute('aria-pressed',on);up.setAttribute('aria-pressed','false');off.classList.toggle('show',on);if(on)off.querySelector('textarea').focus({preventScroll:true});});
 });
 var tip=document.getElementById('mtip');
+function show(m){if(!tip||!m)return;tip.innerHTML='';var b=document.createElement('b');b.textContent=m[0]+' \\u00b7 '+m[1];tip.appendChild(b);if(m[2])tip.appendChild(document.createTextNode(' \\u2013 '+m[2]));}
+show(st.m);
 [].slice.call(document.querySelectorAll('[data-m]')).forEach(function(el){
-  el.addEventListener('click',function(){var m=JSON.parse(el.getAttribute('data-m'));tip.innerHTML='';var b=document.createElement('b');b.textContent=m[0]+' \\u00b7 '+m[1];tip.appendChild(b);if(m[2])tip.appendChild(document.createTextNode(' \\u2013 '+m[2]));});
+  el.addEventListener('click',function(){st.m=JSON.parse(el.getAttribute('data-m'));show(st.m);save();});
 });
 })();
 '''
@@ -425,6 +434,11 @@ def _radar(mots, top):
         dy0 = -13 * (len(lines) - 1) if math.sin(a) < -0.3 else (10 if math.sin(a) > 0.3 else 4 - 6.5 * (len(lines) - 1))
         spans = ''.join('<tspan x="%s" dy="%s">%s</tspan>' % (f(lx), f(dy0) if k == 0 else '13', _e(t)) for k, t in enumerate(lines))
         out.append('<text class="%s" data-m="%s" x="%s" y="%s" text-anchor="%s">%s</text>' % ('top' if hot else '', data, f(lx), f(ly), anchor, spans))
+        # A tap area over the label, bigger than its letters, so a finger finds it.
+        w, h = max(len(t) for t in lines) * 7 + 14, 13 * len(lines) + 14
+        x0 = lx - w / 2 if anchor == 'middle' else (lx - 7 if anchor == 'start' else lx - w + 7)
+        y0 = ly + dy0 - 13
+        out.append('<rect class="hit" data-m="%s" x="%s" y="%s" width="%s" height="%s"/>' % (data, f(x0), f(y0), f(w), f(h)))
     return ('<svg class="radar" viewBox="-200 -150 400 300" role="img" aria-label="What motivates you: your top three are highlighted">'
             + ''.join(out) + '</svg><div class="tip" id="mtip">Tap a point or a name to see its score.</div>')
 
@@ -459,11 +473,11 @@ def _pair(good_title, good, hard_title, hard):
 
 def _overview(v):
     who = _e(_s(v, 'character'))
-    kind = ' · '.join(x for x in [_e(_s(v, 'source')), _e(_s(v, 'type')), _e(_s(v, 'nickname'))] if x)
+    kind = _e(_s(v, 'source'))
     hero = ''
-    if who or kind:
+    if who:
         hero = ('<div class="hero"><div><small>You are most like</small><b>' + who + '</b>'
-                + '<span>' + kind + '</span>'
+                + ('<span>' + kind + '</span>' if kind else '')
                 + ('<p class="why">' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else '') + '</div></div>')
     paras = [p for p in _l(_s(v, 'summaryFull')) if isinstance(p, str)]
     if paras:
@@ -471,7 +485,7 @@ def _overview(v):
     else:
         summ = ('<p style="font-weight:650">' + _e(_s(v, 'headline')) + '</p>' if _s(v, 'headline') else '') + ('<p>' + _e(_s(v, 'summary')) + '</p>' if _s(v, 'summary') else '')
     pats = _items([{'title': p.get('name'), 'detail': p.get('line')} for p in _l(_s(v, 'patterns')) if isinstance(p, dict) and p.get('name')])
-    tease = ' · '.join(x for x in [_s(v, 'character'), _s(v, 'type')] if x)
+    tease = _s(v, 'character')
     return hero + _block('Executive summary', summ) + _block('Your signature patterns', pats), tease
 
 
@@ -554,11 +568,7 @@ def _together(v):
     for d in _l(_s(v, 'develop')):
         if not isinstance(d, dict) or not d.get('title'):
             continue
-        signs = [x for x in _l(d.get('signs')) if isinstance(x, str)]
-        dev += ('<div class="it dev"><b>' + _e(d['title']) + '</b>' + ('<span>' + _e(d.get('detail')) + '</span>' if d.get('detail') else '')
-                + ('<p class="kv"><small>Early signs</small>' + _e(' · '.join(signs)) + '</p>' if signs else '')
-                + ('<p class="kv"><small>Counter-move</small>' + _e(d.get('counterMove')) + '</p>' if d.get('counterMove') else '')
-                + ('<p class="kv ask"><small>Worth asking yourself</small>' + _e(d.get('reflect')) + '</p>' if d.get('reflect') else '') + '</div>')
+        dev += '<div class="it"><b>' + _e(d['title']) + '</b>' + ('<span>' + _e(d.get('detail')) + '</span>' if d.get('detail') else '') + '</div>'
     if not dev:
         dev = _items(_s(v, 'workOn')) + ('<p class="soft">' + _e(_s(v, 'whenItShows')) + '</p>' if _s(v, 'whenItShows') else '')
     steps = [p for p in _l(_s(v, 'steps')) if isinstance(p, dict) and p.get('step')] or [p for p in _l(_s(v, 'plan')) if isinstance(p, dict) and p.get('step')]
@@ -599,8 +609,8 @@ def widget_html(view):
             % (score, (' (' + _e(c.get('level')) + ')') if c.get('level') else '', score,
                ('<div class="soft">Read from: ' + _e(', '.join(x for x in _l(c.get('basedOn')) if isinstance(x, str))) + '</div>') if _l(c.get('basedOn')) else '')) if score is not None else ''
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-            '<title>Your Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr">'
-            '<div class="pr-head"><h1>Your Psyche Report</h1><span>PsycheAI</span></div>'
+            '<title>Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr" data-id="' + hashlib.sha256(json.dumps(view, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12] + '">'
+            '<div class="pr-head"><h1>Psyche Report</h1><span>PsycheAI</span></div>'
             + ''.join(parts) + conf + '</main><script>' + W_JS + '</script></body></html>')
 
 
