@@ -52,6 +52,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import socket
 import sys
 import time
@@ -144,12 +145,10 @@ def local_pdf(r):
         if parts.fragment:
             # /report-pdf?m=<id>#<key>: the key goes in a header, never in an address a server or log keeps.
             pid = urllib.parse.parse_qs(parts.query).get('m', [''])[0]
-            req = urllib.request.Request('%s://%s/api/import/pdf?id=%s' % (parts.scheme, parts.netloc, urllib.parse.quote(pid)),
-                                         headers={'Accept': 'application/pdf', 'X-Psyche-Key': parts.fragment})
+            status, body = fetch('GET', '%s://%s/api/import/pdf?id=%s' % (parts.scheme, parts.netloc, urllib.parse.quote(pid)),
+                                 {'Accept': 'application/pdf', 'X-Psyche-Key': parts.fragment, 'User-Agent': agent()})
         else:
-            req = urllib.request.Request(link, headers={'Accept': 'application/pdf'})
-        with urllib.request.urlopen(req, timeout=60) as res:
-            body = res.read()
+            status, body = fetch('GET', link, {'Accept': 'application/pdf', 'User-Agent': agent()})
         if not body.startswith(b'%PDF'):
             raise ValueError('not a PDF')
         path = os.path.join(OUT, name)
@@ -157,7 +156,7 @@ def local_pdf(r):
             f.write(body)
         os.chmod(path, 0o600)
         out['file'] = path
-    except (OSError, ValueError, urllib.error.URLError):
+    except (OSError, ValueError, urllib.error.URLError, http.client.HTTPException):
         out['files'] = files
     return out
 
@@ -170,9 +169,7 @@ def local_card(r):
         return out
     try:
         os.makedirs(OUT, exist_ok=True)
-        req = urllib.request.Request(link, headers={'Accept': 'image/png'})
-        with urllib.request.urlopen(req, timeout=60) as res:
-            body = res.read()
+        status, body = fetch('GET', link, {'Accept': 'image/png', 'User-Agent': agent()})
         if not body.startswith(b'\x89PNG'):
             raise ValueError('not a PNG')
         for old in os.listdir(OUT):
@@ -183,7 +180,7 @@ def local_card(r):
             f.write(body)
         os.chmod(path, 0o600)
         out['file'] = path
-    except (OSError, ValueError, urllib.error.URLError):
+    except (OSError, ValueError, urllib.error.URLError, http.client.HTTPException):
         pass
     return out
 
@@ -1233,6 +1230,63 @@ def patiently(attempt):
             time.sleep(wait)
 
 
+# Every request goes through curl when the workspace has it, Python's own client otherwise
+# (README "Answers that arrive whole"). In some Muse workspaces Python's reads came back cut
+# short at about 20 KB, every time, while curl read the same answers whole: a republish then
+# failed for minutes as "busy". Secrets (the token, a PDF's key) reach curl on its standard
+# input, never its command line; a body goes through a private file. PSYCHEAI_TRANSPORT=python
+# forces Python's client.
+class Busy(Exception):
+    pass
+
+
+def _curl_quote(v):
+    return '"' + str(v).replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ').replace('\r', ' ') + '"'
+
+
+def fetch(method, url, headers, data=None, timeout=60):
+    """(status, body bytes) for one request. Raises URLError or ConnectionError when it doesn't get a whole answer."""
+    curl = shutil.which('curl') if os.environ.get('PSYCHEAI_TRANSPORT') != 'python' else None
+    if not curl:
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as res:
+                return res.status, res.read()
+        except urllib.error.HTTPError as err:
+            try:
+                return err.code, err.read()
+            except (OSError, http.client.HTTPException):
+                return err.code, b''
+    tmp = tempfile.mkdtemp(prefix='psyche-')
+    try:
+        out = os.path.join(tmp, 'out')
+        conf = ['url = ' + _curl_quote(url), 'request = ' + _curl_quote(method), 'silent', 'show-error',
+                'max-time = %d' % timeout, 'connect-timeout = 20', 'output = ' + _curl_quote(out), 'write-out = "%{http_code}"']
+        conf += ['header = ' + _curl_quote('%s: %s' % (k, v)) for k, v in headers.items()]
+        if data is not None:
+            body = os.path.join(tmp, 'body')
+            with open(body, 'wb') as f:
+                f.write(data)
+            conf.append('data-binary = ' + _curl_quote('@' + body))
+        done = subprocess.run([curl, '--config', '-'], input=('\n'.join(conf) + '\n').encode(), capture_output=True, timeout=timeout + 30)
+        if done.returncode == 28:
+            raise urllib.error.URLError(socket.timeout('timed out'))
+        if done.returncode in (18, 52, 55, 56, 92):
+            raise ConnectionError('the answer arrived cut short (curl %d)' % done.returncode)
+        if done.returncode != 0:
+            raise urllib.error.URLError('curl %d' % done.returncode)
+        try:
+            with open(out, 'rb') as f:
+                got = f.read()
+        except OSError:
+            got = b''
+        return int(done.stdout.decode().strip() or 0), got
+    except subprocess.TimeoutExpired:
+        raise urllib.error.URLError(socket.timeout('timed out'))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def post(path, body, token=None, form=False, extra=None):
     data = (urllib.parse.urlencode(body) if form else json.dumps(body)).encode()
     headers = {'Content-Type': 'application/x-www-form-urlencoded' if form else 'application/json', 'Accept': 'application/json', 'User-Agent': agent()}
@@ -1241,17 +1295,15 @@ def post(path, body, token=None, form=False, extra=None):
         headers['Authorization'] = 'Bearer ' + token
 
     def attempt():
-        req = urllib.request.Request(BASE + path, data=data, headers=headers, method='POST')
+        status, raw = fetch('POST', BASE + path, headers, data, timeout=120)
+        if status in BUSY:
+            raise urllib.error.HTTPError(BASE + path, status, 'busy', {}, None)
         try:
-            with urllib.request.urlopen(req, timeout=120) as res:
-                return res.status, json.loads(res.read().decode() or '{}')
-        except urllib.error.HTTPError as err:
-            if err.code in BUSY:
-                raise
-            try:
-                return err.code, json.loads(err.read().decode() or '{}')
-            except ValueError:
-                return err.code, {}
+            return status, json.loads(raw.decode() or '{}')
+        except ValueError:
+            if 200 <= status < 300:
+                raise ConnectionError('the answer arrived cut short')
+            return status, {}
     try:
         return patiently(attempt)
     except urllib.error.HTTPError as err:
@@ -1266,33 +1318,17 @@ def agent():
 
 def get(path):
     def attempt():
-        req = urllib.request.Request(BASE + path, headers={'Accept': 'application/json', 'User-Agent': agent()})
-        with urllib.request.urlopen(req, timeout=60) as res:
-            return res.read()
+        status, body = fetch('GET', BASE + path, {'Accept': 'application/json', 'User-Agent': agent()})
+        if status >= 400:
+            raise urllib.error.HTTPError(BASE + path, status, 'error', {}, None)
+        return body
     return patiently(attempt)
 
 
-# An update's files (README "Updates that arrive whole"). In some Muse workspaces
-# Python's download of a file came back cut short every time, for minutes, while
-# curl fetched the same file whole straight away. So: Python once, then curl, then
-# Python again with the usual waiting. However a file arrives, update() installs it
-# only if its hash matches the signed manifest, so the route can't change what's installed.
+# An update's files (README "Updates that arrive whole"), through fetch like every request.
+# However a file arrives, update() installs it only if its hash matches the signed
+# manifest, so the route can't change what's installed.
 def fetch_file(path):
-    try:
-        req = urllib.request.Request(BASE + path, headers={'Accept': 'application/json', 'User-Agent': agent()})
-        with urllib.request.urlopen(req, timeout=60) as res:
-            return res.read()
-    except (urllib.error.URLError, http.client.HTTPException, ConnectionError, OSError):
-        pass
-    curl = shutil.which('curl')
-    if curl:
-        try:
-            done = subprocess.run([curl, '-sS', '--fail', '--max-time', '120', '--retry', '3', '-A', agent(), '-H', 'Accept: application/json', BASE + path],
-                                  capture_output=True, timeout=400)
-            if done.returncode == 0 and done.stdout:
-                return done.stdout
-        except (OSError, subprocess.SubprocessError):
-            pass
     return get(path)
 
 
