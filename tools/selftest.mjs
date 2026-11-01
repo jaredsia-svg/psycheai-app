@@ -2137,7 +2137,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         JSON.stringify(c[0].calls.filter(x => / thread /.test(x)).map(x => x.match(/T\d/)[0]).filter((x, i, a) => a.indexOf(x) === i).sort()) === '["T0","T1","T2"]' &&
         c[0].calls.findIndex(x => /^M top-recipients/.test(x)) < c[0].calls.findIndex(x => / thread /.test(x)) &&
         !/Kai|Ana|Jun|Mei|mei\.t|@|U\d|I\d/.test(c[0].digest) && /^### Conversation 1: one-to-one, .*\(whole thread\)$/m.test(c[0].digest) && /^## Interests\n- Distance running$/m.test(c[0].digest) &&
-        /^counts: 15 posts and stories .* 3 conversations · 48 own messages read · 440 followers · 636 following · 10 saved$/m.test(c[0].digest) &&
+        /^counts: 15 posts and stories .* 3 conversations read \(the busiest\) · 48 own messages read · 440 followers · 636 following · 10 saved$/m.test(c[0].digest) &&
         c[1].r.ok === true && /too many requests/.test(c[1].r.stopped) && /^M thread /.test(c[1].calls[c[1].calls.length - 1]) && c[1].r.read.threads === 0 &&
         c[2].r.ok === true && !c[2].calls.some(x => /^M /.test(x)) && /^--account-id must be/.test(c[3].r.problems[0]) && c[3].calls.length === 0 &&
         /already here/.test(c[4].r.problems[0]))(skillState.leaving && skillState.leaving.collect) &&
@@ -2162,6 +2162,10 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       /pass it the exact collect command so it starts at once rather than re-reading this file/.test(skillMd) &&
       /Deliver as soon as show has saved the card and report: anything else \(a note to memory, a check of out\/\) comes after the ready message, never before it/.test(skillMd) &&
       /'usage': 'bin\/psyche\.py collect --account-id/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
+    check('the report is written with one home per theme (no two items on the same theme in a list, no step repeated across horizons), told up front rather than left to the checks; a collect digest says its conversations are the busiest read, not the inbox; room a conversation leaves goes on to the next',
+      /While writing, give each theme one home: within any one list .* no two items on the same theme, even in different words, and no step repeated across the plan's horizons/.test(skillMd) &&
+      ((c) => c && / 3 conversations read \(the busiest\) · /.test(c[0].digest))(skillState.leaving && skillState.leaving.collect) &&
+      /Room set aside for one that ran out goes to the next with more/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
     check('their own words stay: once a report is published, what others wrote ("> " lines) goes from the digest and the WhatsApp source, their own lines stay, and SKILL.md says so',
       ((c) => Array.isArray(c) && c[0] === '# Psyche digest\n## Messages\n### Conversation 1\n2024-01-02 10:00 Yes, I will book the court\n' && c[1] === '2024-02-02 19:00 On my way\n' && c[2] === '0o600')(skillState.leaving && skillState.leaving.context) &&
       /shutil\.rmtree\(WORK, ignore_errors=True\)\n\s+drop_context\(\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&

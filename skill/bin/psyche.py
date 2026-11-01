@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 83
+RELEASE = 84
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1965,7 +1965,9 @@ def build_digest(given=None, given_meta=None):
     head_counts = ['%d posts and stories' % (all_posts + sum(no_words.values())), '%d with words' % words, '%d comments' % len(comments)]
     for k in ('conversations', 'followers', 'following', 'saved'):
         if isinstance(counts.get(k), int):
-            head_counts.append('%s %s' % ('{:,}'.format(counts[k]), k))
+            # collect counts the conversations it read, not the inbox: said so, or a read takes the
+            # sample for their life ("you keep 15 conversations").
+            head_counts.append('%s %s%s' % ('{:,}'.format(counts[k]), k, ' read (the busiest)' if k == 'conversations' and meta.get('sampled') else ''))
         if k == 'conversations' and messages_in:
             # What "How this was read" cites: read off here, never remembered from a tool's output.
             head_counts.append('{:,} own messages read'.format(sum(1 for x in items if x['kind'] == 'message' and x.get('mine'))))
@@ -2279,12 +2281,27 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                     left -= want - st['mine']
                     deeper.append((st, want))
                 at_once(deeper, 30)
+                # Room set aside for one that ran out goes to the next with more, for two more rounds.
+                for _ in range(2):
+                    left, deeper = t['convos'] * 1.3 - sum(st['mine'] for st in states), []
+                    for st in sorted(states, key=lambda x: -x['mine'])[:CONVO_TOP]:
+                        if left <= 0:
+                            break
+                        if st['whole'] or st['failed'] or st['pages'] >= 30 or st['mine'] >= t['cap'] * 1.3:
+                            continue
+                        want = min(t['cap'] * 1.3, st['mine'] + left)
+                        left -= want - st['mine']
+                        deeper.append((st, want))
+                    if not deeper:
+                        break
+                    at_once(deeper, 30)
                 for st in states:
                     if st['pages']:
                         read['threads'] += 1
                     if st['whole']:
                         meta['complete'].append(st['tid'])
                 meta['counts']['conversations'] = len(ranked)
+                meta['sampled'] = True
             except RuntimeError as err:
                 note('messages', err)
     except RateLimited:
