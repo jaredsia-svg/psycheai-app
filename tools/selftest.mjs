@@ -2669,6 +2669,10 @@ print(json.dumps({'page': m.widget_html(v), 'controls': m.controls_html(v), 'emp
     typeof got.controls === 'string' && got.controls.includes('data-id="' + (page.match(/<main class="pr" data-id="([0-9a-f]{12})">/) || [])[1] + '"') && /Collapse the report above ▲/.test(got.controls) &&
     /didn’t answer here\. Tap its section titles instead\./.test(got.controls) && !/https?:\/\/|fetch\(|XMLHttpRequest|sendBeacon/.test(got.controls) &&
     /then its controls, a second small widget with one button that collapses the report above, right under it, also exactly as given\./.test(instructions.CORE_MUSE) && !/foldTop|"Collapse all ▲"/.test(instructions.CORE_MUSE));
+  check('the collapse widget is never skipped: the instructions, SKILL.md and show summary\'s own output all say both widgets, one after the other, every time',
+    /straight after the widget comes its collapse widget \(show summary's controls\), never skipped either: two widgets, one after the other, every time\./.test(instructions.CORE_MUSE) &&
+    /show it right under the report widget, exactly as given, every time, never skipped: two widgets, one after the other\)/.test(require('../lib/skill.js').skillMd()) &&
+    /out\['show'\] = \('Show widget as one interactive HTML widget, exactly as given, then controls as a second widget right under it, '/.test(require('node:fs').readFileSync(script, 'utf8')));
   check('attachment shows the style and its one line, without the longer reading', /<p class="lead">Leans secure<\/p><p>TONE<\/p><\/div>|<p class="lead">Leans secure<\/p><p>TONE<\/p>/.test(page) && !/ATTACH-READING/.test(page));
   check('the whole report shows a slim scrollbar in the site\'s colours where the host gives it a fixed height (a laptop), and no box inside it scrolls',
     /html\{scrollbar-width:thin;scrollbar-color:#cdb6dd transparent\}/.test(css) && /html::-webkit-scrollbar\{width:8px\}/.test(css) && !/scrollbar-width:none|display:none;width:0/.test(css) &&
