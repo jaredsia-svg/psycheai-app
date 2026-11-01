@@ -2706,6 +2706,24 @@ print(json.dumps({'page': m.widget_html(v), 'controls': m.controls_html(v), 'emp
     /\*\*The phone check\.\*\* Only when they ask for "the phone check": run `bin\/psyche\.py show probe`/.test(skillMdText), probe.error);
 }
 
+// ---------- the card keeps its margins (README "The card keeps its margins") ----------
+{
+  const ci = require('../lib/cardimage.js');
+  const base = { stage: 'psyche', fullName: 'Ana Cruz', characterName: 'Mulan', confidence: 71, headline: 'The quiet organiser who shows up for everyone, every time',
+    why: 'You are like Mulan: you do the thing nobody assigned you, quietly, for the people you have chosen, and you would rather carry the cost than be seen carrying it.',
+    patterns: ['The quiet organiser', 'Generous with attention', 'Bursts, then recovery'], motivators: ['Care for your people', 'Achievement', 'Security'],
+    letters: [{ letter: 'E', strength: 'slight' }, { letter: 'N', strength: 'slight' }, { letter: 'F', strength: 'slight' }, { letter: 'J', strength: 'moderate' }], mbti: 'ENFJ',
+    bigFive: { openness: 61, conscientiousness: 84, extraversion: 55, agreeableness: 79, neuroticism: 44 },
+    values: ['Honesty through evidence', 'Loyalty shown by showing up', 'Mercy is worth more than being right'], loveGiving: ['Acts of service'] };
+  const shown = (svg, list) => list.filter(t => svg.includes('>' + t + '<')).length;
+  const longOnes = ['Future technology and autonomous transport', 'Dogs and animal rescue', 'Travel, history and food', 'Investing, markets and new businesses', 'Tennis, pickleball and racquet sports'];
+  const shortOnes = ['Running', 'Chess', 'Jazz', 'Cooking', 'Hiking'];
+  const longSvg = ci.cardSvg({ ...base, interests: longOnes }), shortSvg = ci.cardSvg({ ...base, interests: shortOnes });
+  check('the Psyche Card shows at most four interests, and three when a fourth would shrink the card (wider margins at the sides)',
+    /Future technology/.test(longSvg) && longSvg.includes('>Dogs and animal rescue<') && longSvg.includes('>Travel, history and food<') && !/Investing|Tennis/.test(longSvg) &&
+    shown(shortSvg, shortOnes) === 4 && !shortSvg.includes('>Hiking<'), JSON.stringify([shown(longSvg, longOnes), shown(shortSvg, shortOnes)]));
+}
+
 // ---------- summary ----------
 
 console.log(`${passed} passed, ${failures.length} failed`);
