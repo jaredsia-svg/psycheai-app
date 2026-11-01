@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 56
+RELEASE = 57
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -307,6 +307,8 @@ li{margin:3px 0}
 .off textarea{width:100%%;min-height:64px;padding:8px 10px;border:1px solid #d9cde2;border-radius:10px;font:inherit;font-size:14px;color:#241a2e;background:#fff;resize:vertical;outline:none}
 .off textarea:focus{border-color:var(--c);box-shadow:0 0 0 3px #f3e9f8}
 .conf{background:#fff;border:1px solid #e2d8e9;border-radius:16px;padding:14px 16px;margin-top:4px}
+.fold{all:unset;box-sizing:border-box;display:block;width:100%%;margin:12px 0 4px;padding:12px;border-radius:12px;border:1px solid #d9cde2;background:#fff;color:#6a3590;font-weight:700;font-size:14px;text-align:center;cursor:pointer;touch-action:manipulation}
+.fold[hidden]{display:none}
 .conf b{font-size:18px}
 .bar{height:8px;border-radius:8px;background:#ece4f1;margin:8px 0;overflow:hidden}
 .bar i{display:block;height:100%%;border-radius:8px;background:linear-gradient(90deg,#7b3fa0,#d1477a)}
@@ -328,15 +330,23 @@ var id=document.querySelector('.pr').getAttribute('data-id');
 function load(){try{var s=JSON.parse(window.name||'{}');if(s&&s.psyche===id)return s;}catch(e){}return {psyche:id,closed:[],m:null};}
 var st=load();
 function save(){try{window.name=JSON.stringify(st);}catch(e){}}
+var fold=document.getElementById('fold'),sets=[];
+function foldShown(){if(fold)fold.hidden=!document.querySelector('.part.open');}
 [].slice.call(document.querySelectorAll('.part')).forEach(function(p){
   var b=p.querySelector('button'),key=p.getAttribute('data-section');
   function set(open){p.classList.toggle('open',open);b.setAttribute('aria-expanded',open?'true':'false');}
+  sets.push(function(){set(false);if(st.closed.indexOf(key)<0)st.closed.push(key);});
   if(st.closed.indexOf(key)>=0)set(false);
   b.addEventListener('click',function(){
     var open=!p.classList.contains('open');set(open);
-    st.closed=st.closed.filter(function(k){return k!==key;});if(!open)st.closed.push(key);save();
+    st.closed=st.closed.filter(function(k){return k!==key;});if(!open)st.closed.push(key);save();foldShown();
   });
 });
+// "Collapse the report", at the very end: every section closes to its title at once. On a
+// phone the chat keeps its place while the report above shrinks, so the reader lands
+// after the report, with its six titles just above (README "Collapse the report").
+if(fold)fold.addEventListener('click',function(){sets.forEach(function(f){f();});save();foldShown();});
+foldShown();
 [].slice.call(document.querySelectorAll('.rate')).forEach(function(r){
   var up=r.children[0],down=r.children[1],off=r.nextElementSibling;
   up.addEventListener('click',function(){var on=up.getAttribute('aria-pressed')!=='true';up.setAttribute('aria-pressed',on);down.setAttribute('aria-pressed','false');off.classList.remove('show');});
@@ -616,7 +626,7 @@ def widget_html(view):
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr" data-id="' + hashlib.sha256(json.dumps(view, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12] + '">'
             '<div class="pr-head"><h1>Psyche Report</h1><span>PsycheAI</span></div>'
-            + ''.join(parts) + conf + '</main><script>' + W_JS + '</script></body></html>')
+            + ''.join(parts) + conf + '<button type="button" class="fold" id="fold">Collapse the report ▲</button></main><script>' + W_JS + '</script></body></html>')
 
 
 # ---------- the phone check (README "The phone check") ----------
