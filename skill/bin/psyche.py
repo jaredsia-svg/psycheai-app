@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 57
+RELEASE = 58
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -309,6 +309,8 @@ li{margin:3px 0}
 .conf{background:#fff;border:1px solid #e2d8e9;border-radius:16px;padding:14px 16px;margin-top:4px}
 .fold{all:unset;box-sizing:border-box;display:block;width:100%%;margin:12px 0 4px;padding:12px;border-radius:12px;border:1px solid #d9cde2;background:#fff;color:#6a3590;font-weight:700;font-size:14px;text-align:center;cursor:pointer;touch-action:manipulation}
 .fold[hidden]{display:none}
+.pr-head{align-items:center}
+.pr-head .top{all:unset;box-sizing:border-box;margin-left:auto;padding:7px 12px;border-radius:999px;border:1px solid #d9cde2;background:#fff;color:#6a3590;font-weight:700;font-size:13px;cursor:pointer;touch-action:manipulation;white-space:nowrap}
 .conf b{font-size:18px}
 .bar{height:8px;border-radius:8px;background:#ece4f1;margin:8px 0;overflow:hidden}
 .bar i{display:block;height:100%%;border-radius:8px;background:linear-gradient(90deg,#7b3fa0,#d1477a)}
@@ -330,12 +332,16 @@ var id=document.querySelector('.pr').getAttribute('data-id');
 function load(){try{var s=JSON.parse(window.name||'{}');if(s&&s.psyche===id)return s;}catch(e){}return {psyche:id,closed:[],m:null};}
 var st=load();
 function save(){try{window.name=JSON.stringify(st);}catch(e){}}
-var fold=document.getElementById('fold'),sets=[];
-function foldShown(){if(fold)fold.hidden=!document.querySelector('.part.open');}
+var fold=document.getElementById('fold'),top=document.getElementById('foldTop'),sets=[],opens=[];
+// The control at the top does both: on a phone, Muse passes taps only to roughly the top few
+// thousand pixels of a widget, so with every section open the end of the report can be read but
+// not tapped (README "Taps only near the top"). Above the sections, it changes only what's below it.
+function foldShown(){var any=!!document.querySelector('.part.open');if(fold)fold.hidden=!any;if(top)top.textContent=any?'Collapse all \u25b2':'Open all \u25bc';}
 [].slice.call(document.querySelectorAll('.part')).forEach(function(p){
   var b=p.querySelector('button'),key=p.getAttribute('data-section');
   function set(open){p.classList.toggle('open',open);b.setAttribute('aria-expanded',open?'true':'false');}
   sets.push(function(){set(false);if(st.closed.indexOf(key)<0)st.closed.push(key);});
+  opens.push(function(){set(true);});
   if(st.closed.indexOf(key)>=0)set(false);
   b.addEventListener('click',function(){
     var open=!p.classList.contains('open');set(open);
@@ -346,6 +352,10 @@ function foldShown(){if(fold)fold.hidden=!document.querySelector('.part.open');}
 // phone the chat keeps its place while the report above shrinks, so the reader lands
 // after the report, with its six titles just above (README "Collapse the report").
 if(fold)fold.addEventListener('click',function(){sets.forEach(function(f){f();});save();foldShown();});
+if(top)top.addEventListener('click',function(){
+  if(document.querySelector('.part.open'))sets.forEach(function(f){f();});else{opens.forEach(function(f){f();});st.closed=[];}
+  save();foldShown();
+});
 foldShown();
 [].slice.call(document.querySelectorAll('.rate')).forEach(function(r){
   var up=r.children[0],down=r.children[1],off=r.nextElementSibling;
@@ -625,7 +635,7 @@ def widget_html(view):
                ('<div class="soft">Read from: ' + _e(', '.join(x for x in _l(c.get('basedOn')) if isinstance(x, str))) + '</div>') if _l(c.get('basedOn')) else '')) if score is not None else ''
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr" data-id="' + hashlib.sha256(json.dumps(view, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12] + '">'
-            '<div class="pr-head"><h1>Psyche Report</h1><span>PsycheAI</span></div>'
+            '<div class="pr-head"><h1>Psyche Report</h1><span>PsycheAI</span><button type="button" class="top" id="foldTop">Collapse all ▲</button></div>'
             + ''.join(parts) + conf + '<button type="button" class="fold" id="fold">Collapse the report ▲</button></main><script>' + W_JS + '</script></body></html>')
 
 

@@ -2660,9 +2660,13 @@ print(json.dumps({'page': m.widget_html(v), 'empty': [m.widget_html(x) for x in 
     (page.match(/<rect class="hit" data-m=/g) || []).length === 10 && /\.tip\{height:66px;overflow:hidden/.test(css) &&
     /<main class="pr" data-id="[0-9a-f]{12}">/.test(page) && /window\.name=JSON\.stringify\(st\)/.test(page) && /if\(st\.closed\.indexOf\(key\)>=0\)set\(false\)/.test(page) && /show\(st\.m\)/.test(page));
   check('at the very end, "Collapse the report" closes every section at once, is shown only while one is open, and the closed state survives a redraw (README "Collapse the report")',
-    /<\/div><button type="button" class="fold" id="fold">Collapse the report ▲<\/button><\/main>/.test(page) && /function foldShown\(\)\{if\(fold\)fold\.hidden=!document\.querySelector\('\.part\.open'\);\}/.test(page) &&
+    /<\/div><button type="button" class="fold" id="fold">Collapse the report ▲<\/button><\/main>/.test(page) && /function foldShown\(\)\{var any=!!document\.querySelector\('\.part\.open'\);if\(fold\)fold\.hidden=!any;/.test(page) &&
     /fold\.addEventListener\('click',function\(\)\{sets\.forEach\(function\(f\)\{f\(\);\}\);save\(\);foldShown\(\);\}\)/.test(page) && /\.fold\{all:unset;[^}]*touch-action:manipulation/.test(css) &&
-    /Under it, last, a "Collapse the report ▲" button that closes every card to its title at once, shown only while a card is open\./.test(instructions.CORE_MUSE));
+    /Under it, last, a "Collapse the report ▲" button that closes every card to its title at once, shown only while a card is open;/.test(instructions.CORE_MUSE));
+  check('the top has "Collapse all ▲", which becomes "Open all ▼" once every section is closed, since on a phone only the top of a widget takes taps (README "Taps only near the top")',
+    /<h1>Psyche Report<\/h1><span>PsycheAI<\/span><button type="button" class="top" id="foldTop">Collapse all ▲<\/button><\/div>/.test(page) &&
+    /top\.textContent=any\?'Collapse all ▲':'Open all ▼'/.test(page) && /if\(document\.querySelector\('\.part\.open'\)\)sets\.forEach\(function\(f\)\{f\(\);\}\);else\{opens\.forEach\(function\(f\)\{f\(\);\}\);st\.closed=\[\];\}/.test(page) &&
+    /at the top, beside the title "Psyche Report", the same control as a small button, "Collapse all ▲", which becomes "Open all ▼"/.test(instructions.CORE_MUSE));
   check('the whole report shows a slim scrollbar in the site\'s colours where the host gives it a fixed height (a laptop), and no box inside it scrolls',
     /html\{scrollbar-width:thin;scrollbar-color:#cdb6dd transparent\}/.test(css) && /html::-webkit-scrollbar\{width:8px\}/.test(css) && !/scrollbar-width:none|display:none;width:0/.test(css) &&
     !/overflow-y:auto|class="scroll"|\.panel/.test(page));
