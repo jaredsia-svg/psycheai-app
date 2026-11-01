@@ -73,10 +73,13 @@ function readJson(req) {
   });
 }
 
+// Every answer goes with its exact length, never chunked: on some hosts' networks a
+// chunked answer reached Python cut short while curl got it whole (README "Updates
+// that arrive whole"), and a stated length lets a short read be told from a whole one.
 function send(res, status, body, type = 'application/json', headers = {}) {
-  const text = typeof body === 'string' ? body : JSON.stringify(body);
-  res.writeHead(status, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-store', ...headers });
-  res.end(text);
+  const data = Buffer.from(typeof body === 'string' ? body : JSON.stringify(body), 'utf8');
+  res.writeHead(status, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Length': data.length, ...headers });
+  res.end(data);
 }
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Content-Type, Mcp-Protocol-Version' };

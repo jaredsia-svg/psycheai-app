@@ -51,6 +51,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import socket
 import sys
 import time
@@ -63,7 +64,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 48
+RELEASE = 49
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1234,7 +1235,7 @@ def patiently(attempt):
 
 def post(path, body, token=None, form=False, extra=None):
     data = (urllib.parse.urlencode(body) if form else json.dumps(body)).encode()
-    headers = {'Content-Type': 'application/x-www-form-urlencoded' if form else 'application/json', 'Accept': 'application/json'}
+    headers = {'Content-Type': 'application/x-www-form-urlencoded' if form else 'application/json', 'Accept': 'application/json', 'User-Agent': agent()}
     headers.update(extra or {})
     if token:
         headers['Authorization'] = 'Bearer ' + token
@@ -1259,12 +1260,40 @@ def post(path, body, token=None, form=False, extra=None):
         return 503, {'error': {'message': 'PsycheAI is busy right now.'}}
 
 
+def agent():
+    return 'PsycheAI-skill/%s' % RELEASE
+
+
 def get(path):
     def attempt():
-        req = urllib.request.Request(BASE + path, headers={'Accept': 'application/json'})
+        req = urllib.request.Request(BASE + path, headers={'Accept': 'application/json', 'User-Agent': agent()})
         with urllib.request.urlopen(req, timeout=60) as res:
             return res.read()
     return patiently(attempt)
+
+
+# An update's files (README "Updates that arrive whole"). In some Muse workspaces
+# Python's download of a file came back cut short every time, for minutes, while
+# curl fetched the same file whole straight away. So: Python once, then curl, then
+# Python again with the usual waiting. However a file arrives, update() installs it
+# only if its hash matches the signed manifest, so the route can't change what's installed.
+def fetch_file(path):
+    try:
+        req = urllib.request.Request(BASE + path, headers={'Accept': 'application/json', 'User-Agent': agent()})
+        with urllib.request.urlopen(req, timeout=60) as res:
+            return res.read()
+    except (urllib.error.URLError, http.client.HTTPException, ConnectionError, OSError):
+        pass
+    curl = shutil.which('curl')
+    if curl:
+        try:
+            done = subprocess.run([curl, '-sS', '--fail', '--max-time', '120', '--retry', '3', '-A', agent(), '-H', 'Accept: application/json', BASE + path],
+                                  capture_output=True, timeout=400)
+            if done.returncode == 0 and done.stdout:
+                return done.stdout
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return get(path)
 
 
 # When each of this script's commands ran in a read (only its name), sent once
@@ -1397,7 +1426,7 @@ OLDER = "This is an older release than the one installed, so it wasn't installed
 
 
 def update():
-    manifest = json.loads(get('/skill/files').decode())
+    manifest = json.loads(fetch_file('/skill/files').decode())
     # The signature that covers the release number too (signature2): one without it could be an old release served again.
     hashes, sig, release = manifest.get('hashes') or {}, manifest.get('signature2') or '', manifest.get('release')
     try:
@@ -1412,7 +1441,7 @@ def update():
     # Every file fetched and checked before any is written: all of a release, or none of it.
     bodies = {}
     for name in names:
-        body = get('/skill/' + name)
+        body = fetch_file('/skill/' + name)
         if hashlib.sha256(body).hexdigest() != hashes[name]:
             return {'updated': False, 'error': NOT_SIGNED}
         if name.endswith('.py'):

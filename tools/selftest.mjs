@@ -1733,6 +1733,29 @@ print(json.dumps({'got': got, 'status': status}))`;
       fsx.writeFileSync(sigFile, sigFor(skillLib.hashes(), skillLib.release()));
       skillState.wrongKey = await runEnv({}, 'update');
       skillState.updated = await runEnv({ PSYCHEAI_SKILL_PUBLIC_KEY: testPub }, 'update');
+      // A network that cuts every Python download short, as some Muse workspaces did (README "Updates that arrive
+      // whole"): Python's read fails, curl fetches the file whole, and the signed hashes still decide.
+      {
+        const httpc = require('node:http');
+        const cutHits = {}, cutLengths = {};
+        const cutter = httpc.createServer((req, res) => {
+          httpc.get(base + req.url, { headers: req.headers }, up => {
+            const parts = []; up.on('data', c => parts.push(c)); up.on('end', () => {
+              const body = Buffer.concat(parts);
+              cutHits[req.url] = (cutHits[req.url] || 0) + 1;
+              if (/^\/skill\//.test(req.url)) cutLengths[req.url] = [Number(up.headers['content-length']), body.length, up.headers['transfer-encoding'] || ''];
+              res.writeHead(up.statusCode, { 'Content-Type': up.headers['content-type'] || 'text/plain', 'Content-Length': body.length });
+              if (/^\/skill\//.test(req.url) && req.headers['accept-encoding'] === 'identity') { res.write(body.subarray(0, Math.floor(body.length / 2))); setTimeout(() => res.destroy(), 50); }
+              else res.end(body);
+            });
+          }).on('error', () => { res.writeHead(502); res.end(); });
+        });
+        await new Promise(r => cutter.listen(0, '127.0.0.1', r));
+        const cutBase = 'http://127.0.0.1:' + cutter.address().port;
+        skillState.cutShort = await runEnv({ PSYCHEAI_SKILL_PUBLIC_KEY: testPub, PSYCHEAI_BASE: cutBase }, 'update').catch(e => ({ error: String(e.message).slice(0, 300) }));
+        skillState.cutHits = cutHits; skillState.cutLengths = cutLengths;
+        cutter.close();
+      }
       const forged = { ...skillLib.hashes(), 'bin/psyche.py': '0'.repeat(64) };
       fsx.writeFileSync(sigFile, sigFor(forged, skillLib.release()));
       skillState.mismatch = (skillLib.manifest().signature === null);
@@ -2130,6 +2153,12 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         skillState.savedName && skillState.savedName.ok === true && !skillState.savedName.whoAreYou && skillState.groupMe && skillState.groupMe.ok === true &&
         /--me "<their name>", their name as their Instagram profile or Muse account shows it, so it can tell which messages are theirs without asking\. Only if it still returns whoAreYou/.test(instructions.MUSE_PROCEDURE) && skillState.forget.ok && skillState.gone, JSON.stringify({ prep: skillState.prep, p, who: skillState.who }).slice(0, 600));
     }
+    check('the skill\'s files and manifest go out with their exact length, never chunked',
+      ['/skill/files', '/skill/SKILL.md', '/skill/bin/psyche.py', '/skill/guide.json'].every(u => skillState.cutLengths && skillState.cutLengths[u] && skillState.cutLengths[u][0] === skillState.cutLengths[u][1] && skillState.cutLengths[u][1] > 0 && !skillState.cutLengths[u][2]),
+      JSON.stringify(skillState.cutLengths));
+    check('an update whose Python downloads always arrive cut short is fetched with curl and installed, since the signed hashes decide (README "Updates that arrive whole")',
+      skillState.cutShort && skillState.cutShort.updated === true && skillState.cutShort.signed === true &&
+      ['/skill/SKILL.md', '/skill/bin/psyche.py', '/skill/guide.json'].every(u => skillState.cutHits[u] === 2), JSON.stringify({ r: skillState.cutShort, h: skillState.cutHits }));
     check('the Muse skill updates itself only from a signed release: unsigned, signed with another key, or not matching its hashes, nothing is installed',
       skillState.unsigned && skillState.unsigned.updated === false && /isn't signed by PsycheAI/.test(skillState.unsigned.error) &&
       skillState.wrongKey && skillState.wrongKey.updated === false && skillState.updated && skillState.updated.signed === true && skillState.mismatch === true &&
