@@ -65,7 +65,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 61
+RELEASE = 62
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -134,6 +134,15 @@ def local_pdf(r):
     # The save's time in the name, so each save's PDF is a new file to the chat, never taken for one sent before.
     name = re.sub(r'\.pdf$', '', name, flags=re.I) + ' ' + saved_at() + '.pdf'
     out = {'pdf': link}
+    # Fetched already, right after the save (saved()): that copy is this save's, since out/ is
+    # emptied at each save, and the link may have expired since.
+    try:
+        kept = [f for f in os.listdir(OUT) if f.lower().endswith('.pdf')]
+    except OSError:
+        kept = []
+    if kept:
+        out['file'] = os.path.join(OUT, kept[0])
+        return out
     if not link or not fetchable(link):
         return out
     try:
@@ -185,12 +194,12 @@ def local_card(r):
     return out
 
 
-# ---------- the report widget (README "The widget is built here") ----------
-# Muse used to draw "Your Psyche Report" itself from view, and drew it
-# differently each time: a serif font on a laptop, cut-off chart labels, grey
-# on grey on a phone. The widget is now a finished page built here from view
-# alone (never the evidence), styled like psycheai.io's report, and Muse shows
-# it as given. It loads nothing from anywhere.
+# ---------- the report file (README "The report as a file") ----------
+# The whole report as one HTML file in the reader's own workspace, attached to the chat:
+# opened, it is a normal page, so every tap works and opening a section can bring the
+# reader to it, which a widget inside Muse's phone app couldn't. Built here from what
+# publish_psyche gave back (full: every write-up and its evidence; else view), styled like
+# psycheai.io's report. It loads nothing from anywhere and keeps nothing anywhere else.
 
 import html as _html
 
@@ -206,177 +215,161 @@ W_PARTS = [
 W_BANDS = {'steady': ('#2f7d5b', '#e3f4ec'), 'mixed': ('#9a5b12', '#fdf1e2'), 'under strain': ('#b3261e', '#fbe7e5')}
 
 W_CSS = '''
-:root{color-scheme:light}
+:root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--mute:#6b6076;--line:#ece4f1;--accent:#7b3fa0;--accent2:#d1477a}
 *{box-sizing:border-box;font-family:inherit}
+html{scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#cdb6dd transparent}
 html,body{margin:0;padding:0;background:#faf7fb}
-html{scrollbar-width:thin;scrollbar-color:#cdb6dd transparent}
-html::-webkit-scrollbar{width:8px}
-html::-webkit-scrollbar-track{background:transparent}
-html::-webkit-scrollbar-thumb{background:#cdb6dd;border-radius:8px;border:2px solid #faf7fb}
-html::-webkit-scrollbar-thumb:hover{background:#b393c8}
-body{font-family:%(font)s;color:#241a2e;font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%%;text-rendering:optimizeLegibility}
-.pr{max-width:720px;margin:0 auto;padding:12px}
-.pr-head{display:flex;align-items:baseline;gap:8px;margin:2px 4px 12px}
-.pr-head h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em}
-.pr-head span{color:#6b6076;font-size:13px}
-.part{background:#fff;border:1px solid #e2d8e9;border-radius:16px;margin:0 0 12px;box-shadow:0 1px 2px rgba(36,26,46,.05),0 6px 20px rgba(36,26,46,.05);overflow:hidden}
-.part.open{border-top:3px solid var(--c)}
-.part>button{all:unset;box-sizing:border-box;touch-action:manipulation;display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:12px;width:100%%;padding:14px 16px;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
-.part>button:focus-visible{outline:2px solid var(--c);outline-offset:-2px;border-radius:14px}
-.num{font-size:22px;font-weight:800;line-height:1;color:var(--c);font-variant-numeric:tabular-nums;letter-spacing:-.02em;grid-row:1/span 2}
-.ttl{font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tease{grid-column:2;font-size:13px;color:#6b6076;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body{font-family:__FONT__;color:var(--ink);font-size:15.5px;line-height:1.55;-webkit-text-size-adjust:100%;text-rendering:optimizeLegibility}
+.wrap{max-width:760px;margin:0 auto;padding:0 14px 40px}
+.banner{position:relative;overflow:hidden;margin:0 -14px;padding:26px 20px 24px;color:#fff;background:linear-gradient(135deg,#5b2a86 0%,#7b3fa0 45%,#c2366d 100%)}
+.banner:before{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,230,190,.55),rgba(255,230,190,0) 70%)}
+.banner .row{position:relative;display:flex;gap:18px;align-items:center}
+.banner .txt{flex:1;min-width:0}
+.kicker{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.85}
+.banner h1{margin:4px 0 2px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
+.banner .sub{font-size:14px;opacity:.9}
+.banner .who{margin-top:14px;display:inline-flex;gap:10px;align-items:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:6px 14px 6px 8px;font-size:14px}
+.banner .who b{font-size:15px}
+.ring{position:relative;width:46px;height:46px;flex:none}
+.ring svg{width:46px;height:46px;transform:rotate(-90deg)}
+.ring i{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:14px}
+.cardpic{flex:none;width:118px;border-radius:14px;box-shadow:0 10px 30px rgba(20,0,40,.35);transform:rotate(3deg);border:3px solid rgba(255,255,255,.85)}
+@media (max-width:480px){.cardpic{width:92px}.banner h1{font-size:24px}}
+nav{position:sticky;top:0;z-index:5;margin:0 -14px 14px;padding:10px 14px;background:rgba(250,247,251,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+@media (min-width:700px){nav{flex-wrap:wrap;overflow:visible}}
+nav a{flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid #e2d8e9;background:#fff;color:var(--soft);font-size:13px;font-weight:650;text-decoration:none;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+nav a i{font-style:normal;font-weight:800;color:var(--c)}
+nav a[aria-current=true]{background:var(--c);border-color:var(--c);color:#fff}
+nav a[aria-current=true] i{color:#fff}
+nav button,.foldall{all:unset;box-sizing:border-box;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+nav button{flex:none;margin-left:auto;padding:6px 12px;border-radius:999px;color:var(--accent);font-size:13px;font-weight:700;white-space:nowrap}
+.part{background:#fff;border:1px solid #e6dcec;border-radius:20px;margin:0 0 14px;box-shadow:0 1px 2px rgba(36,26,46,.04),0 10px 30px rgba(36,26,46,.06);overflow:hidden;scroll-margin-top:var(--navh,62px)}
+.part.open{border-top:4px solid var(--c)}
+.part>button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:14px;width:100%;padding:16px 18px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.part>button:focus-visible{outline:2px solid var(--c);outline-offset:-2px;border-radius:18px}
+.num{grid-row:1/span 2;font-size:30px;font-weight:800;line-height:1;letter-spacing:-.03em;background:linear-gradient(135deg,var(--c),#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ttl{font-size:18px;font-weight:750;letter-spacing:-.01em}
+.tease{grid-column:2;font-size:13px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .part.open .tease{display:none}
-.chev{grid-row:1/span 2;grid-column:3;width:22px;height:22px;color:#6b6076;transition:transform .15s}
+.chev{grid-row:1/span 2;grid-column:3;width:24px;height:24px;color:var(--mute);transition:transform .2s}
 .part.open .chev{transform:rotate(180deg)}
-.body{display:none;padding:0 16px 14px;border-top:1px solid #efe8f3}
-.part.open .body{display:block}
-h3{margin:18px 0 8px;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--c)}
-p{margin:0 0 8px}
-.soft{color:#5a4f66;font-size:14px}
-.hero{display:flex;gap:12px;align-items:center;margin-top:14px;padding:14px;border-radius:14px;background:linear-gradient(135deg,#f3e9f8,#fbf3f8);border:1px solid #e6d6ef}
-.hero b{display:block;font-size:20px;line-height:1.2;color:#7b3fa0}
-.hero small{display:block;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6b6076;margin-bottom:2px}
-.hero span{color:#5a4f66;font-size:14px}
-.row{padding:10px 0;border-bottom:1px solid #f0eaf4}
-.row:last-child{border-bottom:0}
-.row b{font-weight:650}
-.row .soft{margin-top:2px}
-.letter{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:var(--c);color:#fff;font-weight:800;font-size:14px;margin-right:8px;vertical-align:middle}
-.pill{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#f3e9f8;color:#6a3590;vertical-align:middle}
+.body{display:none;padding:2px 18px 18px;border-top:1px solid #f1eaf5}
+.part.open .body{display:block;animation:in .25s ease}
+@keyframes in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+h3{margin:22px 0 10px;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:8px}
+h3:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#efe6f3,transparent)}
+p{margin:0 0 10px}
+.soft{color:var(--soft);font-size:14.5px}
+.lead{font-size:16.5px;font-weight:650;line-height:1.45}
+.hero{margin-top:16px;padding:16px;border-radius:16px;background:linear-gradient(135deg,#f3e9f8,#fdf0f6);border:1px solid #ead9f1}
+.hero small{display:block;font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.hero b{display:block;margin:2px 0;font-size:26px;line-height:1.15;letter-spacing:-.02em;background:linear-gradient(135deg,#7b3fa0,#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero span{display:block;color:var(--mute);font-size:13.5px;margin-bottom:8px}
+.hero p{margin:0;color:#3b2a49}
+.it{padding:12px 0;border-bottom:1px solid #f2ecf5}
+.it:last-child{border-bottom:0}
+.it>b{display:block;font-weight:700;line-height:1.35}
+.it>span{display:block;margin-top:3px;color:var(--soft);font-size:14.5px}
+.pat{display:grid;grid-template-columns:34px 1fr;gap:12px;padding:14px 0;border-bottom:1px solid #f2ecf5}
+.pat:last-child{border-bottom:0}
+.pat .n{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:linear-gradient(135deg,#7b3fa0,#d1477a)}
+.pat b{display:block;font-size:16px;line-height:1.3}
+.pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:#f3e9f8;color:#6a3590;vertical-align:middle}
 .pill.prim{background:var(--c);color:#fff}
-.slider{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 10px;padding:10px 0;border-bottom:1px solid #f0eaf4}
+.pill.g{background:#eef1f4;color:#4d5866}
+details.ev{margin-top:8px}
+details.ev summary{list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--c);padding:3px 10px;border-radius:999px;background:#faf5fc;border:1px solid #efe3f4;-webkit-tap-highlight-color:transparent}
+details.ev summary::-webkit-details-marker{display:none}
+details.ev summary:before{content:"\\25B8";font-size:10px;transition:transform .15s}
+details.ev[open] summary:before{transform:rotate(90deg)}
+details.ev ul{margin:8px 0 2px;padding:0 0 0 2px;list-style:none}
+details.ev li{position:relative;margin:5px 0;padding-left:16px;font-size:14px;color:#3b2a49}
+details.ev li:before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--c);opacity:.55}
+details.ev .kv{margin:8px 0 0;font-size:14px;color:#3b2a49}
+details.ev .kv small{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.letter{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--c);color:#fff;font-weight:800;font-size:15px;margin-right:10px;vertical-align:middle}
+.type{display:flex;align-items:baseline;gap:10px;margin:14px 0 2px}
+.type b{font-size:30px;font-weight:800;letter-spacing:.06em;color:var(--c)}
+.type span{color:var(--mute);font-weight:650}
+.slider{padding:12px 0;border-bottom:1px solid #f2ecf5}
 .slider:last-child{border-bottom:0}
-.track{grid-column:1/span 2;position:relative;height:6px;border-radius:6px;background:#ddd3e4;margin:4px 0}
-.track i{position:absolute;top:50%%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%%;background:var(--c);border:3px solid #fff;box-shadow:0 0 0 1px var(--c)}
-.score{font-weight:800;font-variant-numeric:tabular-nums}
-.slider .soft{grid-column:1/span 2}
-.bands{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
-.band{padding:6px 10px;border-radius:10px;font-size:13px;font-weight:650}
-.band em{font-style:normal;font-weight:500;opacity:.85;margin-left:4px}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px}
-.chip{padding:5px 11px;border-radius:999px;background:#f3e9f8;color:#4c2766;font-size:13px;font-weight:600;border:1px solid #e6d6ef}
-.radar{display:block;width:100%%;max-width:420px;height:auto;margin:0 auto;overflow:visible}
-.radar text{font-family:%(font)s;font-size:11.5px;fill:#5a4f66}
+.slider .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.slider .top em{font-style:normal;color:var(--mute);font-weight:500;font-size:13.5px}
+.track{position:relative;height:8px;border-radius:8px;background:linear-gradient(90deg,#efe7f4,#e2d6ea);margin:8px 0}
+.track i{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:linear-gradient(90deg,var(--c),#d1477a);opacity:.85}
+.track u{position:absolute;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#fff;border:4px solid var(--c);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.score{font-weight:800;font-variant-numeric:tabular-nums;font-size:17px}
+.band{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:700;margin-left:6px;vertical-align:middle}
+.callout{padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,#f3e9f8,#fbf2f8);color:#3b2a49;margin:12px 0 4px}
+.callout b{color:var(--ink)}
+.radar{display:block;width:100%;max-width:440px;height:auto;margin:6px auto 0;overflow:visible}
+.radar text{font-family:__FONT__;font-size:11.5px;fill:#5a4f66}
 .radar text.top{font-weight:800;fill:var(--c);font-size:12.5px}
 .mots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 4px}
 .mots.low{grid-template-columns:repeat(2,1fr)}
-@media (max-width:520px){.mots{grid-template-columns:1fr}.mots.low{grid-template-columns:1fr 1fr}}
-.mot{border-radius:12px;padding:9px 11px;border:1px solid #efe5f4;background:#fdfbfe}
-.mot.hi{background:#fdf3ec;border-color:#f3d9c6}
-.mot b{display:flex;justify-content:space-between;gap:6px;font-weight:700;font-size:14px;line-height:1.3}
+@media (max-width:540px){.mots{grid-template-columns:1fr}.mots.low{grid-template-columns:1fr 1fr}}
+.mot{border-radius:14px;padding:10px 12px;border:1px solid #efe5f4;background:#fdfbfe}
+.mot.hi{background:linear-gradient(135deg,#fff3ea,#fdf0f6);border-color:#f3d9c6}
+.mot b{display:flex;justify-content:space-between;gap:6px;font-weight:750;font-size:14.5px;line-height:1.3}
 .mot b i{font-style:normal;color:var(--c)}
-.mots.low .mot b i{color:#6b6076}
-.mot span{display:block;margin-top:2px;color:#5a4f66;font-size:13px;line-height:1.35}
-.motlabel{margin:10px 0 0;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6b6076}
-.callout{padding:12px 14px;border-radius:12px;background:#f3e9f8;color:#3b2a49;font-size:14px;margin:10px 0 4px}
-.lang{display:grid;grid-template-columns:28px 1fr;column-gap:8px;padding:9px 0;border-bottom:1px solid #f0eaf4}
+.mots.low .mot b i{color:var(--mute)}
+.mot span{display:block;margin-top:3px;color:var(--soft);font-size:13px;line-height:1.4}
+.motlabel{margin:14px 0 0;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.lang{display:grid;grid-template-columns:34px 1fr;column-gap:10px;padding:12px 0;border-bottom:1px solid #f2ecf5}
 .lang:last-child{border-bottom:0}
-.lang .ico{font-size:20px;line-height:1.3}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-@media (max-width:520px){.cols{grid-template-columns:1fr}}
-.box{border:1px solid #efe8f3;border-radius:12px;padding:10px 12px;background:#fdfbfe}
-.box h3{margin-top:2px}
-ul{margin:0;padding-left:18px}
-li{margin:3px 0}
-.it{padding:8px 0;border-bottom:1px solid #f0eaf4}
-.it:last-child{border-bottom:0}
-.it b{display:block;font-weight:650;line-height:1.35}
-.it>span{display:block;margin-top:2px;color:#5a4f66;font-size:14px}
-.box h4{display:flex;align-items:center;gap:6px;margin:2px 0 4px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b6076}
-.box h4 i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%%;font-size:11px;color:#fff}
+.lang .ico{font-size:24px;line-height:1.2}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+@media (max-width:560px){.cols{grid-template-columns:1fr}}
+.box{border:1px solid #efe8f3;border-radius:16px;padding:12px 14px;background:#fdfbfe}
+.box h4{display:flex;align-items:center;gap:7px;margin:2px 0 4px;font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--mute)}
+.box h4 i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;font-size:11px;color:#fff}
 .box.good h4 i{background:#2f7d5b}
 .box.hard h4 i{background:#b26a14}
-.box .it{padding:6px 0}
-.hero .why{margin:8px 0 0;color:#3b2a49;font-size:14px}
-.slider b em{font-style:normal;font-weight:500;color:#6b6076}
-.lead{font-weight:700;margin:0 0 4px}
-.edge{margin-top:14px;padding:12px 14px;border-radius:12px;background:#f2f6fc;border:1px solid #dde6f3}
-.edge small{display:block;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--c)}
-.edge b{display:block;font-size:16px;margin:2px 0 4px}
-.edge p{margin:0;color:#3b3550;font-size:14px}
-.plan{position:relative;margin:4px 0 0 6px;padding-left:18px;border-left:2px solid #e2d8e9}
-.plan>div{position:relative;padding:2px 0 8px}
-.plan>div:before{content:"";position:absolute;left:-26px;top:5px;width:12px;height:12px;border-radius:50%%;background:var(--c);border:2px solid #fff;box-shadow:0 0 0 1px var(--c)}
-.plan small{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b6076}
-.plan p{margin:4px 0 6px}
-.plan p b{display:block;font-weight:650;line-height:1.35}
-.plan p span{display:block;color:#5a4f66;font-size:14px}
-.plan p em{display:inline-block;margin-top:3px;padding:0 7px;border-radius:999px;background:#f3e9f8;color:#6a3590;font-size:11px;font-style:normal;font-weight:600}
-.rate{display:flex;gap:6px;margin-top:14px}
-.rate button{all:unset;cursor:pointer;padding:4px 10px;border:1px solid #e2d8e9;border-radius:999px;background:#fff;font-size:15px;line-height:1.3}
-.rate button[aria-pressed=true]{background:#f3e9f8;border-color:var(--c)}
-.off{display:none;margin-top:8px}
-.off.show{display:block}
-.off label{display:block;font-size:13px;font-weight:650;margin-bottom:4px}
-.off textarea{width:100%%;min-height:64px;padding:8px 10px;border:1px solid #d9cde2;border-radius:10px;font:inherit;font-size:14px;color:#241a2e;background:#fff;resize:vertical;outline:none}
-.off textarea:focus{border-color:var(--c);box-shadow:0 0 0 3px #f3e9f8}
-.conf{background:#fff;border:1px solid #e2d8e9;border-radius:16px;padding:14px 16px;margin-top:4px}
-.fold{all:unset;box-sizing:border-box;display:block;width:100%%;margin:12px 0 4px;padding:12px;border-radius:12px;border:1px solid #d9cde2;background:#fff;color:#6a3590;font-weight:700;font-size:14px;text-align:center;cursor:pointer;touch-action:manipulation}
-.fold[hidden]{display:none}
-@media (hover:none) and (pointer:coarse){.fold{display:none}}
-.conf b{font-size:18px}
-.bar{height:8px;border-radius:8px;background:#ece4f1;margin:8px 0;overflow:hidden}
-.bar i{display:block;height:100%%;border-radius:8px;background:linear-gradient(90deg,#7b3fa0,#d1477a)}
-''' % {'font': W_FONT}
+.box .it{padding:9px 0}
+.edge{margin-top:14px;padding:16px;border-radius:16px;background:linear-gradient(135deg,#eef4fd,#f6f2fd);border:1px solid #dbe5f4}
+.edge small{display:block;font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--c)}
+.edge b{display:block;font-size:19px;margin:3px 0 6px;letter-spacing:-.01em}
+.edge p{margin:0;color:#3b3550}
+.plan{position:relative;margin:6px 0 0 8px;padding-left:20px;border-left:2px solid #e6dcec}
+.plan>div{position:relative;padding:2px 0 12px}
+.plan>div:before{content:"";position:absolute;left:-28px;top:4px;width:14px;height:14px;border-radius:50%;background:var(--c);border:3px solid #fff;box-shadow:0 0 0 1px var(--c)}
+.plan small{display:block;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.plan p{margin:6px 0 8px}
+.plan p b{display:block;font-weight:700;line-height:1.35}
+.plan p span{display:block;color:var(--soft);font-size:14px}
+.plan p em{display:inline-block;margin-top:4px;padding:1px 8px;border-radius:999px;background:#f3e9f8;color:#6a3590;font-size:11.5px;font-style:normal;font-weight:700}
+.method{background:#fff;border:1px solid #e6dcec;border-radius:20px;padding:18px;margin:4px 0 14px;box-shadow:0 10px 30px rgba(36,26,46,.05)}
+.method .big{display:flex;align-items:center;gap:14px}
+.method .big b{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.bar{height:8px;border-radius:8px;background:#ece4f1;margin:10px 0;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,#7b3fa0,#d1477a)}
+.foldall{display:block;width:100%;margin:6px 0 0;padding:13px;border-radius:14px;border:1px solid #d9cde2;background:#fff;color:var(--accent);font-weight:750;font-size:14.5px;text-align:center}
+footer{margin-top:22px;text-align:center;color:var(--mute);font-size:13px}
+footer b{color:var(--ink)}
+@media print{nav,.foldall{display:none}.part .body{display:block!important}.part{break-inside:avoid-page;box-shadow:none}.banner{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+'''.replace('__FONT__', W_FONT)
 
-# Every section starts open, and a tap on a title opens or closes that section alone:
-# nothing else changes and nothing scrolls. Muse's phone app grows the widget to the
-# page and scrolls the chat, which a widget can't move, and it doesn't let a box inside
-# the widget scroll either, so closing one section to open another jumped the reader
-# away, and a panel that scrolled itself couldn't be scrolled at all (README "Every
-# section open"). A tap changes only what's below the title tapped, so it never moves.
-# On a laptop Muse gives the widget a fixed height and the page shows a slim scrollbar.
+# One section open at a time. Overview is open to start with; tapping a closed section's
+# title, or its chip in the bar, closes the others first, then opens it and brings its title
+# to the top of the screen, under the bar. Tapping an open one's title closes it. "Collapse
+# all" closes every section and goes back to the top. Printing opens everything.
 W_JS = '''
 (function(){
-// What's closed and which radar point is shown are kept in the frame's own name, which
-// outlasts a reload of the same frame, so if the chat redraws the widget (as a phone may
-// when its height changes) it comes back as the reader left it. Only this report's state.
-var id=document.querySelector('.pr').getAttribute('data-id');
-function load(){try{var s=JSON.parse(window.name||'{}');if(s&&s.psyche===id)return s;}catch(e){}return {psyche:id,closed:[],m:null};}
-var st=load();
-function save(){try{window.name=JSON.stringify(st);}catch(e){}}
-var fold=document.getElementById('fold'),sets=[],opens=[];
-function foldShown(){if(fold)fold.hidden=!document.querySelector('.part.open');}
-[].slice.call(document.querySelectorAll('.part')).forEach(function(p){
-  var b=p.querySelector('button'),key=p.getAttribute('data-section');
-  function set(open){p.classList.toggle('open',open);b.setAttribute('aria-expanded',open?'true':'false');}
-  sets.push(function(){set(false);if(st.closed.indexOf(key)<0)st.closed.push(key);});
-  opens.push(function(){set(true);});
-  if(st.closed.indexOf(key)>=0)set(false);
-  b.addEventListener('click',function(){
-    var open=!p.classList.contains('open');set(open);
-    st.closed=st.closed.filter(function(k){return k!==key;});if(!open)st.closed.push(key);save();foldShown();ack();
-  });
-});
-function collapse(){sets.forEach(function(f){f();});save();foldShown();ack();}
-function expand(){opens.forEach(function(f){f();});st.closed=[];save();foldShown();ack();}
-// "Collapse the report", at the very end, for a laptop: on a phone Muse passes taps only to
-// roughly the top few thousand pixels of a widget, so there it is hidden, and the report is
-// collapsed from a small widget of its own right under it (controls_html, README "The report's
-// own control"). That widget reaches this one any way the chat allows: a message to every frame
-// of the page, a BroadcastChannel, or shared storage, and this one answers so it can say so.
-if(fold)fold.addEventListener('click',collapse);
-foldShown();
-var chan=null;try{chan=new BroadcastChannel('psyche-'+id);}catch(e){}
-function ack(){
-  var m={psyche:id,ack:true,open:!!document.querySelector('.part.open')};
-  try{if(chan)chan.postMessage(m);}catch(e){}
-  try{localStorage.setItem('psyche-ack-'+id,JSON.stringify({open:m.open,t:Date.now()}));}catch(e){}
-  try{var fs=window.parent&&window.parent.frames;if(fs&&window.parent!==window)for(var i=0;i<fs.length;i++)if(fs[i]!==window)fs[i].postMessage(m,'*');}catch(e){}
-}
-var lastCmd=0;
-function run(m){if(!m||m.psyche!==id||!m.do||(m.t&&m.t<=lastCmd))return;lastCmd=m.t||Date.now();if(m.do==='collapse')collapse();else if(m.do==='open')expand();else ack();}
-window.addEventListener('message',function(e){run(e.data);});
-if(chan)chan.onmessage=function(e){run(e.data);};
-function poll(){try{var c=JSON.parse(localStorage.getItem('psyche-cmd-'+id)||'null');if(c)run(c);}catch(e){}}
-window.addEventListener('storage',function(e){if(e.key==='psyche-cmd-'+id)poll();});
-try{localStorage.getItem('x');setInterval(poll,600);}catch(e){}
-[].slice.call(document.querySelectorAll('.rate')).forEach(function(r){
-  var up=r.children[0],down=r.children[1],off=r.nextElementSibling;
-  up.addEventListener('click',function(){var on=up.getAttribute('aria-pressed')!=='true';up.setAttribute('aria-pressed',on);down.setAttribute('aria-pressed','false');off.classList.remove('show');});
-  down.addEventListener('click',function(){var on=down.getAttribute('aria-pressed')!=='true';down.setAttribute('aria-pressed',on);up.setAttribute('aria-pressed','false');off.classList.toggle('show',on);if(on)off.querySelector('textarea').focus({preventScroll:true});});
-});
+var parts=[].slice.call(document.querySelectorAll('.part')),chips=[].slice.call(document.querySelectorAll('nav a')),bar=document.querySelector('nav');
+// An opened section lands just under the bar, however tall the bar is on this screen.
+function navh(){if(bar)document.documentElement.style.setProperty('--navh',(bar.offsetHeight+10)+'px');}navh();window.addEventListener('resize',navh);
+function set(p,open){p.classList.toggle('open',open);p.querySelector('button').setAttribute('aria-expanded',open?'true':'false');
+  chips.forEach(function(c){if(c.getAttribute('href')==='#'+p.id){c.setAttribute('aria-current',open?'true':'false');
+    if(open){var n=c.parentNode;n.scrollTo?n.scrollTo({left:Math.max(0,c.offsetLeft-n.clientWidth/2+c.clientWidth/2),behavior:'smooth'}):(n.scrollLeft=c.offsetLeft);}}});}
+function go(el){requestAnimationFrame(function(){requestAnimationFrame(function(){try{el.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){el.scrollIntoView(true);}});});}
+function only(p){parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);go(p);}
+parts.forEach(function(p){p.querySelector('button').addEventListener('click',function(){if(p.classList.contains('open'))set(p,false);else only(p);});});
+chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();var p=document.querySelector(c.getAttribute('href'));if(p)only(p);});});
+function all(){parts.forEach(function(q){set(q,false);});go(document.getElementById('top'));}
+[].slice.call(document.querySelectorAll('[data-fold]')).forEach(function(b){b.addEventListener('click',all);});
+window.addEventListener('beforeprint',function(){[].slice.call(document.querySelectorAll('details')).forEach(function(d){d.open=true;});});
 })();
 '''
 
@@ -403,18 +396,50 @@ def _num(x):
         return None
 
 
-def _bullets(items):
-    items = [i for i in _l(items) if isinstance(i, str)]
-    return '<ul>' + ''.join('<li>' + _e(i) + '</li>' for i in items) + '</ul>' if items else ''
+def _cap(t):
+    t = str(t or '')
+    return t[:1].upper() + t[1:]
 
 
 def _chips(items):
     items = [i for i in _l(items) if isinstance(i, str)]
-    return '<div class="chips">' + ''.join('<span class="chip">' + _e(i) + '</span>' for i in items) + '</div>' if items else ''
+    return '<div class="pills">' + ''.join('<span class="pill">' + _e(i) + '</span>' for i in items) + '</div>' if items else ''
 
 
 def _block(title, inner):
     return '<h3>' + _e(title) + '</h3>' + inner if inner else ''
+
+
+def _ev(evidence, label='Evidence', extra=''):
+    """The evidence behind a finding, folded away: a small toggle, open on a tap."""
+    ev = [x for x in _l(evidence) if isinstance(x, str)]
+    if not ev and not extra:
+        return ''
+    head = label + (' · %d' % len(ev) if ev and label == 'Evidence' else '')
+    return ('<details class="ev"><summary>' + _e(head) + '</summary>' + ('<ul>' + ''.join('<li>' + _e(x) + '</li>' for x in ev) + '</ul>' if ev else '')
+            + extra + '</details>')
+
+
+def _items(xs, details=True):
+    """Title-and-detail items, each its title in bold, its detail under it, and its evidence folded away."""
+    out = ''
+    for x in _l(xs):
+        if isinstance(x, str):
+            x = {'title': x}
+        if isinstance(x, dict) and x.get('title'):
+            d = _cap(x.get('detail')) if details else ''
+            pills = ''.join('<span class="pill g">' + _e(_cap(x.get(k))) + '</span>' for k in ('intensity', 'trajectory') if x.get(k))
+            out += ('<div class="it"><b>' + _e(x['title']) + (' ' + pills if pills else '') + '</b>' + ('<span>' + _e(d) + '</span>' if d else '')
+                    + _ev(x.get('evidence')) + '</div>')
+    return out
+
+
+def _pair(good_title, good, hard_title, hard):
+    g, h = _items(good), _items(hard)
+    if not g and not h:
+        return ''
+    box = lambda cls, mark, t, inner: ('<div class="box ' + cls + '"><h4><i>' + mark + '</i>' + _e(t) + '</h4>' + inner + '</div>') if inner else ''
+    return '<div class="cols">' + box('good', '✓', good_title, g) + box('hard', '!', hard_title, h) + '</div>'
 
 
 def _wrap(label, width=13):
@@ -436,14 +461,13 @@ def _radar(mots, top):
     if len(mots) < 3:
         return ''
     tops = set(t for t in _l(top) if isinstance(t, str))
-    n, R, cx, cy = len(mots), 92, 0, 0
+    n, R = len(mots), 92
     f = lambda v: ('%.1f' % v).rstrip('0').rstrip('.')
     ang = lambda i: -math.pi / 2 + 2 * math.pi * i / n
     out = []
     for ring in (25, 50, 75, 100):
         r = R * ring / 100
-        pts = ' '.join(f(cx + r * math.cos(ang(i))) + ',' + f(cy + r * math.sin(ang(i))) for i in range(n))
-        out.append('<polygon points="%s" fill="none" stroke="#e3dae9" stroke-width="1"/>' % pts)
+        out.append('<polygon points="%s" fill="none" stroke="#e3dae9" stroke-width="1"/>' % ' '.join(f(r * math.cos(ang(i))) + ',' + f(r * math.sin(ang(i))) for i in range(n)))
     for i in range(n):
         out.append('<line x1="0" y1="0" x2="%s" y2="%s" stroke="#e3dae9" stroke-width="1"/>' % (f(R * math.cos(ang(i))), f(R * math.sin(ang(i)))))
     shape = ' '.join(f(R * _num(m['score']) / 100 * math.cos(ang(i))) + ',' + f(R * _num(m['score']) / 100 * math.sin(ang(i))) for i, m in enumerate(mots))
@@ -451,103 +475,18 @@ def _radar(mots, top):
     for i, m in enumerate(mots):
         s, a, hot = _num(m['score']), ang(i), m['name'] in tops
         x, y = R * s / 100 * math.cos(a), R * s / 100 * math.sin(a)
-        if hot:
-            out.append('<circle class="pt" cx="%s" cy="%s" r="7" fill="var(--c)" stroke="#fff" stroke-width="2"/>' % (f(x), f(y)))
-        else:
-            out.append('<circle class="pt" cx="%s" cy="%s" r="3.5" fill="#fff" stroke="#9a8fa6" stroke-width="1.5"/>' % (f(x), f(y)))
+        out.append(('<circle cx="%s" cy="%s" r="7" fill="var(--c)" stroke="#fff" stroke-width="2"/>' if hot else '<circle cx="%s" cy="%s" r="3.5" fill="#fff" stroke="#9a8fa6" stroke-width="1.5"/>') % (f(x), f(y)))
         lx, ly = (R + 14) * math.cos(a), (R + 14) * math.sin(a)
         anchor = 'middle' if abs(math.cos(a)) < 0.3 else ('start' if math.cos(a) > 0 else 'end')
         lines = _wrap(m['name'])
         dy0 = -13 * (len(lines) - 1) if math.sin(a) < -0.3 else (10 if math.sin(a) > 0.3 else 4 - 6.5 * (len(lines) - 1))
         spans = ''.join('<tspan x="%s" dy="%s">%s</tspan>' % (f(lx), f(dy0) if k == 0 else '13', _e(t)) for k, t in enumerate(lines))
         out.append('<text class="%s" x="%s" y="%s" text-anchor="%s">%s</text>' % ('top' if hot else '', f(lx), f(ly), anchor, spans))
-    return ('<svg class="radar" viewBox="-200 -150 400 300" role="img" aria-label="What motivates you: your top three are highlighted">'
-            + ''.join(out) + '</svg>')
-
-
-def _rate():
-    return ('<div class="rate"><button type="button" aria-pressed="false" aria-label="This part is right">👍</button>'
-            '<button type="button" aria-pressed="false" aria-label="Something here is off">👎</button></div>'
-            '<div class="off"><label>What\'s off?</label><textarea></textarea></div>')
-
-
-def _items(xs):
-    """Title-and-detail items (a write-up's points), each its title in bold and its detail under it."""
-    out = ''
-    for x in _l(xs):
-        if isinstance(x, str):
-            x = {'title': x}
-        if isinstance(x, dict) and x.get('title'):
-            d = str(x.get('detail') or '')
-            d = d[:1].upper() + d[1:]
-            out += '<div class="it"><b>' + _e(x['title']) + '</b>' + ('<span>' + _e(d) + '</span>' if d else '') + '</div>'
-    return out
-
-
-def _titles(xs):
-    """Just each item's first line: its title, without the detail or reason under it."""
-    return [x if isinstance(x, str) else x.get('title') for x in _l(xs) if isinstance(x, str) or (isinstance(x, dict) and x.get('title'))]
-
-
-def _pair(good_title, good, hard_title, hard):
-    """Two boxes side by side (stacked on a phone): what helps, with ✓, and what's hard, with !."""
-    g, h = _items(good), _items(hard)
-    if not g and not h:
-        return ''
-    box = lambda cls, mark, t, inner: ('<div class="box ' + cls + '"><h4><i>' + mark + '</i>' + _e(t) + '</h4>' + inner + '</div>') if inner else ''
-    return '<div class="cols">' + box('good', '✓', good_title, g) + box('hard', '!', hard_title, h) + '</div>'
-
-
-def _overview(v):
-    who = _e(_s(v, 'character'))
-    kind = _e(_s(v, 'source'))
-    hero = ''
-    if who:
-        hero = ('<div class="hero"><div><small>You are most like</small><b>' + who + '</b>'
-                + ('<span>' + kind + '</span>' if kind else '')
-                + ('<p class="why">' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else '') + '</div></div>')
-    paras = [p for p in _l(_s(v, 'summaryFull')) if isinstance(p, str)]
-    if paras:
-        summ = ''.join('<p>' + _e(p) + '</p>' for p in paras)
-    else:
-        summ = ('<p style="font-weight:650">' + _e(_s(v, 'headline')) + '</p>' if _s(v, 'headline') else '') + ('<p>' + _e(_s(v, 'summary')) + '</p>' if _s(v, 'summary') else '')
-    pats = _items([{'title': p.get('name'), 'detail': p.get('line')} for p in _l(_s(v, 'patterns')) if isinstance(p, dict) and p.get('name')])
-    tease = _s(v, 'character')
-    return hero + _block('Executive summary', summ) + _block('Your signature patterns', pats), tease
-
-
-def _who(v):
-    letters = [l for l in _l(_s(v, 'mbti')) if isinstance(l, dict) and l.get('letter')]
-    types = ''.join(l.get('letter', '') for l in letters)
-    mbti = ''.join('<div class="row"><span class="letter">' + _e(l.get('letter')) + '</span><b>' + _e(l.get('name')) + '</b>'
-                   + ('<span class="pill">' + _e(l.get('strength')) + '</span>' if l.get('strength') else '')
-                   + ('<div class="soft">' + _e(l.get('reading') or l.get('line')) + '</div>' if (l.get('reading') or l.get('line')) else '') + '</div>'
-                   for l in letters)
-    five = ''
-    for t in _l(_s(v, 'bigFive')):
-        s = _num(t.get('score')) if isinstance(t, dict) else None
-        if s is None:
-            continue
-        five += ('<div class="slider"><b>' + _e(t.get('trait')) + (' <em>· ' + _e(t.get('band')) + '</em>' if t.get('band') else '') + '</b><span class="score">' + str(s) + '</span>'
-                 '<div class="track"><i style="left:' + str(s) + '%"></i></div>'
-                 + ('<div class="soft">' + _e(t.get('reading') or t.get('line')) + '</div>' if (t.get('reading') or t.get('line')) else '') + '</div>')
-    wb = _s(v, 'wellbeing') or {}
-    areas = [a for a in _l(_s(wb, 'areas')) if isinstance(a, dict) and a.get('area')]
-    band = lambda a: '<span class="band" style="color:%s;background:%s">%s</span>' % (W_BANDS.get(a.get('band'), ('#5a4f66', '#f1edf4')) + (_e(a.get('band')),))
-    if any(a.get('reading') for a in areas):
-        well = ''.join('<div class="row"><b>' + _e(a.get('area')) + '</b> ' + band(a) + ('<div class="soft">' + _e(a.get('reading')) + '</div>' if a.get('reading') else '') + '</div>' for a in areas)
-    else:
-        well = '<div class="bands">' + ''.join('<span class="band" style="color:%s;background:%s">%s<em>%s</em></span>' % (W_BANDS.get(a.get('band'), ('#5a4f66', '#f1edf4')) + (_e(a.get('area')), _e(a.get('band')))) for a in areas) + '</div>' if areas else ''
-    together = _s(wb, 'together') or _s(wb, 'summary')
-    well += ('<div class="callout"><b>Taken together.</b> ' + _e(together) + '</div>') if together else ''
-    fives = [t for t in _l(_s(v, 'bigFive')) if isinstance(t, dict) and _num(t.get('score')) is not None]
-    fives.sort(key=lambda t: -_num(t.get('score')))
-    tease = ' · '.join(([types] if types else []) + ['%s %d' % (t.get('trait'), _num(t.get('score'))) for t in fives[:2]])
-    return _block('MBTI', mbti) + _block('Big Five', five) + _block('Wellbeing', well), tease
+    return '<svg class="radar" viewBox="-200 -150 400 300" role="img" aria-label="What motivates you: your top three are highlighted">' + ''.join(out) + '</svg>'
 
 
 def _motive_boxes(mots, top):
-    """Under the radar: the top three, then the lowest two, each its score and a short meaning (README "Strongest and weakest")."""
+    """Under the radar: the top three, then the lowest two, each its score, meaning and, where written, their own line."""
     ms = [m for m in _l(mots) if isinstance(m, dict) and m.get('name') and _num(m.get('score')) is not None]
     if len(ms) < 5:
         return ''
@@ -555,23 +494,70 @@ def _motive_boxes(mots, top):
     tops = [by[t] for t in _l(top) if isinstance(t, str) and t in by][:3] or sorted(ms, key=lambda m: -_num(m['score']))[:3]
     low = [m for m in sorted(ms, key=lambda m: _num(m['score'])) if m not in tops][:2]
     box = lambda m, hi: ('<div class="mot%s"><b>%s<i>%d</i></b>%s</div>' % (' hi' if hi else '', _e(m['name']), _num(m['score']),
-                         ('<span>' + _e(m.get('meaning')) + '</span>') if m.get('meaning') else ''))
+                         '<span>' + _e(m.get('line') or m.get('meaning')) + '</span>' if (m.get('line') or m.get('meaning')) else ''))
     return ('<p class="motlabel">Strongest</p><div class="mots">' + ''.join(box(m, True) for m in tops) + '</div>'
             + '<p class="motlabel">Weakest</p><div class="mots low">' + ''.join(box(m, False) for m in low) + '</div>')
+
+
+def _overview(v):
+    hero = ''
+    if _s(v, 'character'):
+        hero = ('<div class="hero"><small>You are most like</small><b>' + _e(_s(v, 'character')) + '</b>'
+                + ('<span>' + _e(_s(v, 'source')) + '</span>' if _s(v, 'source') else '') + ('<p>' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else '') + '</div>')
+    paras = [p for p in _l(_s(v, 'summaryFull')) if isinstance(p, str)] or [x for x in [_s(v, 'summary')] if x]
+    summ = ''.join('<p%s>%s</p>' % (' class="lead"' if i == 0 else '', _e(p)) for i, p in enumerate(paras))
+    pats = ''.join('<div class="pat"><span class="n">%d</span><div><b>%s</b>%s%s%s</div></div>' % (
+        i + 1, _e(p.get('name')), '<span class="soft">' + _e(p.get('line')) + '</span>' if p.get('line') else '',
+        ('<div class="pills">' + ''.join('<span class="pill">' + _e(x) + '</span>' for x in _l(p.get('showsUpIn')) if isinstance(x, str)) + '</div>') if _l(p.get('showsUpIn')) else '',
+        _ev(p.get('evidence')))
+        for i, p in enumerate(p for p in _l(_s(v, 'patterns')) if isinstance(p, dict) and p.get('name')))
+    return hero + _block('Executive summary', summ) + _block('Your signature patterns', pats), _s(v, 'character')
+
+
+def _who(v, nickname=''):
+    letters = [l for l in _l(_s(v, 'mbti')) if isinstance(l, dict) and l.get('letter')]
+    types = ''.join(l.get('letter', '') for l in letters)
+    mbti = (('<div class="type"><b>' + _e(types) + '</b>' + ('<span>' + _e(nickname) + '</span>' if nickname else '') + '</div>') if types else '') + ''.join(
+        '<div class="it"><b><span class="letter">' + _e(l.get('letter')) + '</span>' + _e(l.get('name'))
+        + (' <span class="pill">' + _e(l.get('strength')) + '</span>' if l.get('strength') else '') + '</b>'
+        + ('<span>' + _e(l.get('reading') or l.get('line')) + '</span>' if (l.get('reading') or l.get('line')) else '')
+        + ('<span><i>In practice:</i> ' + _e(l.get('inPractice')) + '</span>' if l.get('inPractice') else '') + _ev(l.get('evidence')) + '</div>'
+        for l in letters) + ('<p class="soft" style="margin-top:8px;font-size:13px">' + _e(_s(v, 'mbtiCaveat')) + '</p>' if _s(v, 'mbtiCaveat') else '')
+    five = ''
+    for t in _l(_s(v, 'bigFive')):
+        s = _num(t.get('score')) if isinstance(t, dict) else None
+        if s is None:
+            continue
+        five += ('<div class="slider"><div class="top"><b>' + _e(t.get('trait')) + (' <em>· ' + _e(t.get('band')) + '</em>' if t.get('band') else '') + '</b>'
+                 '<span class="score">' + str(s) + '</span></div><div class="track"><i style="width:' + str(s) + '%"></i><u style="left:' + str(s) + '%"></u></div>'
+                 + ('<div class="soft">' + _e(t.get('reading') or t.get('line')) + '</div>' if (t.get('reading') or t.get('line')) else '') + _ev(t.get('evidence')) + '</div>')
+    wb = _s(v, 'wellbeing') or {}
+    band = lambda a: '<span class="band" style="color:%s;background:%s">%s</span>' % (W_BANDS.get(a.get('band'), ('#5a4f66', '#f1edf4')) + (_e(a.get('band')),))
+    well = ''.join('<div class="it"><b>' + _e(a.get('area')) + band(a) + (' <span class="pill g">confidence ' + _e(a.get('confidence')) + '</span>' if a.get('confidence') else '') + '</b>'
+                   + ('<span>' + _e(a.get('reading')) + '</span>' if a.get('reading') else '') + _ev(a.get('evidence')) + '</div>'
+                   for a in _l(_s(wb, 'areas')) if isinstance(a, dict) and a.get('area'))
+    together = _s(wb, 'together') or _s(wb, 'summary')
+    well += ('<div class="callout"><b>Taken together.</b> ' + _e(together) + '</div>') if together else ''
+    fives = sorted([t for t in _l(_s(v, 'bigFive')) if isinstance(t, dict) and _num(t.get('score')) is not None], key=lambda t: -_num(t.get('score')))
+    tease = ' · '.join(([types] if types else []) + ['%s %d' % (t.get('trait'), _num(t.get('score'))) for t in fives[:2]])
+    return _block('MBTI', mbti) + _block('Big Five', five) + _block('Wellbeing', well), tease
 
 
 def _drives(v):
     radar = _radar(_s(v, 'motivators'), _s(v, 'top')) + _motive_boxes(_s(v, 'motivators'), _s(v, 'top'))
     reading = '<div class="callout">' + _e(_s(v, 'reading')) + '</div>' if _s(v, 'reading') else ''
-    vb = _l(_s(v, 'values')) + _l(_s(v, 'beliefs'))
+    vb_full = _l(_s(v, 'valuesFull')) + _l(_s(v, 'beliefsFull'))
+    vb = _items(vb_full) if vb_full else _chips(_l(_s(v, 'values')) + _l(_s(v, 'beliefs')))
+    ints = _items(_s(v, 'interestsFull')) if _l(_s(v, 'interestsFull')) else _chips(_s(v, 'interests'))
     tease = ' · '.join(t for t in _l(_s(v, 'top')) if isinstance(t, str))
-    return _block('What motivates you', radar + reading) + _block('Values and beliefs', _chips(vb)) + _block('Interests', _chips(_s(v, 'interests'))), tease
+    return _block('What motivates you', radar + reading) + _block('Values and beliefs', vb) + _block('Interests', ints), tease
 
 
 def _langs(xs):
-    return ''.join('<div class="lang"><span class="ico">' + _e(l.get('icon') or '💗') + '</span><div><b>' + _e(l.get('language')) + '</b>'
+    return ''.join('<div class="lang"><span class="ico">' + _e(l.get('icon') or '💗') + '</span><div><b>' + _e(l.get('language')) + '</b> '
                    + '<span class="pill' + (' prim' if l.get('strength') == 'primary' else '') + '">' + _e(l.get('strength') or 'secondary') + '</span>'
-                   + ('<div class="soft">' + _e(l.get('line')) + '</div>' if l.get('line') else '') + '</div></div>'
+                   + ('<div class="soft">' + _e(l.get('line')) + '</div>' if l.get('line') else '')
+                   + _ev([l.get('why')] if l.get('why') else [], 'Why') + '</div></div>'
                    for l in _l(xs) if isinstance(l, dict) and l.get('language'))
 
 
@@ -579,28 +565,34 @@ def _connect(v):
     ll = _s(v, 'loveLanguages') or {}
     attach = ''
     if _s(v, 'attachment'):
+        read_from = ('<p class="motlabel">Read from</p><div class="pills">' + ''.join('<span class="pill g">' + _e(x) + '</span>' for x in _l(_s(v, 'derivedFrom')) if isinstance(x, str)) + '</div>') if _l(_s(v, 'derivedFrom')) else ''
         attach = ('<p class="lead">' + _e(_s(v, 'attachment')) + '</p>' + ('<p>' + _e(_s(v, 'attachmentTone')) + '</p>' if _s(v, 'attachmentTone') else '')
-        )
+                  + ('<p class="soft">' + _e(_s(v, 'attachmentReading')) + '</p>' if _s(v, 'attachmentReading') else '') + read_from
+                  + _items(_s(v, 'implications')) + ('<p class="soft" style="font-size:13px">' + _e(_s(v, 'attachmentCaveat')) + '</p>' if _s(v, 'attachmentCaveat') else ''))
     conflict = '<p>' + _e(_s(v, 'conflict')) + '</p>' if _s(v, 'conflict') else ''
     friction = _pair('What you bring', _s(v, 'bring') or _s(v, 'atYourBest'), 'Where it gets hard', _s(v, 'hard') or _s(v, 'watchFor'))
     suits = (('<p>' + _e(_s(v, 'whoSuits') or _s(v, 'bestPartner')) + '</p>') if (_s(v, 'whoSuits') or _s(v, 'bestPartner')) else '') \
-        + _pair('What you actually need', _titles(_s(v, 'needs') or _s(v, 'partnerNeeds')), 'What to be careful of', _titles(_s(v, 'careful') or _s(v, 'carefulOf')))
+        + _pair('What you actually need', _s(v, 'needs') or _s(v, 'partnerNeeds'), 'What to be careful of', _s(v, 'careful') or _s(v, 'carefulOf'))
+    love = _block('How you want to be loved', _langs(_s(ll, 'receiving'))) + _block('How you show love', _langs(_s(ll, 'giving'))) \
+        + ('<p class="soft" style="font-size:13px">' + _e(_s(ll, 'caveat')) + '</p>' if _s(ll, 'caveat') else '')
     first = next((l.get('language') for l in _l(_s(ll, 'receiving')) if isinstance(l, dict)), '')
     tease = ' · '.join(x for x in [first, _s(v, 'attachment')] if x)
-    return (_block('How you want to be loved', _langs(_s(ll, 'receiving'))) + _block('How you show love', _langs(_s(ll, 'giving')))
-            + _block('Attachment style', attach) + _block('How you deal with conflict', conflict)
+    return (love + _block('Attachment style', attach) + _block('How you deal with conflict', conflict)
             + _block('Strengths and friction', friction) + _block('Who suits you', suits)), tease
 
 
 def _work(v):
+    situation = '<p class="lead" style="margin-top:14px">' + _e(_s(v, 'situation')) + '</p>' if _s(v, 'situation') else ''
     edge = ''
     if _s(v, 'edge'):
-        edge = '<div class="edge"><small>Your edge</small><b>' + _e(_s(v, 'edge')) + '</b>' + ('<p>' + _e(_s(v, 'edgeDetail')) + '</p>' if _s(v, 'edgeDetail') else '') + '</div>'
+        edge = ('<div class="edge"><small>Your edge</small><b>' + _e(_s(v, 'edge')) + '</b>' + ('<p>' + _e(_s(v, 'edgeDetail')) + '</p>' if _s(v, 'edgeDetail') else '')
+                + _ev(_s(v, 'edgeEvidence')) + '</div>')
     others = _s(v, 'others') or ([x for x in _l(_s(v, 'strengths'))] + (['Not yet using: ' + _s(v, 'underused')] if _s(v, 'underused') else []))
     holding = _s(v, 'holding') or ([_s(v, 'holdingBack')] if _s(v, 'holdingBack') else [])
     sides = _pair('Your other strengths', others, 'What holds you back', holding)
-    fit = _pair('Suits you best', _titles(_s(v, 'suitsFull') or _s(v, 'suits')), 'Likely to drain you', _titles(_s(v, 'drainsFull') or _s(v, 'drains')))
-    return edge + sides + _block('Careers that suit you', fit), _s(v, 'edge')
+    style = ''.join('<div class="it"><b>' + t + '</b><span>' + _e(_s(v, k)) + '</span></div>' for k, t in (('workStyle', 'How you work best'), ('watchOuts', 'Watch out for')) if _s(v, k))
+    fit = _pair('Suits you best', _s(v, 'suitsFull') or _s(v, 'suits'), 'Likely to drain you', _s(v, 'drainsFull') or _s(v, 'drains'))
+    return situation + edge + sides + _block('Your working style', style) + _block('Careers that suit you', fit), _s(v, 'edge')
 
 
 def _together(v):
@@ -609,9 +601,14 @@ def _together(v):
     for d in _l(_s(v, 'develop')):
         if not isinstance(d, dict) or not d.get('title'):
             continue
-        dev += '<div class="it"><b>' + _e(d['title']) + '</b>' + ('<span>' + _e(d.get('detail')) + '</span>' if d.get('detail') else '') + '</div>'
+        signs = [x for x in _l(d.get('signs')) if isinstance(x, str)]
+        more = (('<p class="kv"><small>Early signs</small>' + _e(' · '.join(signs)) + '</p>' if signs else '')
+                + ('<p class="kv"><small>Counter-move</small>' + _e(d.get('counterMove')) + '</p>' if d.get('counterMove') else '')
+                + ('<p class="kv"><small>Worth asking yourself</small><i>' + _e(d.get('reflect')) + '</i></p>' if d.get('reflect') else ''))
+        dev += ('<div class="it"><b>' + _e(d['title']) + '</b>' + ('<span>' + _e(d.get('detail')) + '</span>' if d.get('detail') else '')
+                + (_ev([], 'When it shows up', more) if more else '') + '</div>')
     if not dev:
-        dev = _items(_s(v, 'workOn')) + ('<p class="soft">' + _e(_s(v, 'whenItShows')) + '</p>' if _s(v, 'whenItShows') else '')
+        dev = _items(_s(v, 'workOn'))
     steps = [p for p in _l(_s(v, 'steps')) if isinstance(p, dict) and p.get('step')] or [p for p in _l(_s(v, 'plan')) if isinstance(p, dict) and p.get('step')]
     plan = ''
     for when in ('This week', 'This quarter', 'This year'):
@@ -621,84 +618,65 @@ def _together(v):
                 '<p><b>' + _e(p['step']) + '</b>' + ('<span>' + _e(p.get('detail')) + '</span>' if p.get('detail') else '')
                 + ('<em>' + _e(p.get('from')) + '</em>' if p.get('from') else '') + '</p>' for p in here) + '</div>'
     tease = ' · '.join(t for t in ([d.get('title') for d in _l(_s(v, 'develop')) if isinstance(d, dict)] or _l(_s(v, 'workOn'))) if isinstance(t, str))[:90]
-    return _block('Build on', build) + _block('Develop', dev) + _block('Your plan', '<div class="plan">' + plan + '</div>' if plan else ''), tease
+    two = ('<div class="cols">' + ('<div class="box good"><h4><i>✓</i>Build on</h4>' + build + '</div>' if build else '')
+           + ('<div class="box hard"><h4><i>!</i>Develop</h4>' + dev + '</div>' if dev else '') + '</div>') if build or dev else ''
+    return two + _block('Your plan', '<div class="plan">' + plan + '</div>' if plan else ''), tease
 
 
 W_BUILD = {'overview': _overview, 'whoYouAre': _who, 'whatDrivesYou': _drives, 'howYouConnect': _connect, 'howYouWork': _work, 'puttingItTogether': _together}
 W_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
 
-def _view_id(view):
-    """The report's id, the same in the report and its control widget, so one only ever moves the other."""
-    return hashlib.sha256(json.dumps(view, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
+def _ring(score):
+    import math
+    c = 2 * math.pi * 19
+    return ('<span class="ring"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="19" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="5"/>'
+            '<circle cx="23" cy="23" r="19" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-dasharray="%.1f %.1f"/></svg><i>%d</i></span>'
+            % (c * score / 100, c, score))
 
 
-# The report's own control (README "The report's own control"): a small widget shown right
-# under the report. On a phone Muse passes taps only to the top part of a widget, so a button
-# at the end of a long report can't be tapped; this one is short, so it always can. It asks the
-# report above to collapse or open, every way the chat might allow, and says whether it answered.
-CONTROLS_HTML = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Psyche Report</title><style>
-:root{color-scheme:light}*{box-sizing:border-box;font-family:inherit}
-html,body{margin:0;background:#faf7fb}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;color:#241a2e;font-size:14px}
-main{max-width:720px;margin:0 auto;padding:8px 12px}
-button{all:unset;box-sizing:border-box;display:block;width:100%;padding:12px;border-radius:12px;border:1px solid #d9cde2;background:#fff;color:#6a3590;font-weight:700;font-size:14px;text-align:center;cursor:pointer;touch-action:manipulation}
-p{margin:6px 2px 0;color:#6b6076;font-size:13px;min-height:18px;text-align:center}
-</style></head><body><main data-id="__ID__"><button type="button" id="go">Collapse the report above \u25b2</button><p id="note"></p></main><script>
-(function(){
-var id=document.querySelector('main').getAttribute('data-id'),go=document.getElementById('go'),note=document.getElementById('note');
-var open=true,waiting=null,chan=null;try{chan=new BroadcastChannel('psyche-'+id);}catch(e){}
-function label(){go.textContent=open?'Collapse the report above \u25b2':'Open the report above \u25bc';}
-function heard(m){if(!m||m.psyche!==id||!m.ack)return;open=!!m.open;label();if(waiting){clearTimeout(waiting);waiting=null;note.textContent=open?'Opened.':'Collapsed: tap a section title to read it again.';}}
-window.addEventListener('message',function(e){heard(e.data);});
-if(chan)chan.onmessage=function(e){heard(e.data);};
-var seen=0;function poll(){try{var a=JSON.parse(localStorage.getItem('psyche-ack-'+id)||'null');if(a&&a.t>seen){seen=a.t;heard({psyche:id,ack:true,open:a.open});}}catch(e){}}
-try{localStorage.getItem('x');setInterval(poll,500);}catch(e){}
-function send(m){
-  try{if(chan)chan.postMessage(m);}catch(e){}
-  try{localStorage.setItem('psyche-cmd-'+id,JSON.stringify(m));}catch(e){}
-  try{var fs=window.parent&&window.parent.frames;if(fs&&window.parent!==window)for(var i=0;i<fs.length;i++)if(fs[i]!==window)fs[i].postMessage(m,'*');}catch(e){}
-}
-go.addEventListener('click',function(){
-  note.textContent='';send({psyche:id,do:open?'collapse':'open',t:Date.now()});
-  if(waiting)clearTimeout(waiting);
-  waiting=setTimeout(function(){waiting=null;note.textContent='The report above didn’t answer here. Tap its section titles instead.';},2000);
-});
-label();
-})();
-</script></body></html>"""
-
-
-def controls_html(view):
-    """The report's control widget, for the report built from this view."""
-    return CONTROLS_HTML.replace('__ID__', _view_id(view)) if isinstance(view, dict) else None
-
-
-def widget_html(view):
-    """The whole report as one self-contained page, from view and nothing else."""
+def report_html(view, name='', when='', card_png=None):
+    """The whole report as one self-contained HTML file, from view (full, with the evidence, when given)."""
     if not isinstance(view, dict):
         return None
-    parts, i = [], 0
+    ov = view.get('overview') if isinstance(view.get('overview'), dict) else {}
+    parts, nav, i = [], [], 0
     for key, title, colour in W_PARTS:
-        inner, tease = W_BUILD[key](view.get(key) if isinstance(view.get(key), dict) else {})
+        data = view.get(key) if isinstance(view.get(key), dict) else {}
+        inner, tease = (_who(data, ov.get('nickname') or '') if key == 'whoYouAre' else W_BUILD[key](data))
         if not inner:
             continue
-        parts.append('<section class="part%s" style="--c:%s" data-section="%s"><button type="button" aria-expanded="%s">'
-                     '<span class="num">%02d</span><span class="ttl">%s</span><span class="tease">%s</span>%s</button>'
-                     '<div class="body">%s%s</div></section>'
-                     % (' open', colour, _e(title), 'true', i, _e(title), _e(tease), W_CHEV, inner, _rate()))
+        sid = 'p%d' % i
+        parts.append('<section class="part%s" id="%s" style="--c:%s" data-section="%s"><button type="button" aria-expanded="%s">'
+                     '<span class="num">%02d</span><span class="ttl">%s</span><span class="tease">%s</span>%s</button><div class="body">%s</div></section>'
+                     % (' open' if i == 0 else '', sid, colour, _e(title), 'true' if i == 0 else 'false', i, _e(title), _e(tease), W_CHEV, inner))
+        nav.append('<a href="#%s" style="--c:%s" aria-current="%s"><i>%02d</i>%s</a>' % (sid, colour, 'true' if i == 0 else 'false', i, _e(title)))
         i += 1
     if not parts:
         return None
     c = view.get('confidence') if isinstance(view.get('confidence'), dict) else {}
     score = _num(c.get('score'))
-    conf = ('<div class="conf" style="--c:#7b3fa0"><h3 style="margin-top:0">Confidence</h3><b>%d%%</b>%s<div class="bar"><i style="width:%d%%"></i></div>%s</div>'
-            % (score, (' (' + _e(c.get('level')) + ')') if c.get('level') else '', score,
-               ('<div class="soft">Read from: ' + _e(', '.join(x for x in _l(c.get('basedOn')) if isinstance(x, str))) + '</div>') if _l(c.get('basedOn')) else '')) if score is not None else ''
+    m = view.get('method') if isinstance(view.get('method'), dict) else {}
+    method = ''
+    if score is not None or m:
+        method = ('<div class="method" style="--c:#7b3fa0"><h3 style="margin-top:0">How this was read</h3>'
+                  + ('<div class="big"><b>%d%%</b><span class="soft">confidence%s</span></div><div class="bar"><i style="width:%d%%"></i></div>'
+                     % (score, (' · ' + _e(c.get('level'))) if c.get('level') else '', score) if score is not None else '')
+                  + ('<p>' + _e(m.get('rationale')) + '</p>' if m.get('rationale') else '')
+                  + (('<p class="motlabel">Read from</p>' + _chips(c.get('basedOn'))) if _l(c.get('basedOn')) else '')
+                  + (('<p class="motlabel">How you show up online</p>' + _items(m.get('activity'))) if _l(m.get('activity')) else '') + '</div>')
+    first = str(name or '').split(' ')[0]
+    title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
+    kind = ' · '.join(x for x in [_s(ov, 'type'), _s(ov, 'nickname')] if x)
+    banner = ('<header class="banner" id="top"><div class="row"><div class="txt"><div class="kicker">PsycheAI · Psyche Report</div><h1>' + _e(title) + '</h1>'
+              + ('<div class="sub">' + _e(when) + (' · ' + _e(kind) if kind else '') + '</div>' if (when or kind) else '')
+              + (('<div class="who">' + (_ring(score) if score is not None else '') + '<span>Most like <b>' + _e(_s(ov, 'character')) + '</b></span></div>') if _s(ov, 'character') else '')
+              + '</div>' + ('<img class="cardpic" alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '">' if card_png else '') + '</div></header>')
+    bar = '<nav aria-label="Sections">' + ''.join(nav) + '<button type="button" data-fold>Collapse all ▲</button></nav>'
+    foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-            '<title>Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr" data-id="' + _view_id(view) + '">'
-            '<div class="pr-head"><h1>Psyche Report</h1><span>PsycheAI</span></div>'
-            + ''.join(parts) + conf + '<button type="button" class="fold" id="fold">Collapse the report ▲</button></main><script>' + W_JS + '</script></body></html>')
+            '<title>' + _e(title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method
+            + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div><script>' + W_JS + '</script></body></html>')
 
 
 # ---------- the phone check (README "The phone check") ----------
@@ -788,26 +766,37 @@ document.getElementById('collapse').addEventListener('click',function(){
 </script></body></html>'''
 
 
-def local_widget(r):
-    """The report in short, and the widget: the finished page, also saved in out/."""
+def local_report(r):
+    """The report as one HTML file in out/, to attach right after the card (README "The report as a file")."""
     out = {'sections': r.get('sections', [])}
-    page = widget_html(r.get('view'))
+    kept = read_first([REPORT, REPORT_KEPT]) or {}
+    card = None
+    try:
+        pics = sorted(f for f in os.listdir(OUT) if f.lower().endswith('.png'))
+        if pics:
+            with open(os.path.join(OUT, pics[-1]), 'rb') as f:
+                card = base64.b64encode(f.read()).decode()
+    except OSError:
+        pass
+    try:
+        when = datetime.fromtimestamp(os.path.getmtime(LAST)).strftime('%-d %B %Y')
+    except (OSError, ValueError):
+        when = ''
+    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card)
     if not page:
         return out
-    out['widget'] = page
-    out['controls'] = controls_html(r.get('view'))
-    out['show'] = ('Show widget as one interactive HTML widget, exactly as given, then controls as a second widget right under it, '
-                   'exactly as given: both, every time, never skipping controls.')
     try:
         os.makedirs(OUT, exist_ok=True)
         for old in os.listdir(OUT):
             if old.lower().endswith('.html'):
                 os.remove(os.path.join(OUT, old))
-        path = os.path.join(OUT, 'Psyche Report ' + saved_at() + '.html')
+        first = re.sub(r'[^\w -]', '', str(kept.get('name') or '').split(' ')[0])[:30]
+        path = os.path.join(OUT, 'Psyche Report' + (' - ' + first if first else '') + ' ' + saved_at() + '.html')
         with open(path, 'w', encoding='utf-8') as f:
             f.write(page)
         os.chmod(path, 0o600)
-        out['widgetFile'] = path
+        out['report'] = path
+        out['show'] = 'Attach report, this file, right after the card: it is their whole Psyche Report. No widget, and no PDF unless they ask for it.'
     except OSError:
         pass
     return out
@@ -815,7 +804,7 @@ def local_widget(r):
 
 PARTS = {
     'card': local_card,
-    'summary': local_widget,
+    'summary': local_report,
     'pdf': local_pdf,
     'next': lambda r: {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')},
 }
@@ -826,6 +815,9 @@ def saved(out):
     # The last Psyche's PDF goes, so only this one's can be attached: show pdf fetches it.
     shutil.rmtree(OUT, ignore_errors=True)
     write_private([LAST], out)
+    # The PDF is fetched now, while its link works (it lasts 30 minutes), and attached only
+    # when they ask for it (show pdf): it stays here in the meantime.
+    local_pdf(out)
     return {'ok': True, 'saved': True, 'parts': list(PARTS)}
 
 # ---------- the digest (README "The digest in the workspace") ----------
@@ -2054,7 +2046,7 @@ UNSIGNED = ('show', 'after', 'first', 'namesFirst')
 LABELS = frozenset([
     'Generate my Psyche', 'Generate my Psyche. DMs included (Recommended)', 'Generate my Psyche. DMs excluded', 'What will I learn?', 'Is it private?',
     'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Not now',
-    'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
+    'Reveal my roast 🔥', 'Get the PDF', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
     'Facebook and Messenger', 'Facebook posts only', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
     'Done', 'Yes', 'No thanks', 'Someone else', 'I\'ll share it myself', 'Sync with someone else', 'Sync with someone new', 'Write it again',
@@ -2092,6 +2084,8 @@ def call(tool, args):
     acc = account()
     if tool == 'sync_with':
         keep_keys(text=args.get('link'))     # the code in a friend's link is the key to their card and your Sync
+    if tool == 'publish_psyche':
+        args = dict(args, forFile=True)     # the whole report, evidence included, for the report file (README "The report as a file")
     msg = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': tool, 'arguments': args}}
     status, body = post('/mcp', msg, acc['access_token'], extra=key_headers())
     if status == 401:
