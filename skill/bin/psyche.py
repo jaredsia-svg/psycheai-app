@@ -63,7 +63,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 46
+RELEASE = 47
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -210,13 +210,16 @@ W_BANDS = {'steady': ('#2f7d5b', '#e3f4ec'), 'mixed': ('#9a5b12', '#fdf1e2'), 'u
 W_CSS = '''
 :root{color-scheme:light}
 *{box-sizing:border-box;font-family:inherit}
-html,body{margin:0;padding:0;background:#faf7fb}
+html,body{margin:0;padding:0;background:#faf7fb;scrollbar-width:none}
+html::-webkit-scrollbar,body::-webkit-scrollbar,.scroll::-webkit-scrollbar{display:none;width:0;height:0}
+.scroll{position:relative}
+.panel .scroll{height:var(--panel,560px);overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-radius:16px}
 body{font-family:%(font)s;color:#241a2e;font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%%;text-rendering:optimizeLegibility}
 .pr{max-width:720px;margin:0 auto;padding:12px}
 .pr-head{display:flex;align-items:baseline;gap:8px;margin:2px 4px 12px}
 .pr-head h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em}
 .pr-head span{color:#6b6076;font-size:13px}
-.part{background:#fff;border:1px solid #e2d8e9;border-radius:16px;margin:0 0 12px;box-shadow:0 1px 2px rgba(36,26,46,.05),0 6px 20px rgba(36,26,46,.05);overflow:hidden;scroll-margin-top:8px}
+.part{background:#fff;border:1px solid #e2d8e9;border-radius:16px;margin:0 0 12px;box-shadow:0 1px 2px rgba(36,26,46,.05),0 6px 20px rgba(36,26,46,.05);overflow:hidden;scroll-margin-top:32px}
 .part.open{border-top:3px solid var(--c)}
 .part>button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:12px;width:100%%;padding:14px 16px;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
 .part>button:focus-visible{outline:2px solid var(--c);outline-offset:-2px;border-radius:14px}
@@ -290,9 +293,22 @@ li{margin:3px 0}
 
 # Taps: one section open at a time. Closing the others happens first, then the
 # opened section's top is brought into view, so what's above it never hides it.
+# On a laptop Muse gives the widget a fixed height and the page scrolls itself:
+# the section goes to the top, a line down (32px) to clear Muse's fade. On a
+# phone Muse makes the widget as tall as the page and the chat scrolls, which
+# the page can't move, so closing a long section above made the chat jump; on
+# a touch screen the sections sit in a panel about two thirds of the screen
+# tall that scrolls inside itself, and that panel is what's scrolled.
 W_JS = '''
 (function(){
 var parts=[].slice.call(document.querySelectorAll('.part'));
+var box=document.querySelector('.scroll');
+var panel=!!(window.matchMedia&&matchMedia('(hover: none) and (pointer: coarse)').matches);
+if(panel){document.documentElement.style.setProperty('--panel',Math.round(Math.max(420,Math.min(640,(screen.height||820)*0.68)))+'px');document.body.classList.add('panel');}
+function toTop(p){
+  if(panel){var y=Math.max(0,p.offsetTop-8);try{box.scrollTo({top:y,behavior:'smooth'});}catch(e){box.scrollTop=y;}return;}
+  try{p.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){p.scrollIntoView(true);}
+}
 parts.forEach(function(p){
   p.querySelector('button').addEventListener('click',function(){
     var opening=!p.classList.contains('open');
@@ -300,14 +316,14 @@ parts.forEach(function(p){
     if(!opening)return;
     p.classList.add('open');p.querySelector('button').setAttribute('aria-expanded','true');
     requestAnimationFrame(function(){requestAnimationFrame(function(){
-      try{p.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){p.scrollIntoView(true);}
+      toTop(p);
     });});
   });
 });
 [].slice.call(document.querySelectorAll('.rate')).forEach(function(r){
   var up=r.children[0],down=r.children[1],off=r.nextElementSibling;
   up.addEventListener('click',function(){var on=up.getAttribute('aria-pressed')!=='true';up.setAttribute('aria-pressed',on);down.setAttribute('aria-pressed','false');off.classList.remove('show');});
-  down.addEventListener('click',function(){var on=down.getAttribute('aria-pressed')!=='true';down.setAttribute('aria-pressed',on);up.setAttribute('aria-pressed','false');off.classList.toggle('show',on);if(on)off.querySelector('textarea').focus();});
+  down.addEventListener('click',function(){var on=down.getAttribute('aria-pressed')!=='true';down.setAttribute('aria-pressed',on);up.setAttribute('aria-pressed','false');off.classList.toggle('show',on);if(on)off.querySelector('textarea').focus({preventScroll:true});});
 });
 var tip=document.getElementById('mtip');
 [].slice.call(document.querySelectorAll('[data-m]')).forEach(function(el){
@@ -519,8 +535,8 @@ def widget_html(view):
                ('<div class="soft">Read from: ' + _e(', '.join(x for x in _l(c.get('basedOn')) if isinstance(x, str))) + '</div>') if _l(c.get('basedOn')) else '')) if score is not None else ''
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>Your Psyche Report</title><style>' + W_CSS + '</style></head><body><main class="pr">'
-            '<div class="pr-head"><h1>Your Psyche Report</h1><span>PsycheAI</span></div>'
-            + ''.join(parts) + conf + '</main><script>' + W_JS + '</script></body></html>')
+            '<div class="pr-head"><h1>Your Psyche Report</h1><span>PsycheAI</span></div><div class="scroll">'
+            + ''.join(parts) + conf + '</div></main><script>' + W_JS + '</script></body></html>')
 
 
 def local_widget(r):

@@ -2597,7 +2597,12 @@ print(json.dumps({'page': m.widget_html(v), 'empty': [m.widget_html(x) for x in 
     /body\{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;/.test(css) &&
     /\.radar text\{font-family:-apple-system/.test(css) && !/serif;?\s*[^-]/.test(css.replace(/sans-serif/g, '')) && /html,body\{[^}]*background:#faf7fb/.test(css) && /\.part\{background:#fff/.test(css) && /color-scheme:light/.test(css));
   check('the first section opens; a tap closes the others first, then opens it and brings its top into view', /<section class="part open"[^>]*data-section="Overview"/.test(page) &&
-    (page.match(/class="part open"/g) || []).length === 1 && /parts\.forEach\(function\(q\)\{q\.classList\.remove\('open'\)[\s\S]*if\(!opening\)return;[\s\S]*p\.classList\.add\('open'\)[\s\S]*scrollIntoView\(\{block:'start'/.test(page));
+    (page.match(/class="part open"/g) || []).length === 1 && /parts\.forEach\(function\(q\)\{q\.classList\.remove\('open'\)[\s\S]*if\(!opening\)return;[\s\S]*p\.classList\.add\('open'\)[\s\S]*toTop\(p\)/.test(page) &&
+    /function toTop\(p\)\{\s*if\(panel\)\{var y=Math\.max\(0,p\.offsetTop-8\);try\{box\.scrollTo\(/.test(page) && /scrollIntoView\(\{block:'start'/.test(page));
+  check('on a laptop the opened title lands a line down (32px) and no scrollbar shows; on a touch screen the sections are a panel that scrolls itself',
+    /\.part\{[^}]*scroll-margin-top:32px/.test(css) && /html,body\{[^}]*scrollbar-width:none/.test(css) && /::-webkit-scrollbar\{display:none/.test(css) &&
+    /\.panel \.scroll\{height:var\(--panel,560px\);overflow-y:auto/.test(css) && /matchMedia\('\(hover: none\) and \(pointer: coarse\)'\)/.test(page) &&
+    /<div class="scroll"><section class="part open"/.test(page) && /focus\(\{preventScroll:true\}\)/.test(page));
   check('the radar marks the top three on the chart, with no list of them and no bars', (page.match(/<text class="top"/g) || []).length === 3 &&
     (page.match(/r="7" fill="var\(--c\)"/g) || []).length === 3 && !/class="bar"[^]*What drives you/.test(page.split('data-section="What drives you"')[1] || '') && /Tap a point or a name/.test(page));
   check('values and beliefs are one set of chips; scores are clamped; an empty view makes no widget', /<h3>Values and beliefs<\/h3><div class="chips"><span class="chip">Craft<\/span><span class="chip">Fairness<\/span><\/div>/.test(page) &&
