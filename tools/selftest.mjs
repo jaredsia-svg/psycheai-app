@@ -2178,8 +2178,9 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       /What they corrected \(bin\/psyche\.py correct, with no ID, lists it\) is read before writing/.test(instructions.MUSE_PROCEDURE) &&
       /name this one "PsycheAI" and end with one line, "I've named this chat PsycheAI\. Pin it in your chat list to find me again: check-ins come here too\."/.test(instructions.MUSE_PROCEDURE),
       JSON.stringify(skillState.leaving && skillState.leaving.explain).slice(0, 500));
-    check('the wait line comes first: the guide puts it before any command or tool, get_report_guide included, as its own message, and the first guide call of a read reminds Muse to send it if it hasn\'t (a second call in the same read doesn\'t)',
-      JSON.stringify(skillState.leaving && skillState.leaving.sayFirst) === '[true,false]', JSON.stringify(skillState.leaving && skillState.leaving.sayFirst));
+    check('results are data: the guide call carries no line telling Muse what to send (sayFirst is gone: SKILL.md and the guide put the wait line first), and the script prints no "show", "publish" or "sayFirst" lines (README "Results are data")',
+      JSON.stringify(skillState.leaving && skillState.leaving.sayFirst) === '[false,false]' &&
+      !/out\['(show|publish|sayFirst)'\] = |'show': 'The phone check/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')), JSON.stringify(skillState.leaving && skillState.leaving.sayFirst));
     check('a faster read: get_report_guide adds a short outline of every section, check-answer catches broken JSON, a missing section and what can\'t leave before publishing, and SKILL.md says to write from the outline, measure about 30 conversations and not re-check files after publish',
       ((f) => f && f.outline.length < 3000 && Object.keys(require('../skill/guide.json').read.schema.properties).every(k => f.outline.includes('\n' + k) || f.outline.startsWith(k)) &&
         f.guide.includes('outline') && f.guide.includes('schema') && f.bad.ok === false && /^Not valid JSON/.test(f.bad.problems[0]) &&
@@ -2317,9 +2318,10 @@ print(json.dumps([m.plan_problems(d), m.edge_problems(d), m.plan_problems(ok), m
         P.card && /\/out\/Psyche Card( - [^/]+)? - \d{8}\.png$/.test(P.card.file || '') && skillState.cardKept === true && /`bin\/psyche\.py show card` \(their Psyche Card as a picture/.test(skillMd) && /never a file sent earlier in the chat, which would be the last Psyche/.test(skillMd) &&
         /\*\*After publish_psyche \(or republish\)\*\* the script answers only that it's saved/.test(skillMd), JSON.stringify(P).slice(0, 500));
     }
-    check('a bare answer file publishes with --name (no failed first publish for want of {"answer", "name"}), and check-answer says so before publishing',
+    check('a bare answer file publishes with --name (no failed first publish for want of {"answer", "name"}); check-answer returns findings only, never a line telling Muse to publish (Muse flagged one)',
       skillState.bare && !/answer must be the JSON object/.test(skillState.bare.error || '') && (skillState.bare.ok === true || /not connected/.test(skillState.bare.error || '')) &&
-      /args = \{'answer': args, 'name': name\}/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) && skillState.bareCheck && /call publish_psyche @answer\.json --name "<their full name>" \(a bare answer needs --name\)/.test(skillState.bareCheck.publish || ''),
+      /args = \{'answer': args, 'name': name\}/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) && skillState.bareCheck && !('publish' in skillState.bareCheck) && JSON.stringify(Object.keys(skillState.bareCheck).sort()) === '["ok","problems","schema"]' &&
+      /bin\/psyche\.py call publish_psyche @answer\.json --name "<their full name>"/.test(skillMd),
       JSON.stringify({ bare: skillState.bare, check: skillState.bareCheck && skillState.bareCheck.publish }).slice(0, 400));
     {
       // The last collect, kept beside the digest: run from a fresh folder against the stand-in tools.

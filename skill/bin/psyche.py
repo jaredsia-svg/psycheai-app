@@ -71,7 +71,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 122
+RELEASE = 123
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -902,7 +902,6 @@ def local_report(r):
             f.write(page)
         os.chmod(path, 0o600)
         out['report'] = path
-        out['show'] = 'Attach report, this file, right after the card: it is their whole Psyche Report. No widget, and no PDF unless they ask for it.'
     except OSError:
         pass
     return out
@@ -3013,27 +3012,11 @@ def check_answer(path):
     problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + sample_problems(answer)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
-    if isinstance(args, dict) and 'answer' not in args:
-        notes_first = 'publish it as bin/psyche.py call publish_psyche @answer.json --name "<their full name>" (a bare answer needs --name), or wrap it as {"answer": ..., "name": "<their full name>"}'
-    else:
-        notes_first = None
     # Where it differs from the guide's schema below the top: worth fixing, but publish_psyche is the judge.
     notes = [n for n in schema_problems(answer, schema, schema.get('$defs', {})) if not n.startswith('answer is missing ')] if schema else []
-    out = {'ok': not problems, 'problems': problems[:25], 'schema': notes[:20]}
-    if notes_first:
-        out['publish'] = notes_first
-    return out
-
-
-def read_starting(now=None):
-    """Whether this get_report_guide call starts a read: none other in the last half hour (its own mark is the latest)."""
-    now = now or time.time()
-    try:
-        with open(TIMING) as f:
-            marks = json.load(f)
-    except (OSError, ValueError):
-        return True
-    return sum(1 for m in marks if isinstance(m, list) and len(m) == 2 and m[0] == 'call:get_report_guide' and now - m[1] < 1800) <= 1
+    # Findings only: a line here telling the assistant what to run next (it once said "publish it as
+    # bin/psyche.py call publish_psyche …") was flagged by Muse's safety check (README "Results are data").
+    return {'ok': not problems, 'problems': problems[:25], 'schema': notes[:20]}
 
 
 def with_pinned_guide(tool, args, out):
@@ -3046,11 +3029,6 @@ def with_pinned_guide(tool, args, out):
         deep = isinstance(args, dict) and args.get('depth') == 'deep'
         out = {'spec': read['spec'] + (guide.get('deepSpec', '') if deep else ''), 'rubric': read.get('rubric'), 'schema': read['schema']}
         out['outline'] = schema_outline(read['schema'])
-        # The first guide call of a read is where reading starts: the line saying how long it takes goes out
-        # before it, as its own message (README "The wait line comes first"), not at the end with the card.
-        if read_starting():
-            out['sayFirst'] = ('Before reading anything: if step 1\'s line ("On it. ... takes about 5 minutes ...") is not '
-                               'already in the chat for this read, send it now as its own message, then read.')
         return out
     if tool == 'get_sync' and isinstance(out, dict) and 'spec' in out:
         if not guide:
@@ -3516,7 +3494,7 @@ def main(argv):
         print(json.dumps(saved(out) if out.get('ok') else out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'show' and len(argv) >= 2 and argv[1] == 'probe':
-        print(json.dumps({'widget': PROBE_HTML, 'show': 'The phone check: show widget as one interactive HTML widget, exactly as given.'}, ensure_ascii=False))
+        print(json.dumps({'widget': PROBE_HTML}, ensure_ascii=False))
         return
     if argv[0] == 'show' and len(argv) >= 2:
         last = read_first([LAST])
