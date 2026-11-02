@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 106
+RELEASE = 108
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1660,7 +1660,8 @@ def send_timing():
 # ---------- first-run: status, start and both account lists in one call (README "First run in one call") ----------
 STEP_ONE = ("On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready. "
             "Here's what you'll get, in a minute, while you wait.")
-MESSAGES_LINE = "Your messages make it much sharper: that's where you're most yourself."
+# A later read's line, with no reel (the guide's step 1).
+FRESH_STEP_ONE = "On it. Writing your fresh Psyche takes about 5 minutes. I'll show it here when it's ready."
 
 
 def instagram_accounts(data, messages=False):
@@ -1687,9 +1688,35 @@ def instagram_accounts(data, messages=False):
     return found
 
 
+def account_tag(account_id):
+    """A short hash of the account read, so last-collect can mark it next time without keeping its ID."""
+    return hashlib.sha256(('psyche-account:' + str(account_id)).encode()).hexdigest()[:12]
+
+
+def account_choice():
+    """The account question (README "Messages, then the account"): one button per personal account, with its
+    IDs and whether its messages are connected. The question only with more than one account, and the one read
+    last time first, marked "(last time)". Raises when a list can't be read."""
+    ig_list = [a for a in instagram_accounts(ig(IG_CLI, 'accounts')) if not a['professional']]
+    msg = {a['username']: a for a in instagram_accounts(ig(IGM_CLI, 'accounts'), True)}
+    if not ig_list:
+        return {'accounts': None, 'problem': 'No personal Instagram account came back.'}
+    last = (read_first([LAST_COLLECT]) or {}).get('account')
+    buttons = []
+    for a in ig_list:
+        m = msg.get(a['username'])
+        was = len(ig_list) > 1 and last == account_tag(a['id'])
+        buttons.append(dict(label='@' + a['username'] + (' (last time)' if was else ''), last=was,
+                            account_id=a['id'], messages_account_id=m['id'] if m and m['id'] != a['id'] else None,
+                            messages_connected=bool(m and m['connected'])))
+    buttons.sort(key=lambda b: not b['last'])
+    return {'question': 'Which account should I read?' if len(buttons) > 1 else None, 'buttons': buttons}
+
+
 def first_run():
-    """Data only (README "First run in one call"): what start says, the account question and its buttons, each
-    button's accounts, and step 1's line. No instruction to Muse rides in a tool result: SKILL.md says what to do."""
+    """Data only (README "First run in one call"): what start says and its two messages buttons (the welcome,
+    sent before this ran), the account question and its buttons, and step 1's line. No instruction to Muse
+    rides in a tool result: SKILL.md says what to do."""
     account()
     out = {'version': local_version()}
     start = call('start', {})
@@ -1698,27 +1725,11 @@ def first_run():
         out['error'] = start['error']
         return out
     try:
-        ig_list = [a for a in instagram_accounts(ig(IG_CLI, 'accounts')) if not a['professional']]
-        msg = {a['username']: a for a in instagram_accounts(ig(IGM_CLI, 'accounts'), True)}
+        out.update(account_choice())
     except (RuntimeError, RateLimited) as err:
         out['accounts'] = None
         out['problem'] = 'The account lists could not be read here (%s).' % type(err).__name__
         return out
-    if not ig_list:
-        out['accounts'] = None
-        out['problem'] = 'No personal Instagram account came back.'
-        return out
-    buttons = []
-    for a in ig_list:
-        m = msg.get(a['username'])
-        ids = {'account_id': a['id'], 'messages_account_id': m['id'] if m and m['id'] != a['id'] else None}
-        connected = bool(m and m['connected'])
-        buttons.append(dict(label='@' + a['username'], messages=connected, messages_connected=connected, **ids))
-        if connected:
-            buttons.append(dict(label='@' + a['username'] + ' (without my messages)', messages=False, messages_connected=True, **ids))
-    out['question'] = 'Which account should I read?' if len(buttons) > 1 else None
-    out['note'] = MESSAGES_LINE if any(b['messages_connected'] for b in buttons) else None
-    out['buttons'] = buttons
     out['stepOne'] = STEP_ONE + '\n▶ PsycheAI in a minute: ' + str(out.get('reel') or '')
     return out
 
@@ -2741,7 +2752,7 @@ LABELS = frozenset([
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
     'Explain why you said this', 'Correct something', 'More', 'Fresh Psyche', 'Add WhatsApp as data source', 'My data and privacy',
-    'Delete everything', 'Yes, delete everything', 'Cancel', 'Privacy policy'])
+    'Delete everything', 'Yes, delete everything', 'Cancel', 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$')]
 
 
@@ -3109,6 +3120,14 @@ def main(argv):
     if argv[0] == 'first-run':
         print(json.dumps(first_run(), ensure_ascii=False, indent=1))
         return
+    if argv[0] == 'accounts':
+        try:
+            out = account_choice()
+        except (RuntimeError, RateLimited) as err:
+            out = {'accounts': None, 'problem': 'The account lists could not be read here (%s).' % type(err).__name__}
+        out['stepOne'] = FRESH_STEP_ONE
+        print(json.dumps(out, ensure_ascii=False, indent=1))
+        return
     if argv[0] == 'call' and len(argv) >= 2:
         raw = argv[2] if len(argv) > 2 else '{}'
         if raw.startswith('@'):
@@ -3219,7 +3238,8 @@ def main(argv):
         # What it read, kept beside the digest (counts and notes only: no ID, cursor or message), so
         # "last-collect" can show it after a helper ran it (README "The last collect, kept").
         if out.get('read'):
-            write_private([LAST_COLLECT], {'at': datetime.now().strftime('%Y-%m-%d %H:%M'), **{k: out[k] for k in ('ok', 'read', 'notes', 'stopped', 'problems', 'characters') if k in out}})
+            write_private([LAST_COLLECT], {'at': datetime.now().strftime('%Y-%m-%d %H:%M'), 'account': account_tag(opts.get('--account-id')), 'messages': not opts.get('no'),
+                                           **{k: out[k] for k in ('ok', 'read', 'notes', 'stopped', 'problems', 'characters') if k in out}})
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'last-collect':
