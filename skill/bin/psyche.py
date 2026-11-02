@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 98
+RELEASE = 99
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -211,6 +211,15 @@ def local_card(r):
 import html as _html
 
 W_FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif'
+# psycheai.io's own mark, as its site header draws it (docs/index.html .brand-mark), in white at the
+# banner's top right (README "The logo in the banner").
+W_LOGO = ('<div class="logo" aria-label="PsycheAI"><svg viewBox="0 0 140 140" fill="none" stroke="currentColor" stroke-width="7" '
+          'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+          '<path d="M12 70C12 56.745 37.967 46 70 46C102.033 46 128 56.745 128 70C128 83.255 102.033 94 70 94C37.967 94 12 83.255 12 70Z"/>'
+          '<path d="M46 70C46 37.967 56.745 12 70 12C83.255 12 94 37.967 94 70C94 102.033 83.255 128 70 128C56.745 128 46 102.033 46 70Z"/>'
+          '<path d="M41 19.771C52.479 13.143 74.768 30.259 90.785 58C106.801 85.741 110.479 113.602 99 120.229C87.521 126.857 65.232 109.741 49.215 82C33.199 54.259 29.521 26.398 41 19.771Z"/>'
+          '<circle cx="70" cy="70" r="12" fill="currentColor" stroke="none"/></svg><span>PsycheAI</span></div>')
+
 W_PARTS = [
     ('overview', 'Overview', '#7b3fa0'),
     ('whoYouAre', 'Who you are', '#2f7d6b'),
@@ -234,6 +243,8 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webk
 .banner .txt{flex:1;min-width:0}
 .facts{display:inline-block;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
 .lede{margin:6px 0 0;font-size:14.5px;line-height:1.5;opacity:.92;max-width:34em}
+.logo{position:absolute;top:18px;right:18px;display:flex;align-items:center;gap:7px;color:#fff;font-weight:800;font-size:15px;letter-spacing:-.01em}
+.logo svg{width:24px;height:24px;flex:none}
 .banner h1{margin:10px 0 2px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
 .banner .sub{margin-top:8px;font-size:12.5px;opacity:.75}
 .cardbtn{all:unset;flex:none;cursor:zoom-in;-webkit-tap-highlight-color:transparent}
@@ -247,7 +258,8 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webk
 .cardpic{display:block;width:150px;border-radius:14px;box-shadow:0 14px 30px rgba(70,20,100,.28),0 2px 6px rgba(70,20,100,.15);transform:rotate(2.5deg);border:3px solid #fff;transition:transform .2s ease,box-shadow .2s ease}
 .cardbtn:hover .cardpic,.cardbtn:focus-visible .cardpic{transform:rotate(0) scale(1.04);box-shadow:0 18px 36px rgba(70,20,100,.34)}
 .cardbtn em{font-style:normal;font-size:11.5px;line-height:1.3;font-weight:700;color:#7b3fa0;text-align:center}
-@media (max-width:480px){.cardpic{width:112px}.hero.withcard .cardbtn{margin-left:12px}.banner h1{font-size:24px}.facts{font-size:9.5px;letter-spacing:.04em;padding:4px 9px;white-space:nowrap}.lede{font-size:13.5px}}
+@media (max-width:379px){.logo span{display:none}}
+@media (max-width:480px){.logo{top:14px;right:14px;font-size:13px;gap:5px}.logo svg{width:19px;height:19px}.cardpic{width:112px}.hero.withcard .cardbtn{margin-left:12px}.banner h1{font-size:24px}.facts{font-size:9.5px;letter-spacing:.04em;padding:4px 9px;white-space:nowrap}.lede{font-size:13.5px}}
 nav{position:sticky;top:0;z-index:5;margin:0 -14px 14px;padding:10px 14px;background:rgba(250,247,251,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
 @media (min-width:700px){nav{flex-wrap:wrap;overflow:visible}}
@@ -713,7 +725,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
     facts = ' · '.join(x for x in ['%d parts' % len(parts), ('%d pages' % pages) if pages else '', ('%d%% signal strength' % score) if score is not None else ''] if x)
-    banner = ('<header class="banner" id="top"><div class="row"><div class="txt"><div class="facts">' + _e(facts) + '</div><h1>' + _e(title) + '</h1>'
+    banner = ('<header class="banner" id="top">' + W_LOGO + '<div class="row"><div class="txt"><div class="facts">' + _e(facts) + '</div><h1>' + _e(title) + '</h1>'
               + '<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it.</p>'
               + ('<div class="sub">' + _e(when) + '</div>' if when else '')
               + '</div></div></header>')
