@@ -103,6 +103,8 @@ function sendResult(res, r) {
 
 const theme = require('./lib/theme');
 const preview = require('./lib/preview');
+let sampleHtml = null;
+const sampleReport = () => (sampleHtml = sampleHtml || require('node:fs').readFileSync(require('node:path').join(__dirname, 'assets', 'sample-report.html')));
 // PsycheAI's app icon, at the addresses hosts and browsers look for it.
 const ICONS = Object.fromEntries([['/favicon.ico', 'favicon.ico', 'image/x-icon'], ['/icon.png', 'icon-512.png', 'image/png'],
   ['/icon-192.png', 'icon-192.png', 'image/png'], ['/apple-touch-icon.png', 'apple-touch-icon.png', 'image/png']]
@@ -290,6 +292,12 @@ async function route(req, res) {
       const held = join.hold((await readParams(req)).get('read') || '');
       if (held.error) return send(res, 400, page('Not sent', esc(held.error)), 'text/html');
       return sendResult(res, oauth.startWeb('join', { joinId: held.id }));
+    }
+    // A sample of the report file the skill makes, for someone deciding whether to try it (README "A sample report").
+    if (/^\/sample\/?$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
+      const html = sampleReport();
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600', 'Content-Length': html.length });
+      return res.end(req.method === 'HEAD' ? undefined : html);
     }
     // The image a shared install or Psyche link previews with (lib/preview.js).
     if (url.pathname === '/preview.png' && req.method === 'GET') {

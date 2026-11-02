@@ -71,7 +71,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 111
+RELEASE = 112
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -377,6 +377,11 @@ p{margin:0 0 10px}
 .plan p b{display:block;font-weight:700;line-height:1.35}
 .plan p span{display:block;color:var(--soft);font-size:14px}
 .plan p em{display:inline-block;margin-top:4px;padding:1px 8px;border-radius:999px;background:#f3e9f8;color:#6a3590;font-size:11.5px;font-style:normal;font-weight:700}
+.sample{display:grid;justify-items:center;gap:10px;margin:14px 0 16px;padding:16px;border-radius:20px;background:#fff;border:1px solid #e6dcec;text-align:center}
+.sample p{margin:0;color:var(--soft);font-size:14px;max-width:46ch}
+.sample p.get{color:var(--accent);font-weight:700}
+.sample .cardbtn#cardopen{float:none;margin:4px 0 0}
+.sample .cardpic{width:min(320px,76vw);transform:none}
 .roast{background:#fff;border:1px solid #f0c9d7;border-radius:20px;padding:0;margin:4px 0 14px;overflow:hidden}
 .roast summary{list-style:none;cursor:pointer;display:grid;gap:4px;padding:16px 18px;background:linear-gradient(120deg,#5b2a86,#c2366d);color:#fff}
 .roast summary::-webkit-details-marker{display:none}
@@ -707,7 +712,7 @@ W_BUILD = {'overview': _overview, 'whoYouAre': _who, 'whatDrivesYou': _drives, '
 W_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
 
-def report_html(view, name='', when='', card_png=None, pages=None, doc_title=None, bonus=None):
+def report_html(view, name='', when='', card_png=None, pages=None, doc_title=None, bonus=None, sample=None):
     """The whole report as one self-contained HTML file, from view (full, with the evidence, when given), and
     the roast (bonus, from the report kept here) as its appendix, closed until they open it (README "The roast in the appendix")."""
     if not isinstance(view, dict):
@@ -716,7 +721,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     parts, nav, i = [], [], 0
     for key, title, colour in W_PARTS:
         data = view.get(key) if isinstance(view.get(key), dict) else {}
-        inner, tease = (_who(data, ov.get('nickname') or '') if key == 'whoYouAre' else _overview(data, card_png) if key == 'overview' else W_BUILD[key](data))
+        inner, tease = (_who(data, ov.get('nickname') or '') if key == 'whoYouAre' else _overview(data, None if sample else card_png) if key == 'overview' else W_BUILD[key](data))
         if not inner:
             continue
         sid = 'p%d' % i
@@ -754,10 +759,17 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
               + '<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it.</p>'
               + ('<div class="sub">' + _e(when) + '</div>' if when else '')
               + '</div></div></header>')
+    # A sample (README "A sample report"): the card large at the top, with a line saying whose it is and how to get one's own.
+    if sample and card_png:
+        banner += ('<div class="sample"><p>' + _e(sample.get('note') or '') + '</p>'
+                   '<button type="button" class="cardbtn top" id="cardopen" aria-label="Open the Psyche Card full size">'
+                   '<img class="cardpic" alt="A sample Psyche Card" src="data:image/png;base64,' + card_png + '"><em>Tap to open</em></button>'
+                   + ('<p class="get">' + _e(sample['cta']) + '</p>' if sample.get('cta') else '') + '</div>')
     bar = '<nav aria-label="Sections">' + ''.join(nav) + '<button type="button" data-fold>Collapse all ▲</button></nav>'
     # The picture is embedded once, in the Overview; the full-screen view borrows it when opened.
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card"><span>Tap to close</span></div>' if card_png else ''
-    foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.</footer>')
+    foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>' + ('A sample report for a fictional reader. Yours is made in your own Muse workspace, and PsycheAI keeps no copy of it.'
+            if sample else 'This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.') + '</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + roast
             + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + '</script></body></html>')

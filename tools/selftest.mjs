@@ -1173,7 +1173,7 @@ function signup(email, d) {
         all.length > 100 && boxes.length >= 1 && !/Mei|Ana|Mulan|Moana|ENFJ|hiking|platonic|howToPartner/.test(all) && !boxes.some(b => /Mulan|Moana|hiking|platonic|howToPartner|quiet organiser/.test(b)) &&
         !all.includes(code) && store.kvGet('synccode', keyring.syncId(code)).u === user.id, JSON.stringify({ len: all.length, n: boxes.length, plain: (/Mei|Ana|Mulan|Moana|ENFJ|hiking|platonic|howToPartner/.exec(all) || [null])[0], code: all.includes(code) }));
     }
-    check('Sync: someone not here yet gets a one-paste invite: install the skill, make their card, sync', /^Install the skill at \S+\/sync\/[A-Za-z0-9_-]{22}\. Generate my Psyche and sync with Mei\.$/.test(invite.invite) && sync.linkOwner(invite.invite) === user.id);
+    check('Sync: someone not here yet gets a one-paste invite: what their friend got and that it\'s private, then install the skill, make their card, sync', /^I got [^.]{2,40}\. It reads your Instagram privately in Muse\. Want to see how we sync\? Install the skill at \S+\/sync\/[A-Za-z0-9_-]{22}\. Generate my Psyche and sync with Mei\.$/.test(invite.invite) && require('../lib/skill.js').installPrompt({ code: 'abcdefgh', name: 'Mei', character: 'Mulan<script>' }) === 'I got Mulanscript. It reads your Instagram privately in Muse. Want to see how we sync? Install the skill at localhost:8787/sync/abcdefgh. Generate my Psyche and sync with Mei.' && sync.linkOwner(invite.invite) === user.id);
     const keys = JSON.stringify(Object.keys(store.kvAll ? Object.fromEntries(store.kvAll('syncreq')) : {})) + JSON.stringify(Object.fromEntries(store.kvAll('synchandle')));
     check('Sync: no handle appears in a key', !/jun\.lee|mei\.tan/i.test(keys));
     check('Sync: only the card is kept, locked under the code, never the report', !/The quiet organiser/.test(JSON.stringify(store.kvGet('synccard', user.id))) &&
@@ -1657,7 +1657,7 @@ function signup(email, d) {
       /It takes about 5 minutes\. Then ask me anything, or sync with a friend to see how you click\./.test(fresh.say) && /I'll write your Psyche from your Instagram, no questions asked/.test(fresh.say) && fresh.reel === 'https://www.instagram.com/reel/DewpyUayqTN/' && !fresh.attach && /Say it as written, with its two buttons, then go on as the guide's step 0 says: on their tap, the account question only if they have more than one account, then MESSAGES FIRST when they chose their messages and those aren't connected, then step 1\. No other buttons\./.test(fresh.after) && JSON.stringify(fresh.options) === '[{"id":"messages","label":"Include my messages (Recommended)"},{"id":"posts","label":"Posts only"}]' &&
       ((process.env.PSYCHE_REEL_URL = 'https://www.instagram.com/reel/abc/'), mcp.startMenu({ id: 'u_reel' }).reel === 'https://www.instagram.com/reel/abc/') && (delete process.env.PSYCHE_REEL_URL, true) &&
       fresh.say.endsWith(require('../lib/mcp.js').GO_AHEAD + '\n\n' + mcp.MESSAGES_LINE) && /^🔒 Read here in Muse, on your own account: your posts and chat messages stay here\.\n🙈 Your data and chat messages are de-identified before your Psyche is written: names, handles, phone numbers and links removed, and what others wrote never quoted\.\n🗑️ PsycheAI keeps no copy of your report, so it stays private to you\.$/.test(require('../lib/mcp.js').GO_AHEAD) && !/look again/.test(fresh.say) &&
-      /word for word in four short parts: "I'm PsycheAI, your personal AI coach that already knows you\."/.test(instructions.MUSE_PROCEDURE) && !/look again the same way/.test(instructions.MUSE_PROCEDURE) &&
+      /word for word in five short parts: "I'm PsycheAI, your personal AI coach that already knows you\."/.test(instructions.MUSE_PROCEDURE) && /Then: "👀 See a sample report first: psycheai\.io\/muse-sample" \(a link to open\)\./.test(instructions.MUSE_PROCEDURE) && fresh.say.includes('👀 See a sample report first: psycheai.io/muse-sample') && /x/.test(instructions.MUSE_PROCEDURE) && !/look again the same way/.test(instructions.MUSE_PROCEDURE) &&
       /"▶ PsycheAI in a minute: <reel>"\. It's a link to open, not a file: don't download it\./.test(instructions.MUSE_PROCEDURE) &&
       /psycheai\.io\/muse-privacy for the details: PsycheAI keeps none of your report, and a short summary of it is kept, locked, for the card picture and Syncs/.test(instructions.MUSE_PROCEDURE));
     check('someone with a read gets Ask, Sync, a Fresh Psyche and More (check-ins, Syncs, Pair, WhatsApp, their data), one source button for WhatsApp, Facebook and Messenger', JSON.stringify(back.options.map(o => o.label)) ===
@@ -2432,6 +2432,18 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
     check('the Muse skill: the install prompt is one short line, the short link and "generate my Psyche"; the link\'s copy says how to install, and without a word on messages, the go-ahead comes first',
       skillMod.installPrompt() === 'Install the skill at localhost:8787/install and generate my Psyche' && skillMod.installPrompt({ code: 'abcdefgh', name: 'Mei' }).endsWith('/sync/abcdefgh. Generate my Psyche and sync with Mei.') &&
       /that is their go-ahead: step 0's message with its messages question, then the account question only with more than one account, then MESSAGES FIRST, then step 1, with no Generate button/.test(skillMod.skillMd()) && /it is ready once `python3 -m py_compile bin\/psyche\.py` passes and `bin\/psyche\.py status` says connected/.test(skillMod.skillMd()), skillMod.installPrompt());
+  }
+  {
+    const sampleHtml = require('node:fs').readFileSync(new URL('../assets/sample-report.html', import.meta.url), 'utf8');
+    const served = await fetch(base + '/sample');
+    const servedText = await served.text();
+    check('the sample report (README "A sample report"): the skill\'s own report file for the fictional Emily Carter, her card large at the top with the sample line and how to get one\'s own, every part, the roast closed at the end, and a footer that says it is a sample; served at /sample',
+      served.status === 200 && /text\/html/.test(served.headers.get('content-type') || '') && servedText === sampleHtml &&
+      /<div class="sample"><p>A sample: Emily Carter is fictional\. This is the report file PsycheAI makes in your Muse chat, written from your own Instagram\.<\/p><button type="button" class="cardbtn top" id="cardopen"/.test(sampleHtml) &&
+      /Get yours: paste psycheai\.io\/muse into Muse/.test(sampleHtml) && (sampleHtml.match(/class="cardpic"/g) || []).length === 1 &&
+      ['Overview', 'Who you are', 'What drives you', 'How you connect', 'How you work', 'Putting it together'].every(t => sampleHtml.includes('<span class="ttl">' + t + '</span>')) &&
+      /<details class="roast" id="roast">/.test(sampleHtml) && /A sample report for a fictional reader\./.test(sampleHtml) && !/This file was made in your own Muse workspace/.test(sampleHtml),
+      served.status + ' ' + sampleHtml.length);
   }
   check('tools/list does not leak handlers', list.body.result.tools.every(t => !('run' in t)) && !JSON.stringify(list.body).includes('=>'));
 
