@@ -314,7 +314,7 @@ async function route(req, res) {
       const BASE = require('./lib/config').BASE_URL;
       const shared = code
         ? { title: (name || 'A friend') + ' wants to see how you two sync', description: 'Paste this link into Muse: PsycheAI writes your Psyche Card from your own Instagram and shows how you two click.' }
-        : { title: 'PsycheAI for Muse', description: 'Your personal AI coach that already knows you: a Psyche Card and report from your own Instagram. Paste into Muse: Install the skill at app.psycheai.io/install' };
+        : { title: 'PsycheAI for Muse', description: 'Your personal AI coach that already knows you: a Psyche Card and report from your own Instagram. Paste into Muse: psycheai.io/muse' };
       // A link previewer (WhatsApp, an Instagram DM, iMessage…) gets the preview, with the same text as its body (README "Link previews").
       if (!inBrowser && preview.isPreviewer(req.headers['user-agent'])) {
         return send(res, 200, preview.page({ ...shared, url: BASE + url.pathname, base: BASE, text: skill.bootstrap(code ? { code, name } : {}) }), 'text/html');
@@ -322,10 +322,10 @@ async function route(req, res) {
       if (!inBrowser) return send(res, 200, skill.bootstrap(code ? { code, name } : {}), 'text/markdown');
       // /install opened in a browser: what PsycheAI is and the message to paste into Muse.
       if (!code) {
-        const msg = skill.installPrompt();
+        const msg = skill.shortInstall();
         return send(res, 200, theme.page('PsycheAI for Muse',
           `<h1>Your personal AI coach that already knows you</h1><p>PsycheAI reads your own Instagram in Muse and writes your Psyche: a Psyche Card to share and a private report on your type, what drives you, how you connect and how you work.</p>` +
-          `<p><b>Paste this into Muse</b> and send it. When Muse asks to allow PsycheAI, tap <b>Allow all</b>, so it only asks once.</p>` +
+          `<p><b>Paste this link into Muse</b> and send it. When Muse asks to allow PsycheAI, tap <b>Allow all</b>, so it only asks once.</p>` +
           `<pre id="invite" style="white-space:pre-wrap;word-break:break-word;background:var(--alt);border:1.5px dashed var(--line);border-radius:12px;padding:12px;font-size:.9rem">${esc(msg)}</pre>` +
           `<p><button type="button" id="copy">Copy</button></p><script>document.getElementById('copy').onclick=function(){navigator.clipboard.writeText(document.getElementById('invite').textContent).then(function(){document.getElementById('copy').textContent='Copied';});};</script>` +
           `<p>Free. Your posts and messages are never stored.</p>`, { head: preview.tags({ ...shared, url: BASE + url.pathname, base: BASE }) }), 'text/html');
