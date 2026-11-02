@@ -1,44 +1,44 @@
 #!/usr/bin/env python3
 """PsycheAI for Muse, as a skill: calls PsycheAI's tools at app.psycheai.io.
 
-  bin/psyche.py status                 make (or check) this workspace's PsycheAI account,
+  python3 bin/psyche.py status                 make (or check) this workspace's PsycheAI account,
                                        and say whether a newer version of this skill exists
-  bin/psyche.py update                 fetch the newest version of this skill's files
-  bin/psyche.py call TOOL [JSON]       run a PsycheAI tool, e.g. call start, or
+  python3 bin/psyche.py update                 fetch the newest version of this skill's files
+  python3 bin/psyche.py call TOOL [JSON]       run a PsycheAI tool, e.g. call start, or
                                        call publish_psyche '{"answer": {...}, "name": "..."}'
-  bin/psyche.py call TOOL @FILE        the same, with the JSON arguments read from FILE
-  bin/psyche.py report                 their latest Psyche Report (kept here when it was
+  python3 bin/psyche.py call TOOL @FILE        the same, with the JSON arguments read from FILE
+  python3 bin/psyche.py report                 their latest Psyche Report (kept here when it was
                                        saved), for answering their questions in later chats
-  bin/psyche.py prep FILE... [--me NAME] [--deep]
+  python3 bin/psyche.py prep FILE... [--me NAME] [--deep]
                                        WhatsApp chats they exported (.zip or .txt), made
                                        ready here, on their device: their own messages, dated,
                                        after what they answer, everyone else "Friend A", "Friend B"..., numbers,
                                        emails, links and handles taken out. Writes
                                        sources/whatsapp.txt; the export itself is never read
                                        for the report and never sent anywhere
-  bin/psyche.py collect-facebook [--me NAME] [--no-messenger]
+  python3 bin/psyche.py collect-facebook [--me NAME] [--no-messenger]
                                        their own Facebook posts and their side of their busiest
                                        Messenger chats, de-identified, into sources/facebook.txt; a
                                        service not connected answers with its connect link
-  bin/psyche.py show PART              one part of what publish_psyche gave back, kept here:
+  python3 bin/psyche.py show PART              one part of what publish_psyche gave back, kept here:
                                        card (saved as a picture), summary, pdf (saved as a file), links or next (README "One part at a time")
-  bin/psyche.py checkin [ID done|not-yet|drop] [--note TEXT]
+  python3 bin/psyche.py checkin [ID done|not-yet|drop] [--note TEXT]
                                        their plan from the kept report and where each step
                                        stands; with an ID, record their answer (kept here only)
-  bin/psyche.py why [ID]               the report's main findings to pick from; with an ID,
+  python3 bin/psyche.py why [ID]               the report's main findings to pick from; with an ID,
                                        what that finding rests on, from the report and the digest
-  bin/psyche.py correct [ID not-me|partly|used-to-be --note TEXT]
+  python3 bin/psyche.py correct [ID not-me|partly|used-to-be --note TEXT]
                                        what they say is off (kept here only); no ID lists them
-  bin/psyche.py build-digest           digest/digest.md built from work/items.jsonl and work/meta.json
+  python3 bin/psyche.py build-digest           digest/digest.md built from work/items.jsonl and work/meta.json
                                        (what was read, saved as it was read), then checked
-  bin/psyche.py check-answer FILE      the answer file checked as publish_psyche will take it:
+  python3 bin/psyche.py check-answer FILE      the answer file checked as publish_psyche will take it:
                                        JSON, the schema, and what may leave the workspace
-  bin/psyche.py republish              save their kept report (report.json) to PsycheAI again,
+  python3 bin/psyche.py republish              save their kept report (report.json) to PsycheAI again,
                                        for a fresh link, card and PDF, with no new read
-  bin/psyche.py check-digest           check digest/digest.md, the summary of their own
+  python3 bin/psyche.py check-digest           check digest/digest.md, the summary of their own
                                        words a read is written from: its size, its dates,
                                        and that no handle, link, email or number is left
-  bin/psyche.py forget [--everything]  delete the working files (work/, sources/, notes/);
+  python3 bin/psyche.py forget [--everything]  delete the working files (work/, sources/, notes/);
                                        with --everything, the digest and the report too
 
 The account is private and needs nothing typed: on first use this asks
@@ -71,7 +71,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 123
+RELEASE = 124
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1201,6 +1201,50 @@ SCRUB = [
     (re.compile(r'\+?\d[\d ()\-]{6,}\d'), '[number]'),
 ]
 
+# Common first names, removed wherever they turn up in their own words (captions, stories, comments,
+# messages, bio) as [name]: a friend named in a story ("thanks arthur!") isn't a conversation
+# participant, so the per-chat names miss them (README "Names in their own words"). Words that are also
+# names (will, may, grace, mark, jack, hope, faith…) are left out, so ordinary words survive.
+COMMON_NAMES = frozenset("""
+    aaron abby abigail adam adeline adrian agnes ahmad aidan aiden aisha alan albert alex alexa
+    alexander alexandra alexis alfred ali alice alicia alison allison alyssa amanda amelia
+    amir amy andre andrea andrew andy angela angelina angie anita ann anna annabelle anne annie
+    anthony antonio arjun arnold arthur ashley audrey ava avery bailey barbara beatrice becky
+    belinda ben benedict benjamin bernard beth bethany betty beverly bianca bobby bonnie brad
+    bradley brandon brenda brendan brian bridget brittany bruce bryan bryce caleb calvin cameron
+    camila candice carl carla carlos carmen caroline carolyn casey cassandra catherine cecilia
+    celeste celine chad charlene charles charlie charlotte charmaine cheryl chloe chris christina
+    christine christopher cindy claire clara clarence claudia clement colin connie connor conor
+    constance corey craig cynthia daisuke damian damien dan daniel danielle danny darren darryl
+    david debbie deborah declan denise dennis derek desiree desmond diana diane dominic donald donna
+    doris dorothy douglas dylan edmund edward edwin eileen elaine eleanor elena eli elijah elisa
+    elise eliza elizabeth ella ellen ellie eloise elsie emily emma eric erica erin esther ethan
+    eugene evelyn fabian farah fatimah felicia felix fernando fiona francesca francis gabriel
+    gabriella gareth gavin genevieve geoffrey george gerald geraldine germaine gillian gina gloria
+    gordon graham greg gregory gwen gwendolyn hailey haley hannah harold harriet harrison harry
+    heidi helen henry herbert howard hugo huimin ian ingrid irene isaac isabel isabella isabelle
+    isaiah jacob jacqueline jake james jamie jane janet janice jared jason jasper jeff jeffrey jen
+    jenna jennifer jenny jeremy jerome jess jesse jessica jessie jiahui jill jim joanna joanne
+    jocelyn joe joel joey john johnny jolene jolin jon jonathan joseph josh joshua joyce juan judith
+    judy julia julian juliana julie justin karen karthik kate katherine kathleen kathryn kathy katie
+    kayla keith kelly ken kenneth kenny kevin kim kimberly kirsten kristen kyle lachlan laura lauren
+    lawrence leah leon leonard leslie lewis liam lillian linda lindsay lionel lisa liz lizzie logan
+    lorraine louis louisa louise lucas lucy luis luke lydia lynn madeleine maggie mandy marcus
+    margaret maria marian marianne marie marilyn martha martin marvin mary matilda matt matthew
+    maureen maxwell meg megan melanie melissa melvin michael michaela michelle mikayla mike mildred
+    mohamed mohammad mohammed monica muhammad nadia naomi natalie natasha nate nathan nathaniel neil
+    nicholas nicole nigel noah norman nurul oliver olivia oscar owen pamela patricia patrick paul
+    paula pauline pete peter phil philip phoebe phyllis pooja preeti priscilla priya rachel rahul
+    ralph randy raphael rebecca regina reuben rhys ricardo richard rick ricky rita robert roberto
+    rodney roger ronald rosalind rosemary russell ruth ryan sabrina sally sam samantha samuel sandra
+    sara sarah scott sean sebastian selina serena seth shane shannon sharon sheila shermaine shirley
+    siti sophia sophie stanley stella stephanie stephen steve steven suresh susan sylvia tamara
+    tanya terence teresa theodore theresa thomas tiffany tim timothy tina tobias todd tom tony tracy
+    trevor tyler valerie vanessa veronica victor vincent vivian wallace walter weiming wendy wesley
+    william winnie winston xavier xinyi yvonne zach zachary zack zoe
+""".split())
+NAME_RX = re.compile(r"(?<![\w@\[])(?:%s)(?!\w)" % '|'.join(sorted(COMMON_NAMES, key=lambda n: -len(n))), re.I)
+
 
 def clean_name(value):
     return re.sub(r'\s+', ' ', re.sub(r'[\u200e\u200f\u202a-\u202e\ufeff~]', '', value or '')).strip()
@@ -2002,12 +2046,16 @@ def when(value):
     return None
 
 
-def scrub(text, names=()):
-    # Links, emails, handles and numbers first, so a name inside one ("jun@…") goes with it.
+def scrub(text, names=(), people=True):
+    # Links, emails, handles and numbers first, so a name inside one ("jun@…") goes with it; then the
+    # names of the people in the chat (labelled), then common first names anywhere (people=False only
+    # for Instagram's interest list, which is topics and public figures, not their friends).
     for rx, sub in SCRUB:
         text = rx.sub(sub, text)
     for name, lab in names:
         text = re.sub(r'(?<!\w)' + re.escape(name) + r'(?!\w)', lab, text, flags=re.I)
+    if people:
+        text = NAME_RX.sub('[name]', text)
     return re.sub(r'\s+', ' ', text).strip()
 
 
@@ -2055,7 +2103,7 @@ def build_digest(given=None, given_meta=None):
     for x in sorted((x for x in items if x['kind'] in ('post', 'story')), key=lambda x: x['t']):
         text = scrub(str(x.get('text') or ''))
         # Only tags ("[handle] [handle]") is a story without words: nothing of theirs to read.
-        if not re.search(r'\w', re.sub(r'\[(handle|link|email|number)\]', '', text)):
+        if not re.search(r'\w', re.sub(r'\[(handle|link|email|number|name)\]', '', text)):
             no_words[x['t'].year] = no_words.get(x['t'].year, 0) + 1
             continue
         key = norm_text(text) + stamp(x)[:10]
@@ -2131,8 +2179,8 @@ def build_digest(given=None, given_meta=None):
                 len(convo_blocks) + 1, 'one-to-one' if len(others) <= 1 else 'a group of %d' % (len(others) + 1),
                 first_t.strftime('%Y-%m'), last_t.strftime('%Y-%m'), ' (whole thread)' if tid in complete else '', '\n'.join(lines)))
     # An interest that scrubs to nothing but a placeholder ("[number]") says nothing about them.
-    interests = [x for x in ('- ' + scrub(str(i)) for i in (meta.get('interests') or []) if str(i).strip())
-                 if re.search(r'\w', re.sub(r'\[(handle|link|email|number)\]', '', x))][:40]
+    interests = [x for x in ('- ' + scrub(str(i), people=False) for i in (meta.get('interests') or []) if str(i).strip())
+                 if re.search(r'\w', re.sub(r'\[(handle|link|email|number|name)\]', '', x))][:40]
     every = [x['t'] for x in items]
     counts = meta.get('counts') or {}
     head_counts = ['%d posts and stories' % (all_posts + sum(no_words.values())), '%d with words' % words, '%d comments' % len(comments)]
@@ -2636,7 +2684,7 @@ def collect_facebook(me=None, with_messenger=True):
     lines = []
     for t, text in sorted(posts, key=lambda x: x[0]):
         said = scrub(text, names)
-        if re.search(r'\w', re.sub(r'\[(handle|link|email|number)\]', '', said)):
+        if re.search(r'\w', re.sub(r'\[(handle|link|email|number|name)\]', '', said)):
             lines.append('%s [facebook post] %s' % (t.strftime('%Y-%m-%d %H:%M'), keep_ends(said) if len(said) > 1500 else said))
     read['facebook posts'] = len(lines)
     lines = thin(lines, FB_POSTS_MAX)
@@ -2817,8 +2865,10 @@ def schema_problems(value, node, defs, at='answer', out=None):
     if kind in kinds and (not isinstance(value, kinds[kind]) or (kind in ('integer', 'number') and isinstance(value, bool))):
         out.append('%s should be %s' % (at, 'an ' + kind if kind[0] in 'aeiou' else 'a ' + kind))
         return out
-    if 'enum' in node and value not in node['enum']:
-        out.append('%s is "%s", not one of the allowed values' % (at, str(value)[:40]))
+    # Matched as psycheai.io matches it (lib/prompts.js enumKey): case, spaces, dashes and dots aside.
+    key = lambda v: re.sub(r'[\s_\-–—.]+', '', str('' if v is None else v).lower())
+    if 'enum' in node and key(value) not in {key(e) for e in node['enum']}:
+        out.append('%s is "%s", not one of the allowed values (%s)' % (at, str(value)[:40], ', '.join(str(e) for e in node['enum'][:8])))
     if kind == 'object':
         props = node.get('properties', {})
         for k in node.get('required', []):
@@ -2991,8 +3041,45 @@ def list_problems(data):
     return out[:1]
 
 
+# Evidence that is a summary rather than a moment, as psycheai.io's evidenceProblems has it (README
+# "Moments, checked"): pattern evidence is each a dated moment; a letter's, a wellbeing area's and
+# attachment's may also be a count or a rhythm, but never words alone or a span, and each list has at
+# least one dated moment in it. Same words, same patterns: keep the two in step.
+EV_MONTH = re.compile(r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(19|20)\d\d\b', re.I)
+EV_YEAR = re.compile(r'\b(19|20)\d\d\b')
+EV_SPAN = re.compile(r'\b(19|20)\d\d\s*(?:to|-|–|—|through|until|and)\s*(?:19|20)?\d\d\b|\b(?:across|over|for|spanning|throughout)\s+(?:the\s+|many\s+|several\s+)?(?:years|the span|time|the decade)\b|\bspanning\b|\bsince\s+(19|20)\d\d\b', re.I)
+
+
+def evidence_problems(data):
+    out, lists = [], []
+    for i, p in enumerate(data.get('patterns') or []):
+        if isinstance(p, dict):
+            lists.append(('patterns[%d].evidence' % i, p.get('evidence'), True))
+    for i, l in enumerate((data.get('mbti') or {}).get('letters') or [] if isinstance(data.get('mbti'), dict) else []):
+        if isinstance(l, dict):
+            lists.append(('mbti.letters[%d].evidence' % i, l.get('evidence'), False))
+    for k, v in (data.get('wellness') or {}).items() if isinstance(data.get('wellness'), dict) else []:
+        if isinstance(v, dict) and isinstance(v.get('evidence'), list):
+            lists.append(('wellness.%s.evidence' % k, v['evidence'], False))
+    if isinstance(data.get('attachment'), dict):
+        lists.append(('attachment.derivedFrom', data['attachment'].get('derivedFrom'), False))
+    for at, items, strict in lists:
+        ev = [x for x in (items if isinstance(items, list) else []) if isinstance(x, str) and x.strip()]
+        if not ev:
+            continue
+        bad = next((x for x in ev if EV_SPAN.search(x) or (not EV_YEAR.search(x) and (strict or not re.search(r'\d', x)))), None)
+        if bad:
+            out.append('%s: "%s" is a summary of many, not a moment: use the one dated thing they did or wrote that shows it best ("your May 2025 comment fixing a friend\'s recipe")%s'
+                       % (at, bad[:70], '' if strict else ', or the count or rhythm behind it'))
+        elif not any(EV_MONTH.search(x) or EV_YEAR.search(x) for x in ev):
+            out.append('%s: none of its items is a dated moment: make at least one the dated thing they did or wrote that shows it best' % at)
+        if len(out) >= 6:
+            break
+    return out
+
+
 def check_answer(path):
-    """bin/psyche.py check-answer FILE: the answer file as publish_psyche will take it, checked here first."""
+    """python3 bin/psyche.py check-answer FILE: the answer file as publish_psyche will take it, checked here first."""
     try:
         with open(path.lstrip('@'), encoding='utf-8') as f:
             raw = f.read()
@@ -3009,13 +3096,17 @@ def check_answer(path):
     # What would stop or hold the publish: these are fixed first.
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
-    problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + sample_problems(answer)
+    problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + evidence_problems(answer) + sample_problems(answer)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
-    # Where it differs from the guide's schema below the top: worth fixing, but publish_psyche is the judge.
+    # Where it differs from the guide's schema below the top. A value outside its list or of the wrong
+    # type is refused by publish_psyche, so it is a problem here too, or check-answer passes a read that
+    # publish then sends back (README "Checked as publish checks"); the rest are worth fixing, notes only.
     notes = [n for n in schema_problems(answer, schema, schema.get('$defs', {})) if not n.startswith('answer is missing ')] if schema else []
+    problems += [n for n in notes if 'not one of the allowed values' in n or re.search(r' should be an? \w+$', n)]
+    notes = [n for n in notes if n not in problems]
     # Findings only: a line here telling the assistant what to run next (it once said "publish it as
-    # bin/psyche.py call publish_psyche …") was flagged by Muse's safety check (README "Results are data").
+    # python3 bin/psyche.py call publish_psyche …") was flagged by Muse's safety check (README "Results are data").
     return {'ok': not problems, 'problems': problems[:25], 'schema': notes[:20]}
 
 
@@ -3024,7 +3115,7 @@ def with_pinned_guide(tool, args, out):
     guide = pinned_guide()
     if tool == 'get_report_guide':
         if not guide:
-            return {'error': 'The guide that comes with the skill is missing: run bin/psyche.py update.'}
+            return {'error': 'The guide that comes with the skill is missing: run python3 bin/psyche.py update.'}
         read = guide['read']
         deep = isinstance(args, dict) and args.get('depth') == 'deep'
         out = {'spec': read['spec'] + (guide.get('deepSpec', '') if deep else ''), 'rubric': read.get('rubric'), 'schema': read['schema']}
@@ -3032,7 +3123,7 @@ def with_pinned_guide(tool, args, out):
         return out
     if tool == 'get_sync' and isinstance(out, dict) and 'spec' in out:
         if not guide:
-            return {'error': 'The guide that comes with the skill is missing: run bin/psyche.py update.'}
+            return {'error': 'The guide that comes with the skill is missing: run python3 bin/psyche.py update.'}
         sync = guide['sync']
         out.update(spec=sync['spec'], schema=sync['schema'], task=sync['brief'] + SYNC_TASK)
     return out
@@ -3393,7 +3484,7 @@ def correct(args):
         f = {'id': args[0], 'label': args[0][8:].strip()[:60], 'said': ''}
     how = args[1] if len(args) > 1 else ''
     if not f or how not in ('not-me', 'partly', 'used-to-be'):
-        return {'error': 'Use: correct ID not-me|partly|used-to-be --note TEXT, with an ID from bin/psyche.py why.'}
+        return {'error': 'Use: correct ID not-me|partly|used-to-be --note TEXT, with an ID from python3 bin/psyche.py why.'}
     note = args[args.index('--note') + 1][:500] if '--note' in args and args.index('--note') + 1 < len(args) else ''
     entry = {'on': datetime.now().strftime('%Y-%m-%d'), 'finding': f['label'], 'said': f['said'][:300], 'how': how, 'theirWords': note}
     data['corrections'] = [c for c in data.get('corrections') or [] if c.get('finding') != f['label']][-29:] + [entry]
@@ -3524,7 +3615,7 @@ def main(argv):
         return
     if argv[0] == 'collect':
         if '--help' in argv or '-h' in argv:
-            print(json.dumps({'usage': 'bin/psyche.py collect --account-id <instagram-cli user_fbid> [--messages-account-id <instagram-messages-cli user_fbid>] [--me "<their full name>"] [--no-messages]'}, indent=1))
+            print(json.dumps({'usage': 'python3 bin/psyche.py collect --account-id <instagram-cli user_fbid> [--messages-account-id <instagram-messages-cli user_fbid>] [--me "<their full name>"] [--no-messages]'}, indent=1))
             return
         opts, i = {}, 1
         while i < len(argv):
@@ -3570,7 +3661,7 @@ def main(argv):
             write_private([REPORT], kept)
         print(json.dumps(kept, ensure_ascii=False))
         return
-    sys.exit('Usage: bin/psyche.py status | update | report | republish | show PART | prep FILE... [--me NAME] [--deep] | check-digest | forget [--everything] | call TOOL [JSON | @FILE]')
+    sys.exit('Usage: python3 bin/psyche.py status | update | report | republish | show PART | prep FILE... [--me NAME] [--deep] | check-digest | forget [--everything] | call TOOL [JSON | @FILE]')
 
 
 if __name__ == '__main__':
