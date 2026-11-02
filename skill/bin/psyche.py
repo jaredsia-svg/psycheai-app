@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 97
+RELEASE = 98
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -241,8 +241,13 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webk
 .viewer[hidden]{display:none}
 .viewer img{max-width:100%;max-height:calc(100% - 40px);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .viewer span{margin-top:12px;color:#fff;opacity:.8;font-size:13px}
-.cardpic{flex:none;width:118px;border-radius:14px;box-shadow:0 10px 30px rgba(20,0,40,.35);transform:rotate(3deg);border:3px solid rgba(255,255,255,.85)}
-@media (max-width:480px){.cardpic{width:92px}.banner h1{font-size:24px}.facts{font-size:9.5px;letter-spacing:.04em;padding:4px 9px;white-space:nowrap}.lede{font-size:13.5px}}
+.hero.withcard{display:flow-root}
+.hero.withcard .cardbtn{float:right;margin:0 0 8px 16px}
+.cardbtn{display:flex;flex-direction:column;align-items:center;gap:8px}
+.cardpic{display:block;width:150px;border-radius:14px;box-shadow:0 14px 30px rgba(70,20,100,.28),0 2px 6px rgba(70,20,100,.15);transform:rotate(2.5deg);border:3px solid #fff;transition:transform .2s ease,box-shadow .2s ease}
+.cardbtn:hover .cardpic,.cardbtn:focus-visible .cardpic{transform:rotate(0) scale(1.04);box-shadow:0 18px 36px rgba(70,20,100,.34)}
+.cardbtn em{font-style:normal;font-size:11.5px;line-height:1.3;font-weight:700;color:#7b3fa0;text-align:center}
+@media (max-width:480px){.cardpic{width:112px}.hero.withcard .cardbtn{margin-left:12px}.banner h1{font-size:24px}.facts{font-size:9.5px;letter-spacing:.04em;padding:4px 9px;white-space:nowrap}.lede{font-size:13.5px}}
 nav{position:sticky;top:0;z-index:5;margin:0 -14px 14px;padding:10px 14px;background:rgba(250,247,251,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
 @media (min-width:700px){nav{flex-wrap:wrap;overflow:visible}}
@@ -531,11 +536,17 @@ def _motive_boxes(mots, top):
 )
 
 
-def _overview(v):
+def _overview(v, card_png=None):
+    # The card sits beside "You are most like", big enough to want a tap, and opens full size
+    # (README "The card in the Overview"); it is embedded here once.
+    card = ('<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card full size">'
+            '<img class="cardpic" alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"><em>Your Psyche Card<br>Tap to open</em></button>') if card_png else ''
     hero = ''
-    if _s(v, 'character'):
-        hero = ('<div class="hero"><small>You are most like</small><b>' + _e(_s(v, 'character')) + '</b>'
-                + ('<span>' + _e(_s(v, 'source')) + '</span>' if _s(v, 'source') else '') + ('<p>' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else '') + '</div>')
+    if _s(v, 'character') or card:
+        text = (('<small>You are most like</small><b>' + _e(_s(v, 'character')) + '</b>'
+                 + ('<span>' + _e(_s(v, 'source')) + '</span>' if _s(v, 'source') else '') + ('<p>' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else ''))
+                if _s(v, 'character') else '')
+        hero = '<div class="hero%s">%s%s</div>' % (' withcard' if card else '', card, text)
     paras = [p for p in _l(_s(v, 'summaryFull')) if isinstance(p, str)] or [x for x in [_s(v, 'summary')] if x]
     summ = ''.join('<p%s>%s</p>' % (' class="intro"' if i == 0 else '', _e(p)) for i, p in enumerate(paras))
     # As psycheai.io shows them: the name, its line, the evidence, then where it shows up, under the
@@ -677,7 +688,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     parts, nav, i = [], [], 0
     for key, title, colour in W_PARTS:
         data = view.get(key) if isinstance(view.get(key), dict) else {}
-        inner, tease = (_who(data, ov.get('nickname') or '') if key == 'whoYouAre' else W_BUILD[key](data))
+        inner, tease = (_who(data, ov.get('nickname') or '') if key == 'whoYouAre' else _overview(data, card_png) if key == 'overview' else W_BUILD[key](data))
         if not inner:
             continue
         sid = 'p%d' % i
@@ -705,9 +716,9 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     banner = ('<header class="banner" id="top"><div class="row"><div class="txt"><div class="facts">' + _e(facts) + '</div><h1>' + _e(title) + '</h1>'
               + '<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it.</p>'
               + ('<div class="sub">' + _e(when) + '</div>' if when else '')
-              + '</div>' + ('<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card"><img class="cardpic" alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"></button>' if card_png else '') + '</div></header>')
+              + '</div></div></header>')
     bar = '<nav aria-label="Sections">' + ''.join(nav) + '<button type="button" data-fold>Collapse all ▲</button></nav>'
-    # The picture is embedded once, in the banner; the full-screen view borrows it when opened.
+    # The picture is embedded once, in the Overview; the full-screen view borrows it when opened.
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card"><span>Tap to close</span></div>' if card_png else ''
     foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
