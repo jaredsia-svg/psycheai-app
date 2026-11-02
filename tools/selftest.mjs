@@ -2927,6 +2927,12 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     /body\{font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;/.test(css) && /\.radar text\{font-family:-apple-system/.test(css) &&
     !/serif;?\s*[^-]/.test(css.replace(/sans-serif/g, '')) && /color-scheme:light/.test(css) && !/scroll-behavior:smooth|@keyframes|animation:/.test(css) && !/behavior:'smooth'/.test(page) && /behavior:'instant'/.test(page) && /@media print\{nav,\.foldall\{display:none\}\.part \.body\{display:block!important\}/.test(css));
   check('scores are clamped, and an empty view makes no file', /<u style="left:100%">/.test(page) && Array.isArray(got.empty) && got.empty.every(x => x === null));
+  check('a line too long for the card ends at a word with "…", never mid-word, and a card value has room for 60 characters; the report\'s full-screen card keeps "Tap to close" above a phone\'s home bar',
+    require('../lib/psyche.js').text('Mercy can change a person more than punishment', 40) === 'Mercy can change a person more than…' &&
+      require('../lib/psyche.js').text('Mercy can change a person more than punishment', 60) === 'Mercy can change a person more than punishment' &&
+      /text\(v && \(v\.value \|\| v\), 60\)/.test(require('node:fs').readFileSync(new URL('../lib/psyche.js', import.meta.url), 'utf8')) &&
+      /calc\(28px \+ env\(safe-area-inset-bottom\)\)/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
+      /initial-scale=1, viewport-fit=cover/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
   check('the receipt under the report says only what was read, names removed', /as a receipt: "Read here in Muse: 239 stories, 30 comments and 15 conversations, names removed\." Then "What's next\?"/.test(instructions.CORE_MUSE) && !/names removed\. PsycheAI received only your finished Psyche/.test(instructions.CORE_MUSE));
   check('the chat shows the card, then the report as a file, then "What\'s next?" with "Get the PDF": no widget, no PDF unless asked (README "The report as a file")',
     /their whole report is a file: right under the card picture, attach the HTML file bin\/psyche\.py show summary saves \(report\), their Psyche Report, as a file they open, never as a widget and never pasted; it is never skipped\./.test(instructions.CORE_MUSE) &&

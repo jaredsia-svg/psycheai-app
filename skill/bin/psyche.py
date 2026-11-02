@@ -71,7 +71,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 118
+RELEASE = 119
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -252,10 +252,10 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webk
 .banner h1{margin:10px 0 2px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
 .banner .sub{margin-top:8px;font-size:12.5px;opacity:.75}
 .cardbtn{all:unset;flex:none;cursor:zoom-in;-webkit-tap-highlight-color:transparent}
-.viewer{position:fixed;inset:0;z-index:20;background:rgba(20,8,30,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+.viewer{position:fixed;inset:0;z-index:20;background:rgba(20,8,30,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));cursor:zoom-out}
 .viewer[hidden]{display:none}
-.viewer img{max-width:100%;max-height:calc(100% - 40px);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.viewer span{margin-top:12px;color:#fff;opacity:.8;font-size:13px}
+.viewer img{max-width:100%;max-height:calc(100% - 64px);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.viewer span{margin-top:14px;padding:8px 16px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:14px;font-weight:600}
 .cardbtn#cardopen{float:right;margin:16px 0 10px 22px}
 .hero.withcard{display:flow-root}
 .cardbtn{display:flex;flex-direction:column;align-items:center;gap:8px}
@@ -770,7 +770,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card"><span>Tap to close</span></div>' if card_png else ''
     foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>' + ('A sample report for a fictional reader. Yours is made in your own Muse workspace, and PsycheAI keeps no copy of it.'
             if sample else 'This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.') + '</footer>')
-    return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+    return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + roast
             + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + '</script></body></html>')
 
