@@ -1496,12 +1496,25 @@ function signup(email, d) {
       const goneCode = await fetch(base + '/sync/aaaaaaaa');
       const oldPage = await fetch(base + '/p/' + code, { headers: browser });
       const oldSkill = await (await fetch(base + '/p')).text();
+      const wa = { 'User-Agent': 'WhatsApp/2.24.20.0 A' };
+      const waInstall = await (await fetch(base + '/install', { headers: wa })).text();
+      const waSync = await (await fetch(base + '/sync/' + code, { headers: wa })).text();
+      const img = await fetch(base + '/preview.png');
+      const imgBuf = Buffer.from(await img.arrayBuffer());
+      const previewState = { waInstall, waSync, imgType: img.headers.get('content-type'), imgW: imgBuf.readUInt32BE(16), imgH: imgBuf.readUInt32BE(20), imgSize: imgBuf.length, plainSkill };
+      check('link previews: a link previewer (WhatsApp, an Instagram DM, iMessage) gets the install link and a Psyche link as a page with Open Graph tags and a 1200x630 image, with the same install text as its body; Muse and other fetchers still get the plain text',
+        ((p) => p && /<meta property="og:title" content="PsycheAI for Muse">/.test(p.waInstall) && /<meta property="og:image" content="[^"]+\/preview\.png">/.test(p.waInstall) &&
+          /<meta property="og:description" content="[^"]*Paste into Muse: Install the skill at app\.psycheai\.io\/install">/.test(p.waInstall) && /<pre[^>]*># PsycheAI skill for Muse/.test(p.waInstall) &&
+          /<meta property="og:title" content="Mei wants to see how you two sync">/.test(p.waSync) && p.imgType === 'image/png' && p.imgW === 1200 && p.imgH === 630 && p.imgSize < 300000 &&
+          /^# PsycheAI skill for Muse/.test(p.plainSkill))(previewState) &&
+        require('../lib/preview.js').isPreviewer('facebookexternalhit/1.1') && !require('../lib/preview.js').isPreviewer('python-requests/2.31') && !require('../lib/preview.js').isPreviewer('curl/8.5.0'),
+        JSON.stringify({ title: (previewState.waInstall.match(/og:title" content="[^"]*/) || [])[0], w: previewState.imgW, size: previewState.imgSize }));
       check('a Psyche link is /sync/<code> and the install link /install (the first /p names still answer): Muse fetching it gets a short plain page of where the skill\'s files are (whose link it is, with a code), nothing to follow; SKILL.md describes its install; a browser opening a code gets the page; a bad code is gone',
         page.status === 410 && gone.status === 410 &&
         asPage.status === 200 && /Mei wants to see how you two sync/.test(asPageText) && /Sync with http/.test(asPageText) && /tap <b>Allow all<\/b>, so it only asks once/.test(asPageText) && /<pre id="invite"[^>]*>Install the skill at \S+\/sync\/[A-Za-z0-9_-]{22}\. Generate my Psyche and sync with Mei\.<\/pre>/.test(asPageText) && asPageText.includes('/sync/' + code + '. Generate') &&
         /^# PsycheAI skill for Muse/.test(asSkill) && asSkill.includes('/skill/SKILL.md') && asSkill.includes('/sync/' + code + ', from Mei') && oldPage.status === 200 && /^# PsycheAI skill for Muse/.test(oldSkill) && sync.linkOwner('app.psycheai.io/p/' + code) === owner.id && asSkill.length < 1000 && !/^---/m.test(asSkill) &&
         /^# PsycheAI skill for Muse/.test(plainSkill) && !/Psyche link:/.test(plainSkill) && /SKILL\.md describes the rest/.test(plainSkill) &&
-        home.status === 200 && /^# PsycheAI skill for Muse/.test(await home.text()) && goneCode.status === 410 &&
+        home.status === 200 && ((h) => /<h1>Your personal AI coach that already knows you<\/h1>/.test(h) && h.includes('>' + require('../lib/skill.js').installPrompt() + '</pre>') && /<meta property="og:image" content="[^"]+\/preview\.png">/.test(h))(await home.text()) && goneCode.status === 410 &&
         ((md) => /## Installing/.test(md) && /When it was installed from a Psyche link/.test(md) && !/without messages|quietly|don't tell|do not tell|nothing about/i.test(md.slice(md.indexOf('## Installing'), md.indexOf('## Purpose'))))(require('../lib/skill.js').skillMd()) && sync.linkOwner(l.url) === owner.id,
         JSON.stringify({ page: page.status, asPage: asPage.status, pg: /generate my Psyche/.test(asPageText), home: home.status, loc: home.headers.get('location'), gone: goneCode.status, ver: plainSkill.includes('version: "' + require('../lib/skill.js').version() + '"'), owner: sync.linkOwner(l.url) === owner.id, asSkill: asSkill.slice(0, 120) }));
     }
