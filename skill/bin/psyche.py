@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 101
+RELEASE = 102
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -252,13 +252,13 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webk
 .viewer[hidden]{display:none}
 .viewer img{max-width:100%;max-height:calc(100% - 40px);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .viewer span{margin-top:12px;color:#fff;opacity:.8;font-size:13px}
+.cardbtn#cardopen{float:right;margin:16px 0 10px 22px}
 .hero.withcard{display:flow-root}
-.hero.withcard .cardbtn{float:right;margin:0 0 8px 16px}
 .cardbtn{display:flex;flex-direction:column;align-items:center;gap:8px}
-.cardpic{display:block;width:150px;border-radius:14px;box-shadow:0 14px 30px rgba(70,20,100,.28),0 2px 6px rgba(70,20,100,.15);transform:rotate(2.5deg);border:3px solid #fff;transition:transform .2s ease,box-shadow .2s ease}
+.cardpic{display:block;width:132px;border-radius:14px;box-shadow:0 14px 30px rgba(70,20,100,.28),0 2px 6px rgba(70,20,100,.15);transform:rotate(2.5deg);border:3px solid #fff;transition:transform .2s ease,box-shadow .2s ease}
 .cardbtn:hover .cardpic,.cardbtn:focus-visible .cardpic{transform:rotate(0) scale(1.04);box-shadow:0 18px 36px rgba(70,20,100,.34)}
 .cardbtn em{font-style:normal;font-size:11.5px;line-height:1.3;font-weight:700;color:#7b3fa0;text-align:center}
-@media (max-width:480px){.banner .mark{top:-3.6rem;right:-3.4rem;width:165px;opacity:.14}.cardpic{width:112px}.hero.withcard .cardbtn{margin-left:12px}.banner h1{font-size:24px}.facts{font-size:9.5px;letter-spacing:.04em;padding:4px 9px;white-space:nowrap}.lede{font-size:13.5px}}
+@media (max-width:480px){.banner .mark{top:-3.6rem;right:-3.4rem;width:165px;opacity:.14}.cardpic{width:112px}.cardbtn#cardopen{margin:32px 16px 8px 12px}.hero.withcard{display:block}.hero.withcard .cardbtn{margin-left:12px}.banner h1{font-size:24px}.facts{font-size:9.5px;letter-spacing:.04em;padding:4px 9px;white-space:nowrap}.lede{font-size:13.5px}}
 nav{position:sticky;top:0;z-index:5;margin:0 -14px 14px;padding:10px 14px;background:rgba(250,247,251,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
 @media (min-width:700px){nav{flex-wrap:wrap;overflow:visible}}
@@ -557,7 +557,9 @@ def _overview(v, card_png=None):
         text = (('<small>You are most like</small><b>' + _e(_s(v, 'character')) + '</b>'
                  + ('<span>' + _e(_s(v, 'source')) + '</span>' if _s(v, 'source') else '') + ('<p>' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else ''))
                 if _s(v, 'character') else '')
-        hero = '<div class="hero%s">%s%s</div>' % (' withcard' if card else '', card, text)
+        # The card floats beside the box and the start of the Executive summary (laptop), or sits
+        # inside the box's top right where the text wraps round it (phone): one picture either way.
+        hero = card + ('<div class="hero%s">%s</div>' % (' withcard' if card else '', text) if text else '')
     paras = [p for p in _l(_s(v, 'summaryFull')) if isinstance(p, str)] or [x for x in [_s(v, 'summary')] if x]
     summ = ''.join('<p%s>%s</p>' % (' class="intro"' if i == 0 else '', _e(p)) for i, p in enumerate(paras))
     # As psycheai.io shows them: the name, its line, the evidence, then where it shows up, under the
