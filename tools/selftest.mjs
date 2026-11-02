@@ -2270,9 +2270,10 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
         /bin\/psyche\.py last-collect +# what the last collect read/.test(skillMd), JSON.stringify(kept).slice(0, 400));
       fsx.rmSync(tmp, { recursive: true, force: true });
     }
-    check('first-run: the account, start and both account lists in one call: step 0\'s say, the question with "@name" and "@name (without my messages)" for an account whose messages are connected, business accounts left out, each button\'s collect command ready, and step 1\'s line word for word; SKILL.md opens with it',
-      ((f) => f && /^I'm PsycheAI/.test(f.say || '') && f.question === 'Which account should I read?' && JSON.stringify(f.buttons) === '["@mei.t","@mei.t (without my messages)","@mei.alt"]' &&
-        f.onTap['@mei.t'] === 'bin/psyche.py collect --account-id ACC1' && f.onTap['@mei.t (without my messages)'] === 'bin/psyche.py collect --account-id ACC1 --no-messages' && /^MESSAGES FIRST for this account/.test(f.onTap['@mei.alt']) &&
+    check('first-run: the account, start and both account lists in one call: step 0\'s say, the question with "@name" and "@name (without my messages)" for an account whose messages are connected, business accounts left out, each button\'s accounts as data (no instruction rides in a tool result: one did, and Muse\'s safety check flagged it), and step 1\'s line word for word; SKILL.md opens with it and says how to build the collect command',
+      ((f) => f && /^I'm PsycheAI/.test(f.say || '') && f.question === 'Which account should I read?' && JSON.stringify(f.buttons.map(b => b.label)) === '["@mei.t","@mei.t (without my messages)","@mei.alt"]' &&
+        JSON.stringify(f.buttons.map(b => [b.account_id, b.messages_account_id, b.messages, b.messages_connected])) === '[["ACC1",null,true,true],["ACC1",null,false,true],["ALT1",null,false,false]]' &&
+        !('onTap' in f) && !('then' in f) && !/\b(send|run|start|tap|end the turn|never show|MESSAGES FIRST|helper|do what)\b/i.test(JSON.stringify(Object.fromEntries(Object.entries(f).filter(([k]) => !['say', 'stepOne'].includes(k))))) &&
         f.stepOne.startsWith(require('../lib/mcp.js').WAIT_LINE || "On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready. Here's what you'll get, in a minute, while you wait.\n▶ PsycheAI in a minute: "))(skillState.firstRun) &&
       /^# PsycheAI\n\n## First run, in order\n/m.test(skillMd) && /1\. Install as below, then run `bin\/psyche\.py first-run`/.test(skillMd) &&
       /Then send, as its own message, word for word: "On it\. Reading your Instagram and writing your Psyche takes about 5 minutes\./.test(skillMd) &&

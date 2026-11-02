@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 100
+RELEASE = 101
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1681,6 +1681,8 @@ def instagram_accounts(data, messages=False):
 
 
 def first_run():
+    """Data only (README "First run in one call"): what start says, the account question and its buttons, each
+    button's accounts, and step 1's line. No instruction to Muse rides in a tool result: SKILL.md says what to do."""
     account()
     out = {'version': local_version()}
     start = call('start', {})
@@ -1693,34 +1695,24 @@ def first_run():
         msg = {a['username']: a for a in instagram_accounts(ig(IGM_CLI, 'accounts'), True)}
     except (RuntimeError, RateLimited) as err:
         out['accounts'] = None
-        out['then'] = 'The account lists could not be read here (%s): run instagram-cli accounts and instagram-messages-cli accounts yourself, as step 0 says.' % type(err).__name__
+        out['problem'] = 'The account lists could not be read here (%s).' % type(err).__name__
         return out
     if not ig_list:
         out['accounts'] = None
-        out['then'] = 'No personal Instagram account came back: run instagram-cli accounts yourself, as step 0 says.'
+        out['problem'] = 'No personal Instagram account came back.'
         return out
-    buttons, on_tap = [], {}
+    buttons = []
     for a in ig_list:
         m = msg.get(a['username'])
-        base = 'bin/psyche.py collect --account-id %s' % a['id'] + ((' --messages-account-id %s' % m['id']) if m and m['id'] != a['id'] else '')
-        label = '@' + a['username']
-        buttons.append(label)
-        if m and m['connected']:
-            on_tap[label] = base
-            buttons.append(label + ' (without my messages)')
-            on_tap[label + ' (without my messages)'] = base + ' --no-messages'
-        else:
-            on_tap[label] = 'MESSAGES FIRST for this account (its messages aren\'t connected), then: ' + base + ' (add --no-messages on "Continue without messages")'
-    if len(buttons) > 1:
-        out['question'], out['buttons'] = 'Which account should I read?', buttons
+        ids = {'account_id': a['id'], 'messages_account_id': m['id'] if m and m['id'] != a['id'] else None}
+        connected = bool(m and m['connected'])
+        buttons.append(dict(label='@' + a['username'], messages=connected, messages_connected=connected, **ids))
+        if connected:
+            buttons.append(dict(label='@' + a['username'] + ' (without my messages)', messages=False, messages_connected=True, **ids))
+    out['question'] = 'Which account should I read?' if len(buttons) > 1 else None
+    out['buttons'] = buttons
     out['stepOne'] = STEP_ONE + '\n▶ PsycheAI in a minute: ' + str(out.get('reel') or '')
-    out['onTap'] = on_tap
-    out['then'] = ('Send say, then question with buttons, as ONE message (with one button, no question: go on as if it was tapped). '
-                   'On their tap: start ONE helper with the brief in SKILL.md "First run, in order", with that button\'s collect command '
-                   'from onTap (add --me "<their full name>"), then send stepOne as its own message, word for word, and end the turn. '
-                   'IDs stay inside commands: never show one.')
     return out
-
 
 def local_version():
     try:
