@@ -71,7 +71,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 115
+RELEASE = 117
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2921,12 +2921,56 @@ def sample_problems(answer):
             for at, text in strings_in(answer) if rx.search(text)][:3]
 
 
+# What a plan step is about, by theme, as psycheai.io's planProblems has it (README "One step, once"):
+# three themes in common is one step asked for twice, in different words.
+PLAN_THEMES = {
+    'plan': ['plan', 'meetu', 'meet', 'dinne', 'lunch', 'run', 'game', 'night', 'trip', 'hango', 'catch', 'drink'],
+    'commit': ['pick', 'fix', 'lock', 'book', 'choos', 'close', 'commi', 'decid', 'confi', 'sched', 'set'],
+    'time': ['time', 'day', 'slot', 'hour', 'date', 'eveni', 'weekd', 'weeke'],
+    'finish': ['finis', 'ship', 'relea', 'publi', 'share', 'send', 'launc', 'compl', 'deliv'],
+    'sleep': ['sleep', 'bed', 'wake', 'alarm', 'morni'],
+    'write': ['write', 'note', 'journ', 'draft'],
+}
+THEME_OF = {w: t for t, ws in PLAN_THEMES.items() for w in ws}
+
+
+def themes_of(x):
+    words = re.findall(r'[a-z]{3,}', (str(x.get('title') or '') + ' ' + str(x.get('detail') or '')).lower())
+    return {THEME_OF.get(w[:5]) or THEME_OF.get(w) for w in words} - {None}
+
+
 def plan_problems(data):
     dev = data.get('development') if isinstance(data.get('development'), dict) else {}
     car = data.get('careerAssessment') if isinstance(data.get('careerAssessment'), dict) else {}
     well = data.get('wellness') if isinstance(data.get('wellness'), dict) else {}
-    acts = [a for d in (dev.get('develop') or []) if isinstance(d, dict) for a in (d.get('actions') or [])]
-    return first_same(acts + list(car.get('actions') or []) + list(well.get('suggestions') or []), 'the plan')
+    # A develop step is a "step", with no title: it is compared like the rest.
+    acts = [({'title': a['step'], 'detail': '', 'horizon': a.get('horizon')} if isinstance(a, dict) and isinstance(a.get('step'), str) and not a.get('title') else a)
+            for d in (dev.get('develop') or []) if isinstance(d, dict) for a in (d.get('actions') or [])]
+    steps = [x for x in acts + list(car.get('actions') or []) + list(well.get('suggestions') or [])
+             if isinstance(x, dict) and isinstance(x.get('title'), str) and x['title'].strip()]
+    same = first_same(steps, 'the plan')
+    if same:
+        return same
+    for i in range(len(steps)):
+        for j in range(i + 1, len(steps)):
+            shared = [t for t in PLAN_THEMES if t in themes_of(steps[i]) and t in themes_of(steps[j])]
+            if len(shared) >= 3:
+                return ['the plan: "%s" and "%s" ask for the same move (%s); the plan keeps one of them and gives the other place to a different step'
+                        % (steps[i]['title'][:60], steps[j]['title'][:60], ', '.join(shared))]
+    return []
+
+
+def edge_problems(data):
+    """psycheai.io's edgeProblems: "Your edge" repeating one of their other strengths."""
+    ca = data.get('careerAssessment') if isinstance(data.get('careerAssessment'), dict) else {}
+    e = ca.get('edge') if isinstance(ca.get('edge'), dict) else None
+    if not e or not e.get('headline'):
+        return []
+    edge = {'title': e['headline'], 'detail': e.get('detail') or ''}
+    car = data.get('career') if isinstance(data.get('career'), dict) else {}
+    same = next((x for x in car.get('strengths') or [] if isinstance(x, dict) and isinstance(x.get('title'), str) and same_point(edge, x)), None)
+    return ['career.strengths: "%s" makes the same point as careerAssessment.edge "%s": name a different strength there'
+            % (same['title'][:60], e['headline'][:60])] if same else []
 
 
 def list_problems(data):
@@ -2966,7 +3010,7 @@ def check_answer(path):
     # What would stop or hold the publish: these are fixed first.
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
-    problems += ei_problems(answer) + holding_problems(answer) + plan_problems(answer) + list_problems(answer) + sample_problems(answer)
+    problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + sample_problems(answer)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
     if isinstance(args, dict) and 'answer' not in args:
