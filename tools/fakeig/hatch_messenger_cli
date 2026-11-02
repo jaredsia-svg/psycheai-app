@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+# A stand-in for Muse's Messenger tool, shaped as its connector doc describes, for the selftest of
+# `bin/psyche.py collect-facebook`. FAKEMSGR_OFF=1 answers as not connected.
+import sys, json, os
+a = sys.argv[1:]
+log = os.environ.get('FAKEIG_LOG')
+if log:
+    open(log, 'a').write('messenger ' + ' '.join(a) + '\n')
+opt = {a[i]: a[i + 1] for i in range(len(a) - 1) if a[i].startswith('--')}
+if a[0] == 'check':
+    print(json.dumps({'connected': not os.environ.get('FAKEMSGR_OFF')})); sys.exit(0)
+if a[0] == 'connect-url':
+    print(json.dumps({'connect_url': 'https://messenger.example/connect'})); sys.exit(0)
+if a[0] in ('sync', 'repair'):
+    print(json.dumps({'ok': True})); sys.exit(0)
+if a[0] == 'threads':
+    print(json.dumps({'threads': [
+        {'conversation_id': 'cid.c.1', 'thread_type': 'ONE_TO_ONE', 'participants': [{'name': 'Mei Tan'}, {'name': 'Jun Lim'}]},
+        {'conversation_id': 'cid.c.2', 'thread_type': 'ONE_TO_ONE', 'name': 'Muse', 'participants': [{'name': 'Muse'}]},
+        {'conversation_id': 'cid.g.3', 'thread_type': 'GROUP', 'name': 'Running club', 'participants': [{'name': 'Mei Tan'}, {'name': 'Ana Cruz'}, {'name': 'Bo Wen'}]}]})); sys.exit(0)
+if a[0] == 'messages':
+    cid = opt['--cid']
+    cache = {'self_user_id': 'ME1', 'cached_message_count': {'cid.c.1': 300, 'cid.c.2': 900, 'cid.g.3': 40}[cid]}
+    if opt.get('--limit') == '1':
+        print(json.dumps({'messages': [], '_cache': cache})); sys.exit(0)
+    assert cid != 'cid.c.2', 'the Muse side chat was read'
+    if opt.get('--before'):
+        print(json.dumps({'messages': [], '_cache': cache})); sys.exit(0)
+    who = {'cid.c.1': ('JUN', 'Jun Lim'), 'cid.g.3': ('ANA', 'Ana Cruz')}[cid]
+    rows = []
+    for i in range(6):
+        ms = 1767225600000 + i * 7200000
+        rows.append({'sender_id': who[0], 'sender_name': who[1], 'text': 'Jun here, are you coming Saturday %d? mail me at jun@example.com' % i, 'timestamp_ms': ms})
+        rows.append({'sender_id': 'ME1', 'text': 'Yes Jun, I will bring the snacks this time %d, see www.example.com/plan' % i, 'timestamp_ms': ms + 60000})
+    rows.append({'sender_id': 'ME1', 'text': '(decrypt failed)', 'timestamp_ms': 1767225600000})
+    print(json.dumps({'messages': rows, '_cache': cache})); sys.exit(0)
+print('unknown', file=sys.stderr); sys.exit(3)

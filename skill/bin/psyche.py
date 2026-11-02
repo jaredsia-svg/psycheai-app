@@ -16,6 +16,10 @@
                                        emails, links and handles taken out. Writes
                                        sources/whatsapp.txt; the export itself is never read
                                        for the report and never sent anywhere
+  bin/psyche.py collect-facebook [--me NAME] [--no-messenger]
+                                       their own Facebook posts and their side of their busiest
+                                       Messenger chats, de-identified, into sources/facebook.txt; a
+                                       service not connected answers with its connect link
   bin/psyche.py show PART              one part of what publish_psyche gave back, kept here:
                                        card (saved as a picture), summary, pdf (saved as a file), links or next (README "One part at a time")
   bin/psyche.py checkin [ID done|not-yet|drop] [--note TEXT]
@@ -67,7 +71,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 110
+RELEASE = 111
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1988,10 +1992,11 @@ def when(value):
 
 
 def scrub(text, names=()):
-    for name, lab in names:
-        text = re.sub(r'(?<!\w)' + re.escape(name) + r'(?!\w)', lab, text, flags=re.I)
+    # Links, emails, handles and numbers first, so a name inside one ("jun@…") goes with it.
     for rx, sub in SCRUB:
         text = rx.sub(sub, text)
+    for name, lab in names:
+        text = re.sub(r'(?<!\w)' + re.escape(name) + r'(?!\w)', lab, text, flags=re.I)
     return re.sub(r'\s+', ' ', text).strip()
 
 
@@ -2514,6 +2519,249 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
     return result
 
 
+# ---------- collect-facebook: Facebook posts and Messenger, read like Instagram (README "Facebook and Messenger") ----------
+# Through Muse's own Facebook and Messenger tools, as their connectors' docs say: their own
+# timeline posts only (a post on their wall by someone else is left out), and their own side of
+# their busiest Messenger chats, each reply after what it answers as "> " context, read in memory.
+# Names, handles, links and numbers come out as the digest's do; IDs and cursors never leave this
+# function. Messenger is read narrowly, for one purpose: the busiest few chats, a set amount of
+# their own words, and the "> " context dropped once the report is saved (drop_context), never
+# a copy of their history. What reaches disk is sources/facebook.txt.
+FB_CLI = os.environ.get('PSYCHEAI_FB_CLI') or '/opt/hatch/bin/facebook-cli'
+MSGR_CLI = os.environ.get('PSYCHEAI_MSGR_CLI') or '/opt/hatch/bin/hatch_messenger_cli'
+FB_PAGES = 15               # timeline pages of 20, newest first
+FB_POSTS_MAX = 30000        # their posts' characters at most
+MSGR_THREADS = 8            # their busiest Messenger chats
+MSGR_CHARS = 40000          # their own words across them, as a later read adds
+MSGR_PAGES = 10             # a chat's pages at most
+UNREADABLE = re.compile(r'^\((decrypt failed|no thread key)\)$', re.I)
+SIDE_CHAT = re.compile(r'\b(muse|meta ai)\b', re.I)
+
+
+def _first_str(d, keys):
+    for k in keys:
+        v = d.get(k) if isinstance(d, dict) else None
+        if isinstance(v, dict):
+            v = v.get('text') or v.get('body')
+        if isinstance(v, str) and v.strip():
+            return v
+    return ''
+
+
+def _rows(got, keys):
+    if isinstance(got, list):
+        return got
+    for k in keys:
+        if isinstance(got, dict) and isinstance(got.get(k), list):
+            return got[k]
+    if isinstance(got, dict) and isinstance(got.get('data'), dict):
+        return _rows(got['data'], keys)
+    return []
+
+
+def _names_in(v, out):
+    """Every person's name a post tags or mentions (with_tags, mentions, tagged…), to take out."""
+    if isinstance(v, list):
+        for x in v:
+            _names_in(x, out)
+    elif isinstance(v, dict):
+        n = v.get('name') or v.get('full_name')
+        if isinstance(n, str) and n.strip():
+            out.add(n.strip())
+    elif isinstance(v, str) and v.strip():
+        out.add(v.strip())
+
+
+def _not_connected(got, err=None):
+    said = json.dumps(got) if got is not None else str(err or '')
+    return got == {} or bool(re.search(r"not connected|isn'?t connected|no (linked )?account|not linked", said, re.I))
+
+
+def collect_facebook(me=None, with_messenger=True):
+    """Their own Facebook posts and, with_messenger, their side of their busiest Messenger chats, into
+    sources/facebook.txt. A service that isn't connected answers with its connect link, as data."""
+    read = {'facebook posts': 0, 'messenger chats': 0}
+    notes, connect = [], {}
+    owner = str(me or '').strip()
+    posts, tagged = [], set()
+    # Facebook: who they are, then their own timeline.
+    try:
+        who = ig(FB_CLI, 'me')
+    except RuntimeError as err:
+        who = None
+        if not _not_connected(None, err):
+            notes.append('facebook: %s' % err)
+    if isinstance(who, dict) and who.get('consent_url'):
+        connect['facebook'] = who['consent_url']
+    elif who is None or _not_connected(who) or not who.get('fb_user_id'):
+        if who is not None or not notes:
+            try:
+                connect['facebook'] = (ig(FB_CLI, 'connect-url') or {}).get('connect_url') or 'Meta Accounts Center'
+            except RuntimeError:
+                connect['facebook'] = 'Meta Accounts Center'
+    else:
+        fbid = str(who['fb_user_id'])
+        owner = owner or str(who.get('name') or '')
+        try:
+            for page in pages(lambda after: ig(FB_CLI, 'timeline', 'fetch', '--profile-id', fbid, '--limit', 20, *(('--after', after) if after else ())),
+                              lambda p: (p.get('next_cursor') or ((p.get('paging') or {}).get('cursors') or {}).get('after')) if isinstance(p, dict) else None,
+                              limit=FB_PAGES):
+                for p in _rows(page, ('posts', 'items', 'timeline')):
+                    author, own = str(p.get('author_id') or ''), str(p.get('owner_id') or fbid)
+                    if author and author != own:
+                        continue        # someone else's post on their wall
+                    text = _first_str(p, ('message', 'text', 'post_text', 'body', 'caption', 'content'))
+                    t = local_time(p.get('post_created_at') or p.get('created_at'), p.get('created_time') or p.get('timestamp'))
+                    if not t or not text.strip():
+                        continue
+                    for k in ('with_tags', 'tags', 'tagged', 'mentions', 'message_tags', 'with'):
+                        _names_in(p.get(k), tagged)
+                    posts.append((t, text))
+        except RateLimited:
+            notes.append('facebook: too many requests, so it stopped there')
+        except RuntimeError as err:
+            notes.append('facebook: %s' % err)
+    names = sorted([(n, 'a friend') for n in tagged if n.lower() != owner.lower()], key=lambda n: -len(n[0]))
+    lines = []
+    for t, text in sorted(posts, key=lambda x: x[0]):
+        said = scrub(text, names)
+        if re.search(r'\w', re.sub(r'\[(handle|link|email|number)\]', '', said)):
+            lines.append('%s [facebook post] %s' % (t.strftime('%Y-%m-%d %H:%M'), keep_ends(said) if len(said) > 1500 else said))
+    read['facebook posts'] = len(lines)
+    lines = thin(lines, FB_POSTS_MAX)
+    blocks = []
+    if lines:
+        blocks.append('# Facebook posts: %d of their own, %s to %s\n%s' % (read['facebook posts'], lines[0][:7], lines[-1][:7], '\n'.join(lines)))
+    # Messenger: the busiest chats by what's held for each, their own words, what each answers as context.
+    if with_messenger:
+        try:
+            state = ig(MSGR_CLI, 'check')
+            if _not_connected(state) or (isinstance(state, dict) and state.get('connected') is False):
+                connect['messenger'] = (ig(MSGR_CLI, 'connect-url') or {}).get('connect_url') or 'Messenger settings'
+            else:
+                try:
+                    ig(MSGR_CLI, 'sync', 'both', '--since-days', 365, timeout=240)
+                except RuntimeError as err:
+                    notes.append('messenger: refresh %s' % err)
+                listed = _rows(ig(MSGR_CLI, 'threads', '--limit', 30), ('threads', 'conversations', 'items'))
+                ranked = []
+                for th in listed:
+                    cid = str(th.get('conversation_id') or th.get('cid') or th.get('id') or '')
+                    found = set()
+                    _names_in(th.get('participants') or th.get('members') or [], found)
+                    people = sorted(found)
+                    title = str(th.get('name') or th.get('thread_name') or th.get('title') or '')
+                    if not cid or SIDE_CHAT.search(title + ' ' + ' '.join(people)):
+                        continue        # Muse's own side chat is never read
+                    probe = ig(MSGR_CLI, 'messages', '--cid', cid, '--limit', 1)
+                    size = ((probe.get('_cache') or {}).get('cached_message_count') if isinstance(probe, dict) else 0) or 0
+                    ranked.append((size, cid, people, (probe.get('_cache') or {}).get('self_user_id') if isinstance(probe, dict) else None))
+                ranked.sort(key=lambda r: -r[0])
+                repaired, share, gathered = False, MSGR_CHARS // max(1, min(MSGR_THREADS, len(ranked))), []
+                for size, cid, people, self_id in ranked[:MSGR_THREADS]:
+                    try:
+                        ig(MSGR_CLI, 'sync', 'messages', '--cid', cid, '--older', 200, timeout=120)
+                    except RuntimeError:
+                        pass
+                    msgs, before, unreadable = [], None, 0
+                    for _ in range(MSGR_PAGES):
+                        got = ig(MSGR_CLI, 'messages', '--cid', cid, '--limit', 100, *(('--before', before) if before else ()))
+                        self_id = self_id or ((got.get('_cache') or {}).get('self_user_id') if isinstance(got, dict) else None)
+                        rows = _rows(got, ('messages', 'items'))
+                        if not rows:
+                            break
+                        oldest = None
+                        for m in rows:
+                            text = _first_str(m, ('text', 'body', 'message', 'snippet'))
+                            raw_t = m.get('timestamp_ms') or m.get('timestamp') or m.get('sent_at')
+                            t = local_time(m.get('message_sent_at') if isinstance(m.get('message_sent_at'), dict) else None, raw_t or m.get('message_sent_at'))
+                            ms = raw_t if isinstance(raw_t, (int, float)) else (int(t.timestamp() * 1000) if t else None)
+                            oldest = ms if oldest is None or (ms is not None and ms < oldest) else oldest
+                            if UNREADABLE.match(text.strip()):
+                                unreadable += 1
+                                continue
+                            if m.get('poll') or not text.strip() or not t:
+                                continue
+                            sender = str(m.get('sender_id') or m.get('sender') or '')
+                            name = str(m.get('sender_name') or '') or 'Friend'
+                            msgs.append({'t': t, 'sender': 'me' if self_id and sender == str(self_id) else name, 'text': text})
+                        mine = sum(len(x['text']) for x in msgs if x['sender'] == 'me')
+                        if mine >= share * 1.3 or oldest is None or oldest == before:
+                            break
+                        before = oldest
+                    if unreadable and not repaired:
+                        repaired = True
+                        try:
+                            ig(MSGR_CLI, 'repair')
+                        except RuntimeError:
+                            pass
+                    msgs = sorted({(x['t'], x['sender'], x['text']): x for x in msgs}.values(), key=lambda x: x['t'])
+                    if any(x['sender'] == 'me' for x in msgs):
+                        gathered.append((msgs, people))
+                # Everyone read in any chat is "a friend" in the others, as the digest does.
+                everyone = sorted({n for msgs, people in gathered for n in [x['sender'] for x in msgs if x['sender'] != 'me'] + people
+                                   if n and n != 'Friend' and n.lower() != owner.lower()})
+                elsewhere = [(n, 'a friend') for n in everyone] + [(n.split(' ')[0], 'a friend') for n in everyone if ' ' in n and len(n.split(' ')[0]) >= 3]
+                for msgs, people in gathered:
+                    others = sorted({x['sender'] for x in msgs if x['sender'] != 'me'} | set(people) - {owner})
+                    label = {n: ('Friend' if len(others) <= 1 else 'Friend ' + chr(65 + j)) for j, n in enumerate(others[:26])}
+                    pairs = []
+                    for n in others:
+                        pairs.append((n, label.get(n, 'Friend')))
+                        first = n.split(' ')[0]
+                        if len(first) >= 3 and first != n:
+                            pairs.append((first, label.get(n, 'Friend')))
+                    pairs += [e for e in elsewhere if e[0] not in {x[0] for x in pairs}]
+                    pairs.sort(key=lambda n: -len(n[0]))
+                    own_names = [(owner, '[you]')] + ([(owner.split(' ')[0], '[you]')] if ' ' in owner and len(owner.split(' ')[0]) >= 3 else []) if owner else []
+                    mine, chosen = choose_messages(msgs, 'me', share)
+                    out = []
+                    for u in chosen:
+                        for y in u['ctx']:
+                            said = scrub(y['text'], sorted(pairs + own_names, key=lambda n: -len(n[0])))
+                            out.append('> %s: %s' % (label.get(y['sender'], 'Friend'), said if len(said) <= CTX_CHARS else said[:CTX_CHARS].rstrip() + ' …'))
+                        out.append('%s %s' % (u['t'].strftime('%Y-%m-%d %H:%M'), keep_ends(scrub(u['text'], pairs))))
+                    if not chosen:
+                        continue
+                    read['messenger chats'] += 1
+                    blocks.append('# Messenger chat %d: %s, %s to %s\n%s' % (
+                        read['messenger chats'], 'one-to-one' if len(others) <= 1 else 'a group of %d' % (len(others) + 1),
+                        mine[0]['t'].strftime('%Y-%m') if mine else '-', mine[-1]['t'].strftime('%Y-%m') if mine else '-', '\n'.join(out)))
+        except RateLimited:
+            notes.append('messenger: too many requests, so it stopped there')
+        except RuntimeError as err:
+            notes.append('messenger: %s' % err)
+    if not blocks:
+        out = {'ok': False, 'read': read}
+        if connect:
+            out['connect'] = connect
+        if notes:
+            out['notes'] = notes
+        if not connect:
+            out['problems'] = ['Nothing of their own came back from Facebook or Messenger.']
+        return out
+    os.makedirs(SOURCES, exist_ok=True)
+    os.chmod(SOURCES, 0o700)
+    target = os.path.join(SOURCES, 'facebook.txt')
+    with open(target, 'w', encoding='utf-8') as f:
+        f.write('Facebook%s, read on this device through Muse\'s own connections: their own posts%s, everyone else as a friend or Friend A, B..., '
+                'numbers, emails, links and handles taken out.\n\n' % (' and Messenger' if read['messenger chats'] else '',
+                ' and their own Messenger messages, each after what it answers as "> " lines (context only, never quoted)' if read['messenger chats'] else '')
+                + '\n\n'.join(blocks) + '\n')
+    os.chmod(target, 0o600)
+    # Counts kept beside the last collect, for the receipt and My data and privacy (posts only: Messenger's
+    # own guidance is never to say how many messages were read).
+    last = read_first([LAST_COLLECT]) or {}
+    last['facebook'] = {'posts': read['facebook posts'], 'messenger': bool(read['messenger chats'])}
+    write_private([LAST_COLLECT], last)
+    out = {'ok': True, 'deidentified': True, 'file': os.path.relpath(target, HERE), 'read': read}
+    if connect:
+        out['connect'] = connect
+    if notes:
+        out['notes'] = notes
+    return out
+
+
 # ---------- the report's outline and a local check (README "A faster read") ----------
 # The schema runs to about 33,000 characters; the outline is each section and
 # its fields on a line (a "?" marks one that may be left out, [..]N-M a list's
@@ -2897,7 +3145,7 @@ def confidence_problems(answer):
         with open(DIGEST, encoding='utf-8') as f:
             head = '\n'.join(f.read().splitlines()[:6])
     sources = (re.search(r'sources:\s*([^\n·]+)', head) or [0, 'instagram'])[1].lower()
-    strong = 1 + bool(re.search(r'facebook|messenger', sources)) + os.path.exists(os.path.join(SOURCES, 'whatsapp.txt'))
+    strong = 1 + bool(re.search(r'facebook|messenger', sources) or os.path.exists(os.path.join(SOURCES, 'facebook.txt'))) + os.path.exists(os.path.join(SOURCES, 'whatsapp.txt'))
     cap, read = {1: 79, 2: 86}.get(strong, 90), {1: 'Instagram alone', 2: 'two strong sources'}.get(strong, 'Instagram, Facebook and WhatsApp')
     score, problems = conf['score'], []
     if score > cap:
@@ -2912,7 +3160,7 @@ def confidence_problems(answer):
 # "> " lines are context for writing a read, and every check that uses them runs before
 # publishing. Their own lines stay, for "explain" and for the next read to add to.
 def drop_context():
-    for path in (DIGEST, os.path.join(SOURCES, 'whatsapp.txt')):
+    for path in (DIGEST, os.path.join(SOURCES, 'whatsapp.txt'), os.path.join(SOURCES, 'facebook.txt')):
         if not os.path.exists(path):
             continue
         with open(path, encoding='utf-8') as f:
@@ -2930,7 +3178,7 @@ def quote_problems(answer):
     if not isinstance(answer, dict):
         return []
     said = []
-    for path in (DIGEST, os.path.join(SOURCES, 'whatsapp.txt')):
+    for path in (DIGEST, os.path.join(SOURCES, 'whatsapp.txt'), os.path.join(SOURCES, 'facebook.txt')):
         if os.path.exists(path):
             with open(path, encoding='utf-8') as f:
                 said += [re.findall(r"[\w']+", l.lower().split(':', 1)[-1]) for l in f if l.startswith('>')]
@@ -3182,6 +3430,10 @@ def main(argv):
             drop_context()
             out = saved(out)
         print(json.dumps(out, ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'collect-facebook':
+        me = argv[argv.index('--me') + 1] if '--me' in argv and argv.index('--me') + 1 < len(argv) else None
+        print(json.dumps(collect_facebook(me, '--no-messenger' not in argv), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'prep' and len(argv) >= 2:
         files, me, deep, i = [], None, False, 1

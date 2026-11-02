@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+# A stand-in for Muse's Facebook tool, shaped as its connector doc describes, for the selftest of
+# `bin/psyche.py collect-facebook`. FAKEFB_OFF=1 answers as an account that isn't linked.
+import sys, json, os
+a = sys.argv[1:]
+log = os.environ.get('FAKEIG_LOG')
+if log:
+    open(log, 'a').write('facebook-cli ' + ' '.join(a) + '\n')
+if a[0] == 'connect-url':
+    print(json.dumps({'connect_url': 'https://accountscenter.example/connect'})); sys.exit(0)
+if a[0] == 'me':
+    print(json.dumps({} if os.environ.get('FAKEFB_OFF') else {'name': 'Mei Tan', 'fb_user_id': 'FB1'})); sys.exit(0)
+if a[:2] == ['timeline', 'fetch']:
+    opt = {a[i]: a[i + 1] for i in range(2, len(a) - 1) if a[i].startswith('--')}
+    assert opt['--profile-id'] == 'FB1'
+    page = int(opt.get('--after', '0'))
+    posts = [{'post_id': 'P%d%d' % (page, j), 'author_id': 'FB1', 'owner_id': 'FB1',
+              'message': 'Fb post %d-%d: hiked with Kai Ng again, call me on +65 9123 4567' % (page, j),
+              'with_tags': [{'name': 'Kai Ng'}], 'post_created_at': {'user_local': '20%02d-0%d-1%d 09:3%d:00' % (15 + page, 1 + j, j, j)}} for j in range(3)]
+    posts.append({'post_id': 'W%d' % page, 'author_id': 'FB9', 'owner_id': 'FB1', 'message': 'Happy birthday from your aunt', 'post_created_at': {'user_local': '2020-05-05 10:00:00'}})
+    print(json.dumps({'posts': posts, 'next_cursor': str(page + 1) if page < 2 else None})); sys.exit(0)
+print('unknown', file=sys.stderr); sys.exit(3)
