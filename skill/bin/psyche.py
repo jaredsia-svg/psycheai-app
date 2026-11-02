@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 104
+RELEASE = 106
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -889,6 +889,10 @@ def local_ready(r):
             files[key] = {'file': f, 'bytes': os.path.getsize(f)}
     out = {'say': 'Your Psyche Card and Report are ready.', **files,
            'next': {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')}}
+    # What was read, for the receipt under the report (counts only, from the last collect).
+    last = read_first([LAST_COLLECT]) or {}
+    if isinstance(last.get('read'), dict):
+        out['read'] = {k: v for k, v in last['read'].items() if k in ('stories', 'posts', 'comments', 'threads') and isinstance(v, int)}
     if len(files) < 2:
         out['missing'] = [k for k in ('card', 'report') if k not in files]
     return out
@@ -1656,6 +1660,7 @@ def send_timing():
 # ---------- first-run: status, start and both account lists in one call (README "First run in one call") ----------
 STEP_ONE = ("On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready. "
             "Here's what you'll get, in a minute, while you wait.")
+MESSAGES_LINE = "Your messages make it much sharper: that's where you're most yourself."
 
 
 def instagram_accounts(data, messages=False):
@@ -1712,6 +1717,7 @@ def first_run():
         if connected:
             buttons.append(dict(label='@' + a['username'] + ' (without my messages)', messages=False, messages_connected=True, **ids))
     out['question'] = 'Which account should I read?' if len(buttons) > 1 else None
+    out['note'] = MESSAGES_LINE if any(b['messages_connected'] for b in buttons) else None
     out['buttons'] = buttons
     out['stepOne'] = STEP_ONE + '\n▶ PsycheAI in a minute: ' + str(out.get('reel') or '')
     return out
@@ -2734,7 +2740,8 @@ LABELS = frozenset([
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
-    'Explain why you said this', 'Correct something', 'More'])
+    'Explain why you said this', 'Correct something', 'More', 'Fresh Psyche', 'Add WhatsApp as data source', 'My data and privacy',
+    'Delete everything', 'Yes, delete everything', 'Cancel', 'Privacy policy'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$')]
 
 
