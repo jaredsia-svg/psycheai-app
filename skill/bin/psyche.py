@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 108
+RELEASE = 110
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -373,6 +373,16 @@ p{margin:0 0 10px}
 .plan p b{display:block;font-weight:700;line-height:1.35}
 .plan p span{display:block;color:var(--soft);font-size:14px}
 .plan p em{display:inline-block;margin-top:4px;padding:1px 8px;border-radius:999px;background:#f3e9f8;color:#6a3590;font-size:11.5px;font-style:normal;font-weight:700}
+.roast{background:#fff;border:1px solid #f0c9d7;border-radius:20px;padding:0;margin:4px 0 14px;overflow:hidden}
+.roast summary{list-style:none;cursor:pointer;display:grid;gap:4px;padding:16px 18px;background:linear-gradient(120deg,#5b2a86,#c2366d);color:#fff}
+.roast summary::-webkit-details-marker{display:none}
+.roast summary b{font-size:19px}
+.roast summary .soft{color:#f6e6f0;font-size:13.5px}
+.roast .badge{justify-self:start;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;background:rgba(255,255,255,.18);padding:3px 8px;border-radius:999px}
+.roast .salt{margin:14px 18px 0;font-size:13px;color:var(--soft)}
+.roast .burn,.roast .kind{margin:12px 18px 18px;padding:14px 16px;border-radius:14px}
+.roast .burn{background:#fdecf1}.roast .kind{background:#f3e9f8}
+.roast h3{margin:0 0 6px;font-size:15px;text-transform:none;letter-spacing:0}
 .method{background:#fff;border:1px solid #e6dcec;border-radius:20px;padding:18px;margin:4px 0 14px;box-shadow:0 10px 30px rgba(36,26,46,.05)}
 .method .big{display:flex;align-items:center;gap:14px}
 .method .big b{font-size:30px;font-weight:800;letter-spacing:-.02em}
@@ -693,8 +703,9 @@ W_BUILD = {'overview': _overview, 'whoYouAre': _who, 'whatDrivesYou': _drives, '
 W_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
 
-def report_html(view, name='', when='', card_png=None, pages=None, doc_title=None):
-    """The whole report as one self-contained HTML file, from view (full, with the evidence, when given)."""
+def report_html(view, name='', when='', card_png=None, pages=None, doc_title=None, bonus=None):
+    """The whole report as one self-contained HTML file, from view (full, with the evidence, when given), and
+    the roast (bonus, from the report kept here) as its appendix, closed until they open it (README "The roast in the appendix")."""
     if not isinstance(view, dict):
         return None
     ov = view.get('overview') if isinstance(view.get('overview'), dict) else {}
@@ -723,6 +734,15 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
                   + ('<p>' + _e(m.get('rationale')) + '</p>' if m.get('rationale') else '')
                   + _ev(c.get('basedOn'))
                   + '</div>')
+    roast = ''
+    if isinstance(bonus, dict) and isinstance(bonus.get('harsh'), str) and bonus['harsh'].strip():
+        paras = lambda t: ''.join('<p>' + _e(x.strip()) + '</p>' for x in re.split(r'\n\s*\n', t) if x.strip())
+        roast = ('<details class="roast" id="roast"><summary><span class="badge">Appendix</span><b>Your roast 🔥</b>'
+                 '<span class="soft">Deliberately unkind, and just for you. Not on your card, never in a link. Tap to open.</span></summary>'
+                 '<p class="salt">🧂 An AI being deliberately harsh about your data: not an assessment and not a diagnosis. Argue with it, and if any of it lands heavier than that, talk to someone you trust or a professional.</p>'
+                 '<div class="burn"><h3>🔥 The least charitable assessment of you</h3>' + paras(bonus['harsh']) + '</div>'
+                 + ('<div class="kind"><h3>💬 What an honest friend would tell you</h3>' + paras(bonus['advice']) + '</div>' if isinstance(bonus.get('advice'), str) and bonus['advice'].strip() else '')
+                 + '</details>')
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
     facts = ' · '.join(x for x in ['%d parts' % len(parts), ('%d pages' % pages) if pages else '', ('%d%% signal strength' % score) if score is not None else ''] if x)
@@ -735,7 +755,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card"><span>Tap to close</span></div>' if card_png else ''
     foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-            '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method
+            '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + roast
             + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + '</script></body></html>')
 
 
@@ -852,7 +872,8 @@ def local_report(r):
             pages = max(counts) if counts else None
     except (OSError, ValueError):
         pages = None
-    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages, file_label('Psyche Report'))
+    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages, file_label('Psyche Report'),
+                       (kept.get('report') or {}).get('bonus') if isinstance(kept.get('report'), dict) else None)
     if not page:
         return out
     try:
@@ -2746,7 +2767,7 @@ LABELS = frozenset([
     'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Not now',
     'Reveal my roast 🔥', 'Get the PDF', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
-    'Facebook and Messenger', 'Facebook posts only', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
+    'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
     'Done', 'Yes', 'No thanks', 'Someone else', 'I\'ll share it myself', 'Sync with someone else', 'Sync with someone new', 'Write it again',
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',

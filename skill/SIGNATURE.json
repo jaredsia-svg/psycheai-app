@@ -1,11 +1,11 @@
 {
-  "version": "43f8e80cc299",
-  "release": 108,
+  "version": "55dba1bedcaa",
+  "release": 110,
   "hashes": {
-    "SKILL.md": "96443eb118182b2964afb0c9afa31a4d4139ec7d67e261da0a4019f547d22208",
-    "bin/psyche.py": "3e13ad056d75431971652fb94dee753811d6eda107e68901dc785fb20a874b2e",
+    "SKILL.md": "c7f5da37aae8d2e5eadbd6df43fdb075f801697a642006d4af2c1faff577e5da",
+    "bin/psyche.py": "11ddada914f94ad7cd7c528c77f217561af276c069c7f34cd753136b8d555d3b",
     "guide.json": "e48f6963ebc15feb3b0180c7bca58fdb435de407ab0037412335c41a438e79f8"
   },
-  "signature": "ybHtlOwzPzMgPkMLYOkHeJK2vpurOiZG3gYi0kbPvttrnh1SxUAl8Vk4HqBlqLqw1kIAu5Z8HB2Q8vp0rgrdCw",
-  "signature2": "BA-IpnAoQGSLfzMpu2UbJdCVPusDIz-KYWqHdi9MIf-pQn5k90q8cRtZtXnrbtFWw64b67ffomXRY8xEO6UnDQ"
+  "signature": "mr7eBKlFRdVMEiqWkBWHqf8-jgeO-tGnR6xGZroMj8yCyuQ3sM01KwM7dNEu4wIJp_GSB-jOQ7QtvGAqkYYwDw",
+  "signature2": "yoBscv6WeE-cwQiIoYnLWxtajiTnxjBcPUi_lpkdmVYSWV0O_3t-lLAdMAnFLc7DfcePT1nnIA3A7uM_dwPzBA"
 }
