@@ -1996,6 +1996,13 @@ print(json.dumps({'fine': m.answer_problems(fine),
     json.dump({'me': 'Mei Tan', 'bio': 'hi', 'messages': True, 'counts': {'conversations': 3}, 'interests': ['Tennis'], 'complete': ['t0', 't1', 't2']}, open(d + '/work/meta.json', 'w')),
     (lambda r: (r, open(d + '/digest/digest.md').read(), m.build_digest()['ok'], os.remove(d + '/digest/.built'), m.build_digest()))(m.build_digest()))[-1])(tempfile.mkdtemp()),
   'collect': collecting(),
+  'checks2': (lambda d: (os.makedirs(d + '/digest'), setattr(m, 'DIGEST', d + '/digest/digest.md'),
+    open(d + '/digest/digest.md', 'w').write('# Psyche digest\\ncounts: 239 posts and stories · 15 conversations read (the busiest) · 1,212 own messages read\\n'),
+    [m.sample_problems({'values': [{'evidence': '15 conversations across 2018 to 2026'}], 'attachment': {'derivedFrom': ['Fifteen conversations running from 2018']}, 'x': 'about 140 conversations'}),
+     m.holding_problems({'careerAssessment': {'holdingBack': {'headline': 'Dull follow-through', 'detail': 'Routine admin slips.'}}, 'career': {'weaknesses': [{'title': 'Follow-through slips on dull admin', 'detail': 'x'}]}}),
+     m.holding_problems({'careerAssessment': {'holdingBack': {'headline': 'Dull follow-through', 'detail': 'Routine admin slips.'}}, 'career': {'weaknesses': [{'title': 'Blunt in public', 'detail': 'Your verdicts land hard.'}]}})])[-1])(tempfile.mkdtemp()),
+  'interests': (lambda d: (setattr(m, 'DIGEST', d + '/digest/digest.md'), m.build_digest([{'kind': 'story', 'date': '2024-01-0%d' % (1 + k), 'text': 'a story with words %d' % k} for k in range(3)],
+    {'me': 'Mei Tan', 'messages': False, 'interests': ['2026', 'Singapore', '9123 4567', 'Artificial Intelligence']}), open(d + '/digest/digest.md').read())[-1])(tempfile.mkdtemp()),
   'readyFull': (lambda d: (setattr(m, 'OUT', d + '/out'), setattr(m, 'local_pdf', lambda r: None), setattr(m, 'send_timing', lambda: None),
     (lambda o: {k: v for k, v in o.items() if k != 'next'})(m.local_ready({'full': {'overview': {'character': 'Mulan', 'patterns': []}}, 'nextStep': {'buttons': ['x']}})))[-1])(tempfile.mkdtemp()),
   'saved': [m.ei_problems({'mbti': {'letters': [{'choice': 'I', 'why': 'Your setting is small and familiar: family gatherings, close friends, and a circle you return to across years', 'evidence': []}]}}),
@@ -2176,7 +2183,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
     check('check-answer runs the checks psycheai.io runs when a read is saved (E/I resting on a close circle, two plan steps or list points making the same point), with the site\'s words and thresholds, so Muse fixes them before its first publish; the guide\'s own strength-under-pressure frame is not a same point',
       ((v) => Array.isArray(v) && /loyalty rather than energy/.test(v[0].join(' ')) && /^the plan: "Close one open project loop" and "Close one loop a week" make the same point/.test(v[1][0] || '') &&
         /^careerAssessment\.holdingBack: "Too many open threads" and "Spreads across interests" make the same point/.test(v[2][0] || '') && v[3] === false && v[4].length === 0)(skillState.leaving && skillState.leaving.saved) &&
-      /problems \+= ei_problems\(answer\) \+ plan_problems\(answer\) \+ list_problems\(answer\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')),
+      /problems \+= ei_problems\(answer\) \+ holding_problems\(answer\) \+ plan_problems\(answer\) \+ list_problems\(answer\) \+ sample_problems\(answer\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')),
       JSON.stringify(skillState.leaving && skillState.leaving.saved));
     check('a first read starts collect the moment the account is picked (no status, help, memory or workspace first; a helper gets the exact command) and delivers before any housekeeping; collect --help prints its usage',
       /The moment they pick the account \(or straight after the go-ahead with one\), run collect: no status again, no help, no memory search, and nothing from the workspace/.test(skillMd) &&
@@ -2187,6 +2194,12 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
       /While writing, give each theme one home: within any one list .* no two items on the same theme, even in different words, and no step repeated across the plan's horizons/.test(skillMd) &&
       ((c) => c && / 3 conversations read \(the busiest\) · /.test(c[0].digest))(skillState.leaving && skillState.leaving.collect) &&
       /Room set aside for one that ran out goes to the next with more/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
+    check('check-answer sends back the count of conversations read cited as a fact ("15 conversations", "Fifteen conversations", never another number) and a career weakness repeating what holds them back, as psycheai.io does; an interest that scrubs to a placeholder is left out of the digest',
+      ((c) => c && c[0].length === 2 && /^answer\.values\[0\]\.evidence cites "15 conversations": that is how many conversations were read, the sample's size/.test(c[0][0]) && /cites "Fifteen conversations"/.test(c[0][1]) &&
+        /^career\.weaknesses: "Follow-through slips on dull admin" makes the same point as careerAssessment\.holdingBack "Dull follow-through"/.test(c[1][0] || '') && c[2].length === 0)(skillState.leaving && skillState.leaving.checks2) &&
+      ((g) => typeof g === 'string' && /^- Singapore$/m.test(g) && /^- Artificial Intelligence$/m.test(g) && !/^- \[number\]$/m.test(g))(skillState.leaving && skillState.leaving.interests) &&
+      /holding_problems\(answer\) \+ plan_problems\(answer\) \+ list_problems\(answer\) \+ sample_problems\(answer\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')),
+      JSON.stringify(skillState.leaving && [skillState.leaving.checks2, (skillState.leaving.interests || '').slice(-200)]).slice(0, 600));
     check('their own words stay: once a report is published, what others wrote ("> " lines) goes from the digest and the WhatsApp source, their own lines stay, and SKILL.md says so',
       ((c) => Array.isArray(c) && c[0] === '# Psyche digest\n## Messages\n### Conversation 1\n2024-01-02 10:00 Yes, I will book the court\n' && c[1] === '2024-02-02 19:00 On my way\n' && c[2] === '0o600')(skillState.leaving && skillState.leaving.context) &&
       /shutil\.rmtree\(WORK, ignore_errors=True\)\n\s+drop_context\(\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&

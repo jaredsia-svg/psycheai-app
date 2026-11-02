@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 102
+RELEASE = 103
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2076,7 +2076,9 @@ def build_digest(given=None, given_meta=None):
             convo_blocks.append('### Conversation %d: %s, %s to %s%s\n%s' % (
                 len(convo_blocks) + 1, 'one-to-one' if len(others) <= 1 else 'a group of %d' % (len(others) + 1),
                 first_t.strftime('%Y-%m'), last_t.strftime('%Y-%m'), ' (whole thread)' if tid in complete else '', '\n'.join(lines)))
-    interests = ['- ' + scrub(str(i)) for i in (meta.get('interests') or []) if str(i).strip()][:40]
+    # An interest that scrubs to nothing but a placeholder ("[number]") says nothing about them.
+    interests = [x for x in ('- ' + scrub(str(i)) for i in (meta.get('interests') or []) if str(i).strip())
+                 if re.search(r'\w', re.sub(r'\[(handle|link|email|number)\]', '', x))][:40]
     every = [x['t'] for x in items]
     counts = meta.get('counts') or {}
     head_counts = ['%d posts and stories' % (all_posts + sum(no_words.values())), '%d with words' % words, '%d comments' % len(comments)]
@@ -2588,6 +2590,39 @@ def first_same(items, what):
     return []
 
 
+def holding_problems(data):
+    """psycheai.io's holdingProblems: the career weakness shown beside "What holds you back" repeating it."""
+    ca = data.get('careerAssessment') if isinstance(data.get('careerAssessment'), dict) else {}
+    hb = ca.get('holdingBack') if isinstance(ca.get('holdingBack'), dict) else None
+    if not hb or not hb.get('headline'):
+        return []
+    back = {'title': hb['headline'], 'detail': hb.get('detail') or ''}
+    car = data.get('career') if isinstance(data.get('career'), dict) else {}
+    same = next((w for w in car.get('weaknesses') or [] if isinstance(w, dict) and isinstance(w.get('title'), str) and same_point(back, w)), None)
+    return ['career.weaknesses: "%s" makes the same point as careerAssessment.holdingBack "%s": leave it empty or name a different cost'
+            % (same['title'][:60], hb['headline'][:60])] if same else []
+
+
+NUMBER_WORDS = 'zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty'.split()
+
+
+def sample_problems(answer):
+    """The number of conversations read, cited as if it were a fact about them ("15 conversations running from 2018")."""
+    try:
+        with open(DIGEST, encoding='utf-8') as f:
+            head = f.read(2000)
+    except OSError:
+        return []
+    m = re.search(r'([\d,]+) conversations read', head)
+    if not m:
+        return []
+    n = int(m.group(1).replace(',', ''))
+    said = [str(n)] + ([NUMBER_WORDS[n]] if n < len(NUMBER_WORDS) else [])
+    rx = re.compile(r'\b(?:%s)\s+(?:conversations|threads|chats)\b' % '|'.join(map(re.escape, said)), re.I)
+    return ['%s cites "%s": that is how many conversations were read, the sample\'s size, not a fact about them; say what a conversation shows instead' % (at, rx.search(text).group(0))
+            for at, text in strings_in(answer) if rx.search(text)][:3]
+
+
 def plan_problems(data):
     dev = data.get('development') if isinstance(data.get('development'), dict) else {}
     car = data.get('careerAssessment') if isinstance(data.get('careerAssessment'), dict) else {}
@@ -2633,7 +2668,7 @@ def check_answer(path):
     # What would stop or hold the publish: these are fixed first.
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
-    problems += ei_problems(answer) + plan_problems(answer) + list_problems(answer)
+    problems += ei_problems(answer) + holding_problems(answer) + plan_problems(answer) + list_problems(answer) + sample_problems(answer)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
     if isinstance(args, dict) and 'answer' not in args:
