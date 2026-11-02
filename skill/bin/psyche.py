@@ -67,7 +67,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 96
+RELEASE = 97
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -336,6 +336,7 @@ p{margin:0 0 10px}
 .box.hard{background:#fdf7ef}
 .where,.it>span.where{display:block;margin-top:5px;font-size:12.5px;color:#8a7f96}
 .areas{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:7px}
+.def{margin:-4px 0 12px;font-size:13.5px}
 .areas span{font-size:12px;color:#8a7f96;margin-right:2px}
 .areas i{font-style:normal;padding:2px 9px;border-radius:999px;background:#f4eef8;color:#6a3590;font-size:11.5px;font-weight:650}
 .fine{margin:10px 0 0;font-size:12.5px;line-height:1.45;color:#8a7f96}
@@ -443,7 +444,8 @@ def _ev(evidence, label='', extra=''):
     ev = [x for x in _l(evidence) if isinstance(x, str)]
     if not ev and not extra:
         return ''
-    return '<ul class="ev">' + ''.join('<li>' + _e(x) + '</li>' for x in ev) + extra + '</ul>'
+    # Each line starts with a capital, as a sentence would ("your May 2018 messages…" came through lower-case).
+    return '<ul class="ev">' + ''.join('<li>' + _e(x[:1].upper() + x[1:]) + '</li>' for x in ev) + extra + '</ul>'
 
 
 def _items(xs, details=True):
@@ -536,11 +538,15 @@ def _overview(v):
                 + ('<span>' + _e(_s(v, 'source')) + '</span>' if _s(v, 'source') else '') + ('<p>' + _e(_s(v, 'why')) + '</p>' if _s(v, 'why') else '') + '</div>')
     paras = [p for p in _l(_s(v, 'summaryFull')) if isinstance(p, str)] or [x for x in [_s(v, 'summary')] if x]
     summ = ''.join('<p%s>%s</p>' % (' class="intro"' if i == 0 else '', _e(p)) for i, p in enumerate(paras))
+    # As psycheai.io shows them: the name, its line, the evidence, then where it shows up, under the
+    # heading's one-line definition (README "Signature patterns as the site writes them").
     pats = ''.join('<div class="pat"><span class="n">%d</span><div><b>%s</b>%s%s%s</div></div>' % (
         i + 1, _e(p.get('name')), '<span class="soft">' + _e(p.get('line')) + '</span>' if p.get('line') else '',
-        ('<div class="areas"><span>Shows up in</span>' + ''.join('<i>' + _e(x) + '</i>' for x in _l(p.get('showsUpIn')) if isinstance(x, str)) + '</div>') if _l(p.get('showsUpIn')) else '',
-        _ev(p.get('evidence')))
+        _ev(p.get('evidence')),
+        ('<div class="areas"><span>Shows up in</span>' + ''.join('<i>' + _e(x) + '</i>' for x in _l(p.get('showsUpIn')) if isinstance(x, str)) + '</div>') if _l(p.get('showsUpIn')) else '')
         for i, p in enumerate(p for p in _l(_s(v, 'patterns')) if isinstance(p, dict) and p.get('name')))
+    if pats:
+        pats = '<p class="soft def">The behaviours that explain the most about you.</p>' + pats
     return hero + _block('Executive summary', summ) + _block('Your signature patterns', pats), _s(v, 'character')
 
 
@@ -2539,28 +2545,6 @@ def ei_problems(data):
     return out
 
 
-TRAIT_OF = {'E/I': ('extraversion', 'E'), 'N/S': ('openness', 'N'), 'T/F': ('agreeableness', 'F'), 'J/P': ('conscientiousness', 'J')}
-
-
-def trait_problems(data):
-    """A Big Five trait on the other side of 50 from the letter it tracks, worded as psycheai.io's traitProblems."""
-    out = []
-    letters = (data.get('mbti') or {}).get('letters') or [] if isinstance(data.get('mbti'), dict) else []
-    five = data.get('bigFive') if isinstance(data.get('bigFive'), dict) else {}
-    for l in letters:
-        pair = TRAIT_OF.get(l.get('axis')) if isinstance(l, dict) else None
-        if not pair or not re.fullmatch(r'[EINSTFJP]', str(l.get('choice') or '')):
-            continue
-        score = (five.get(pair[0]) or {}).get('score') if isinstance(five.get(pair[0]), dict) else None
-        if not isinstance(score, (int, float)) or isinstance(score, bool):
-            continue
-        high = l['choice'] == pair[1]
-        if (score < 50) if high else (score > 50):
-            out.append('bigFive.%s: %s is on the other side of 50 from the letter %s: %s follows %s, so with %s it is %s (or, if the evidence says otherwise, the letter changes)'
-                       % (pair[0], score if score != int(score) else int(score), l['choice'], pair[0], l['axis'], l['choice'], '50 or above' if high else '50 or below'))
-    return out
-
-
 def same_point(a, b):
     stems = lambda t: [w[:5] for w in re.findall(r'[a-z]{3,}', str(t or '').lower()) if w not in SAME_COMMON]
     words = lambda t: re.findall(r'[a-z0-9]+', str(t or '').lower())
@@ -2633,7 +2617,7 @@ def check_answer(path):
     # What would stop or hold the publish: these are fixed first.
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
-    problems += ei_problems(answer) + trait_problems(answer) + plan_problems(answer) + list_problems(answer)
+    problems += ei_problems(answer) + plan_problems(answer) + list_problems(answer)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
     if isinstance(args, dict) and 'answer' not in args:
