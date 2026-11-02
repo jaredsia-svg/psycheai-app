@@ -330,13 +330,13 @@ async function route(req, res) {
       if (!inBrowser) return send(res, 200, skill.bootstrap(code ? { code, name } : {}), 'text/markdown');
       // /install opened in a browser: what PsycheAI is and the message to paste into Muse.
       if (!code) {
-        const msg = skill.shortInstall();
+        const msg = skill.installPrompt();
         return send(res, 200, theme.page('PsycheAI for Muse',
           `<h1>Your personal AI coach that already knows you</h1><p>PsycheAI reads your own Instagram in Muse and writes your Psyche: a Psyche Card to share and a private report on your type, what drives you, how you connect and how you work.</p>` +
-          `<p><b>Paste this link into Muse</b> and send it. When Muse asks to allow PsycheAI, tap <b>Allow all</b>, so it only asks once.</p>` +
+          `<p><b>Paste this into Muse</b> and send it. When Muse asks to share information with app.psycheai.io, tap <b>Always allow this site</b>, so it asks only once. Posts only? End it with "from my posts only".</p>` +
           `<pre id="invite" style="white-space:pre-wrap;word-break:break-word;background:var(--alt);border:1.5px dashed var(--line);border-radius:12px;padding:12px;font-size:.9rem">${esc(msg)}</pre>` +
           `<p><button type="button" id="copy">Copy</button></p><script>document.getElementById('copy').onclick=function(){navigator.clipboard.writeText(document.getElementById('invite').textContent).then(function(){document.getElementById('copy').textContent='Copied';});};</script>` +
-          `<p>Free. Your posts and messages are never stored.</p>`, { head: preview.tags({ ...shared, url: BASE + url.pathname, base: BASE }) }), 'text/html');
+          `<p>Free. Your posts and messages are read in Muse, on your own account: PsycheAI never stores them.</p>`, { head: preview.tags({ ...shared, url: BASE + url.pathname, base: BASE }) }), 'text/html');
       }
     }
     // A Psyche link, opened in a browser: who sent it, and how to use it in Muse.
@@ -350,11 +350,11 @@ async function route(req, res) {
       const link = esc(require('./lib/config').BASE_URL + url.pathname);
       return send(res, 200, theme.page(name + ' wants to sync with you',
         `<h1>${name} wants to see how you two sync</h1><p>PsycheAI reads your Instagram, writes your Psyche Card and shows how you click with ${name}: what you share, how you get on, and how to relate to each other better.</p>` +
-        `<p><b>Paste this into Muse</b> and send it: it sets up PsycheAI, makes your Psyche and syncs you with ${name}. When Muse asks to allow PsycheAI, tap <b>Allow all</b>, so it only asks once.</p>` +
+        `<p><b>Paste this into Muse</b> and send it: it sets up PsycheAI, makes your Psyche and syncs you with ${name}. When Muse asks to share information with app.psycheai.io, tap <b>Always allow this site</b>, so it only asks once.</p>` +
         `<pre id="invite" style="white-space:pre-wrap;word-break:break-word;background:var(--alt);border:1.5px dashed var(--line);border-radius:12px;padding:12px;font-size:.9rem">${esc(skill.installPrompt({ code: syncPath[1], name: first }))}</pre>` +
         `<p><button type="button" id="copy">Copy</button></p><script>document.getElementById('copy').onclick=function(){navigator.clipboard.writeText(document.getElementById('invite').textContent).then(function(){document.getElementById('copy').textContent='Copied: paste it into Muse'})}</script>` +
         `<p class="note">Already have PsycheAI in Muse? Just say: <b>Sync with ${link}</b></p>` +
-        `<p>Free. Your posts and messages are never stored.</p>`, { head: preview.tags({ title: (first || 'A friend') + ' wants to see how you two sync', description: 'Paste this link into Muse: PsycheAI writes your Psyche Card from your own Instagram and shows how you two click.', url: require('./lib/config').BASE_URL + url.pathname, base: require('./lib/config').BASE_URL }) }), 'text/html');
+        `<p>Free. Your posts and messages are read in Muse, on your own account: PsycheAI never stores them.</p>`, { head: preview.tags({ title: (first || 'A friend') + ' wants to see how you two sync', description: 'Paste this link into Muse: PsycheAI writes your Psyche Card from your own Instagram and shows how you two click.', url: require('./lib/config').BASE_URL + url.pathname, base: require('./lib/config').BASE_URL }) }), 'text/html');
     }
     // One of their Instagram photos, offered in the form, fetched for the form's own page.
     const igPath = /^\/pair\/form\/([\w.-]+)\/ig\/(\d{1,2})\.jpg$/.exec(url.pathname);
