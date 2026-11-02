@@ -63,7 +63,7 @@ import socket
 import sys
 import time
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -71,7 +71,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 125
+RELEASE = 126
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -112,16 +112,35 @@ LAST = os.path.join(HERE, 'last-psyche.json')   # what the latest publish gave b
 OUT = os.path.join(HERE, 'out')                 # the PDF as a file here, so the chat opens it in Muse, not a browser
 
 
+def local_now():
+    """Now on the user's clock: Muse's machine runs on UTC, so the offset Instagram's own times
+    showed at the last collect (user_local beside utc) is added; without one, the machine's clock."""
+    off = (read_first([LAST_COLLECT]) or {}).get('utcOffset')
+    if isinstance(off, int) and -840 <= off <= 840:
+        return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=off)
+    return datetime.now()
+
+
+def file_tag(previous=None):
+    """This publish's part of the file names: the user's local date, and from a second Psyche saved
+    the same day " (2)", " (3)"… (README "A name for each run"). Every run once had the same names,
+    and the Muse phone app showed its stored copy of the last run's report under the new one's name."""
+    day = local_now().strftime('%d%m%Y')
+    m = re.match(r'^(\d{8})(?: \((\d+)\))?$', str((previous or {}).get('fileTag') or ''))
+    if not m or m.group(1) != day:
+        return day
+    return '%s (%d)' % (day, int(m.group(2) or 1) + 1)
+
+
 def file_label(kind):
-    """A saved file's name: "Psyche Report - Mei Tan - 01112026", their full name and the save's date
-    (as psycheai.io names its PDFs), never the time."""
+    """A saved file's name: "Psyche Report - Mei Tan - 01112026", their full name and this publish's
+    tag (file_tag: the local date, numbered from a second the same day), never the time."""
     kept = read_first([REPORT, REPORT_KEPT]) or {}
     name = re.sub(r'[^\w .&()-]', '', str(kept.get('name') or '')).strip()[:60]
-    try:
-        day = datetime.fromtimestamp(os.path.getmtime(LAST)).strftime('%d%m%Y')
-    except OSError:
-        day = datetime.now().strftime('%d%m%Y')
-    return ' - '.join(x for x in [kind, name, day] if x)
+    tag = (read_first([LAST]) or {}).get('fileTag')
+    if not isinstance(tag, str) or not re.match(r'^\d{8}( \(\d+\))?$', tag):
+        tag = local_now().strftime('%d%m%Y')
+    return ' - '.join(x for x in [kind, name, tag] if x)
 
 
 # Where the card and PDF may be fetched from (README "Fetched only from PsycheAI"): a server
@@ -947,6 +966,7 @@ def saved(out):
     """Keep a publish result here and say only that it's saved, and its parts."""
     # The last Psyche's PDF goes, so only this one's can be attached: show pdf fetches it.
     shutil.rmtree(OUT, ignore_errors=True)
+    out = dict(out, fileTag=file_tag(read_first([LAST])))
     write_private([LAST], out)
     # The PDF (its link lasts 30 minutes) is fetched by show ready, beside the card and report,
     # or by show pdf if that comes first: never on the way to the card.
@@ -2281,10 +2301,18 @@ def caption_of(p):
     return ''
 
 
+SEEN_OFFSET = [None]   # the user's minutes from UTC, as their Instagram times showed it in this run
+
+
 def local_time(stamp, raw=None):
     """A post's or message's time: the user's local time, else UTC, else the raw provider time."""
     if stamp is not None and not isinstance(stamp, dict):
         stamp, raw = None, stamp if raw in (None, '') else raw
+    if isinstance(stamp, dict) and when(stamp.get('user_local')) and when(stamp.get('utc')):
+        # The user's offset from UTC, to the quarter hour, for local_now (kept by collect as utcOffset).
+        mins = round((when(stamp['user_local']) - when(stamp['utc'])).total_seconds() / 900) * 15
+        if -840 <= mins <= 840:
+            SEEN_OFFSET[0] = mins
     for v in ((stamp or {}).get('user_local'), (stamp or {}).get('utc')) if isinstance(stamp, dict) else ():
         if when(v):
             return when(v)
@@ -3637,6 +3665,7 @@ def main(argv):
         # "last-collect" can show it after a helper ran it (README "The last collect, kept").
         if out.get('read'):
             write_private([LAST_COLLECT], {'at': datetime.now().strftime('%Y-%m-%d %H:%M'), 'account': account_tag(opts.get('--account-id')), 'messages': not opts.get('no'),
+                                           **({'utcOffset': SEEN_OFFSET[0]} if SEEN_OFFSET[0] is not None else {}),
                                            **{k: out[k] for k in ('ok', 'read', 'notes', 'stopped', 'problems', 'characters') if k in out}})
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return

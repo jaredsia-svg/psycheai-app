@@ -2278,6 +2278,18 @@ print(json.dumps([names, interest, m.evidence_problems(bad), m.evidence_problems
         /answer\.t is "growing", not one of the allowed values \(rising, phasic\)/.test(got[4].join(' ')) && /answer\.n should be an integer/.test(got[4].join(' ')) && got[5].length === 0 &&
         /problems \+= \[n for n in notes if 'not one of the allowed values' in n or re\.search/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')), JSON.stringify(got.slice(4)));
     }
+    {
+      const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.local_time({'user_local': '2026-11-03 01:37:00', 'utc': '2026-11-02 17:37:00'})
+off = m.SEEN_OFFSET[0]
+day = m.local_now().strftime('%d%m%Y')
+print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_tag({'fileTag': day + ' (2)'}), m.file_tag({'fileTag': '01012020 (4)'}), day]))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
+      const src = fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8');
+      check('each run\'s files have names of their own, on the user\'s date: the first Psyche saved on a day is "… - 03112026", the next "… (2)", then "(3)"; the date is the user\'s, from the offset their Instagram times showed (user_local beside utc, kept by collect), not Muse\'s UTC clock (the Muse phone app showed its stored copy of the last run\'s report under the same name)',
+        got[0] === 480 && got[1] === got[5] && got[2] === got[5] + ' (2)' && got[3] === got[5] + ' (3)' && got[4] === got[5] &&
+        /out = dict\(out, fileTag=file_tag\(read_first\(\[LAST\]\)\)\)/.test(src) && /'utcOffset': SEEN_OFFSET\[0\]/.test(src) && /tag = \(read_first\(\[LAST\]\) or \{\}\)\.get\('fileTag'\)/.test(src), JSON.stringify(got));
+    }
     check('every command runs as python3 bin/psyche.py: a file fetched with curl isn\'t executable, and a Muse run lost its first collect to "Permission denied" (exit 126)',
       /Every command runs as `python3 bin\/psyche\.py <command>`, never `bin\/psyche\.py` on its own/.test(skillMd) && !/(?<!python3 )`bin\/psyche\.py (collect|call|show|status|first-run|check-answer)/.test(skillMd) &&
       !/(?<!python3 )bin\/psyche\.py (collect|call|show|check-answer)/.test(instructions.MUSE_PROCEDURE));
