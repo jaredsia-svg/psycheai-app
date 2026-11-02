@@ -2523,7 +2523,7 @@ print(json.dumps({'file': r.get('file'), 'body': open(r['file']).read() if r.get
   const selfPage = await (await fetch(myCard.structuredContent.page.replace(/^http:\/\/localhost:\d+/, base))).text();
   check('your own card page has no buttons, and says how to change it', /Your Psyche Card/.test(selfPage) && !/<button/.test(selfPage) && /tell Muse what to fix/.test(selfPage));
   check('pages escape what users wrote', !/<script>alert/.test(selfPage));
-  for (const [path, to] of [['/', '/muse'], ['/add-to-muse', '/muse#add'], ['/privacy', '/muse-privacy'], ['/terms', '/muse-terms'], ['/safety', '/muse#safety'], ['/docs', '/muse-docs']]) {
+  for (const [path, to] of [['/', '/muse'], ['/add-to-muse', '/muse#add'], ['/privacy', '/muse-privacy'], ['/terms', '/muse-terms'], ['/safety', '/muse-pair#safety'], ['/docs', '/muse-docs']]) {
     const moved = await fetch(base + path, { redirect: 'manual' });
     check('the old page ' + path + ' redirects to psycheai.io' + to, moved.status === 301 && moved.headers.get('location').endsWith(to), moved.headers.get('location'));
   }
