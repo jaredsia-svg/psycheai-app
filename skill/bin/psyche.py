@@ -64,6 +64,7 @@ import io
 import json
 import math
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -82,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 137
+RELEASE = 138
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1713,19 +1714,12 @@ def mark(label):
 
 
 def send_timing():
-    """The read's marks, as seconds before now, to PsycheAI; then they're cleared. Never holds up the read."""
+    """The read's marks are cleared once it's delivered, and never sent anywhere (README "Nothing about them
+    leaves Muse"): they once went to PsycheAI as seconds per stage, the digest's size and whether messages
+    were in, which Muse rightly counted as something about them leaving."""
     try:
-        with open(TIMING) as f:
-            marks = json.load(f)
         os.remove(TIMING)
-        now = time.time()
-        digest = check_digest()
-        body = {'marks': [[m[0], round(m[1] - now)] for m in marks], 'chars': digest.get('characters'), 'reads': digest.get('reads'),
-                'messages': 'Messages' in (digest.get('sections') or {})}
-        req = urllib.request.Request(BASE + '/skill/timing', data=json.dumps(body).encode(), method='POST',
-                                     headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + account()['access_token']})
-        urllib.request.urlopen(req, timeout=5).close()
-    except Exception:
+    except OSError:
         pass
 
 
@@ -1791,7 +1785,7 @@ def first_run():
     rides in a tool result: SKILL.md says what to do."""
     account()
     out = {'version': local_version()}
-    start = call('start', {})
+    start = call('start', {}, first=True)    # a first run's welcome, even with a report kept here from before
     out['say'], out['reel'] = start.get('say'), start.get('reel')
     if start.get('error'):
         out['error'] = start['error']
@@ -3925,12 +3919,11 @@ def local_publish(args):
     answer = canonical(args['answer'], schema, schema.get('$defs', {})) if schema else args['answer']
     name = args.get('name') or ''
     full = local_full(answer, name, guide.get('labels') or {})
-    out = call('psyche_saved', {})
-    if isinstance(out, dict) and out.get('ok'):
-        out['full'] = full
-        out['card'] = card_summary(answer, name)
-        args['answer'] = answer
-    return out
+    card = card_summary(answer, name)
+    # Nothing is sent, not even that a Psyche exists (README "Nothing about them leaves Muse"): What's next
+    # and the ideas to ask come from here (AFTER_PUBLISH, ASK_IDEAS: lib/next.js and lib/mcp.js's, kept in step by the selftest).
+    args['answer'] = answer
+    return {'ok': True, 'full': full, 'card': card, 'nextStep': json.loads(json.dumps(AFTER_PUBLISH)), 'askIdeas': ask_ideas(card.get('patterns'))}
 
 
 def with_pinned_guide(tool, args, out):
@@ -3994,10 +3987,35 @@ def clean_result(value):
     return out
 
 
+# What's next after a Psyche, and the ideas to ask: the server's own (lib/next.js publish_psyche, lib/mcp.js
+# ASK_IDEAS and askIdeas), here so publishing asks nothing of it. The selftest holds them to the server's.
+AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Add WhatsApp or Facebook", "More"], "asButtons": True, "sources": ["WhatsApp chats", "Facebook and Messenger", "Facebook posts only"], "more": {"buttons": ["Weekly check-ins on my plan", "Join the Psyche Pair waitlist", "My data and privacy"]}}
+ASK_IDEAS = [
+"Who am I when I'm not being useful, impressive or needed?",
+"What do I keep trying to prove, and to whom?",
+"What am I most insecure about in my life?",
+"What would make my life worthwhile, even if nobody ever knew what I achieved?",
+"What would I regret most about my life when I'm old?",
+"What do I already know needs attention in my life, but keep putting off because it means a hard choice?",
+"Which commitments deserve my loyalty, and which need rethinking?",
+"How can I show up better for my partner, my family and the people closest to me?",
+"Should I move abroad and start again? If you picked one country for me, which would it be, and why?",
+"How can I become a better leader, at work and with the people around me?",
+"I'm thinking about a big change in my career. Is it right for me, given everything else in my life?"
+]
+
+
+def ask_ideas(patterns=None, n=4):
+    pool = list(ASK_IDEAS)
+    random.shuffle(pool)
+    own = ['Where does "%s" come from in me, and how do I make it work for me?' % str(patterns[0])[:40]] if patterns else []
+    return (own + pool)[:n]
+
+
 SYNC_SENDS_CARD = ('sync_link', 'sync_with', 'get_syncs', 'get_sync', 'save_sync')
 
 
-def call(tool, args):
+def call(tool, args, first=False):
     if tool == 'get_report_guide':
         return with_pinned_guide(tool, args, None)
     acc = account()
@@ -4024,6 +4042,12 @@ def call(tool, args):
         keep_keys(card=out.pop('cardKey'))
     if tool == 'sync_link' and out.get('url'):
         keep_keys(text=out['url'])
+    if tool == 'start' and isinstance(out, dict):
+        # The server can't tell who has a Psyche any more (nothing is sent to say so): start gives both
+        # menus, and the one for someone back is used when their report is kept here.
+        back = out.pop('returning', None)
+        if isinstance(back, dict) and not first and read_first([REPORT, REPORT_KEPT]):
+            out = back
     out = clean_result(with_pinned_guide(tool, args, out))
     files = [c for c in result.get('content', []) if c.get('type') == 'resource_link']
     if files:
