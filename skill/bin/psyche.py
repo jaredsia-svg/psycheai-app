@@ -60,6 +60,7 @@ import base64
 import hashlib
 import http.client
 import json
+import math
 import os
 import re
 import shutil
@@ -79,7 +80,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 131
+RELEASE = 132
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -3023,6 +3024,373 @@ def list_problems(data):
     return out[:1]
 
 
+# ---------- the report laid out here (README "The report stays in Muse") ----------
+# The read never leaves Muse: the report file is laid out here from the answer itself, as
+# psycheai.io's lib/musepdf.js view() and full() lay it out, with its fixed wording (motivator
+# names, labels, icons) from the signed guide.json's labels. The selftest holds the two to the
+# same output on psycheai.io's own sample reads (tools/fixtures/report-view.json): keep in step.
+_NAN = float('nan')
+
+
+def _jsnum(v):
+    """JavaScript's Number(v): None 0, a bool 1 or 0, a numeric string its value, else NaN."""
+    if v is None:
+        return 0.0
+    if isinstance(v, bool):
+        return 1.0 if v else 0.0
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        t = v.strip()
+        if not t:
+            return 0.0
+        try:
+            return float(t)
+        except ValueError:
+            return _NAN
+    return _NAN
+
+
+def _finite(x):
+    return isinstance(x, float) and math.isfinite(x)
+
+
+def _round(x):
+    return int(math.floor(x + 0.5))
+
+
+def _truthy(v):
+    if isinstance(v, float) and math.isnan(v):
+        return False
+    return v is not None and v is not False and v != '' and v != 0 or isinstance(v, (list, dict))
+
+
+def _at(o, *keys):
+    """o.k1.k2 as JavaScript reads it: a missing step gives None."""
+    for k in keys:
+        if not isinstance(o, dict):
+            return None
+        o = o.get(k)
+    return o
+
+
+def _ls(x):
+    return x if isinstance(x, list) else []
+
+
+def _tx(x):
+    return x.strip() if isinstance(x, str) else ''
+
+
+_MONTH = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)'
+_UNDATED = [
+    (re.compile(r'\s*\([^)]*\b(?:19|20)\d{2}\b[^)]*\)', re.A), ''),
+    (re.compile(r',?\s+(?:as in|like in|e\.g\.|for example|such as|most recently)\s+[^,.;!?]*\b(?:19|20)\d{2}\b', re.A | re.I), ''),
+    (re.compile(r'\s+(?:in|since|from|during|by|until)\s+(?:(?:early|late|mid)[- ])?' + _MONTH + r'\.?\s+(?:19|20)\d{2}\b', re.A | re.I), ''),
+    (re.compile(r'\s+(?:in|since|during)\s+(?:19|20)\d{2}\b', re.A), ''),
+    (re.compile(r'\s+([,.;!?])', re.A), r'\1'),
+]
+
+
+def _undated(t):
+    t = '' if t is None else str(t)
+    for rx, sub in _UNDATED:
+        t = rx.sub(sub, t)
+    return t.strip()
+
+
+def _first_sentence(text):
+    t = re.sub(r'\s+', ' ', '' if text is None else str(text)).strip()
+    m = re.match(r'^.{20,240}?[.!?](?=\s|$)', t)
+    return m.group(0) if m else t[:200]
+
+
+def _after_prefix(text):
+    t = '' if text is None else str(text)
+    first = re.split(r'\s', t)[0] if t else ''
+    plain = bool(re.match(r'^[A-Z][a-z]*$', first)) and first != 'I'
+    return t[:1].lower() + t[1:] if plain and not re.match(r'^[A-Z][a-z]+ [A-Z]', t) else t
+
+
+def _plan_pick(lists, horizons, most):
+    queue, seen = [], set()
+    longest = max([0] + [len(x) for x in lists])
+    for i in range(longest):
+        for items in lists:
+            item = items[i] if i < len(items) else None
+            key = re.sub(r'[^a-z0-9]+', ' ', str((item or {}).get('step') or (item or {}).get('title') or '').lower()).strip() if item else ''
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            queue.append(item)
+    chosen = []
+    for h in horizons:
+        first = next((x for x in queue if not any(x is c for c in chosen) and x.get('horizon') == h), None)
+        if first is not None and len(chosen) < most:
+            chosen.append(first)
+    for x in queue:
+        if len(chosen) >= most:
+            break
+        if not any(x is c for c in chosen):
+            chosen.append(x)
+    return [x for x in queue if any(x is c for c in chosen)]
+
+
+def _with_own_name(value, real):
+    if not real:
+        return value
+    if isinstance(value, str):
+        return re.sub(r'\bPsycheUser\b', real, value)
+    if isinstance(value, list):
+        return [_with_own_name(v, real) for v in value]
+    if isinstance(value, dict):
+        return {k: _with_own_name(v, real) for k, v in value.items()}
+    return value
+
+
+def _view(r, L):
+    one = lambda t: _undated(_first_sentence(t)) if _truthy(t) else ''
+    full = lambda t: _undated(re.sub(r'[ \t]+', ' ', str(t)).strip()) if _truthy(t) else ''
+    paras = lambda t: [x for x in (full(p) for p in re.split(r'\n\s*\n', '' if not _truthy(t) else str(t))) if x][:4]
+    titles = lambda xs, n: [y for y in ((x.get('title') or x.get('headline')) if isinstance(x, dict) else None for x in _ls(xs)) if _truthy(y)][:n]
+    items = lambda xs, n: [{'title': str(x.get('title') or x.get('headline')).strip(), 'detail': full(x.get('detail'))}
+                           for x in _ls(xs) if isinstance(x, dict) and _truthy(x.get('title') or x.get('headline'))][:n]
+    label = lambda t: ('' if not _truthy(t) else str(t)).split(':')[0].strip()
+    placeholder = lambda t: bool(re.match(r'^kind of work$', t, re.I))
+
+    def split(xs):
+        out = []
+        for x in [str(y) for y in _ls(xs)]:
+            if not x or placeholder(label(x)):
+                continue
+            at = x.find(': ')
+            out.append({'title': x[:at].strip(), 'detail': full(x[at + 2:])} if at > 0 else {'title': x.strip(), 'detail': ''})
+        return out[:3]
+    essence, mbti, five = _at(r, 'essence') or {}, _at(r, 'mbti') or {}, _at(r, 'bigFive') or {}
+    traits, W = L.get('traitLabels') or {}, _at(r, 'wellness') or {}
+    rel = _at(r, 'relationship') or {}
+    love, ideal = rel.get('loveLanguages') or {}, _at(r, 'idealPartner') or {}
+    career, dev, conf = _at(r, 'careerAssessment') or {}, _at(r, 'development') or {}, _at(r, 'confidence') or {}
+    icons, M, areas = L.get('loveIcons') or {}, L.get('motivators') or {}, L.get('wellbeingAreas') or {}
+
+    def lang(xs, giving=False):
+        return [{'language': 'Giving gifts' if giving and l['language'] == 'Receiving gifts' else l['language'], 'icon': icons.get(l['language']) or '💗',
+                 'strength': l.get('strength') or 'secondary', 'line': one(l.get('inPractice'))}
+                for l in _ls(xs) if isinstance(l, dict) and _truthy(l.get('language'))][:3]
+    fit = lambda xs: [y for y in (label(x) for x in _ls(xs)) if y and not placeholder(y)][:3]
+    steps = _ls(career.get('actions')) + [a for d in _ls(dev.get('develop')) for a in _ls(_at(d, 'actions'))]
+    plan = []
+    for h in ['this week', 'this quarter', 'this year']:
+        a = next((x for x in steps if isinstance(x, dict) and str(x.get('horizon') or '').lower() == h and _truthy(x.get('title') or x.get('step'))), None)
+        if a:
+            plan.append({'when': h[:1].upper() + h[1:], 'step': str(a.get('title') or a.get('step')).strip()})
+    develop = _ls(dev.get('develop'))
+    hb, under = career.get('holdingBack') or {}, career.get('underused') or {}
+    horizons = ['this week', 'this quarter', 'this year']
+    picked = _plan_pick([
+        [{'horizon': a.get('horizon'), 'step': a.get('step'), 'from': d.get('title')} for d in develop if isinstance(d, dict) for a in _ls(d.get('actions')) if isinstance(a, dict) and _truthy(a.get('step'))],
+        [{'horizon': a.get('horizon'), 'step': a.get('title'), 'detail': a.get('detail'), 'from': L.get('fromWork')} for a in _ls(career.get('actions')) if isinstance(a, dict) and _truthy(a.get('title'))],
+        [{'horizon': 'this week', 'step': a.get('title'), 'detail': a.get('detail'), 'from': L.get('fromWellbeing')} for a in _ls(W.get('suggestions')) if isinstance(a, dict) and _truthy(a.get('title'))],
+    ], horizons, L.get('planSteps') or 5)
+
+    def step_of(a):
+        h = str(a.get('horizon') or '').lower()
+        h = h if h in horizons else 'this week'
+        return {'when': h[:1].upper() + h[1:], 'step': str(a.get('step')).strip(), 'detail': full(a.get('detail')), 'from': a.get('from') or ''}
+    return {
+        'overview': {
+            'character': essence.get('character') or '', 'type': mbti.get('type') or '', 'nickname': mbti.get('nickname') or '',
+            'headline': _at(r, 'card', 'headline') or '', 'summary': one(r.get('summary')),
+            'source': essence.get('source') or '', 'why': full(essence.get('why')), 'summaryFull': paras(r.get('summary')),
+            'patterns': [{'name': p['name'], 'line': one(p.get('line'))} for p in _ls(r.get('patterns')) if isinstance(p, dict) and _truthy(p.get('name'))][:3],
+        },
+        'whoYouAre': {
+            'mbti': [{'letter': l['choice'], 'name': (L.get('mbtiPoles') or {}).get(l['choice']) or l['choice'], 'strength': str(l.get('strength') or '').lower(),
+                      'line': (L.get('letterLines') or {}).get(l['choice'], ''), 'reading': full(l.get('why'))}
+                     for l in _ls(mbti.get('letters')) if isinstance(l, dict) and _truthy(l.get('choice'))],
+            'bigFive': [{'trait': traits[k], 'score': _round(_jsnum(five[k].get('score'))), 'line': one(five[k].get('reading')), 'band': five[k].get('band') or '', 'reading': full(five[k].get('reading'))}
+                        for k in traits if isinstance(five.get(k), dict) and _finite(_jsnum(five[k].get('score')) if 'score' in five[k] else _NAN)],
+            'wellbeing': {
+                'summary': one(W.get('overall')),
+                'areas': [{'area': areas[k], 'band': W[k]['band'], 'reading': full(W[k].get('reading'))}
+                          for k in areas if isinstance(W.get(k), dict) and _truthy(W[k].get('band')) and W[k]['band'] != 'not enough evidence'],
+                'together': full(W.get('overall')),
+            },
+        },
+        'whatDrivesYou': {
+            'motivators': [{'name': (M.get(m['value']) or {}).get('label') or m['value'], 'score': _round(_jsnum(m.get('score'))),
+                            'group': (M.get(m['value']) or {}).get('group') or '', 'meaning': (M.get(m['value']) or {}).get('meaning') or ''}
+                           for m in _ls(_at(r, 'motivators', 'scores')) if isinstance(m, dict) and _truthy(m.get('value')) and 'score' in m and _finite(_jsnum(m.get('score')))],
+            'top': [(M.get(k) or {}).get('label') or k for k in _ls(r.get('topMotivators'))][:3],
+            'reading': one(_at(r, 'motivators', 'reading')),
+            'values': [y for y in (_at(v, 'value') for v in _ls(r.get('values'))) if _truthy(y)][:4],
+            'interests': [y for y in (_at(i, 'name') for i in _ls(r.get('interests'))) if _truthy(y)][:5],
+            'beliefs': [y for y in (_at(b, 'belief') for b in _ls(r.get('beliefs'))) if _truthy(y)][:3],
+        },
+        'howYouConnect': {
+            'loveLanguages': {'receiving': lang(love.get('receiving')), 'giving': lang(love.get('giving'), True)},
+            'attachment': _at(r, 'attachment', 'style') or '',
+            'atYourBest': titles(rel.get('strengths'), 3), 'watchFor': titles(rel.get('weaknesses'), 3),
+            'partnerNeeds': titles(ideal.get('needs'), 4), 'carefulOf': titles(ideal.get('carefulOf'), 3), 'bestPartner': one(ideal.get('summary')),
+            'attachmentTone': full(_at(r, 'attachment', 'styleTone')), 'attachmentReading': full(_at(r, 'attachment', 'why')),
+            'conflict': full(_at(r, 'attachment', 'conflict')), 'bring': items(rel.get('strengths'), 3), 'hard': items(rel.get('weaknesses'), 3),
+            'whoSuits': full(ideal.get('summary')), 'needs': items(ideal.get('needs'), 4), 'careful': items(ideal.get('carefulOf'), 3),
+        },
+        'howYouWork': {
+            'edge': _at(career, 'edge', 'headline') or '', 'underused': under.get('headline') or '', 'holdingBack': hb.get('headline') or '',
+            'strengths': titles(_at(r, 'career', 'strengths'), 3), 'suits': fit(_at(career, 'fit', 'suits')), 'drains': fit(_at(career, 'fit', 'draining')),
+            'edgeDetail': full(_at(career, 'edge', 'detail')),
+            'others': items(_at(r, 'career', 'strengths'), 3) + ([{'title': (L.get('notYetUsing') or 'Not yet using: ') + _after_prefix(under['headline']), 'detail': full(under.get('detail'))}]
+                                                                if _truthy(under.get('headline')) else []),
+            'holding': items(([hb] if _truthy(hb.get('headline')) else []) + _ls(_at(r, 'career', 'weaknesses')), 2),
+            'suitsFull': split(_at(career, 'fit', 'suits')), 'drainsFull': split(_at(career, 'fit', 'draining')),
+        },
+        'puttingItTogether': {
+            'buildOn': titles(dev.get('buildOn'), 2), 'workOn': titles(dev.get('develop'), 2),
+            'whenItShows': one(_at(develop[0] if develop and isinstance(develop[0], dict) else {}, 'counterMove')),
+            'plan': plan, 'wellbeing': titles(W.get('suggestions'), 2), 'build': items(dev.get('buildOn'), 3),
+            'develop': [{'title': d['title'], 'detail': full(d.get('detail')), 'signs': [y for y in (full(x) for x in _ls(d.get('earlySigns'))) if y][:3],
+                         'counterMove': full(d.get('counterMove')), 'reflect': full(d.get('reflect'))} for d in develop if isinstance(d, dict) and _truthy(d.get('title'))][:3],
+            'steps': [step_of(a) for a in picked],
+        },
+        'confidence': {'score': _round(_jsnum(conf['score'])) if 'score' in conf and _finite(_jsnum(conf['score'])) else None,
+                       'level': conf.get('level') or '', 'basedOn': _ls(conf.get('basedOn'))[:4]},
+    }
+
+
+def local_full(answer, name, labels=None):
+    """The whole report, evidence included, for the report file: psycheai.io's full(), laid out here."""
+    L = labels if labels is not None else ((pinned_guide() or {}).get('labels') or {})
+    A = answer if isinstance(answer, dict) else {}
+    r = _with_own_name(dict(A), re.sub(r'\s+', ' ', str(name or '')).strip())
+    if not _at(r, 'wellness', 'rhythmAndActivity'):
+        r['wellness'] = dict(A.get('wellness') or {}, **(r.get('wellness') or {}))
+    v = _view(r, L)
+    strs = lambda xs, n=6: [y for y in (_tx(x) for x in _ls(xs)) if y][:n]
+    names = L.get('sectionNames') or {}
+
+    def section_names(keys):
+        out = []
+        for k in _ls(keys):
+            n = names.get(k) if isinstance(k, str) else None
+            if n and n not in out:
+                out.append(n)
+        return out[:8]
+    by_name = {p['name']: p for p in _ls(r.get('patterns')) if isinstance(p, dict) and _truthy(p.get('name'))}
+    v['overview']['patterns'] = [dict(p, line=_tx(by_name.get(p['name'], {}).get('line')) or p['line'], evidence=strs(by_name.get(p['name'], {}).get('evidence')),
+                                      showsUpIn=section_names(by_name.get(p['name'], {}).get('showsUpIn'))) for p in v['overview']['patterns']]
+    v['overview']['why'] = _tx(_at(r, 'essence', 'why')) or v['overview']['why']
+    v['overview']['summaryFull'] = [y for y in (_tx(x) for x in re.split(r'\n\s*\n', _tx(r.get('summary')))) if y][:6]
+    letters = {l['choice']: l for l in _ls(_at(r, 'mbti', 'letters')) if isinstance(l, dict) and _truthy(l.get('choice'))}
+    v['whoYouAre']['mbti'] = [dict(l, reading=_tx(letters.get(l['letter'], {}).get('why')) or l['reading'], inPractice=_tx(letters.get(l['letter'], {}).get('inPractice')),
+                                   evidence=strs(letters.get(l['letter'], {}).get('evidence'))) for l in v['whoYouAre']['mbti']]
+    v['whoYouAre']['mbtiCaveat'] = _tx(_at(r, 'mbti', 'caveat'))
+    traits = L.get('traitLabels') or {}
+    five_key = {traits[k]: k for k in traits}
+    trait = lambda k: dict(_at(A, 'bigFive', k) or {}, **(_at(r, 'bigFive', k) or {}))
+    v['whoYouAre']['bigFive'] = [dict(t, reading=_tx(trait(five_key.get(t['trait'])).get('reading')) or t['reading'],
+                                      evidence=strs(trait(five_key.get(t['trait'])).get('evidence')) or strs(_at(A, 'bigFive', five_key.get(t['trait']), 'evidence')))
+                                 for t in v['whoYouAre']['bigFive']]
+    W = r.get('wellness') or {}
+    area_key = {a: k for k, a in (L.get('wellbeingAreas') or {}).items()}
+    v['whoYouAre']['wellbeing']['areas'] = [dict(a, reading=_tx(_at(W, area_key.get(a['area']), 'reading')) or a['reading'],
+                                                 confidence=_tx(_at(W, area_key.get(a['area']), 'confidence')), evidence=strs(_at(W, area_key.get(a['area']), 'evidence')))
+                                            for a in v['whoYouAre']['wellbeing']['areas']]
+    v['whoYouAre']['wellbeing']['together'] = _tx(W.get('overall')) or v['whoYouAre']['wellbeing']['together']
+    scores = _ls(_at(r, 'motivators', 'scores'))
+    lines = {m['value']: _tx(m.get('line')) for m in scores if isinstance(m, dict) and _truthy(m.get('value'))}
+    M = L.get('motivators') or {}
+    v['whatDrivesYou']['motivators'] = [{'name': (M.get(m['value']) or {}).get('label') or m['value'], 'score': _round(_jsnum(m['score'])),
+                                         'group': (M.get(m['value']) or {}).get('group') or '', 'meaning': (M.get(m['value']) or {}).get('meaning') or '',
+                                         'line': lines.get(m['value']) or ''}
+                                        for m in scores if isinstance(m, dict) and _truthy(m.get('value')) and 'score' in m and _finite(_jsnum(m['score']))]
+    v['whatDrivesYou']['reading'] = _tx(_at(r, 'motivators', 'reading')) or v['whatDrivesYou']['reading']
+    v['whatDrivesYou']['valuesFull'] = [{'title': _tx(x.get('value')), 'detail': _tx(x.get('detail')), 'evidence': strs([x.get('evidence')]), 'trajectory': _tx(x.get('trajectory'))}
+                                        for x in _ls(r.get('values')) if isinstance(x, dict) and _truthy(x.get('value'))][:6]
+    v['whatDrivesYou']['beliefsFull'] = [{'title': _tx(x.get('belief')), 'detail': _tx(x.get('detail')), 'evidence': strs([x.get('evidence')])}
+                                         for x in _ls(r.get('beliefs')) if isinstance(x, dict) and _truthy(x.get('belief'))][:4]
+    interest_of = lambda n: next((y for y in _ls(A.get('interests')) if isinstance(y, dict) and y.get('name') == n), {})
+    v['whatDrivesYou']['interestsFull'] = [{'title': _tx(x.get('name')), 'detail': _tx(x.get('detail')) or _tx(interest_of(x.get('name')).get('detail')),
+                                            'evidence': strs([x.get('evidence')]) or strs([interest_of(x.get('name')).get('evidence')]),
+                                            'intensity': _tx(x.get('intensity')), 'trajectory': _tx(x.get('trajectory'))}
+                                           for x in _ls(r.get('interests')) if isinstance(x, dict) and _truthy(x.get('name'))][:8]
+    icons = L.get('loveIcons') or {}
+    love = _at(r, 'relationship', 'loveLanguages') or {}
+
+    def lang(xs, giving=False):
+        return [{'language': 'Giving gifts' if giving and l['language'] == 'Receiving gifts' else l['language'], 'icon': icons.get(l['language']) or '💗',
+                 'strength': l.get('strength') or 'secondary', 'line': _tx(l.get('inPractice')), 'why': _tx(l.get('why'))}
+                for l in _ls(xs) if isinstance(l, dict) and _truthy(l.get('language'))][:3]
+    v['howYouConnect']['loveLanguages'] = {'receiving': lang(love.get('receiving')), 'giving': lang(love.get('giving'), True), 'caveat': _tx(love.get('caveat'))}
+    att, attA = r.get('attachment') or {}, A.get('attachment') or {}
+    ca, caA = r.get('careerAssessment') or {}, A.get('careerAssessment') or {}
+    car, carA = r.get('career') or {}, A.get('career') or {}
+    imps = _ls(att.get('implications')) or _ls(attA.get('implications'))
+    v['howYouConnect'].update({'attachmentReading': _tx(att.get('why')) or _tx(attA.get('why')),
+                               'conflict': _tx(att.get('conflict')) or _tx(attA.get('conflict')) or v['howYouConnect']['conflict'],
+                               'derivedFrom': strs(att.get('derivedFrom')) or strs(attA.get('derivedFrom')),
+                               'implications': [{'title': _tx(x.get('title')), 'detail': _tx(x.get('detail'))} for x in imps if isinstance(x, dict) and _truthy(x.get('title'))][:4],
+                               'attachmentCaveat': _tx(att.get('caveat')) or _tx(attA.get('caveat'))})
+    v['howYouWork'].update({'situation': _tx(ca.get('situation')) or _tx(caA.get('situation')),
+                            'edgeEvidence': strs(_at(ca, 'edge', 'evidence')) or strs(_at(caA, 'edge', 'evidence')),
+                            'workStyle': _tx(car.get('workStyle')) or _tx(carA.get('workStyle')), 'watchOuts': _tx(car.get('watchOuts')) or _tx(carA.get('watchOuts'))})
+    v['puttingItTogether']['develop'] = [{'title': _tx(d.get('title')), 'detail': _tx(d.get('detail')), 'signs': strs(d.get('earlySigns'), 4),
+                                          'counterMove': _tx(d.get('counterMove')), 'reflect': _tx(d.get('reflect'))}
+                                         for d in _ls(_at(r, 'development', 'develop')) if isinstance(d, dict) and _truthy(d.get('title'))][:3]
+    v['method'] = {'rationale': _tx(_at(r, 'confidence', 'rationale'))}
+    return v
+
+
+# The card summary this skill sends instead of the read (lib/psyche.js summarize, the same fields):
+# what a shared Psyche Card shows, no more, locked on PsycheAI's server under a key only this
+# workspace holds, for the card picture and Syncs.
+MOTIVATOR_LABELS = {'self-direction': 'Self-direction', 'stimulation': 'Stimulation', 'hedonism': 'Enjoyment', 'achievement': 'Achievement', 'power': 'Influence',
+                    'security': 'Security', 'conformity': 'Conformity', 'tradition': 'Tradition', 'benevolence': 'Care for your people', 'universalism': 'Care for the wider world'}
+
+
+def _clip(value, most):
+    if not isinstance(value, str):
+        return None
+    t = re.sub(r'\s+', ' ', value).strip()
+    if len(t) <= most:
+        return t
+    cut = t[:most - 1]
+    return re.sub(r'[,;:.\s]+$', '', re.sub(r'\s+\S*$', '', cut) if ' ' in cut else cut) + '…'
+
+
+def card_summary(answer, name):
+    a = answer if isinstance(answer, dict) else {}
+    essence, big = a.get('essence') or {}, a.get('bigFive') or {}
+    love = _at(a, 'relationship', 'loveLanguages') or {}
+    letters = _ls(_at(a, 'mbti', 'letters'))
+    pick = lambda value, f, most: [y for y in (f(x) for x in value) if _truthy(y)][:most] if isinstance(value, list) else []
+    high = a.get('cardHighlights') if _truthy(a.get('cardHighlights')) else essence.get('why')
+    high = ','.join(str(x) for x in high) if isinstance(high, list) else ('' if high is None else str(high))
+    sentences = [x for x in re.split(r'(?<=[.!?])\s+', re.sub(r'\s+', ' ', high).strip()) if x]
+    conf = _at(a, 'confidence', 'score') if isinstance(a.get('confidence'), dict) and 'score' in a['confidence'] else _NAN
+    name = '' if name is None else str(name)
+    first = re.split(r'\s+', name)[0] if name else ''
+    return {
+        'firstName': _clip(first, 40) or 'You',
+        'fullName': _clip(name, 60),
+        'confidence': _round(_jsnum(conf)) if _finite(_jsnum(conf) if not isinstance(conf, float) else conf) else None,
+        'letters': [l for l in ({'letter': _clip(_at(x, 'choice'), 1), 'strength': _clip(_at(x, 'strength'), 12)} for x in letters[:4])
+                    if l['letter'] and re.match(r'^[EINSTFJP]$', l['letter'])],
+        'character': _clip(essence.get('character'), 40),
+        'why': _clip(' '.join(sentences[:2]), 400),
+        'headline': _clip(_at(a, 'card', 'headline'), 120),
+        'mbti': _clip(_at(a, 'mbti', 'type'), 4),
+        'patterns': pick(a.get('patterns'), lambda p: _clip(_at(p, 'name'), 40), 3),
+        'motivators': pick(a.get('topMotivators'), lambda m: MOTIVATOR_LABELS.get(m) if isinstance(m, str) and m in MOTIVATOR_LABELS else _clip(m, 30), 3),
+        'interests': pick(a.get('interests'), lambda i: _clip(i.get('name') or i if isinstance(i, dict) else i, 60), 6),
+        'values': (pick(a.get('values'), lambda v: _clip(v.get('value') or v if isinstance(v, dict) else v, 60), 3)
+                   + pick(a.get('beliefs'), lambda b: _clip(b.get('belief') or b if isinstance(b, dict) else b, 60), 1))[:4],
+        'bigFive': {k: (_round(_jsnum(big[k]['score'])) if isinstance(big.get(k), dict) and 'score' in big[k] and _finite(_jsnum(big[k]['score'])) else None)
+                    for k in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']},
+        'loveGiving': pick(love.get('giving'), lambda l: _clip(_at(l, 'language'), 30), 2),
+    }
+
+
 # Evidence that is a summary rather than a moment, as psycheai.io's evidenceProblems has it (README
 # "Moments, checked"): pattern evidence is each a dated moment; a letter's, a wellbeing area's and
 # attachment's may also be a count or a rhythm, but never words alone or a span, and each list has at
@@ -3070,6 +3438,11 @@ def check_answer(path):
         return {'ok': False, 'problems': ['No file at %s.' % path]}
     except ValueError as err:
         return {'ok': False, 'problems': ['Not valid JSON: %s.' % err]}
+    return answer_check(args)
+
+
+def answer_check(args):
+    """The checks for a read, on the parsed answer (check-answer and the local publish, the same)."""
     answer = args.get('answer') if isinstance(args, dict) and 'answer' in args else args
     if not isinstance(answer, dict):
         return {'ok': False, 'problems': ['The answer is not a JSON object.']}
@@ -3079,6 +3452,11 @@ def check_answer(path):
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
     problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + evidence_problems(answer) + sample_problems(answer)
+    # The format's own words copied in place of a kind of work, as psycheai.io's bundleFrom refused.
+    fit = (answer.get('careerAssessment') or {}).get('fit') if isinstance(answer.get('careerAssessment'), dict) else None
+    for k in ('suits', 'draining'):
+        if isinstance(fit, dict) and any(re.match(r'^\s*kind of work\s*:', str(x), re.I) for x in (fit.get(k) or [])):
+            problems.append('careerAssessment.fit.%s: each item starts with the kind of work itself ("Research in a small product team: …"), not the words "Kind of work"' % k)
     if isinstance(args, dict) and 'answer' in args and not args.get('name'):
         problems.append('name is empty: put their full name from their Meta account details.')
     # Where it differs from the guide's schema below the top. A value outside its list or of the wrong
@@ -3090,6 +3468,39 @@ def check_answer(path):
     # Findings only: a line here telling the assistant what to run next (it once said "publish it as
     # python3 bin/psyche.py call publish_psyche …") was flagged by Muse's safety check (README "Results are data").
     return {'ok': not problems, 'problems': problems[:25], 'schema': notes[:20]}
+
+
+def canonical(value, node, defs):
+    """The answer with each listed value in its list's own spelling ("Moderate" as "moderate"), as
+    psycheai.io's checkMerged matched them (enumKey: case, spaces, dashes and dots aside)."""
+    node = schema_ref(node, defs)
+    key = lambda v: re.sub(r'[\s_\-–—.]+', '', str('' if v is None else v).lower())
+    if 'enum' in node and not isinstance(value, (dict, list)):
+        return next((e for e in node['enum'] if key(e) == key(value)), value)
+    if node.get('type') == 'object' and isinstance(value, dict):
+        props = node.get('properties', {})
+        return {k: canonical(v, props[k], defs) if k in props else v for k, v in value.items()}
+    if node.get('type') == 'array' and isinstance(value, list):
+        return [canonical(v, node.get('items', {}), defs) for v in value]
+    return value
+
+
+def local_publish(args):
+    """publish_psyche, here (README "The report stays in Muse"): the read checked and laid out in this
+    workspace, and only its card summary sent, to save_card, for the card picture and Syncs."""
+    checked = answer_check(args)
+    if not checked.get('ok'):
+        return {'ok': False, 'problems': checked.get('problems') or []}
+    guide = pinned_guide() or {}
+    schema = (guide.get('read') or {}).get('schema') or {}
+    answer = canonical(args['answer'], schema, schema.get('$defs', {})) if schema else args['answer']
+    name = args.get('name') or ''
+    full = local_full(answer, name, guide.get('labels') or {})
+    out = call('save_card', {'card': card_summary(answer, name)})
+    if isinstance(out, dict) and out.get('ok'):
+        out['full'] = full
+        args['answer'] = answer
+    return out
 
 
 def with_pinned_guide(tool, args, out):
@@ -3159,8 +3570,6 @@ def call(tool, args):
     acc = account()
     if tool == 'sync_with':
         keep_keys(text=args.get('link'))     # the code in a friend's link is the key to their card and your Sync
-    if tool == 'publish_psyche':
-        args = dict(args, forFile=True)     # the whole report, evidence included, for the report file (README "The report as a file")
     msg = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': tool, 'arguments': args}}
     status, body = post('/mcp', msg, acc['access_token'], extra=key_headers())
     if status == 401:
@@ -3524,7 +3933,7 @@ def main(argv):
             if held:
                 print(json.dumps(held, ensure_ascii=False, indent=1))
                 return
-        out = call(argv[1], args)
+        out = local_publish(args) if argv[1] == 'publish_psyche' else call(argv[1], args)
         # Their report stays in this workspace for Ask PsycheAI in later chats.
         if argv[1] == 'publish_psyche' and out.get('ok') and isinstance(args.get('answer'), dict):
             write_private([REPORT, REPORT_KEPT], {'name': args.get('name'), 'report': args['answer']})
@@ -3563,7 +3972,7 @@ def main(argv):
         if leaving:
             print(json.dumps({'saved': False, 'report': 'not ready', 'problems': leaving}, ensure_ascii=False, indent=1))
             return
-        out = call('publish_psyche', {'answer': kept['report'], 'name': kept.get('name') or ''})
+        out = local_publish({'answer': kept['report'], 'name': kept.get('name') or ''})
         print(json.dumps(saved(out) if out.get('ok') else out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'show' and len(argv) >= 2 and argv[1] == 'probe':

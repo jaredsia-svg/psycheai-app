@@ -822,9 +822,9 @@ function signup(email, d) {
   check('the first visit is a go-ahead, a line on how long it takes, then the card, and no other questions before Psyche Pair', /FIRST VISIT: four short messages from you, at most: the welcome with its question, one line on how long it takes, then their card/.test(core) && /The first message after their last answer \(after MESSAGES FIRST's check, when there is one, and before anything else: no other command or tool, get_report_guide included, comes before it\), sent as a message of its own whether or not PsycheAI is answering yet, is this line, word for word, so they know what to expect: "On it\. Reading your Instagram and writing your Psyche takes about 5 minutes/.test(core));
   check('Muse speaks as PsycheAI, says lines as written, says how long, and ends on buttons', /speak as PsycheAI, in the first person/.test(core) && /Keep technical words out of the chat \(guide, spec, schema, format, tool, connector\) and say what's happening in plain words; when they ask what is sent where, answer plainly/.test(core) && /said as written, not reworded/.test(core) && /Say how long before anything that takes a while/.test(core) && /never a bare question/.test(core));
   check('one go-ahead covers reading, messages and saving, with no draft and no second ask', /Connected: start straight away, with step 1's line\. After their last answer \(the messages button with one account, the account button, "I've connected them" or "Continue without messages", which reads posts and stories only\), go on to step 1\./.test(core) &&
-    /"🔒 Your Instagram is read right here in your Muse account: nothing to export or upload\." "🙈 Your posts and chats are de-identified first: names, handles, numbers and links removed, and no one else is quoted\." "🗑️ Only your finished report goes to PsycheAI, to make your card\. PsycheAI keeps no copy of your data or report\." "✋ Your results are private to you\. Nothing is posted or shared with other people unless you choose to\. Delete it all any time\."/.test(core) && !/save them to PsycheAI/.test(core) && /From their last answer to the card they see exactly two messages from you: this one, then "Your Psyche Card and Report are ready\."/.test(core) && /with no progress notes or versions; anything they need to know or act on is said in one line/.test(core) && /"PsycheAI is busy right now\. Your Instagram is read and kept here, so trying again picks up where this left off\.", with the buttons "Try again" and "Not now"/.test(core) && /if start hasn't answered, this one: https:\/\/www\.instagram\.com\/reel\//.test(core) && /goes into the report, not the chat\. Then work in one pass/.test(core) && /No progress reports, evidence files, digests, summaries, drafts or attachments along the way, in the chat/.test(core) &&
+    /"🔒 Your Instagram is read right here in your Muse account: nothing to export or upload\." "🙈 Your posts and chats are de-identified first: names, handles, numbers and links removed, and no one else is quoted\." "🗑️ Your report never leaves Muse\. Only your card's few lines go to PsycheAI, locked with a key only you hold, to draw your card\." "✋ Your results are private to you\. Nothing is posted or shared with other people unless you choose to\. Delete it all any time\."/.test(core) && !/save them to PsycheAI/.test(core) && /From their last answer to the card they see exactly two messages from you: this one, then "Your Psyche Card and Report are ready\."/.test(core) && /with no progress notes or versions; anything they need to know or act on is said in one line/.test(core) && /"PsycheAI is busy right now\. Your Instagram is read and kept here, so trying again picks up where this left off\.", with the buttons "Try again" and "Not now"/.test(core) && /if start hasn't answered, this one: https:\/\/www\.instagram\.com\/reel\//.test(core) && /goes into the report, not the chat\. Then work in one pass/.test(core) && /No progress reports, evidence files, digests, summaries, drafts or attachments along the way, in the chat/.test(core) &&
     /If you need a last check before saving, ask once, in ONE short message/.test(core) && /The JSON is only for publish_psyche: never show it, attach it as a file or paste the report in the chat, and never call it a draft/.test(core) && /and nothing attached, once/.test(core) && !/second check|is the go-ahead|is their yes|user's yes|their approval|agreed to in step 0/.test(core + require('../lib/skill.js').skillMd()) &&
-    /go on to step 1/.test(core) && /the welcome told them their finished report goes to PsycheAI to make their card, and that PsycheAI keeps no copy of their data or report/.test(core));
+    /go on to step 1/.test(core) && /the welcome told them their report never leaves Muse and only their card's few lines go to PsycheAI/.test(core));
   check('"DMs included" checks their messages are connected first, before step 1\'s line, on every path to it', /MESSAGES FIRST: whenever they chose their messages \(a first Psyche or a "Fresh Psyche"\), after the account and before step 1's line, check them from Muse's Instagram messages connection's list of accounts, which shows no message \(only if their account isn't connected there, ask it for their conversation list once, keeping nothing from it, for Muse's connect link\)/.test(core) &&
     /the reply above comes first, never step 1's line/.test(core) &&
     /"Fresh Psyche" asks the messages question at once, as step 0 does, then goes on exactly as step 0 does: the account question only with more than one account, MESSAGES FIRST, then step 1/.test(core) && !/go straight to step 1/.test(core + require('../lib/skill.js').skillMd()) && /then MESSAGES FIRST, then step 1, with no Generate button/.test(require('../lib/skill.js').skillMd()) &&
@@ -953,6 +953,22 @@ function signup(email, d) {
     check('the whole report, evidence included, comes back only when the skill asks for its file, never in a host\'s tool result (README "The report as a file")',
       !('full' in pub) && forFile.ok && forFile.full && forFile.full.overview.patterns[0].evidence[0] === 'FULL-EVIDENCE' &&
       /forFile: \{ type: 'boolean', description: 'Set by the PsycheAI skill only/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8')));
+  }
+  {
+    // README "The report stays in Muse": the skill sends only the card summary, locked here under a key handed back.
+    const before = seen.length;
+    const sc = psyche.saveCard(user, { character: 'Mulan', mbti: 'ENFJ', why: 'Steps up.', headline: 'Quietly brave', patterns: ['A', 'B'], bigFive: { openness: 80.4 }, letters: [{ letter: 'E', strength: 'slight' }, { letter: 'Q' }], evidence: ['your May 2025 story'], summary: 'the whole report' });
+    const opened = sc.ok && psyche.card(user.id, Date.now(), sc.cardKey);
+    const viaMcp = await mcp.handle(user, { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'save_card', arguments: { card: { character: 'Mulan', mbti: 'ENFJ', patterns: ['Steps up'] } } } });
+    const sd = viaMcp.result && viaMcp.result.structuredContent;
+    if (sd && sd.cardKey) holdKeys(user.id, sd.cardKey);
+    check('save_card keeps only the card summary, its known fields clipped as summarize clips them, locked under a key handed back and never kept, sends nothing to psycheai.io, and comes back with the card image, What\'s next and ask ideas; the skill publishes through it, never publish_psyche',
+      sc.ok && sc.cardKey && /\/card\/.+\.png$/.test(sc.image) && opened && opened.character === 'Mulan' && opened.bigFive.openness === 80 && !('evidence' in opened) && !('summary' in opened) &&
+        JSON.stringify(opened.letters) === '[{"letter":"E","strength":"slight"}]' && !JSON.stringify(store.kvGet('psyche', user.id)).includes(sc.cardKey) &&
+        psyche.saveCard(user, {}).ok === false && seen.length === before && sd && sd.ok && sd.nextStep && sd.nextStep.buttons[0] === 'Ask PsycheAI questions about myself' && Array.isArray(sd.askIdeas) &&
+        !/call\('publish_psyche'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
+        /out = call\('save_card', \{'card': card_summary\(answer, name\)\}\)/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
+      JSON.stringify({ sc: { ok: sc.ok }, opened, sd: sd && Object.keys(sd) }).slice(0, 500));
   }
   check('a publish keeps no read id: psycheai.io keeps nothing to open, so nothing to remind about', !store.kvGet('psyche', user.id).readId && (await psyche.remindUnopened(Date.now())) === 0);
   {
@@ -1655,7 +1671,7 @@ function signup(email, d) {
     check('someone new is told what PsycheAI is and offered only their read, with what they\'ll learn and privacy', /^I'm PsycheAI, your personal AI coach that already knows you\./.test(fresh.say) && /MBTI, attachment style, career strengths and blind spots/.test(fresh.say) &&
       /It takes about 5 minutes\. Then ask me anything, or sync with a friend to see how you click\./.test(fresh.say) && /I'll write your Psyche from your Instagram, no questions asked/.test(fresh.say) && fresh.reel === 'https://www.instagram.com/reel/DewpyUayqTN/' && !fresh.attach && /Say it as written, with its two buttons, then go on as the guide's step 0 says: on their tap, the account question only if they have more than one account, then MESSAGES FIRST when they chose their messages and those aren't connected, then step 1\. No other buttons\./.test(fresh.after) && JSON.stringify(fresh.options) === '[{"id":"messages","label":"Include my messages (Recommended)"},{"id":"posts","label":"Posts only"}]' &&
       ((process.env.PSYCHE_REEL_URL = 'https://www.instagram.com/reel/abc/'), mcp.startMenu({ id: 'u_reel' }).reel === 'https://www.instagram.com/reel/abc/') && (delete process.env.PSYCHE_REEL_URL, true) &&
-      fresh.say.endsWith(require('../lib/mcp.js').GO_AHEAD + '\n\n' + mcp.MESSAGES_LINE) && /^🔒 Your Instagram is read right here in your Muse account: nothing to export or upload\.\n🙈 Your posts and chats are de-identified first: names, handles, numbers and links removed, and no one else is quoted\.\n🗑️ Only your finished report goes to PsycheAI, to make your card\. PsycheAI keeps no copy of your data or report\.\n✋ Your results are private to you\. Nothing is posted or shared with other people unless you choose to\. Delete it all any time\.$/.test(require('../lib/mcp.js').GO_AHEAD) && !/look again/.test(fresh.say) &&
+      fresh.say.endsWith(require('../lib/mcp.js').GO_AHEAD + '\n\n' + mcp.MESSAGES_LINE) && /^🔒 Your Instagram is read right here in your Muse account: nothing to export or upload\.\n🙈 Your posts and chats are de-identified first: names, handles, numbers and links removed, and no one else is quoted\.\n🗑️ Your report never leaves Muse\. Only your card's few lines go to PsycheAI, locked with a key only you hold, to draw your card\.\n✋ Your results are private to you\. Nothing is posted or shared with other people unless you choose to\. Delete it all any time\.$/.test(require('../lib/mcp.js').GO_AHEAD) && !/look again/.test(fresh.say) &&
       /word for word in four short parts: "I'm PsycheAI, your personal AI coach that already knows you\."/.test(instructions.MUSE_PROCEDURE) && !/muse-sample/.test(instructions.MUSE_PROCEDURE + fresh.say) && /x/.test(instructions.MUSE_PROCEDURE) && !/look again the same way/.test(instructions.MUSE_PROCEDURE) &&
       /"▶ PsycheAI in a minute: <reel>"\. It's a link to open, not a file: don't download it\./.test(instructions.MUSE_PROCEDURE) &&
       /psycheai\.io\/muse-privacy for the details: PsycheAI keeps none of your report, and a short summary of it is kept, locked, for the card picture and Syncs/.test(instructions.MUSE_PROCEDURE));
@@ -1907,7 +1923,8 @@ m.saved({'ok': True})`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...proces
       fsx.writeFileSync(pathx.join(dir, 'answer.json'), JSON.stringify({ answer: { summary: passage('New A'), essence: { why: passage('New B') }, card: { headline: passage('C') }, mbti: { caveat: passage('New D') } }, name: 'Mei' }));
       skillState.freshEnough = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'));
       // A bare answer file: check-answer says how to publish it, and publish takes it with --name.
-      fsx.writeFileSync(pathx.join(dir, 'answer.json'), JSON.stringify({ summary: passage('Bare A'), essence: { why: passage('Bare B') }, card: { headline: passage('C') }, mbti: { caveat: passage('Bare D') } }));
+      // A whole read (the site's mock, from the report-view fixture), since publishing now checks it here (README "The report stays in Muse").
+      fsx.writeFileSync(pathx.join(dir, 'answer.json'), JSON.stringify(((a) => Object.assign(a, { confidence: Object.assign({}, a.confidence, { score: 72, level: 'moderate' }) }))(JSON.parse(fsx.readFileSync(new URL('./fixtures/report-view.json', import.meta.url), 'utf8'))[1].answer)));
       skillState.bareCheck = await run('check-answer', '@' + pathx.join(dir, 'answer.json'));
       skillState.bare = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'), '--name', 'Mei Tan');
       fsx.rmSync(pathx.join(dir, 'report.json'));
@@ -2088,7 +2105,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       skillState.parts.ready = await run('show', 'ready');
       skillState.readyPdf = fsx.readdirSync(pathx.join(dir, 'out')).filter(f => /\.pdf$/i.test(f)).length;
       for (const part of ['card', 'summary', 'pdf', 'links', 'next', 'nope']) skillState.parts[part] = await run('show', part);
-      skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche Card( - .+)? - \d{8}\.png$/.test(f));
+      skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche Card( - .+)? - \d{8}( \(\d+\))?\.png$/.test(f));
       skillState.pdfLocal = skillState.parts.pdf && skillState.parts.pdf.file ? fsx.readFileSync(skillState.parts.pdf.file, 'utf8') : null;
       // The skill folder's account deleted, as when the skill is removed and installed again: the spare copy keeps the same account.
       const before = JSON.parse(fsx.readFileSync(pathx.join(dir, '.account.json'), 'utf8')).refresh_token;
@@ -2277,6 +2294,27 @@ print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_ta
         /What it does, in full[^]*contacts only app\.psycheai\.io, and psycheai\.io for the card picture[^]*runs only Muse's own Instagram, Messenger and Facebook tools \(\/opt\/hatch\/bin\) and curl[^]*writes only in this skill's folder/.test(py.slice(0, 1500)) &&
         (py.match(/subprocess\.run\(/g) || []).length === 2 && require('../lib/skill.js').installPrompt() === 'Install localhost:8787/install')(
         require('../lib/skill.js').bootstrap(), require('../lib/skill.js').skillMd(), fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
+    {
+      // The report laid out here (README "The report stays in Muse"), held to what psycheai.io makes of the same reads
+      // (tools/fixtures/report-view.json, written by tools/pin-guide.mjs from the site's own code).
+      const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+L = json.load(open(sys.argv[2]))['labels']
+fx = json.load(open(sys.argv[3]))
+out = []
+for f in fx:
+    full = m.local_full(f['answer'], f['name'], L)
+    # Two things the site's layout drops and the report file shows: the character's source, each letter's "in practice".
+    kept = {'source': full['overview']['source'], 'inPractice': [l.get('inPractice') for l in full['whoYouAre']['mbti']]}
+    full['overview']['source'] = f['full']['overview']['source']
+    for l, w in zip(full['whoYouAre']['mbti'], f['full']['whoYouAre']['mbti']):
+        l['inPractice'] = w.get('inPractice')
+    out.append({'same': full == f['full'], 'card': m.card_summary(f['answer'], f['name']) == f['card'], 'kept': kept})
+print(json.dumps(out))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname, new URL('../skill/guide.json', import.meta.url).pathname,
+        new URL('./fixtures/report-view.json', import.meta.url).pathname], { maxBuffer: 1 << 24 }).toString());
+      check('the report is laid out here, from the read itself, exactly as psycheai.io lays it out (its two sample reads), with the character\'s source and each letter\'s "in practice" kept, which the site\'s layout drops; the card summary is the same fields as this server\'s, so only that leaves Muse',
+        got.length === 2 && got.every(g => g.same && g.card) && got[0].kept.source === 'The Ballad of Mulan' && got.every(g => g.kept.inPractice.every(Boolean)), JSON.stringify(got).slice(0, 400));
+    }
     check('every command runs as python3 bin/psyche.py: a file fetched with curl isn\'t executable, and a Muse run lost its first collect to "Permission denied" (exit 126)',
       /Every command runs as `python3 bin\/psyche\.py <command>`, never `bin\/psyche\.py` on its own/.test(skillMd) && !/(?<!python3 )`bin\/psyche\.py (collect|call|show|status|first-run|check-answer)/.test(skillMd) &&
       !/(?<!python3 )bin\/psyche\.py (collect|call|show|check-answer)/.test(instructions.MUSE_PROCEDURE));
@@ -2308,7 +2346,7 @@ print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_ta
         const mi = require(pathx.join(siteRepo, 'lib', 'museimport.js'));
         const r = mi.guide('read'), dp = mi.guide('read', 'deep'), sy = mi.guide('sync');
         check('skill/guide.json is psycheai.io\'s current guide (node tools/pin-guide.mjs, then sign)',
-          JSON.stringify(pinned) === JSON.stringify({ read: { spec: r.spec, rubric: r.rubric, schema: r.schema }, deepSpec: dp.spec.slice(r.spec.length), sync: { spec: sy.spec, brief: sy.brief, schema: sy.schema } }));
+          JSON.stringify(pinned) === JSON.stringify({ read: { spec: r.spec, rubric: r.rubric, schema: r.schema }, deepSpec: dp.spec.slice(r.spec.length), sync: { spec: sy.spec, brief: sy.brief, schema: sy.schema }, labels: require(pathx.join(siteRepo, 'lib', 'musepdf.js')).labels() }));
       }
     }
     check('there is no report PDF in the skill (README "The report file, not a PDF"): no PDF fetched, "show pdf" gives the report file, and "Get the PDF" is no button',
@@ -2342,7 +2380,7 @@ print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_ta
       check('a saved Psyche is shown a part at a time: card (saved as a picture), summary (the report file), pdf (now the report file too: there is no PDF), next, each with only its own piece, and no links part: nothing is kept to link to',
         P.summary && P.summary.sections[0].title === 'Overview' && !P.summary.url && P.pdf && JSON.stringify(P.pdf) === JSON.stringify(P.summary) &&
         P.links && /^Parts: ready, card, summary, pdf, next$/.test(P.links.error || '') && P.next && P.next.nextStep.buttons[0] === 'Reveal my roast 🔥' && P.nope && /Parts: ready, card, summary/.test(P.nope.error) &&
-        P.card && /\/out\/Psyche Card( - [^/]+)? - \d{8}\.png$/.test(P.card.file || '') && skillState.cardKept === true && /`python3 bin\/psyche\.py show card` \(their Psyche Card as a picture/.test(skillMd) && /never a file sent earlier in the chat, which would be the last Psyche/.test(skillMd) &&
+        P.card && /\/out\/Psyche Card( - [^/]+)? - \d{8}( \(\d+\))?\.png$/.test(P.card.file || '') && skillState.cardKept === true && /`python3 bin\/psyche\.py show card` \(their Psyche Card as a picture/.test(skillMd) && /never a file sent earlier in the chat, which would be the last Psyche/.test(skillMd) &&
         /\*\*After publish_psyche \(or republish\)\*\* the script answers only that it's saved/.test(skillMd), JSON.stringify(P).slice(0, 500));
     }
     check('a bare answer file publishes with --name (no failed first publish for want of {"answer", "name"}); check-answer returns findings only, never a line telling Muse to publish (Muse flagged one)',
@@ -2395,10 +2433,10 @@ print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_ta
       /are sources\/facebook\.txt, written by `python3 bin\/psyche\.py collect-facebook`/.test(skillMd),
       JSON.stringify(skillState.facebook).slice(0, 600));
     check('show ready names the report file the summary saved (its path is under "report"), with its size, when the report comes back in full',
-      ((o) => o && /\/out\/Psyche Report( - [^/]+)? - \d{8}\.html$/.test((o.report || {}).file || '') && o.report.bytes > 1000 && JSON.stringify(o.missing) === '["card"]')(skillState.leaving && skillState.leaving.readyFull),
+      ((o) => o && /\/out\/Psyche Report( - [^/]+)? - \d{8}( \(\d+\))?\.html$/.test((o.report || {}).file || '') && o.report.bytes > 1000 && JSON.stringify(o.missing) === '["card"]')(skillState.leaving && skillState.leaving.readyFull),
       JSON.stringify(skillState.leaving && skillState.leaving.readyFull));
     check('show ready: the card and the report file saved and What\'s next given in one call, no PDF, and SKILL.md delivers with it on the helper\'s return, before anything else',
-      ((R) => R && R.say === 'Your Psyche Card and Report are ready.' && /\/out\/Psyche Card( - [^/]+)? - \d{8}\.png$/.test((R.card || {}).file || '') && R.card.bytes > 0 && ((skillState.parts.summary || {}).report ? /\/out\/Psyche Report( - [^/]+)? - \d{8}\.html$/.test((R.report || {}).file || '') && R.report.bytes > 0 && !R.missing : JSON.stringify(R.missing) === '["report"]' && !R.report) && !R.summary && !/sections|image/.test(JSON.stringify(R).replace(/askIdeas[\s\S]*/, '')) && JSON.stringify(R).length < 2500 && R.next && R.next.nextStep.buttons[0] === 'Reveal my roast 🔥')(skillState.parts && skillState.parts.ready) &&
+      ((R) => R && R.say === 'Your Psyche Card and Report are ready.' && /\/out\/Psyche Card( - [^/]+)? - \d{8}( \(\d+\))?\.png$/.test((R.card || {}).file || '') && R.card.bytes > 0 && ((skillState.parts.summary || {}).report ? /\/out\/Psyche Report( - [^/]+)? - \d{8}( \(\d+\))?\.html$/.test((R.report || {}).file || '') && R.report.bytes > 0 && !R.missing : JSON.stringify(R.missing) === '["report"]' && !R.report) && !R.summary && !/sections|image/.test(JSON.stringify(R).replace(/askIdeas[\s\S]*/, '')) && JSON.stringify(R).length < 2500 && R.next && R.next.nextStep.buttons[0] === 'Reveal my roast 🔥')(skillState.parts && skillState.parts.ready) &&
       skillState.readyPdf === 0 && /is put together in one call: `python3 bin\/psyche\.py show ready` saves the card and the report file and gives What's next/.test(skillMd) &&
       /## First run, in order\n/.test(skillMd) && /4\. When the helper returns: deliver at once, before anything else\. show ready's result is the check \(it names each file only once it is saved, with its size\), so there is nothing to list, read back or note to memory first/.test(skillMd) && /this is the whole path, and it needs no working list or to-do list/.test(skillMd) &&
       /The helper's brief, sent as written with the <…> filled in:\n"Write a fresh Psyche for <their full name>\. Reply only with the result below; this brief has what the read needs\. In ~\/workspace\/skills\/psycheai: 1\) Start in the background: <that collect command> --me \"<their full name>\"\. 2\)/.test(skillMd) &&
@@ -2968,7 +3006,7 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     /there is no PDF, the report file is the whole report/.test(instructions.CORE_MUSE) &&
     /"Ask PsycheAI questions about myself", "Sync with a friend", "Add WhatsApp or Facebook", "More"/.test(instructions.CORE_MUSE) &&
     /There is no PDF: the report file is the whole report/.test(require('../lib/skill.js').skillMd()) && !/'Get the PDF'/.test(fsw.readFileSync(script, 'utf8')) &&
-    /args = dict\(args, forFile=True\)/.test(fsw.readFileSync(script, 'utf8')) && /side = \[threading\.Thread\(target=send_timing\)\]/.test(fsw.readFileSync(script, 'utf8')));
+    /out = local_publish\(args\) if argv\[1\] == 'publish_psyche' else call\(argv\[1\], args\)/.test(fsw.readFileSync(script, 'utf8')) && /side = \[threading\.Thread\(target=send_timing\)\]/.test(fsw.readFileSync(script, 'utf8')));
 }
 
 // ---------- the phone check (README "The phone check") ----------

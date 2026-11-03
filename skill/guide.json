@@ -1353,5 +1353,119 @@
     }
    }
   }
+ },
+ "labels": {
+  "motivators": {
+   "self-direction": {
+    "label": "Self-direction",
+    "group": "openness",
+    "meaning": "Thinking and choosing for yourself"
+   },
+   "stimulation": {
+    "label": "Stimulation",
+    "group": "openness",
+    "meaning": "Novelty, challenge and excitement"
+   },
+   "hedonism": {
+    "label": "Enjoyment",
+    "group": "openness",
+    "meaning": "Pleasure and enjoying life"
+   },
+   "achievement": {
+    "label": "Achievement",
+    "group": "enhancement",
+    "meaning": "Succeeding and being seen to"
+   },
+   "power": {
+    "label": "Influence",
+    "group": "enhancement",
+    "meaning": "Status, resources and control"
+   },
+   "security": {
+    "label": "Security",
+    "group": "conservation",
+    "meaning": "Safety and stability"
+   },
+   "conformity": {
+    "label": "Conformity",
+    "group": "conservation",
+    "meaning": "Not upsetting people or norms"
+   },
+   "tradition": {
+    "label": "Tradition",
+    "group": "conservation",
+    "meaning": "Respect for custom and heritage"
+   },
+   "benevolence": {
+    "label": "Care for your people",
+    "group": "transcendence",
+    "meaning": "The welfare of those close to you"
+   },
+   "universalism": {
+    "label": "Care for the wider world",
+    "group": "transcendence",
+    "meaning": "Fairness, tolerance and the planet"
+   }
+  },
+  "traitLabels": {
+   "openness": "Openness to experience",
+   "conscientiousness": "Conscientiousness",
+   "extraversion": "Extraversion",
+   "agreeableness": "Agreeableness",
+   "neuroticism": "Emotional sensitivity"
+  },
+  "loveIcons": {
+   "Words of affirmation": "💬",
+   "Acts of service": "🛠️",
+   "Quality time": "⏳",
+   "Receiving gifts": "🎁",
+   "Giving gifts": "🎁",
+   "Physical touch": "🫂"
+  },
+  "mbtiPoles": {
+   "E": "Extraversion",
+   "I": "Introversion",
+   "N": "Intuition",
+   "S": "Sensing",
+   "T": "Thinking",
+   "F": "Feeling",
+   "J": "Judging",
+   "P": "Perceiving"
+  },
+  "sectionNames": {
+   "bigFive": "Big Five",
+   "mbti": "MBTI",
+   "motivators": "Motivators",
+   "interests": "Interests",
+   "values": "Values & beliefs",
+   "beliefs": "Values & beliefs",
+   "relationships": "Relationships",
+   "attachment": "Attachment",
+   "idealPartner": "Ideal partner",
+   "work": "How you work",
+   "wellness": "Wellbeing"
+  },
+  "notYetUsing": "Not yet using: ",
+  "fromWork": "How you work",
+  "fromWellbeing": "Wellbeing",
+  "planSteps": 5,
+  "letterLines": {
+   "E": "You get your energy from people and action.",
+   "I": "You get your energy from time alone or with a few people you know well.",
+   "N": "You look for the idea and where it leads before the detail.",
+   "S": "You trust what is concrete, tested and in front of you.",
+   "T": "You decide by testing the argument, then weigh the people.",
+   "F": "You decide by what it means for the people involved.",
+   "J": "You like things settled, planned and closed.",
+   "P": "You keep options open and plan close to the day."
+  },
+  "wellbeingAreas": {
+   "lifeTrajectory": "Direction",
+   "outlook": "Outlook",
+   "socialConnection": "Connection",
+   "cognitiveLoad": "Mental load",
+   "meaning": "Meaning",
+   "rhythmAndActivity": "Rhythm and activity"
+  }
  }
 }
