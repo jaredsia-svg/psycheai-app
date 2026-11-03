@@ -2,7 +2,8 @@
 """PsycheAI for Muse, as a skill: calls PsycheAI's tools at app.psycheai.io.
 
 What it does, in full:
-  - contacts only app.psycheai.io, and psycheai.io for the card picture (FETCH_HOSTS)
+  - contacts only app.psycheai.io (and psycheai.io, for a card a release before 133 saved: FETCH_HOSTS); it
+    sends nothing about them unless they choose to Sync (local_publish, SYNC_SENDS_CARD)
   - runs only Muse's own Instagram, Messenger and Facebook tools (/opt/hatch/bin) and curl
   - writes only in this skill's folder (~/workspace/skills/psycheai/), ~/.psycheai/ (a spare
     copy of the account keys) and a temporary folder it removes after each request
@@ -59,6 +60,7 @@ Standard library only.
 import base64
 import hashlib
 import http.client
+import io
 import json
 import math
 import os
@@ -80,7 +82,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 132
+RELEASE = 133
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -166,7 +168,22 @@ def fetchable(link):
 
 
 def local_card(r):
-    """Their Psyche Card as a picture saved in out/, so it's attached as an image rather than a link preview."""
+    """Their Psyche Card as a picture saved in out/, so it's attached as an image rather than a link preview:
+    drawn here from the card summary (README "The card is drawn in Muse"), or, for a Psyche saved by
+    an older release, fetched from its link."""
+    if isinstance(r.get('card'), dict):
+        out = {}
+        try:
+            os.makedirs(OUT, exist_ok=True)
+            for old in os.listdir(OUT):
+                if old.lower().endswith('.png'):
+                    os.remove(os.path.join(OUT, old))
+            path = draw_card(r['card'], os.path.join(OUT, file_label('Psyche Card') + '.png'))
+            os.chmod(path, 0o600)
+            out['file'] = path
+        except (OSError, ValueError, ImportError, urllib.error.URLError, http.client.HTTPException) as err:
+            out['error'] = 'The card could not be drawn here (%s).' % str(err)[:120]
+        return out
     link = r.get('image')
     out = {'image': link}
     if not link or not fetchable(link):
@@ -3391,6 +3408,409 @@ def card_summary(answer, name):
     }
 
 
+# ---------- the Psyche Card, drawn here (README "The card is drawn in Muse") ----------
+# Drawn in this workspace with Pillow from the card summary, as the server's lib/cardimage.js
+# psycheSvg lays it out (the same sizes, colours, panels and order), so nothing about them is
+# sent to draw it. The fonts and every character's picture come in one pack, card-art.zip, fetched
+# once from PsycheAI and checked against CARD_ART_SHA256 (tools/card-art.mjs prints it): the whole
+# pack, so the fetch says nothing about which character they got.
+CARD_ART_SHA256 = '26bc26f0b13c46ab1726a4eecdfa04036188ff227b414c119fbfde42dd0946c1'
+CARD_ART = os.path.join(KEEP, 'card-art-' + CARD_ART_SHA256[:12])
+
+
+def card_art():
+    """The unpacked card art: fetched and checked the first time, kept in ~/.psycheai after."""
+    meta = os.path.join(CARD_ART, 'card-art', 'meta.json')
+    if os.path.exists(meta):
+        return os.path.join(CARD_ART, 'card-art')
+    status, body = fetch('GET', BASE + '/skill/card-art.zip', {'User-Agent': agent()}, timeout=120)
+    if status != 200 or hashlib.sha256(body).hexdigest() != CARD_ART_SHA256:
+        raise ValueError('the card art did not check out')
+    os.makedirs(CARD_ART, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(body)) as z:
+        for n in z.namelist():
+            if n.startswith('/') or '..' in n.split('/'):
+                raise ValueError('the card art did not check out')
+        z.extractall(CARD_ART)
+    return os.path.join(CARD_ART, 'card-art')
+
+
+class _Painter:
+    """psycheSvg's drawing calls on a Pillow canvas, at K times the size, scaled down at the end."""
+    K = 2
+
+    def __init__(self, art, w, h):
+        from PIL import Image, ImageDraw, ImageFont, ImageChops
+        self.Image, self.ImageDraw, self.ImageFont, self.ImageChops = Image, ImageDraw, ImageFont, ImageChops
+        self.art = art
+        self.meta = json.load(open(os.path.join(art, 'meta.json'), encoding='utf-8'))
+        self.C = self.meta['tokens']
+        self.im = Image.new('RGBA', (w * self.K, h * self.K), (0, 0, 0, 0))
+        self.draw = ImageDraw.Draw(self.im, 'RGBA')     # fills and text blend with what's under them
+        self.fonts = {}
+
+    def rgba(self, colour, alpha=1.0):
+        c = colour.lstrip('#')
+        return (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16), int(round(255 * alpha)))
+
+    def font(self, size, weight=400, italic=False):
+        key = (size, weight, italic)
+        if key not in self.fonts:
+            f = 'Inter-SemiBoldItalic.otf' if italic else {400: 'Inter_400Regular.ttf', 600: 'Inter_600SemiBold.ttf'}.get(weight, 'Inter_700Bold.ttf')
+            self.fonts[key] = self.ImageFont.truetype(os.path.join(self.art, 'fonts', f), int(round(size * self.K)))
+        return self.fonts[key]
+
+    def measure(self, s, size, weight=400, italic=False):
+        return self.font(size, weight, italic).getlength(str(s)) / self.K
+
+    def wrap(self, text, size, weight, width, italic=False):
+        out, line = [], ''
+        for w in re.split(r'\s+', str(text or '').strip()):
+            if not w:
+                continue
+            nxt = line + ' ' + w if line else w
+            if line and self.measure(nxt, size, weight, italic) > width:
+                out.append(line)
+                line = w
+            else:
+                line = nxt
+        if line:
+            out.append(line)
+        return out
+
+    def layer(self):
+        return self.Image.new('RGBA', self.im.size, (0, 0, 0, 0))
+
+    def put(self, layer, mask=None):
+        box = (mask.getbbox() if mask is not None else layer.getbbox())
+        if not box:
+            return
+        part = layer.crop(box)
+        if mask is not None:
+            part.putalpha(self.ImageChops.multiply(part.getchannel('A'), mask.crop(box)))
+        self.im.alpha_composite(part, (box[0], box[1]))
+
+    def text(self, x, y, s, size, weight=400, fill='#000000', alpha=1.0, anchor='ls', italic=False, spacing=0.0):
+        k, f = self.K, self.font(size, weight, italic)
+        d = self.draw
+        if spacing:
+            # letter-spacing, as SVG adds it after each letter
+            total = sum(f.getlength(ch) / k + spacing for ch in s)
+            cx = x - (total / 2 if anchor[0] == 'm' else total if anchor[0] == 'r' else 0)
+            for ch in s:
+                d.text((cx * k, y * k), ch, font=f, fill=self.rgba(fill, alpha), anchor='l' + anchor[1])
+                cx += f.getlength(ch) / k + spacing
+        else:
+            d.text((x * k, y * k), s, font=f, fill=self.rgba(fill, alpha), anchor=anchor)
+
+    def rrect(self, x, y, w, h, r, fill=None, alpha=1.0, outline=None, width=0, gradient=None):
+        k = self.K
+        box = [x * k, y * k, (x + w) * k, (y + h) * k]
+        mask = self.Image.new('L', self.im.size, 0)
+        self.ImageDraw.Draw(mask).rounded_rectangle(box, radius=r * k, fill=255)
+        if gradient:
+            self.put(gradient(box), mask)
+        elif fill:
+            self.draw.rounded_rectangle(box, radius=r * k, fill=self.rgba(fill, alpha))
+        if outline:
+            self.draw.rounded_rectangle(box, radius=r * k, outline=self.rgba(outline), width=max(1, int(round(width * k))))
+        return mask
+
+    def circle(self, cx, cy, r, fill=None, outline=None, width=0, alpha=1.0):
+        k = self.K
+        self.draw.ellipse([(cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k], fill=self.rgba(fill, alpha) if fill else None,
+                          outline=self.rgba(outline) if outline else None, width=int(round(width * k)) if outline else 0)
+
+    def linear(self, stops, x1, y1, x2, y2):
+        """A linear gradient over a box, as SVG's objectBoundingBox x1 y1 x2 y2 with its stops."""
+        def paint(box):
+            bx0, by0, bx1, by1 = box
+            bw, bh = max(1, bx1 - bx0), max(1, by1 - by0)
+            g = self.layer()
+            small = self.Image.new('RGBA', (64, 64))
+            px = small.load()
+            vx, vy = (x2 - x1), (y2 - y1)
+            n = vx * vx + vy * vy or 1
+            for j in range(64):
+                for i in range(64):
+                    u, v = (i + 0.5) / 64, (j + 0.5) / 64
+                    t = max(0.0, min(1.0, ((u - x1) * vx + (v - y1) * vy) / n))
+                    for a, b in zip(stops, stops[1:]):
+                        if a[0] <= t <= b[0]:
+                            f = 0 if b[0] == a[0] else (t - a[0]) / (b[0] - a[0])
+                            px[i, j] = tuple(int(round(a[1][c] + (b[1][c] - a[1][c]) * f)) for c in range(4))
+                            break
+            g.paste(small.resize((int(bw), int(bh)), self.Image.BILINEAR), (int(bx0), int(by0)))
+            return g
+        return paint
+
+    def image(self, path, x, y, w, h, mask=None):
+        k = self.K
+        pic = self.Image.open(path).convert('RGBA').resize((int(round(w * k)), int(round(h * k))), self.Image.LANCZOS)
+        at = (int(round(x * k)), int(round(y * k)))
+        if mask is not None:
+            cut = mask.crop((at[0], at[1], at[0] + pic.size[0], at[1] + pic.size[1]))
+            pic.putalpha(self.ImageChops.multiply(pic.getchannel('A'), cut))
+        self.im.alpha_composite(pic, at)
+
+
+def draw_card(card, out_path, art=None):
+    """The Psyche Card for a card summary, 1080x1920, as lib/cardimage.js psycheSvg draws it."""
+    art = art or card_art()
+    W, H = 1080, 1920
+    S = {'pad': 60, 'top': 56, 'foot': 44, 'gap': 18, 'col': 20, 'text': 27, 'label': 22, 'panelPad': (22, 28), 'heroPad': (38, 42)}
+    X, CW = S['pad'], W - 2 * S['pad']
+    PW = (CW - S['col']) / 2
+    L, R = X, X + PW + S['col']
+    inner = PW - 2 * S['panelPad'][1]
+    HEAD = S['panelPad'][0] + 26 + 22
+    # Everything but the background goes on its own canvas, tall enough to run past the card,
+    # then is scaled down about the top centre just enough, as the server's card is.
+    p = _Painter(art, W, int(H * 1.5))
+    C, meta = p.C, p.meta
+    hero_grad = p.linear([(0, p.rgba(C['accent'])), (1, p.rgba(C['accent2']))], 0, 0, 1, 1)
+    cap = lambda s: re.sub(r'^\s*\w', lambda m: m.group(0).upper(), str(s or ''))
+    y = S['top']
+    # The top row: the brand, whose card, and the ring.
+    p.image(os.path.join(art, 'brand.png'), X, y + 58 - 30 * 0.95, 30 * 1.25, 30 * 1.25)
+    p.text(X + 45, y + 58, 'PsycheAI', 30, 700, C['ink'])
+    who = card.get('fullName') or card.get('firstName') or ''
+    p.text(W / 2, y + 59, who, 32, 700, C['ink'], anchor='ms')
+    conf = card.get('confidence')
+    if isinstance(conf, (int, float)) and not isinstance(conf, bool):
+        v = max(0, min(100, int(conf)))
+        cx, cy, r = X + CW - 46, y + 48, 40
+        p.circle(cx, cy, r, fill='#ffffff', outline=C['accentSoft'], width=7)
+        k = p.K
+        if v:
+            p.draw.arc([(cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k], -90, -90 + 360 * v / 100, fill=p.rgba(C['accent']), width=7 * k)
+        p.text(cx, cy + 10, str(v), 28, 700, C['ink'], anchor='ms')
+    y += 96 + S['gap']
+
+    # The hero: kicker, name, headline and write-up left of the character's scene.
+    TX, TW = X + S['heroPad'][1], 560
+    name = str(card.get('character') or card.get('firstName') or '')
+    hl = p.wrap(card.get('headline'), 34, 600, TW, italic=True) if card.get('headline') else []
+    blurb = p.wrap(card.get('why'), 26, 400, TW) if card.get('why') else []
+    hy = y + S['heroPad'][0] + 24
+    hero = [('k', TX, hy)]
+    hy += 14 + 70
+    hero.append(('n', TX, hy - 8))
+    if hl:
+        hy += 22
+        hero.append(('h', TX, hy + 34))
+        hy += len(hl) * 42
+    if blurb:
+        hy += 12
+        hero.append(('b', TX, hy + 27))
+        hy += len(blurb) * 37
+    hero_h = max(420, hy + S['heroPad'][0] - y)
+    clip = p.rrect(X, y, CW, hero_h, 36, gradient=hero_grad)
+    scene = (meta.get('scenes') or {}).get(card.get('character') or '')
+    if scene:
+        from PIL import Image
+        pic = Image.open(os.path.join(art, 'scenes', scene + '.png')).convert('RGBA')
+        bw, bh = 640, hero_h
+        s = max(bw / 520, bh / 440)
+        sw, sh = 520 * s, 440 * s
+        # "xMaxYMid slice": scaled to cover the box, its right edge on the box's, centred up and down.
+        k = p.K
+        big = pic.resize((int(round(sw * k)), int(round(sh * k))), Image.LANCZOS)
+        ox, oy = (X + CW - sw), (y + (bh - sh) / 2)
+        lay = p.layer()
+        lay.paste(big, (int(round(ox * k)), int(round(oy * k))), big)
+        box = Image.new('L', p.im.size, 0)
+        p.ImageDraw.Draw(box).rectangle([(X + CW - 640) * k, y * k, (X + CW) * k, (y + hero_h) * k], fill=255)
+        from PIL import ImageChops
+        p.put(lay, ImageChops.multiply(box, clip))
+    fade = p.linear([(0, p.rgba(C['accent'], 1)), (0.55, p.rgba(C['accent'], 0.35)), (1, p.rgba(C['accent'], 0))], 0, 0, 1, 0)
+    k = p.K
+    p.put(fade([X * k, y * k, (X + 680) * k, (y + hero_h) * k]), clip)
+    for kind, tx, ty in hero:
+        if kind == 'k':
+            p.text(tx, ty, 'YOU ARE MOST LIKE', 24, 600, '#ffffff', alpha=0.85, spacing=24 * 0.18)
+        elif kind == 'n':
+            p.text(tx, ty, name, 70, 700, '#ffffff', spacing=-2)
+        elif kind == 'h':
+            for i, line in enumerate(hl):
+                p.text(tx, ty + i * 42, line, 34, 600, '#ffffff', italic=True)
+        else:
+            for i, line in enumerate(blurb):
+                p.text(tx, ty + i * 37, line, 26, 400, '#ffffff', alpha=0.95)
+    y += hero_h + S['gap']
+
+    emoji = meta.get('emoji') or {}
+
+    def panel(x, y0, h, label, icon):
+        p.rrect(x, y0, PW, h, 28, fill='#ffffff', outline=C['line'], width=1.5)
+        ly = y0 + S['panelPad'][0] + 26
+        p.circle(x + S['panelPad'][1] + 17, ly - 8, 17, fill=C['accentSoft'])
+        if icon in emoji:
+            p.image(os.path.join(art, 'emoji', emoji[icon] + '.png'), x + S['panelPad'][1] + 5, ly - 20, 24, 24)
+        p.text(x + S['panelPad'][1] + 48, ly, label.upper(), S['label'], 700, C['inkSoft'], spacing=S['label'] * 0.18)
+
+    def numbered(items, filled):
+        lh = int(math.floor(S['text'] * 1.25 + 0.5))
+        rows, total = [], 0
+        for t in items:
+            ls = p.wrap(t, S['text'], 700, inner - 58)
+            h = max(42, len(ls) * lh)
+            rows.append((ls, h))
+            total += h + 12
+
+        def draw(x, y0):
+            cy = y0
+            for i, (ls, h) in enumerate(rows):
+                p.circle(x + 21, cy + h / 2, 21, fill=C['accent'] if filled else C['accentSoft'])
+                p.text(x + 21, cy + h / 2 + 8, str(i + 1), 22, 700, '#ffffff' if filled else C['accent'], anchor='ms')
+                for j, line in enumerate(ls):
+                    p.text(x + 58, cy + h / 2 - (len(ls) * lh) / 2 + (j + 1) * lh - 7, line, S['text'], 700, C['ink'])
+                cy += h + 12
+        return (total - 12 if rows else 0), draw
+
+    def chips(items):
+        size, padx, pady, gap = 26, 18, 10, 10
+        lh = int(math.floor(size * 1.2 + 0.5))
+        placed, cx, cy, row_h = [], 0, 0, 0
+        for item in items:
+            t = str(item or '').strip()
+            if not t:
+                continue
+            ls = p.wrap(t, size, 600, inner - 2 * padx) if p.measure(t, size, 600) + 2 * padx > inner else [t]
+            cw = max(p.measure(l, size, 600) for l in ls) + 2 * padx
+            ch = len(ls) * lh + 2 * pady
+            if cx + cw > inner and cx > 0:
+                cx, cy, row_h = 0, cy + row_h + gap, 0
+            placed.append((cx, cy, cw, ch, ls))
+            cx += cw + gap
+            row_h = max(row_h, ch)
+
+        def draw(x, y0):
+            for (cx_, cy_, cw, ch, ls) in placed:
+                p.rrect(x + cx_, y0 + cy_, round(cw), ch, 14, fill=C['accentSoft'])
+                for i, line in enumerate(ls):
+                    p.text(x + cx_ + padx, y0 + cy_ + pady + (i + 1) * lh - 7, line, size, 600, C['accent'])
+        return (cy + row_h if placed else 0), draw
+
+    def row(left, right):
+        nonlocal y
+        h = max(left[2], right[2] if right else 0) + HEAD + 2 * S['panelPad'][0] - 4
+        panel(L, y, h, left[0], left[1])
+        left[3](L + S['panelPad'][1], y + HEAD + S['panelPad'][0] - 4)
+        if right:
+            panel(R, y, h, right[0], right[1])
+            right[3](R + S['panelPad'][1], y + HEAD + S['panelPad'][0] - 4)
+        y += h + S['gap']
+
+    pats, draw_p = numbered([str(x) for x in (card.get('patterns') or [])[:3]], True)
+    mots, draw_m = numbered([cap(x) for x in (card.get('motivators') or [])[:3]], False)
+    row(('Your patterns', '🧵', pats, draw_p), ('What motivates you', '🧲', mots, draw_m))
+
+    AX = {'E': 'Extraversion', 'I': 'Introversion', 'N': 'Intuition', 'S': 'Sensing', 'T': 'Thinking', 'F': 'Feeling', 'J': 'Judging', 'P': 'Perceiving'}
+    letters = (card.get('letters') or [{'letter': c} for c in str(card.get('mbti') or '')])[:4]
+    RH = 42
+
+    def draw_mbti(x, y0):
+        for i, l in enumerate(letters):
+            ly = y0 + i * RH + 27
+            p.text(x, ly, l.get('letter') or '', S['text'], 700, C['accent'])
+            p.text(x + 48, ly, AX.get(l.get('letter'), ''), S['text'], 400, C['ink'])
+            st = l.get('strength')
+            if st:
+                sw = p.measure(st, 19, 700) + 24
+                clear, slight = bool(re.match(r'^clear$', st, re.I)), bool(re.match(r'^slight$', st, re.I))
+                p.rrect(x + inner - sw, ly - 25, round(sw), 32, 16, fill=C['accent'] if clear else C['accentSoft'], alpha=0.55 if slight else 1.0)
+                p.text(x + inner - sw / 2, ly - 3, st, 19, 700, '#ffffff' if clear else C['inkSoft'] if slight else C['accent'], anchor='ms')
+    traits = [('Openness', 'openness'), ('Conscientious', 'conscientiousness'), ('Agreeable', 'agreeableness'), ('Sensitivity', 'neuroticism')]
+
+    def draw_five(x, y0):
+        five = card.get('bigFive') or {}
+        for i, (label, key) in enumerate(traits):
+            v, ly = five.get(key), y0 + i * RH + 27
+            bx, bw = x + 196, inner - 196 - 58
+            p.text(x, ly, label, S['text'] - 2, 400, C['ink'])
+            p.rrect(bx, ly - 16, bw, 16, 8, fill=C['accentSoft'])
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                if v > 0:
+                    p.rrect(bx, ly - 16, round(bw * v / 100), 16, 8, fill=C['accent'])
+                p.text(x + inner, ly, str(v), S['text'], 700, C['ink'], anchor='rs')
+    row(('MBTI', '🧭', len(letters) * RH - 8, draw_mbti), ('Big Five', '📊', len(traits) * RH - 8, draw_five))
+
+    vh, draw_v = chips([cap(x) for x in (card.get('values') or [])[:4]])
+    ih, draw_i = chips([cap(x) for x in (card.get('interests') or [])[:4]])
+    row(('Values & beliefs', '⚖️', vh, draw_v), ('Interests', '✨', ih, draw_i))
+
+    love_icons = {'Words of affirmation': '💬', 'Acts of service': '🛠️', 'Quality time': '⏳', 'Receiving gifts': '🎁', 'Giving gifts': '🎁', 'Physical touch': '🫂'}
+    love = ['Giving gifts' if t == 'Receiving gifts' else cap(str(t).replace('_', ' ')) for t in (card.get('loveGiving') or [])[:2]]
+
+    def draw_care(x, y0):
+        for i, t in enumerate(love):
+            e = emoji.get(love_icons.get(t, '💗'))
+            if e:
+                p.image(os.path.join(art, 'emoji', e + '.png'), x, y0 + i * 44, 32, 32)
+            p.text(x + 46, y0 + i * 44 + 27, t, S['text'], 400, C['ink'])
+    syncs = ((meta.get('syncs') or {}).get(card.get('character') or '') or [])[:3]
+    right = None
+    if syncs:
+        def draw_syncs(x, y0):
+            from PIL import Image
+            for i, n in enumerate(syncs):
+                cx = x + inner / 6 + i * inner / 3
+                cy, r = y0 + 42, 40
+                p.circle(cx, cy, r, fill=C['accent'])
+                f = (meta.get('scenes') or {}).get(n)
+                if f:
+                    crop = [float(v) for v in str((meta.get('crops') or {}).get(n) or meta.get('defaultCrop') or '220 20 300 300').split()]
+                    pic = Image.open(os.path.join(art, 'scenes', f + '.png')).convert('RGBA')
+                    sx = pic.size[0] / 520
+                    side = min(crop[2], crop[3])
+                    ccx, ccy = crop[0] + crop[2] / 2, crop[1] + crop[3] / 2
+                    cut = pic.crop((int((ccx - side / 2) * sx), int((ccy - side / 2) * sx), int((ccx + side / 2) * sx), int((ccy + side / 2) * sx)))
+                    tmp = os.path.join(art, '.avatar.png')
+                    cut.save(tmp)
+                    disc = Image.new('L', p.im.size, 0)
+                    k = p.K
+                    p.ImageDraw.Draw(disc).ellipse([(cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k], fill=255)
+                    p.image(tmp, cx - r, cy - r, 2 * r, 2 * r, disc)
+                p.circle(cx, cy, r, outline='#ffffff', width=4)
+                p.text(cx, y0 + 84 + 28, n, 21, 600, C['ink'], anchor='ms')
+        right = ('Most in sync with', '🤝', 84 + 34, draw_syncs)
+    row(('Shows care as', '🎁', len(love) * 44 - 8, draw_care), right)
+
+    # The signature, pinned to the foot.
+    y = max(y + 8, H - S['foot'] - 40)
+    parts = [('psycheai.io', 700, C['ink']), ('  •  Tag us ', 400, C['inkSoft']), ('@psycheai.io', 700, C['accent'])]
+    total = sum(p.measure(t, 28, wgt) for t, wgt, _ in parts)
+    fx = W / 2 - total / 2
+    for t, wgt, col in parts:
+        p.text(fx, y + 28, t, 28, wgt, col)
+        fx += p.measure(t, 28, wgt)
+    y += 40
+
+    from PIL import Image
+    k = p.K
+    room = H - S['foot']
+    scale = (room - S['top']) / (y - S['top']) if y > room else 1.0
+    out = Image.new('RGBA', (W * k, H * k), (0, 0, 0, 0))
+    bg = p.linear([(0, p.rgba('#fbf1f6')), (1, p.rgba('#ece2f5'))], 0, 0, 0.3, 1)
+    mask = Image.new('L', out.size, 0)
+    p.ImageDraw.Draw(mask).rounded_rectangle([0, 0, W * k, H * k], radius=44 * k, fill=255)
+    painted = bg([0, 0, W * k, H * k]).crop((0, 0, W * k, H * k))
+    out.paste(painted, (0, 0), mask)
+    body = p.im.crop((0, 0, W * k, int(max(y, H) * k) + 4 * k))
+    if scale < 1:
+        body = body.resize((int(body.size[0] * scale), int(body.size[1] * scale)), Image.LANCZOS)
+    out.alpha_composite(body, (int(round((W / 2) * (1 - scale) * k)), int(round(S['top'] * (1 - scale) * k))))
+    out = out.resize((W, H), Image.LANCZOS)
+    os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
+    out.save(out_path, 'PNG', optimize=True)
+    try:
+        os.remove(os.path.join(art, '.avatar.png'))
+    except OSError:
+        pass
+    return out_path
+
+
 # Evidence that is a summary rather than a moment, as psycheai.io's evidenceProblems has it (README
 # "Moments, checked"): pattern evidence is each a dated moment; a letter's, a wellbeing area's and
 # attachment's may also be a count or a rhythm, but never words alone or a span, and each list has at
@@ -3486,8 +3906,9 @@ def canonical(value, node, defs):
 
 
 def local_publish(args):
-    """publish_psyche, here (README "The report stays in Muse"): the read checked and laid out in this
-    workspace, and only its card summary sent, to save_card, for the card picture and Syncs."""
+    """publish_psyche, here (README "Nothing leaves Muse unless they Sync"): the read checked, the report
+    laid out and the card drawn in this workspace, and nothing of it sent: psyche_saved only notes that
+    a Psyche exists, for the start menu. The card summary goes to PsycheAI only when they Sync (call)."""
     checked = answer_check(args)
     if not checked.get('ok'):
         return {'ok': False, 'problems': checked.get('problems') or []}
@@ -3496,9 +3917,10 @@ def local_publish(args):
     answer = canonical(args['answer'], schema, schema.get('$defs', {})) if schema else args['answer']
     name = args.get('name') or ''
     full = local_full(answer, name, guide.get('labels') or {})
-    out = call('save_card', {'card': card_summary(answer, name)})
+    out = call('psyche_saved', {})
     if isinstance(out, dict) and out.get('ok'):
         out['full'] = full
+        out['card'] = card_summary(answer, name)
         args['answer'] = answer
     return out
 
@@ -3564,10 +3986,21 @@ def clean_result(value):
     return out
 
 
+SYNC_SENDS_CARD = ('sync_link', 'sync_with', 'get_syncs', 'get_sync', 'save_sync')
+
+
 def call(tool, args):
     if tool == 'get_report_guide':
         return with_pinned_guide(tool, args, None)
     acc = account()
+    # Sync is the one thing that shares (README "Nothing leaves Muse unless they Sync"): the card
+    # summary of their kept report goes to save_card, locked, before a Sync tool runs, and never before.
+    if tool in SYNC_SENDS_CARD:
+        kept = read_first([REPORT, REPORT_KEPT]) or {}
+        if isinstance(kept.get('report'), dict):
+            saved_card = call('save_card', {'card': card_summary(kept['report'], kept.get('name') or '')})
+            if isinstance(saved_card, dict) and saved_card.get('error'):
+                return saved_card
     if tool == 'sync_with':
         keep_keys(text=args.get('link'))     # the code in a friend's link is the key to their card and your Sync
     msg = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': tool, 'arguments': args}}

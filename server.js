@@ -415,6 +415,13 @@ async function route(req, res) {
       return f ? send(res, 200, f.body, f.type.split(';')[0]) : send(res, 404, { error: 'Not found' });
     }
     if (url.pathname === '/skill/files' && req.method === 'GET') return send(res, 200, skill.manifest());
+    // The card art the skill draws the Psyche Card with in Muse (README "The card is drawn in Muse"):
+    // one pack for everyone, fetched once and checked against a hash the signed script holds.
+    if (url.pathname === '/skill/card-art.zip' && (req.method === 'GET' || req.method === 'HEAD')) {
+      const zip = require('node:fs').readFileSync(require('node:path').join(__dirname, 'assets', 'card-art.zip'));
+      res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': zip.length, 'Cache-Control': 'public, max-age=86400' });
+      return res.end(req.method === 'HEAD' ? undefined : zip);
+    }
     // A Muse read's stages in seconds, from the skill (lib/timing.js): a signed-in workspace only.
     if (url.pathname === '/skill/timing' && req.method === 'POST') {
       if (!bearer(req)) return send(res, 401, { error: 'Sign in to PsycheAI first.' });
