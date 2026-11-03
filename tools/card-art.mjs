@@ -46,11 +46,16 @@ writeFileSync(join(dir, 'meta.json'), JSON.stringify({ tokens: P.tokens, scenes:
   emoji: { '🧭': 'compass', '📊': 'chart', '⚖️': 'scales', '💡': 'bulb', '✨': 'sparkles', '💝': 'heartgift', '🎁': 'gift', '🤝': 'handshake',
     '🎯': 'target', '🧵': 'thread', '🧲': 'magnet', '💬': 'speech', '🛠️': 'tools', '⏳': 'hourglass', '🫂': 'hug', '💗': 'heart' } }, null, 1));
 
-// 256 colours each, alpha kept (Pillow, as on the reader's side): about a tenth of the size.
-execFileSync('python3', ['-c', `import sys, glob
+// Each scene as a JPEG for its colours and a PNG for its transparency (Pillow puts them back together):
+// smooth glows and gradients, where 256-colour PNGs banded (README "The card is drawn in Muse").
+execFileSync('python3', ['-c', `import sys, glob, os
 from PIL import Image
 for f in glob.glob(sys.argv[1] + '/*.png'):
-    Image.open(f).convert('RGBA').quantize(colors=256, method=Image.Quantize.FASTOCTREE).save(f, optimize=True)`, join(dir, 'scenes')]);
+    im = Image.open(f).convert('RGBA')
+    base = f[:-4]
+    im.convert('RGB').save(base + '.jpg', quality=88, optimize=True, progressive=True)
+    im.getchannel('A').save(base + '-a.png', optimize=True)
+    os.remove(f)`, join(dir, 'scenes')]);
 
 // A fixed date on every entry, so the same art always makes the same zip (and hash).
 execFileSync('find', [dir, '-exec', 'touch', '-t', '202601010000', '{}', '+']);

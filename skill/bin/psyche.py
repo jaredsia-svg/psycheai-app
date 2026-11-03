@@ -82,7 +82,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 136
+RELEASE = 137
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -3414,7 +3414,7 @@ def card_summary(answer, name):
 # sent to draw it. The fonts and every character's picture come in one pack, card-art.zip, fetched
 # once from PsycheAI and checked against CARD_ART_SHA256 (tools/card-art.mjs prints it): the whole
 # pack, so the fetch says nothing about which character they got.
-CARD_ART_SHA256 = '26bc26f0b13c46ab1726a4eecdfa04036188ff227b414c119fbfde42dd0946c1'
+CARD_ART_SHA256 = '452386aafd67b59feaa9b03b3268bb7bfa96933c13719fc2e4140c2e0f434624'
 CARD_ART = os.path.join(KEEP, 'card-art-' + CARD_ART_SHA256[:12])
 
 
@@ -3433,6 +3433,14 @@ def card_art():
                 raise ValueError('the card art did not check out')
         z.extractall(CARD_ART)
     return os.path.join(CARD_ART, 'card-art')
+
+
+def _scene(art, name):
+    """A scene from the pack: its colours (JPEG) and its transparency (PNG) put back together."""
+    from PIL import Image
+    pic = Image.open(os.path.join(art, 'scenes', name + '.jpg')).convert('RGB')
+    pic.putalpha(Image.open(os.path.join(art, 'scenes', name + '-a.png')).convert('L'))
+    return pic
 
 
 class _Painter:
@@ -3609,7 +3617,7 @@ def draw_card(card, out_path, art=None):
     scene = (meta.get('scenes') or {}).get(card.get('character') or '')
     if scene:
         from PIL import Image
-        pic = Image.open(os.path.join(art, 'scenes', scene + '.png')).convert('RGBA')
+        pic = _scene(art, scene)
         bw, bh = 640, hero_h
         s = max(bw / 520, bh / 440)
         sw, sh = 520 * s, 440 * s
@@ -3761,7 +3769,7 @@ def draw_card(card, out_path, art=None):
                 f = (meta.get('scenes') or {}).get(n)
                 if f:
                     crop = [float(v) for v in str((meta.get('crops') or {}).get(n) or meta.get('defaultCrop') or '220 20 300 300').split()]
-                    pic = Image.open(os.path.join(art, 'scenes', f + '.png')).convert('RGBA')
+                    pic = _scene(art, f)
                     sx = pic.size[0] / 520
                     side = min(crop[2], crop[3])
                     ccx, ccy = crop[0] + crop[2] / 2, crop[1] + crop[3] / 2
