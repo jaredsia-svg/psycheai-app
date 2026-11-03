@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 142
+RELEASE = 144
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -135,24 +135,28 @@ def local_now():
 
 def file_tag(previous=None):
     """This publish's part of the file names: the user's local date, and from a second Psyche saved
-    the same day " (2)", " (3)"… (README "A name for each run"). Every run once had the same names,
+    the same day "-2", "-3"… (README "A name for each run"). Every run once had the same names,
     and the Muse phone app showed its stored copy of the last run's report under the new one's name."""
     day = local_now().strftime('%d%m%Y')
-    m = re.match(r'^(\d{8})(?: \((\d+)\))?$', str((previous or {}).get('fileTag') or ''))
+    m = re.match(r'^(\d{8})(?:-(\d+)| \((\d+)\))?$', str((previous or {}).get('fileTag') or ''))
     if not m or m.group(1) != day:
         return day
-    return '%s (%d)' % (day, int(m.group(2) or 1) + 1)
+    return '%s-%d' % (day, int(m.group(2) or m.group(3) or 1) + 1)
 
 
-def file_label(kind):
-    """A saved file's name: "Psyche Report - Mei Tan - 01112026", their full name and this publish's
-    tag (file_tag: the local date, numbered from a second the same day), never the time."""
+def file_label(kind, title=False):
+    """A saved file's name: "Psyche-Report-Mei-Tan-01112026", their full name and this publish's tag
+    (file_tag: the local date, numbered from a second the same day), never the time, and no spaces:
+    Muse's chat showed "Image not found" for a file whose name had them (README "File names without
+    spaces"). title=True gives the report page's own title, "Psyche Report - Mei Tan - 01112026"."""
     kept = read_first([REPORT, REPORT_KEPT]) or {}
     name = re.sub(r'[^\w .&()-]', '', str(kept.get('name') or '')).strip()[:60]
     tag = (read_first([LAST]) or {}).get('fileTag')
-    if not isinstance(tag, str) or not re.match(r'^\d{8}( \(\d+\))?$', tag):
+    if not isinstance(tag, str) or not re.match(r'^\d{8}(-\d+| \(\d+\))?$', tag):
         tag = local_now().strftime('%d%m%Y')
-    return ' - '.join(x for x in [kind, name, tag] if x)
+    if title:
+        return ' - '.join(x for x in [kind, name, tag] if x)
+    return re.sub(r'-{2,}', '-', re.sub(r'[^\w-]+', '-', '-'.join(x for x in [kind, name, tag] if x))).strip('-')
 
 
 # Where the card picture may be fetched from (README "Fetched only from PsycheAI"): a server
@@ -881,7 +885,7 @@ def local_report(r):
     except (OSError, ValueError):
         when = ''
     pages = None                  # no PDF (README "The report file, not a PDF"): no page count to show
-    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages, file_label('Psyche Report'),
+    page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages, file_label('Psyche Report', title=True),
                        (kept.get('report') or {}).get('bonus') if isinstance(kept.get('report'), dict) else None)
     if not page:
         return out
