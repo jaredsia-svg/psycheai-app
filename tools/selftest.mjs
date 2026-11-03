@@ -2338,7 +2338,7 @@ print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_ta
       ((b, md, py) => !/curl|python3|mkdir|py_compile/.test(b) && !/the first message is|rather than a note/.test(b) &&
         /When they install \(with "generate my Psyche" or with the link alone\)/.test(md) && !/Installing PsycheAI is how someone starts|whether they asked to install it/.test(md) && !/One command installs it/.test(md) &&
         /What it does, in full[^]*contacts only app\.psycheai\.io \(and psycheai\.io, for a card a release before 133 saved: FETCH_HOSTS\); it\n    sends nothing about them unless they choose to Sync[^]*runs only Muse's own Instagram, Messenger and Facebook tools \(\/opt\/hatch\/bin\) and curl[^]*writes only in this skill's folder/.test(py.slice(0, 1500)) &&
-        (py.match(/subprocess\.run\(/g) || []).length === 2 && require('../lib/skill.js').installPrompt() === 'Install localhost:8787/install')(
+        (py.match(/subprocess\.run\(/g) || []).length === 2 && require('../lib/skill.js').installPrompt() === 'Install localhost:8787/install and generate my Psyche')(
         require('../lib/skill.js').bootstrap(), require('../lib/skill.js').skillMd(), fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
     {
       // The report laid out here (README "The report stays in Muse"), held to what psycheai.io makes of the same reads
@@ -2598,7 +2598,7 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
     const burst = Array.from({ length: 11 }, () => skillMod.account('203.0.113.9').status);
     check('the Muse skill: new accounts from one address are limited', burst.slice(0, 10).every(s => s === 200) && burst[10] === 429);
     check('the Muse skill: the install prompt is one short line, the short link and "generate my Psyche"; the link\'s copy says how to install, and without a word on messages, the go-ahead comes first',
-      skillMod.installPrompt() === 'Install localhost:8787/install' && skillMod.installPrompt({ code: 'abcdefgh', name: 'Mei' }).endsWith('/sync/abcdefgh and generate my Psyche.') &&
+      skillMod.installPrompt() === 'Install localhost:8787/install and generate my Psyche' && skillMod.installPrompt({ code: 'abcdefgh', name: 'Mei' }).endsWith('/sync/abcdefgh and generate my Psyche.') &&
       /begin with step 0's message with its messages question, then the account question only with more than one account, then MESSAGES FIRST, then step 1, with no Generate button/.test(skillMod.skillMd()) && /it is ready once `python3 -m py_compile bin\/psyche\.py` passes and `python3 bin\/psyche\.py status` says connected/.test(skillMod.skillMd()), skillMod.installPrompt());
   }
   {
