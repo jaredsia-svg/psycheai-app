@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 138
+RELEASE = 139
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2023,10 +2023,23 @@ def when(value):
             return datetime.fromtimestamp(value / 1000 if value > 1e11 else value)
         except (OverflowError, OSError, ValueError):
             return None
-    v = str(value or '').strip().replace('T', ' ').rstrip('Z')
+    v = str(value or '').strip()
+    if re.fullmatch(r'\d{9,13}(\.\d+)?', v):
+        return when(float(v))
+    v = v.replace('T', ' ').rstrip('Z')
     for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
         try:
             return datetime.strptime(v[:len(datetime(2000, 1, 1).strftime(fmt))], fmt)
+        except ValueError:
+            continue
+    # Written out ("May 1, 2024 at 9:14 PM", "Wed, 1 May 2024 21:14"), a zone name or offset aside.
+    w = re.sub(r'\s+(at|um|,)\s+|,\s*', ' ', v)
+    w = re.sub(r'\s+([+-]\d{2}:?\d{2}|(?!AM$|PM$)[A-Z]{2,5}|GMT[+-]?\d*|UTC[+-]?\d*)$', '', w).strip()
+    w = re.sub(r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\.?\s+', '', w)
+    for fmt in ('%B %d %Y %I:%M %p', '%b %d %Y %I:%M %p', '%d %B %Y %H:%M', '%d %b %Y %H:%M', '%B %d %Y %H:%M',
+                '%b %d %Y %H:%M', '%d %b %Y %H:%M:%S', '%B %d %Y', '%b %d %Y', '%d %B %Y', '%d %b %Y', '%m/%d/%Y %I:%M %p', '%m/%d/%Y'):
+        try:
+            return datetime.strptime(w, fmt)
         except ValueError:
             continue
     return None
@@ -2245,7 +2258,7 @@ def ig(cli, *args, timeout=120):
     if done.returncode != 0:
         if re.search(r'too many requests|rate.?limit|\b429\b', said, re.I):
             raise RateLimited()
-        raise RuntimeError('exit %d%s' % (done.returncode, ' (server error)' if re.search(r'\b50\d\b', said) else ''))
+        raise RuntimeError('exit %d%s%s' % (done.returncode, ' (server error)' if re.search(r'\b50\d\b', said) else '', why_failed(said)))
     try:
         got = json.loads(out or '{}')
     except ValueError:
@@ -2255,6 +2268,24 @@ def ig(cli, *args, timeout=120):
     if isinstance(got, dict) and (429 in code or '429' in code or (isinstance(err, str) and re.search(r'too many requests|rate.?limit|\b429\b', err, re.I))):
         raise RateLimited()
     return got
+
+
+def why_failed(said):
+    """A failed call's own reason, short: its error message with links, numbers and IDs out, so a
+    failure can be told apart from the next one (": unknown option --since-days")."""
+    msg = ''
+    try:
+        got = json.loads(said.strip().splitlines()[0]) if said.strip().startswith('{') else None
+        err = got.get('error') if isinstance(got, dict) else None
+        msg = (err.get('message') or err.get('type') or '') if isinstance(err, dict) else (err or got.get('message') or '' if isinstance(got, dict) else '')
+    except (ValueError, IndexError):
+        pass
+    if not msg:
+        lines = [x.strip() for x in said.splitlines() if x.strip() and not x.strip().startswith(('Traceback', 'File ', '{'))]
+        msg = lines[-1] if lines else ''
+    msg = re.sub(r'https?://\S+|\S+@\S+|[\w.$-]*\d[\w.:$-]*', '#', str(msg))
+    msg = re.sub(r'\s+', ' ', msg).strip()[:120]
+    return ': ' + msg if msg else ''
 
 
 def caption_of(p):
@@ -2477,7 +2508,7 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                                     with lock:
                                         if size['n'] > THREAD_FIRST_SAFE:
                                             size['n'] = THREAD_FIRST_SAFE
-                                            note('conversations', '%d messages a page refused (%s), read %d a page' % (first, err, THREAD_FIRST_SAFE))
+                                            note('conversations', '%d messages a page refused (%s), read %d a page' % (first, str(err).split(':')[0], THREAD_FIRST_SAFE))
                                     continue
                                 st['failed'] = True
                                 with lock:
@@ -2595,21 +2626,38 @@ def _first_str(d, keys):
     for k in keys:
         v = d.get(k) if isinstance(d, dict) else None
         if isinstance(v, dict):
-            v = v.get('text') or v.get('body')
+            v = v.get('text') or v.get('body') or v.get('message')
+        if isinstance(v, dict):
+            v = v.get('text')
         if isinstance(v, str) and v.strip():
             return v
     return ''
 
 
-def _rows(got, keys):
+def _rows(got, keys, depth=0):
+    """The list of rows in a tool's answer: under one of keys, or under data/result, or else the
+    one list of objects it holds (a shape the docs didn't show is still read, never dropped as empty)."""
     if isinstance(got, list):
-        return got
-    for k in keys:
-        if isinstance(got, dict) and isinstance(got.get(k), list):
-            return got[k]
-    if isinstance(got, dict) and isinstance(got.get('data'), dict):
-        return _rows(got['data'], keys)
-    return []
+        return [r for r in got if isinstance(r, dict)]
+    if not isinstance(got, dict) or depth > 3:
+        return []
+    for k in tuple(keys) + ('data', 'results', 'result', 'edges', 'nodes'):
+        v = got.get(k)
+        if isinstance(v, list) and (not v or isinstance(v[0], dict)):
+            return [(r.get('node') if isinstance(r.get('node'), dict) else r) for r in v if isinstance(r, dict)]
+        if isinstance(v, dict):
+            found = _rows(v, keys, depth + 1)
+            if found:
+                return found
+    lists = [v for k, v in got.items() if not k.startswith('_') and isinstance(v, list) and v and isinstance(v[0], dict)]
+    return [r for r in lists[0] if isinstance(r, dict)] if len(lists) == 1 else []
+
+
+def _shape(got):
+    """An answer's top-level keys (never its values), for a note when nothing in it could be read."""
+    if isinstance(got, dict):
+        return '{%s}' % ', '.join(sorted(str(k) for k in got)[:12])
+    return type(got).__name__
 
 
 def _names_in(v, out):
@@ -2655,25 +2703,56 @@ def collect_facebook(me=None, with_messenger=True):
     else:
         fbid = str(who['fb_user_id'])
         owner = owner or str(who.get('name') or '')
-        try:
-            for page in pages(lambda after: ig(FB_CLI, 'timeline', 'fetch', '--profile-id', fbid, '--limit', 20, *(('--after', after) if after else ())),
-                              lambda p: (p.get('next_cursor') or ((p.get('paging') or {}).get('cursors') or {}).get('after')) if isinstance(p, dict) else None,
+        mine_ids = {fbid}
+        seen = {'rows': 0, 'others': 0, 'no words': 0, 'no date': 0}
+        shape = []
+
+        def timeline(pid):
+            for page in pages(lambda after: ig(FB_CLI, 'timeline', 'fetch', '--profile-id', pid, '--limit', 20, *(('--after', after) if after else ())),
+                              lambda p: (p.get('next_cursor') or ((p.get('paging') or {}).get('cursors') or {}).get('after')
+                                         or (p.get('paging') or {}).get('next_cursor')) if isinstance(p, dict) else None,
                               limit=FB_PAGES):
-                for p in _rows(page, ('posts', 'items', 'timeline')):
-                    author, own = str(p.get('author_id') or ''), str(p.get('owner_id') or fbid)
-                    if author and author != own:
+                rows = _rows(page, ('posts', 'items', 'timeline', 'stories'))
+                if not rows and not shape:
+                    shape.append(_shape(page))
+                for p in rows:
+                    seen['rows'] += 1
+                    author = str(p.get('author_id') or (p['author'].get('id') if isinstance(p.get('author'), dict) else '') or '')
+                    owned = str(p.get('owner_id') or '')
+                    if author and author not in mine_ids and author != owned:
+                        seen['others'] += 1
                         continue        # someone else's post on their wall
-                    text = _first_str(p, ('message', 'text', 'post_text', 'body', 'caption', 'content'))
-                    t = local_time(p.get('post_created_at') or p.get('created_at'), p.get('created_time') or p.get('timestamp'))
-                    if not t or not text.strip():
+                    text = _first_str(p, ('message', 'text', 'post_text', 'body', 'caption', 'content', 'description', 'story', 'title'))
+                    stamp = next((p.get(k) for k in ('post_created_at', 'created_at', 'creation_time', 'created_time') if isinstance(p.get(k), dict)), None)
+                    raw = next((p.get(k) for k in ('created_time', 'created_at', 'post_created_at', 'creation_time', 'timestamp', 'publish_time', 'time')
+                                if p.get(k) not in (None, '') and not isinstance(p.get(k), dict)), None)
+                    t = local_time(stamp, raw)
+                    if not text.strip():
+                        seen['no words'] += 1   # a photo or a share with nothing of their own written
+                        continue
+                    if not t:
+                        seen['no date'] += 1
                         continue
                     for k in ('with_tags', 'tags', 'tagged', 'mentions', 'message_tags', 'with'):
                         _names_in(p.get(k), tagged)
                     posts.append((t, text))
+
+        try:
+            timeline(fbid)
+            if not seen['rows']:
+                # The docs give the profile's numeric id (profile info) for a timeline: try that once.
+                info = ig(FB_CLI, 'profile', 'info', '--profile-id', fbid)
+                pid = str((info.get('id') or info.get('profile_id') or (info.get('profile') or {}).get('id') or '') if isinstance(info, dict) else '')
+                if pid and pid != fbid:
+                    mine_ids.add(pid)
+                    timeline(pid)
         except RateLimited:
             notes.append('facebook: too many requests, so it stopped there')
         except RuntimeError as err:
             notes.append('facebook: %s' % err)
+        if not posts:
+            notes.append('facebook: %d posts came back%s' % (seen['rows'], (': %d by others on their wall, %d with no words of their own, %d undated' % (
+                seen['others'], seen['no words'], seen['no date'])) if seen['rows'] else (' (answer %s)' % shape[0] if shape else '')))
     names = sorted([(n, 'a friend') for n in tagged if n.lower() != owner.lower()], key=lambda n: -len(n[0]))
     lines = []
     for t, text in sorted(posts, key=lambda x: x[0]):
@@ -2692,11 +2771,21 @@ def collect_facebook(me=None, with_messenger=True):
             if _not_connected(state) or (isinstance(state, dict) and state.get('connected') is False):
                 connect['messenger'] = (ig(MSGR_CLI, 'connect-url') or {}).get('connect_url') or 'Messenger settings'
             else:
-                try:
-                    ig(MSGR_CLI, 'sync', 'both', '--since-days', 365, timeout=240)
-                except RuntimeError as err:
-                    notes.append('messenger: refresh %s' % err)
-                listed = _rows(ig(MSGR_CLI, 'threads', '--limit', 30), ('threads', 'conversations', 'items'))
+                # The normal refresh first (incremental: it fills gaps), then reaching a year back for
+                # their threads, each on its own, so one failing never stops the other or the read.
+                refreshed = []
+                for args, wait in ((('sync', 'both'), 240), (('sync', 'threads', '--since-days', 365), 180)):
+                    try:
+                        ig(MSGR_CLI, *args, timeout=wait)
+                        refreshed.append(args[1])
+                    except RateLimited:
+                        raise
+                    except RuntimeError as err:
+                        notes.append('messenger: refresh (%s) %s' % (' '.join(str(a) for a in args[:2]), err))
+                got = ig(MSGR_CLI, 'threads', '--limit', 30)
+                listed = _rows(got, ('threads', 'conversations', 'items'))
+                if not listed:
+                    notes.append('messenger: no chats listed (answer %s)' % _shape(got))
                 ranked = []
                 for th in listed:
                     cid = str(th.get('conversation_id') or th.get('cid') or th.get('id') or '')

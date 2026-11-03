@@ -2126,7 +2126,11 @@ print(json.dumps({'fine': m.answer_problems(fine),
           const postsOnly = await fb('--no-messenger');
           const postsText = fsx.readFileSync(fbFile, 'utf8');
           const notLinked = await off();
-          skillState.facebook = { both, text, postsOnly, postsText, notLinked };
+          // Another answer shape, and a Messenger refresh that fails: the read still comes back, and says why.
+          const altRun = await execFile('python3', [pathx.join(dir, 'bin', 'psyche.py'), 'collect-facebook', '--me', 'Mei Tan'], { env: { ...env, FAKEFB_ALT: '1', FAKEMSGR_SYNCFAIL: '1' }, timeout: 60000 });
+          const alt = JSON.parse(altRun.stdout);
+          const altText = fsx.readFileSync(fbFile, 'utf8');
+          skillState.facebook = { both, text, postsOnly, postsText, notLinked, alt, altText };
           if (had === null) fsx.rmSync(fbFile); else fsx.writeFileSync(fbFile, had);
         } catch (e) { skillState.facebook = { error: String(e.message).slice(0, 400) }; }
         // A later Fresh Psyche: the account read last time comes first, marked, from last-collect's hash of its ID.
@@ -2508,6 +2512,12 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
       /def drop_context\(\):\n    for path in \(DIGEST, os\.path\.join\(SOURCES, 'whatsapp\.txt'\), os\.path\.join\(SOURCES, 'facebook\.txt'\)\):/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
       /are sources\/facebook\.txt, written by `python3 bin\/psyche\.py collect-facebook`/.test(skillMd),
       JSON.stringify(skillState.facebook).slice(0, 600));
+    check('collect-facebook reads answers in other shapes (rows under data with node wrappers, the author as an object, written-out and offset times, the profile\'s numeric id when the fb_user_id timeline is empty), goes on when a Messenger refresh fails, and its notes say why (the call\'s own reason, numbers out)',
+      ((F) => F && F.alt && F.alt.ok && F.alt.read['facebook posts'] === 4 && F.alt.read['messenger chats'] === 2 &&
+        /^2024-01-02 21:14 \[facebook post\] Alt post 0: a long walk by the sea$/m.test(F.altText) && /^2025-05-01 21:10 \[facebook post\] Alt post 0 b: new job/m.test(F.altText) && !/aunt/.test(F.altText) &&
+        (F.alt.notes || []).some(n => /^messenger: refresh \(sync both\) exit 2: invalid value for --since-days: # \(max #\)$/.test(n)) &&
+        (F.alt.notes || []).some(n => /^messenger: refresh \(sync threads\) exit 2/.test(n)))(skillState.facebook),
+      JSON.stringify(skillState.facebook && { alt: skillState.facebook.alt }).slice(0, 700));
     check('show ready names the report file the summary saved (its path is under "report"), with its size, when the report comes back in full',
       ((o) => o && /\/out\/Psyche Report( - [^/]+)? - \d{8}( \(\d+\))?\.html$/.test((o.report || {}).file || '') && o.report.bytes > 1000 && JSON.stringify(o.missing) === '["card"]')(skillState.leaving && skillState.leaving.readyFull),
       JSON.stringify(skillState.leaving && skillState.leaving.readyFull));

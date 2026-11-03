@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # A stand-in for Muse's Messenger tool, shaped as its connector doc describes, for the selftest of
-# `bin/psyche.py collect-facebook`. FAKEMSGR_OFF=1 answers as not connected.
+# `bin/psyche.py collect-facebook`. FAKEMSGR_OFF=1 answers as not connected. FAKEMSGR_SYNCFAIL=1 fails
+# every refresh (as the real one did once with --since-days), so the read goes on from what's retained.
 import sys, json, os
 a = sys.argv[1:]
 log = os.environ.get('FAKEIG_LOG')
@@ -11,6 +12,8 @@ if a[0] == 'check':
     print(json.dumps({'connected': not os.environ.get('FAKEMSGR_OFF')})); sys.exit(0)
 if a[0] == 'connect-url':
     print(json.dumps({'connect_url': 'https://messenger.example/connect'})); sys.exit(0)
+if a[0] == 'sync' and os.environ.get('FAKEMSGR_SYNCFAIL'):
+    print(json.dumps({'error': {'message': 'invalid value for --since-days: 365 (max 90)'}}), file=sys.stderr); sys.exit(2)
 if a[0] in ('sync', 'repair'):
     print(json.dumps({'ok': True})); sys.exit(0)
 if a[0] == 'threads':

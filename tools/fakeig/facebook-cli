@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # A stand-in for Muse's Facebook tool, shaped as its connector doc describes, for the selftest of
-# `bin/psyche.py collect-facebook`. FAKEFB_OFF=1 answers as an account that isn't linked.
+# `bin/psyche.py collect-facebook`. FAKEFB_OFF=1 answers as an account that isn't linked. FAKEFB_ALT=1
+# answers in another shape: an empty timeline for the fb_user_id (profile info gives the numeric id),
+# rows under data.timeline with node wrappers, the author as an object, and written-out or offset times.
 import sys, json, os
 a = sys.argv[1:]
 log = os.environ.get('FAKEIG_LOG')
@@ -10,6 +12,20 @@ if a[0] == 'connect-url':
     print(json.dumps({'connect_url': 'https://accountscenter.example/connect'})); sys.exit(0)
 if a[0] == 'me':
     print(json.dumps({} if os.environ.get('FAKEFB_OFF') else {'name': 'Mei Tan', 'fb_user_id': 'FB1'})); sys.exit(0)
+ALT = os.environ.get('FAKEFB_ALT')
+if a[:2] == ['profile', 'info']:
+    print(json.dumps({'id': '1000123', 'name': 'Mei Tan'})); sys.exit(0)
+if a[:2] == ['timeline', 'fetch'] and ALT:
+    opt = {a[i]: a[i + 1] for i in range(2, len(a) - 1) if a[i].startswith('--')}
+    if opt['--profile-id'] != '1000123':
+        print(json.dumps({'data': {'timeline': []}})); sys.exit(0)
+    page = int(opt.get('--after', '0'))
+    edges = [{'node': {'post_id': 'P%d' % page, 'author': {'id': '1000123'}, 'message': {'text': 'Alt post %d: a long walk by the sea' % page},
+                       'created_time': '2024-0%d-02T21:14:00+0800' % (1 + page)}},
+             {'node': {'post_id': 'Q%d' % page, 'author': {'id': '1000123'}, 'text': 'Alt post %d b: new job, first week done' % page,
+                       'post_created_at': 'May %d, 2025 at 9:1%d PM' % (1 + page, page)}},
+             {'node': {'post_id': 'R%d' % page, 'author': {'id': '777'}, 'owner_id': '1000123', 'message': 'Happy birthday from your aunt', 'created_time': '2020-05-05T10:00:00'}}]
+    print(json.dumps({'data': {'timeline': {'edges': edges}}, 'paging': {'next_cursor': str(page + 1) if page < 1 else None}})); sys.exit(0)
 if a[:2] == ['timeline', 'fetch']:
     opt = {a[i]: a[i + 1] for i in range(2, len(a) - 1) if a[i].startswith('--')}
     assert opt['--profile-id'] == 'FB1'
