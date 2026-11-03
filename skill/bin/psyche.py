@@ -3,7 +3,9 @@
 
 What it does, in full:
   - contacts only app.psycheai.io (and psycheai.io, for a card a release before 133 saved: FETCH_HOSTS); it
-    sends nothing about them unless they choose to Sync (local_publish, SYNC_SENDS_CARD)
+    sends none of their posts, messages, digest, report or card unless they choose to Sync
+    (local_publish, SYNC_SENDS_CARD); its own calls are the account (nothing of theirs in it),
+    start, the update check and the card art
   - runs only Muse's own Instagram, Messenger and Facebook tools (/opt/hatch/bin) and curl
   - writes only in this skill's folder (~/workspace/skills/psycheai/), ~/.psycheai/ (a spare
     copy of the account keys) and a temporary folder it removes after each request
@@ -83,7 +85,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 140
+RELEASE = 141
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
