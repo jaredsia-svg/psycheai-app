@@ -2,7 +2,7 @@
 """PsycheAI for Muse, as a skill: calls PsycheAI's tools at app.psycheai.io.
 
 What it does, in full:
-  - contacts only app.psycheai.io, and psycheai.io for the card and PDF (FETCH_HOSTS)
+  - contacts only app.psycheai.io, and psycheai.io for the card picture (FETCH_HOSTS)
   - runs only Muse's own Instagram, Messenger and Facebook tools (/opt/hatch/bin) and curl
   - writes only in this skill's folder (~/workspace/skills/psycheai/), ~/.psycheai/ (a spare
     copy of the account keys) and a temporary folder it removes after each request
@@ -29,7 +29,7 @@ What it does, in full:
                                        Messenger chats, de-identified, into sources/facebook.txt; a
                                        service not connected answers with its connect link
   python3 bin/psyche.py show PART              one part of what publish_psyche gave back, kept here:
-                                       card (saved as a picture), summary, pdf (saved as a file), links or next (README "One part at a time")
+                                       card (saved as a picture), summary (the report file), links or next (README "One part at a time")
   python3 bin/psyche.py checkin [ID done|not-yet|drop] [--note TEXT]
                                        their plan from the kept report and where each step
                                        stands; with an ID, record their answer (kept here only)
@@ -42,7 +42,7 @@ What it does, in full:
   python3 bin/psyche.py check-answer FILE      the answer file checked as publish_psyche will take it:
                                        JSON, the schema, and what may leave the workspace
   python3 bin/psyche.py republish              save their kept report (report.json) to PsycheAI again,
-                                       for a fresh link, card and PDF, with no new read
+                                       for a fresh card and report file, with no new read
   python3 bin/psyche.py check-digest           check digest/digest.md, the summary of their own
                                        words a read is written from: its size, its dates,
                                        and that no handle, link, email or number is left
@@ -79,7 +79,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 130
+RELEASE = 131
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -117,7 +117,7 @@ LAST = os.path.join(HERE, 'last-psyche.json')   # what the latest publish gave b
 
 # A saved Psyche's result in parts, so the chat can show each on its own: one
 # part a host won't use no longer holds back the rest.
-OUT = os.path.join(HERE, 'out')                 # the PDF as a file here, so the chat opens it in Muse, not a browser
+OUT = os.path.join(HERE, 'out')                 # the card and the report file, saved here so the chat opens them in Muse
 
 
 def local_now():
@@ -151,8 +151,8 @@ def file_label(kind):
     return ' - '.join(x for x in [kind, name, tag] if x)
 
 
-# Where the card and PDF may be fetched from (README "Fetched only from PsycheAI"): a server
-# answer can't send this workspace, or the PDF's key, anywhere else. Off production (tests,
+# Where the card picture may be fetched from (README "Fetched only from PsycheAI"): a server
+# answer can't send this workspace anywhere else. Off production (tests,
 # a local server) any address is allowed.
 FETCH_HOSTS = ('app.psycheai.io', 'psycheai.io')
 
@@ -162,50 +162,6 @@ def fetchable(link):
         return True
     parts = urllib.parse.urlsplit(link or '')
     return parts.scheme == 'https' and parts.hostname in FETCH_HOSTS
-
-
-def local_pdf(r):
-    """The report's PDF saved in out/, so it's attached as a file rather than linked."""
-    link = r.get('pdf')
-    files = [f for f in r.get('files', []) if f.get('mimeType') == 'application/pdf']
-    name = re.sub(r'[^\w .&()-]', '', r.get('pdfName') or (files[0].get('name') if files else '') or 'Psyche Report.pdf') or 'Psyche Report.pdf'
-    # The save's time in the name, so each save's PDF is a new file to the chat, never taken for one sent before.
-    name = file_label('Psyche Report') + '.pdf'
-    out = {'pdf': link}
-    # Fetched already, right after the save (saved()): that copy is this save's, since out/ is
-    # emptied at each save, and the link may have expired since.
-    try:
-        kept = [f for f in os.listdir(OUT) if f.lower().endswith('.pdf')]
-    except OSError:
-        kept = []
-    if kept:
-        out['file'] = os.path.join(OUT, kept[0])
-        return out
-    if not link or not fetchable(link):
-        return out
-    try:
-        os.makedirs(OUT, exist_ok=True)
-        for old in os.listdir(OUT):
-            if old.lower().endswith('.pdf'):
-                os.remove(os.path.join(OUT, old))
-        parts = urllib.parse.urlsplit(link)
-        if parts.fragment:
-            # /report-pdf?m=<id>#<key>: the key goes in a header, never in an address a server or log keeps.
-            pid = urllib.parse.parse_qs(parts.query).get('m', [''])[0]
-            status, body = fetch('GET', '%s://%s/api/import/pdf?id=%s' % (parts.scheme, parts.netloc, urllib.parse.quote(pid)),
-                                 {'Accept': 'application/pdf', 'X-Psyche-Key': parts.fragment, 'User-Agent': agent()})
-        else:
-            status, body = fetch('GET', link, {'Accept': 'application/pdf', 'User-Agent': agent()})
-        if not body.startswith(b'%PDF'):
-            raise ValueError('not a PDF')
-        path = os.path.join(OUT, name)
-        with open(path, 'wb') as f:
-            f.write(body)
-        os.chmod(path, 0o600)
-        out['file'] = path
-    except (OSError, ValueError, urllib.error.URLError, http.client.HTTPException):
-        out['files'] = files
-    return out
 
 
 def local_card(r):
@@ -905,16 +861,7 @@ def local_report(r):
         when = datetime.fromtimestamp(os.path.getmtime(LAST)).strftime('%-d %B %Y')
     except (OSError, ValueError):
         when = ''
-    # The PDF's page count, from its page tree, for the banner (the PDF is saved here at publish).
-    pages = None
-    try:
-        pdfs = [f for f in os.listdir(OUT) if f.lower().endswith('.pdf')]
-        if pdfs:
-            with open(os.path.join(OUT, pdfs[0]), 'rb') as f:
-                counts = [int(n) for n in re.findall(rb'/Count\s+(\d+)', f.read())]
-            pages = max(counts) if counts else None
-    except (OSError, ValueError):
-        pages = None
+    pages = None                  # no PDF (README "The report file, not a PDF"): no page count to show
     page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages, file_label('Psyche Report'),
                        (kept.get('report') or {}).get('bonus') if isinstance(kept.get('report'), dict) else None)
     if not page:
@@ -935,9 +882,10 @@ def local_report(r):
 
 
 def local_ready(r):
-    """show ready: the card and the report file saved, and What's next, in one call; the PDF fetched
-    and the read's timings sent beside them, so none of it waits on the others (README "Straight to the card")."""
-    side = [threading.Thread(target=local_pdf, args=(r,)), threading.Thread(target=send_timing)]
+    """show ready: the card and the report file saved, and What's next, in one call; the read's timings
+    sent beside them, so neither waits on the other (README "Straight to the card"). There is no PDF:
+    the report file is the whole report (README "The report file, not a PDF")."""
+    side = [threading.Thread(target=send_timing)]
     for t in side:
         t.start()
     card, report = local_card(r), local_report(r)
@@ -965,19 +913,17 @@ PARTS = {
     'ready': local_ready,
     'card': local_card,
     'summary': local_report,
-    'pdf': local_pdf,
+    'pdf': local_report,          # no PDF any more: an older helper's "show pdf" gets the report file
     'next': lambda r: {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')},
 }
 
 
 def saved(out):
     """Keep a publish result here and say only that it's saved, and its parts."""
-    # The last Psyche's PDF goes, so only this one's can be attached: show pdf fetches it.
+    # The last Psyche's files go, so only this one's can be attached.
     shutil.rmtree(OUT, ignore_errors=True)
     out = dict(out, fileTag=file_tag(read_first([LAST])))
     write_private([LAST], out)
-    # The PDF (its link lasts 30 minutes) is fetched by show ready, beside the card and report,
-    # or by show pdf if that comes first: never on the way to the card.
     return {'ok': True, 'saved': True, 'parts': list(PARTS)}
 
 # ---------- the digest (README "The digest in the workspace") ----------
@@ -3174,7 +3120,7 @@ UNSIGNED = ('show', 'after', 'first', 'namesFirst')
 LABELS = frozenset([
     'Generate my Psyche', 'Generate my Psyche. DMs included (Recommended)', 'Generate my Psyche. DMs excluded', 'What will I learn?', 'Is it private?',
     'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Not now',
-    'Reveal my roast 🔥', 'Get the PDF', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
+    'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
     'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
     'Done', 'Yes', 'No thanks', 'Someone else', 'I\'ll share it myself', 'Sync with someone else', 'Sync with someone new', 'Write it again',
