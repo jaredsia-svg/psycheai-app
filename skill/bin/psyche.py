@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """PsycheAI for Muse, as a skill: calls PsycheAI's tools at app.psycheai.io.
 
+What it does, in full (lib/skill.js SCRIPT_SCOPE says the same; keep them in step):
+  - contacts only app.psycheai.io, and psycheai.io for the card and PDF (FETCH_HOSTS)
+  - runs only Muse's own Instagram, Messenger and Facebook tools (/opt/hatch/bin) and curl
+  - writes only in this skill's folder (~/workspace/skills/psycheai/), ~/.psycheai/ (a spare
+    copy of the account keys) and a temporary folder it removes after each request
+  - standard library only; the files are signed (SIGNATURE.json), and update installs only a
+    newer release whose signature checks out
+
   python3 bin/psyche.py status                 make (or check) this workspace's PsycheAI account,
                                        and say whether a newer version of this skill exists
   python3 bin/psyche.py update                 fetch the newest version of this skill's files
@@ -71,7 +79,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 127
+RELEASE = 128
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
