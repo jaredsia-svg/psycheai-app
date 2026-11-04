@@ -14,6 +14,9 @@ if a[0] == 'connect-url':
     print(json.dumps({'connect_url': 'https://messenger.example/connect'})); sys.exit(0)
 if a[0] == 'sync' and os.environ.get('FAKEMSGR_SYNCFAIL'):
     print(json.dumps({'error': {'message': 'invalid value for --since-days: 365 (max 90)'}}), file=sys.stderr); sys.exit(2)
+# FAKEMSGR_DAYS=N: the threads refresh refuses more than N days, saying so as the real one does, number scrubbed.
+if a[0] == 'sync' and a[1:2] == ['threads'] and os.environ.get('FAKEMSGR_DAYS') and int(opt.get('--since-days', 0)) > int(os.environ['FAKEMSGR_DAYS']):
+    print('--since-days cannot exceed %s day(s)' % os.environ['FAKEMSGR_DAYS'], file=sys.stderr); sys.exit(1)
 if a[0] in ('sync', 'repair'):
     print(json.dumps({'ok': True})); sys.exit(0)
 if a[0] == 'threads':

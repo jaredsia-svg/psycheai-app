@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 145
+RELEASE = 149
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -239,7 +239,7 @@ W_PARTS = [
     ('howYouWork', 'How you work', '#2d5fa8'),
     ('puttingItTogether', 'Putting it together', '#6a4bb5'),
 ]
-W_BANDS = {'steady': ('#2f7d5b', '#e3f4ec'), 'mixed': ('#9a5b12', '#fdf1e2'), 'under strain': ('#b3261e', '#fbe7e5')}
+W_BANDS = {'steady': ('#2f7d5b', '#e3f4ec'), 'strong': ('#2f7d5b', '#e3f4ec'), 'mixed': ('#9a5b12', '#fdf1e2'), 'under strain': ('#b3261e', '#fbe7e5')}
 
 W_CSS = '''
 :root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--mute:#6b6076;--line:#ece4f1;--accent:#7b3fa0;--accent2:#d1477a}
@@ -1262,6 +1262,12 @@ COMMON_NAMES = frozenset("""
     william winnie winston xavier xinyi yvonne zach zachary zack zoe
 """.split())
 NAME_RX = re.compile(r"(?<![\w@\[])(?:%s)(?!\w)" % '|'.join(sorted(COMMON_NAMES, key=lambda n: -len(n))), re.I)
+# A capitalised word straight after a word for a person ("this guy Dominik", "thanks Sam", "my cousin Wei Ling")
+# is a name even when it isn't a common one (README "Names the list missed"). Places and brands rarely follow these.
+CUE_NAME_RX = re.compile(r"(\b(?i:guy|girl|dude|lady|friend|friends|buddy|bestie|bro|sis|cousin|uncle|aunt|aunty|auntie|"
+                         r"colleague|boss|mentor|coach|partner|bf|gf|thanks|thank you|thx|ty|shout ?out to|happy birthday|hbd|"
+                         r"congrats|congratulations|missing|miss you|love you|mr|mrs|ms|dr)\.?,?\s+|\[name\],? (?:and|&) )"
+                         r"((?!I\b|I'|The\b|A\b|An\b|My\b|Our\b|You\b|Your\b|Everyone\b|All\b|Guys\b)[A-Z][a-z\u00e0-\u00ff]+(?:\s[A-Z][a-z\u00e0-\u00ff]+)?)")
 
 
 def clean_name(value):
@@ -2080,6 +2086,7 @@ def scrub(text, names=(), people=True):
         text = re.sub(r'(?<!\w)' + re.escape(name) + r'(?!\w)', lab, text, flags=re.I)
     if people:
         text = NAME_RX.sub('[name]', text)
+        text = CUE_NAME_RX.sub(lambda m: m.group(1) + '[name]', text)
     return re.sub(r'\s+', ' ', text).strip()
 
 
@@ -2641,6 +2648,7 @@ MSGR_CLI = os.environ.get('PSYCHEAI_MSGR_CLI') or '/opt/hatch/bin/hatch_messenge
 FB_PAGES = 15               # timeline pages of 20, newest first
 FB_POSTS_MAX = 30000        # their posts' characters at most
 MSGR_THREADS = 8            # their busiest Messenger chats
+MSGR_SINCE_DAYS = (365, 180, 90, 30, 7)
 MSGR_CHARS = 40000          # their own words across them, as a later read adds
 MSGR_PAGES = 10             # a chat's pages at most
 UNREADABLE = re.compile(r'^\((decrypt failed|no thread key)\)$', re.I)
@@ -2730,7 +2738,7 @@ def collect_facebook(me=None, with_messenger=True):
         owner = owner or str(who.get('name') or '')
         mine_ids = {fbid}
         seen = {'rows': 0, 'others': 0, 'no words': 0, 'no date': 0}
-        shape = []
+        shape, wordless = [], set()
 
         def timeline(pid):
             for page in pages(lambda after: ig(FB_CLI, 'timeline', 'fetch', '--profile-id', pid, '--limit', 20, *(('--after', after) if after else ())),
@@ -2748,12 +2756,18 @@ def collect_facebook(me=None, with_messenger=True):
                         seen['others'] += 1
                         continue        # someone else's post on their wall
                     text = _first_str(p, ('message', 'text', 'post_text', 'body', 'caption', 'content', 'description', 'story', 'title'))
+                    if not text.strip():
+                        # Words under a key the docs didn't show ("status_message", "full_text", "post_message"…).
+                        text = next((v for k, v in p.items() if isinstance(v, str) and v.strip() and re.search(r'message|text|caption|body|status', k, re.I)
+                                     and not re.search(r'id$|url|link|type|privacy|time|date', k, re.I) and not re.match(r'^https?://', v.strip())), '')
                     stamp = next((p.get(k) for k in ('post_created_at', 'created_at', 'creation_time', 'created_time') if isinstance(p.get(k), dict)), None)
                     raw = next((p.get(k) for k in ('created_time', 'created_at', 'post_created_at', 'creation_time', 'timestamp', 'publish_time', 'time')
                                 if p.get(k) not in (None, '') and not isinstance(p.get(k), dict)), None)
                     t = local_time(stamp, raw)
                     if not text.strip():
                         seen['no words'] += 1   # a photo or a share with nothing of their own written
+                        if len(wordless) < 40:
+                            wordless.update(str(k) for k in p)   # the fields such a post had: names only, never values
                         continue
                     if not t:
                         seen['no date'] += 1
@@ -2777,7 +2791,8 @@ def collect_facebook(me=None, with_messenger=True):
             notes.append('facebook: %s' % err)
         if not posts:
             notes.append('facebook: %d posts came back%s' % (seen['rows'], (': %d by others on their wall, %d with no words of their own, %d undated' % (
-                seen['others'], seen['no words'], seen['no date'])) if seen['rows'] else (' (answer %s)' % shape[0] if shape else '')))
+                seen['others'], seen['no words'], seen['no date'])) if seen['rows'] else (' (answer %s)' % shape[0] if shape else ''))
+                + ('; the posts without words had the fields %s' % ', '.join(sorted(wordless)[:25]) if wordless else ''))
     names = sorted([(n, 'a friend') for n in tagged if n.lower() != owner.lower()], key=lambda n: -len(n[0]))
     lines = []
     for t, text in sorted(posts, key=lambda x: x[0]):
@@ -2799,13 +2814,20 @@ def collect_facebook(me=None, with_messenger=True):
                 # The normal refresh first (incremental: it fills gaps), then reaching a year back for
                 # their threads, each on its own, so one failing never stops the other or the read.
                 refreshed = []
-                for args, wait in ((('sync', 'both'), 240), (('sync', 'threads', '--since-days', 365), 180)):
+                # The threads refresh has a ceiling on --since-days it doesn't print ("cannot exceed # day(s)"): a
+                # year first, then shorter until one is taken (README "Messenger's day limit").
+                steps = [(('sync', 'both'), 240)] + [(('sync', 'threads', '--since-days', d), 180) for d in MSGR_SINCE_DAYS]
+                for args, wait in steps:
+                    if args[1] == 'threads' and 'threads' in refreshed:
+                        continue
                     try:
                         ig(MSGR_CLI, *args, timeout=wait)
                         refreshed.append(args[1])
                     except RateLimited:
                         raise
                     except RuntimeError as err:
+                        if args[1] == 'threads' and re.search(r'cannot exceed', str(err), re.I) and args[-1] != MSGR_SINCE_DAYS[-1]:
+                            continue
                         notes.append('messenger: refresh (%s) %s' % (' '.join(str(a) for a in args[:2]), err))
                 got = ig(MSGR_CLI, 'threads', '--limit', 30)
                 listed = _rows(got, ('threads', 'conversations', 'items'))
@@ -2962,6 +2984,22 @@ def schema_outline(schema):
     return '\n'.join('%s%s: %s' % (k, '' if k in req else '?', outline_of(v, defs)) for k, v in schema.get('properties', {}).items())
 
 
+ONE_OF = re.compile(r'One of:\s*((?:"[^"]+"(?:,\s*|\.|$))+)')
+
+
+def node_enum(node):
+    """A field's allowed values: its enum, or the quoted list its description gives ("One of: "steady", "mixed"…"),
+    which is how psycheai.io's schema lists them for the providers that refuse an enum. Without this, a value
+    from outside the list ("strong", "Curiosity") passed (README "Allowed values, enforced")."""
+    if 'enum' in node:
+        return node['enum']
+    if node.get('type') == 'string':
+        m = ONE_OF.search(node.get('description') or '')
+        if m:
+            return re.findall(r'"([^"]+)"', m.group(1))
+    return None
+
+
 def schema_problems(value, node, defs, at='answer', out=None):
     """Where an answer doesn't fit the schema: missing or unknown fields, wrong types, values outside a list, list sizes."""
     out = [] if out is None else out
@@ -2975,8 +3013,9 @@ def schema_problems(value, node, defs, at='answer', out=None):
         return out
     # Matched as psycheai.io matches it (lib/prompts.js enumKey): case, spaces, dashes and dots aside.
     key = lambda v: re.sub(r'[\s_\-–—.]+', '', str('' if v is None else v).lower())
-    if 'enum' in node and key(value) not in {key(e) for e in node['enum']}:
-        out.append('%s is "%s", not one of the allowed values (%s)' % (at, str(value)[:40], ', '.join(str(e) for e in node['enum'][:8])))
+    allowed = node_enum(node)
+    if allowed and key(value) not in {key(e) for e in allowed}:
+        out.append('%s is "%s", not one of the allowed values (%s)' % (at, str(value)[:40], ', '.join(str(e) for e in allowed[:10])))
     if kind == 'object':
         props = node.get('properties', {})
         for k in node.get('required', []):
@@ -3977,6 +4016,45 @@ def check_answer(path):
     return answer_check(args)
 
 
+SCHWARTZ = ('self-direction', 'stimulation', 'hedonism', 'achievement', 'power', 'security', 'conformity', 'tradition', 'benevolence', 'universalism')
+NAME_STOP = set('the a an of and in on at for to with your you their my our'.split())
+LEAN = re.compile(r'\b(a|slight|small|mild|gentle)\s+lean\b|\bleans?\b|\bnot a (loud|strong|clear) preference\b|\bonly just\b|\bnarrowly\b', re.I)
+
+
+def depth_problems(answer):
+    """What made a thin report pass (README "A thin report, caught"): all ten motivators scored, a letter's
+    strength that matches what its own words say, a roast of two or more paragraphs, and patterns whose names
+    share no word."""
+    problems = []
+    mot = answer.get('motivators') if isinstance(answer.get('motivators'), dict) else {}
+    vals = [str(m.get('value', '')).strip().lower() for m in (mot.get('scores') or []) if isinstance(m, dict)]
+    missing = [v for v in SCHWARTZ if v not in vals]
+    if missing or len(vals) != len(set(vals)):
+        problems.append('motivators.scores scores each of the ten values once (%s)%s' % (', '.join(SCHWARTZ), ': missing ' + ', '.join(missing) if missing else ': one is listed twice'))
+    mbti = answer.get('mbti') if isinstance(answer.get('mbti'), dict) else {}
+    for i, l in enumerate(mbti.get('letters') or []):
+        if not isinstance(l, dict):
+            continue
+        st = str(l.get('strength') or '').strip().lower()
+        if st not in ('clear', 'moderate', 'slight'):
+            problems.append('mbti.letters[%d].strength is "%s": it is clear, moderate or slight' % (i, st[:20]))
+        elif st != 'slight' and LEAN.search(str(l.get('why') or '') + ' ' + str(l.get('reading') or '')):
+            problems.append('mbti.letters[%d] (%s) calls itself a lean, so its strength is "slight", not "%s"' % (i, l.get('axis') or l.get('choice') or '', st))
+    harsh = str((answer.get('bonus') or {}).get('harsh') or '') if isinstance(answer.get('bonus'), dict) else ''
+    paras = [x for x in re.split(r'\n\s*\n', harsh) if x.strip()]
+    if harsh and (len(paras) < 2 or len(harsh) < 350):
+        problems.append('bonus.harsh is %d characters in %d paragraph(s): the roast is two or three short paragraphs (350 characters or more), each naming real specifics from the digest' % (len(harsh), len(paras)))
+    seen = {}
+    for p in answer.get('patterns') or []:
+        if not isinstance(p, dict):
+            continue
+        for w in set(re.findall(r"[a-z]+", str(p.get('name') or '').lower())) - NAME_STOP:
+            if w in seen and seen[w] != p.get('id'):
+                problems.append('patterns: "%s" is in two pattern names (%s and %s): each pattern gets words of its own' % (w, seen[w], p.get('id')))
+            seen.setdefault(w, p.get('id'))
+    return problems
+
+
 def answer_check(args):
     """The checks for a read, on the parsed answer (check-answer and the local publish, the same)."""
     answer = args.get('answer') if isinstance(args, dict) and 'answer' in args else args
@@ -3987,7 +4065,7 @@ def answer_check(args):
     # What would stop or hold the publish: these are fixed first.
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
-    problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + evidence_problems(answer) + sample_problems(answer)
+    problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + evidence_problems(answer) + sample_problems(answer) + depth_problems(answer)
     # The format's own words copied in place of a kind of work, as psycheai.io's bundleFrom refused.
     fit = (answer.get('careerAssessment') or {}).get('fit') if isinstance(answer.get('careerAssessment'), dict) else None
     for k in ('suits', 'draining'):
@@ -4011,8 +4089,9 @@ def canonical(value, node, defs):
     psycheai.io's checkMerged matched them (enumKey: case, spaces, dashes and dots aside)."""
     node = schema_ref(node, defs)
     key = lambda v: re.sub(r'[\s_\-–—.]+', '', str('' if v is None else v).lower())
-    if 'enum' in node and not isinstance(value, (dict, list)):
-        return next((e for e in node['enum'] if key(e) == key(value)), value)
+    allowed = node_enum(node)
+    if allowed and not isinstance(value, (dict, list)):
+        return next((e for e in allowed if key(e) == key(value)), value)
     if node.get('type') == 'object' and isinstance(value, dict):
         props = node.get('properties', {})
         return {k: canonical(v, props[k], defs) if k in props else v for k, v in value.items()}
