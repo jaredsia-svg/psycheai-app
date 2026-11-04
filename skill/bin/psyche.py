@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 144
+RELEASE = 145
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -118,6 +118,7 @@ WORK = os.path.join(HERE, 'work')        # what was pulled from Instagram for a 
 DIGEST = os.path.join(HERE, 'digest', 'digest.md')
 LAST_COLLECT = os.path.join(os.path.dirname(DIGEST), 'last-collect.json')
 LAST = os.path.join(HERE, 'last-psyche.json')   # what the latest publish gave back, shown a part at a time
+TAG_KEPT = os.path.join(KEEP, 'file-tag.json')  # the last publish's file tag, kept past a reinstall (README "A new name after a reinstall")
 
 # A saved Psyche's result in parts, so the chat can show each on its own: one
 # part a host won't use no longer holds back the rest.
@@ -904,6 +905,25 @@ def local_report(r):
     return out
 
 
+def unsaved_read():
+    """What was read after the last saved Psyche, if anything (README "Never the previous Psyche as the new
+    one"): a collect, a digest written to, or a chat added since last-psyche.json was written. Publishing
+    rewrites the digest and sources before it writes last-psyche.json, so a saved read is never newer."""
+    try:
+        saved_at = os.path.getmtime(LAST)
+    except OSError:
+        return []
+    newer = []
+    for label, path in (('collect', LAST_COLLECT), ('digest', DIGEST),
+                        ('whatsapp', os.path.join(SOURCES, 'whatsapp.txt')), ('facebook', os.path.join(SOURCES, 'facebook.txt'))):
+        try:
+            if os.path.getmtime(path) > saved_at:
+                newer.append(label)
+        except OSError:
+            pass
+    return newer
+
+
 def local_ready(r):
     """show ready: the card and the report file saved, and What's next, in one call; the read's timings
     sent beside them, so neither waits on the other (README "Straight to the card"). There is no PDF:
@@ -945,8 +965,9 @@ def saved(out):
     """Keep a publish result here and say only that it's saved, and its parts."""
     # The last Psyche's files go, so only this one's can be attached.
     shutil.rmtree(OUT, ignore_errors=True)
-    out = dict(out, fileTag=file_tag(read_first([LAST])))
+    out = dict(out, fileTag=file_tag(read_first([LAST]) or read_first([TAG_KEPT])))
     write_private([LAST], out)
+    write_private([TAG_KEPT], {'fileTag': out['fileTag']})
     return {'ok': True, 'saved': True, 'parts': list(PARTS)}
 
 # ---------- the digest (README "The digest in the workspace") ----------
@@ -4541,6 +4562,13 @@ def main(argv):
         if not last or argv[1] not in PARTS:
             print(json.dumps({'error': 'Nothing saved to show yet.' if not last else 'Parts: ' + ', '.join(PARTS)}))
             return
+        # A read that hasn't been saved yet: its files would be the previous Psyche under a new message.
+        newer = unsaved_read() if argv[1] == 'ready' and '--previous' not in argv[2:] else []
+        if newer:
+            print(json.dumps({'saved': False, 'error': 'This read is not saved yet: publish_psyche has not saved a Psyche since the latest '
+                              + ', '.join(newer) + ', so show ready would give the previous one. Publish it (fixing its problems), then show ready.',
+                              'newer': newer}, ensure_ascii=False, indent=1))
+            return
         print(json.dumps(PARTS[argv[1]](last), ensure_ascii=False, indent=1), flush=True)
         if os.path.exists(TIMING) and argv[1] != 'ready':
             send_timing()
@@ -4554,7 +4582,7 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT):
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT):
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))

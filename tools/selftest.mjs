@@ -1701,7 +1701,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
     const fresh = mcp.startMenu({ id: 'u_new_menu' });
     const back = mcp.startMenu({ id: 'u_back_menu', profile: {}, reviewedAt: Date.now() });
     check('someone new is told what PsycheAI is and offered only their read, with what they\'ll learn and privacy', /^I'm PsycheAI, your personal AI coach that already knows you\./.test(fresh.say) && /MBTI, attachment style, career strengths and blind spots/.test(fresh.say) &&
-      /It takes about 5 minutes\. Then ask me anything, or sync with a friend to see how you click\./.test(fresh.say) && /I'll write your Psyche from your Instagram, no questions asked/.test(fresh.say) && fresh.reel === 'https://www.instagram.com/reel/DewpyUayqTN/' && !fresh.attach && /Say it as written, with its two buttons, then go on as the guide's step 0 says: on their tap, the account question only if they have more than one account, then MESSAGES FIRST when they chose their messages and those aren't connected, then step 1\. No other buttons\./.test(fresh.after) && JSON.stringify(fresh.options) === '[{"id":"messages","label":"Include my messages (Recommended)"},{"id":"posts","label":"Posts only"}]' &&
+      /It takes about 5 minutes\. Then sync with a connection to see how you click\./.test(fresh.say) && /I can give you a full personality study from your data within Muse\. No questions asked\. No upload required\./.test(fresh.say) && fresh.reel === 'https://www.instagram.com/reel/DewpyUayqTN/' && !fresh.attach && /Say it as written, with its two buttons, then go on as the guide's step 0 says: on their tap, the account question only if they have more than one account, then MESSAGES FIRST when they chose their messages and those aren't connected, then step 1\. No other buttons\./.test(fresh.after) && JSON.stringify(fresh.options) === '[{"id":"messages","label":"Include my messages (Recommended)"},{"id":"posts","label":"Posts only"}]' &&
       ((process.env.PSYCHE_REEL_URL = 'https://www.instagram.com/reel/abc/'), mcp.startMenu({ id: 'u_reel' }).reel === 'https://www.instagram.com/reel/abc/') && (delete process.env.PSYCHE_REEL_URL, true) &&
       fresh.say.endsWith(require('../lib/mcp.js').GO_AHEAD + '\n\n' + mcp.MESSAGES_LINE) && /^🔒 Your Instagram is read right here in your Muse account: nothing to export or upload\.\n🙈 Your posts and chats are de-identified first: names, handles, numbers and links removed, and no one else is quoted\.\n🗑️ Your report and Psyche Card are made right here in Muse\. None of your posts, messages or report go to PsycheAI\.\n✋ Your results are private to you\. Nothing is posted or shared with other people unless you choose to\. Delete it all any time\.$/.test(require('../lib/mcp.js').GO_AHEAD) && !/look again/.test(fresh.say) &&
       /: PsycheAI's own introduction, in four short parts, its privacy lines as they are, since they're worded to match exactly what the code does: "I'm PsycheAI, your personal AI coach that already knows you\."/.test(instructions.MUSE_PROCEDURE) && !/muse-sample/.test(instructions.MUSE_PROCEDURE + fresh.say) && /x/.test(instructions.MUSE_PROCEDURE) && !/look again the same way/.test(instructions.MUSE_PROCEDURE) &&
@@ -1959,6 +1959,8 @@ m.saved({'ok': True})`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...proces
       fsx.writeFileSync(pathx.join(dir, 'answer.json'), JSON.stringify(((a) => Object.assign(a, { confidence: Object.assign({}, a.confidence, { score: 72, level: 'moderate' }) }))(JSON.parse(fsx.readFileSync(new URL('./fixtures/report-view.json', import.meta.url), 'utf8'))[1].answer)));
       skillState.bareCheck = await run('check-answer', '@' + pathx.join(dir, 'answer.json'));
       skillState.bare = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'), '--name', 'Mei Tan');
+      skillState.tagKept = JSON.parse(fsx.readFileSync(pathx.join(keep, 'file-tag.json'), 'utf8'));
+      skillState.lastTag = JSON.parse(fsx.readFileSync(pathx.join(dir, 'last-psyche.json'), 'utf8')).fileTag;
       // Nothing about them was sent to publish it (README "Nothing leaves Muse unless they Sync"): the card summary is kept here, no card key came back.
       skillState.afterBare = { last: JSON.parse(fsx.readFileSync(pathx.join(dir, 'last-psyche.json'), 'utf8')), keys: fsx.existsSync(pathx.join(dir, '.keys.json')) ? JSON.parse(fsx.readFileSync(pathx.join(dir, '.keys.json'), 'utf8')) : {} };
       skillState.afterBareReady = await run('show', 'card');
@@ -2148,6 +2150,11 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
         for (const k of ['PSYCHEAI_IG_CLI', 'PSYCHEAI_IGM_CLI', 'FAKEIG_LOG']) delete process.env[k];
       }
       skillState.parts = {};
+      // Reads above (Facebook, the Fresh account list) came after the last publish: show ready refuses to pass the
+      // previous Psyche off as this one (README "Never the previous Psyche as the new one"), until the read is saved.
+      skillState.readyStale = await run('show', 'ready');
+      const lastPsyche = pathx.join(dir, 'last-psyche.json');
+      fsx.utimesSync(lastPsyche, new Date(), new Date(Date.now() + 2000));
       skillState.parts.ready = await run('show', 'ready');
       skillState.readyPdf = fsx.readdirSync(pathx.join(dir, 'out')).filter(f => /\.pdf$/i.test(f)).length;
       for (const part of ['card', 'summary', 'pdf', 'links', 'next', 'nope']) skillState.parts[part] = await run('show', part);
@@ -2332,7 +2339,7 @@ print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_ta
       const src = fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8');
       check('each run\'s files have names of their own, on the user\'s date: the first Psyche saved on a day is "…-03112026", the next "…-2", then "-3", with no spaces (Muse\'s chat showed "Image not found" for a name with them); the date is the user\'s, from the offset their Instagram times showed (user_local beside utc, kept by collect), not Muse\'s UTC clock (the Muse phone app showed its stored copy of the last run\'s report under the same name)',
         got[0] === 480 && got[1] === got[5] && got[2] === got[5] + '-2' && got[3] === got[5] + '-3' && got[4] === got[5] &&
-        /out = dict\(out, fileTag=file_tag\(read_first\(\[LAST\]\)\)\)/.test(src) && /'utcOffset': SEEN_OFFSET\[0\]/.test(src) && /tag = \(read_first\(\[LAST\]\) or \{\}\)\.get\('fileTag'\)/.test(src), JSON.stringify(got));
+        /out = dict\(out, fileTag=file_tag\(read_first\(\[LAST\]\) or read_first\(\[TAG_KEPT\]\)\)\)/.test(src) && /write_private\(\[TAG_KEPT\], \{'fileTag': out\['fileTag'\]\}\)/.test(src) && /'utcOffset': SEEN_OFFSET\[0\]/.test(src) && /tag = \(read_first\(\[LAST\]\) or \{\}\)\.get\('fileTag'\)/.test(src), JSON.stringify(got));
     }
     check('the install text gives nothing to run and no instruction (a one-line install command and "the first message is the welcome" in it were flagged by Muse\'s safety check, and installs paused), "Install psycheai.io/muse" alone is a first run in SKILL.md, and the top of bin/psyche.py says what it does: contacts only app.psycheai.io and psycheai.io, runs only Muse\'s own tools and curl, writes only in its folder, ~/.psycheai and a temporary folder',
       ((b, md, py) => !/curl|python3|mkdir|py_compile/.test(b) && !/the first message is|rather than a note/.test(b) &&
@@ -2518,6 +2525,10 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
         (F.alt.notes || []).some(n => /^messenger: refresh \(sync both\) exit 2: invalid value for --since-days: # \(max #\)$/.test(n)) &&
         (F.alt.notes || []).some(n => /^messenger: refresh \(sync threads\) exit 2/.test(n)))(skillState.facebook),
       JSON.stringify(skillState.facebook && { alt: skillState.facebook.alt }).slice(0, 700));
+    check('show ready refuses while a read is newer than the saved Psyche, so the previous card and report never come back as the new ones; the run\'s file tag is kept outside the skill folder too, so a reinstall still gets a new file name (forget --everything deletes it)',
+      skillState.readyStale && skillState.readyStale.saved === false && /not saved yet/.test(skillState.readyStale.error || '') && (skillState.readyStale.newer || []).includes('collect') &&
+      !skillState.readyStale.card && !skillState.readyStale.report && skillState.tagKept && skillState.tagKept.fileTag === skillState.lastTag && /^\d{8}(-\d+)?$/.test(skillState.lastTag || '') && (skillState.forgetAll && JSON.stringify(skillState.forgetAll).length > 0),
+      JSON.stringify({ stale: skillState.readyStale, kept: skillState.tagKept, last: skillState.lastTag }).slice(0, 400));
     check('show ready names the report file the summary saved (its path is under "report"), with its size, when the report comes back in full',
       ((o) => o && /\/out\/Psyche-Report(-[^/ ]+)?-\d{8}(-\d+)?\.html$/.test((o.report || {}).file || '') && o.report.bytes > 1000 && JSON.stringify(o.missing) === '["card"]')(skillState.leaving && skillState.leaving.readyFull),
       JSON.stringify(skillState.leaving && skillState.leaving.readyFull));
