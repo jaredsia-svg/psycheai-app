@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 157
+RELEASE = 158
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1784,8 +1784,7 @@ def send_timing():
 
 
 # ---------- first-run: status, start and both account lists in one call (README "First run in one call") ----------
-STEP_ONE = ("On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready. "
-            "Here's what you'll get, in a minute, while you wait.")
+STEP_ONE = "On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready."
 # A later read's line, with no reel (the guide's step 1).
 FRESH_STEP_ONE = "On it. Writing your fresh Psyche takes about 5 minutes. I'll show it here when it's ready."
 
@@ -1856,7 +1855,7 @@ def first_run():
         out['accounts'] = None
         out['problem'] = 'The account lists could not be read here (%s).' % type(err).__name__
         return out
-    out['stepOne'] = STEP_ONE + '\n▶ PsycheAI in a minute: ' + str(out.get('reel') or '')
+    out['stepOne'] = STEP_ONE   # the reel is in the welcome now (README "The reel with the welcome")
     return out
 
 def local_version():
