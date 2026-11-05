@@ -2350,14 +2350,18 @@ thin = {'motivators': {'scores': [{'value': 'Curiosity', 'score': 80, 'line': 'x
 g = m.pinned_guide()['read']['schema']
 band = m.schema_problems({'band': 'strong', 'confidence': 'high', 'reading': 'r', 'evidence': []}, g['$defs']['wellnessDimension'], g['$defs'])
 full = {'motivators': {'scores': [{'value': v, 'score': 50, 'line': 'x'} for v in m.SCHWARTZ]}}
-print(json.dumps([m.depth_problems(thin), band, m.depth_problems(full), m.canonical('Under Strain', g['$defs']['wellnessDimension']['properties']['band'], {}),
+reused = {'patterns': [{'evidence': ['Your January 2026 messages arranging a meal or coffee near a friend']}], 'relationship': {'strengths': [{'detail': 'Your January 2026 coffee invite near a friend shows a habit'}]},
+          'idealPartner': {'needs': [{'detail': 'Your January 2026 invite for coffee near a friend shows how much a yes matters'}], 'carefulOf': [{'detail': 'Your January 2026 meal or coffee invite near a friend'}]},
+          'career': {'strengths': [{'detail': 'Your January 2026 message about a side project'}]}}
+print(json.dumps([m.depth_problems(thin), band, m.depth_problems(full), m.canonical('Under Strain', g['$defs']['wellnessDimension']['properties']['band'], {}), m.reuse_problems(reused), m.reuse_problems(dict(list(reused.items())[:2])),
                   m.scrub("its been 7 years since I've seen this guy Dominik!"), m.scrub('thanks Sam and Wei Ling, from Japan and China')]))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
       const t = got[0].join(' | ');
-      check('a thin report is caught before saving: all ten motivators by name, a wellbeing band only from its list ("strong" refused), a letter that calls itself a lean is "slight", a roast of two paragraphs, and no word shared by two pattern names; names after a word for a person ("this guy Dominik") are removed too',
+      check('a thin report is caught before saving: all ten motivators by name, a wellbeing band only from its list ("strong" refused), a letter that calls itself a lean is "slight", a roast of two paragraphs, and no word shared by two pattern names, and no moment cited in more than three places; names after a word for a person ("this guy Dominik") are removed too',
         /motivators\.scores scores each of the ten values once/.test(t) && /missing self-direction/.test(t) && /mbti\.letters\[0\] \(E\/I\) calls itself a lean, so its strength is "slight", not "moderate"/.test(t) && !/letters\[1\]/.test(t) &&
         /bonus\.harsh is \d+ characters in 1 paragraph/.test(t) && /"loyal" is in two pattern names \(p1 and p2\)/.test(t) && !/curious/.test(t) &&
         /band is "strong", not one of the allowed values \(steady, mixed, under strain, not enough evidence\)/.test(got[1].join(' ')) && got[2].length === 0 && got[3] === 'under strain' &&
-        got[4] === "its been 7 years since I've seen this guy [name]!" && got[5] === 'thanks [name] and [name], from Japan and China', JSON.stringify(got).slice(0, 900));
+        got[6] === "its been 7 years since I've seen this guy [name]!" && got[7] === 'thanks [name] and [name], from Japan and China' &&
+        got[4].length === 1 && /is cited in 4 places .*a moment is evidence in 3 places at most/.test(got[4][0]) && got[5].length === 0, JSON.stringify(got).slice(0, 900));
     }
     {
       const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys

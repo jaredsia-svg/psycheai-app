@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 154
+RELEASE = 155
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -4088,6 +4088,42 @@ def depth_problems(answer):
     return problems
 
 
+MONTH_YEAR = re.compile(r'\b(January|February|March|April|May|June|July|August|September|October|November|December) (\d{4})\b')
+MOMENT_STOP = set('your you they them their this that with from about after before into over when then than what which while where have has had were was been being also just more most some only very said says say tell told show shows showed shown message messages story stories comment comments post posts thread threads exchange exchanges note friend friends people person someone they each other same again moment moments'.split())
+MOMENT_TIMES = 3
+
+
+def reuse_problems(answer):
+    """A moment cited as evidence in more than three places (README "A moment, three times at most"): each dated
+    reference ("Your October 2021 messages about…") is grouped with others of the same month and year that share
+    its words, and a group found in more than MOMENT_TIMES places is a problem, named so it can be fixed."""
+    found = []
+    for at, text in strings_in(answer):
+        for m in MONTH_YEAR.finditer(text):
+            # Words either side of the date, cut to their first five letters, so "deepened" and "deepens" agree.
+            near = re.findall(r"[a-z][a-z'-]+", text[max(0, m.start() - 70):m.start()].lower())[-6:] + \
+                re.findall(r"[a-z][a-z'-]+", text[m.end():m.end() + 140].lower())[:14]
+            words = {w[:5] for w in near if len(w) >= 4 and w not in MOMENT_STOP}
+            if len(words) >= 2:
+                found.append({'when': m.group(0), 'words': words, 'at': at, 'text': text[m.start():m.start() + 70]})
+    groups = []
+    for f in found:
+        for g in groups:
+            if g['when'] == f['when'] and any(len(f['words'] & o) >= 2 for o in g['words']):
+                g['words'].append(f['words'])
+                g['at'].add(f['at'])
+                break
+        else:
+            groups.append({'when': f['when'], 'words': [f['words']], 'at': {f['at']}, 'text': f['text']})
+    problems = []
+    for g in groups:
+        if len(g['at']) > MOMENT_TIMES:
+            places = sorted(re.sub(r'^answer\.', '', p) for p in g['at'])
+            problems.append('"%s…" is cited in %d places (%s): a moment is evidence in %d places at most; give the others moments of their own'
+                            % (g['text'].rstrip(), len(places), ', '.join(places[:6]), MOMENT_TIMES))
+    return problems
+
+
 def answer_check(args):
     """The checks for a read, on the parsed answer (check-answer and the local publish, the same)."""
     answer = args.get('answer') if isinstance(args, dict) and 'answer' in args else args
@@ -4098,7 +4134,7 @@ def answer_check(args):
     # What would stop or hold the publish: these are fixed first.
     problems = ['answer is missing the %s section' % k for k in schema.get('required', []) if k not in answer]
     problems += answer_problems(answer) + confidence_problems(answer) + quote_problems(answer)
-    problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + evidence_problems(answer) + sample_problems(answer) + depth_problems(answer)
+    problems += ei_problems(answer) + holding_problems(answer) + edge_problems(answer) + plan_problems(answer) + list_problems(answer) + evidence_problems(answer) + sample_problems(answer) + depth_problems(answer) + reuse_problems(answer)
     # The format's own words copied in place of a kind of work, as psycheai.io's bundleFrom refused.
     fit = (answer.get('careerAssessment') or {}).get('fit') if isinstance(answer.get('careerAssessment'), dict) else None
     for k in ('suits', 'draining'):
