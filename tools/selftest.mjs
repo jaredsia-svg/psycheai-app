@@ -2562,7 +2562,7 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
       ((v, sig, list) => v && v.release === sig.release && v.sha256['bin/psyche.py'] === sig.hashes['bin/psyche.py'] && v.sha256['guide.json'] === sig.hashes['guide.json'] &&
         v.publicKey === 'ff295f50202afe5313924d4ed60e397996164ad8db9aa8079d937c17d0bcbb8d' && v.compareWith === 'https://github.com/jaredsia-svg/psycheai-app/blob/main/skill/RELEASES.md' &&
         list.includes('| ' + sig.release + ' | ') && ['SKILL.md', 'bin/psyche.py', 'guide.json'].every(f => list.includes('`' + sig.hashes[f] + '`')) && list.includes('`' + v.publicKey + '`') &&
-        /all three should match one row of https:\/\/github\.com\/jaredsia-svg\/psycheai-app\/blob\/main\/skill\/RELEASES\.md/.test(skillMd))(
+        !/## Checking this skill/.test(skillMd))(
         skillState.verify, JSON.parse(fsx.readFileSync(new URL('../skill/SIGNATURE.json', import.meta.url), 'utf8')), fsx.readFileSync(new URL('../skill/RELEASES.md', import.meta.url), 'utf8')),
       JSON.stringify(skillState.verify).slice(0, 400));
     {
@@ -2603,8 +2603,8 @@ print(json.dumps([os.path.getsize(path), len(b) * 3 // 4, m._img_src(b)[:23], m.
       check('the report file embeds its card as a JPEG at a fraction of the PNG\'s size, and a PNG still embeds as a PNG; the card they share stays the PNG in out/ (README "A lighter report file")',
         got[2] === 'data:image/jpeg;base64,' && got[3] === 'data:image/png;base64,' && got[1] < got[0] / 2 && /report_card_b64\(os\.path\.join\(OUT, pics\[-1\]\)\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')), JSON.stringify(got));
     }
-    check('after "I\'ve connected them", SKILL.md names one command for the re-check (accounts), with no memory search or first-run again',
-      /on "I've connected them", run `python3 bin\/psyche\.py accounts` once and go on from its button for their account \(`messages_connected`\): that one command rereads both account lists, so it is the whole check, with no memory search, no first-run again and no other list first/.test(skillMd));
+    check('after "I\'ve connected them", SKILL.md names the one command that rereads the lists (accounts), and tells Muse to skip nothing (a line saying "no memory search" was flagged by Muse\'s safety check)',
+      /on "I've connected them", `python3 bin\/psyche\.py accounts` rereads both account lists, and its button for their account \(`messages_connected`\) says whether they're connected now/.test(skillMd) && !/no memory search|no first-run again/.test(skillMd));
     check('show ready names the report file the summary saved (its path is under "report"), with its size, when the report comes back in full',
       ((o) => o && /\/out\/Psyche-Report(-[^/ ]+)?-\d{8}(-\d+)?\.html$/.test((o.report || {}).file || '') && o.report.bytes > 1000 && JSON.stringify(o.missing) === '["card"]')(skillState.leaving && skillState.leaving.readyFull),
       JSON.stringify(skillState.leaving && skillState.leaving.readyFull));
