@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 150
+RELEASE = 152
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1876,6 +1876,8 @@ def local_version():
 # file's SHA-256. A server someone else got into can't sign, so it can't change
 # what runs here. Ed25519 verification as in RFC 8032, standard library only.
 
+# Every release's SHA-256 per file, on GitHub rather than PsycheAI's server (README "Check it yourself").
+RELEASES_URL = 'https://github.com/jaredsia-svg/psycheai-app/blob/main/skill/RELEASES.md'
 SKILL_PUBLIC_KEY = bytes.fromhex(os.environ.get('PSYCHEAI_SKILL_PUBLIC_KEY')
                                  or 'ff295f50202afe5313924d4ed60e397996164ad8db9aa8079d937c17d0bcbb8d')
 _P = 2 ** 255 - 19
@@ -2133,9 +2135,7 @@ def build_digest(given=None, given_meta=None):
     """The digest from work/items.jsonl and work/meta.json, or from items and meta handed in (collect)."""
     if given is None and not os.path.exists(ITEMS):
         return {'ok': False, 'problems': ['No work/items.jsonl yet: save what you read there as you go, one JSON line per item.']}
-    # It builds a first digest (or one after starting over): rebuilding from work/ alone would drop what earlier reads kept.
-    if os.path.exists(DIGEST) and not os.path.exists(os.path.join(os.path.dirname(DIGEST), '.built')):
-        return {'ok': False, 'problems': ['A digest from an earlier read is already here: add what is new to it as SKILL.md says for a later read; build-digest makes a first one.']}
+    # A digest from an earlier read is replaced (README "A fresh read is a fresh read"), as collect replaces it.
     items, bad = [], 0
     if given is None:
         with open(ITEMS, encoding='utf-8') as f:
@@ -2394,8 +2394,10 @@ def pages(fetch, cursor_of, limit=COLLECT_PAGES):
 
 
 def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, with_messages=True):
-    if os.path.exists(DIGEST) and not os.path.exists(os.path.join(os.path.dirname(DIGEST), '.built')):
-        return {'ok': False, 'problems': ['A digest from an earlier read is already here: collect makes a first one. For a later read, add to it as SKILL.md says.']}
+    # A Fresh Psyche starts over (README "A fresh read is a fresh read"): the last read's digest goes and this
+    # one is built from what Instagram holds now. Added chats and Facebook (sources/) stay.
+    # The old one is removed only once this read has something to build from, so a failed start keeps it.
+    started_over = os.path.exists(DIGEST) and not os.path.exists(os.path.join(os.path.dirname(DIGEST), '.built'))
     account = str(account or '').strip()
     if not re.fullmatch(r'[\w-]{3,40}', account):
         return {'ok': False, 'problems': ['--account-id must be their own user_fbid from instagram-cli accounts.']}
@@ -2655,6 +2657,8 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
         stopped = 'Instagram said too many requests, so every call stopped there, as its docs ask: the digest has what came before.'
     if not items:
         return {'ok': False, 'read': read, 'notes': notes, 'stopped': stopped, 'problems': ['Nothing came back from Instagram to build a digest from.']}
+    if started_over and items and os.path.exists(DIGEST):
+        os.remove(DIGEST)
     result = build_digest(items, meta)
     result['read'] = read
     if notes:
@@ -4591,6 +4595,19 @@ def main(argv):
         return
     if argv[0] == 'first-run':
         print(json.dumps(first_run(), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'verify':
+        # Check it yourself (README "Check it yourself"): this copy's SHA-256 per file, to compare with the public
+        # list on GitHub. Nothing is fetched. sha256sum gives the same numbers without trusting this script.
+        files = {}
+        for name in ('SKILL.md', 'bin/psyche.py', 'guide.json'):
+            try:
+                with open(os.path.join(HERE, name), 'rb') as f:
+                    files[name] = hashlib.sha256(f.read()).hexdigest()
+            except OSError:
+                files[name] = None
+        print(json.dumps({'release': RELEASE, 'sha256': files, 'publicKey': SKILL_PUBLIC_KEY.hex(), 'compareWith': RELEASES_URL,
+                          'checkWithoutThisScript': 'sha256sum SKILL.md bin/psyche.py guide.json (in %s)' % HERE}, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'accounts':
         try:

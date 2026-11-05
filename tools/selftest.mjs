@@ -2163,6 +2163,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       const lastPsyche = pathx.join(dir, 'last-psyche.json');
       fsx.utimesSync(lastPsyche, new Date(), new Date(Date.now() + 2000));
       skillState.parts.ready = await run('show', 'ready');
+      skillState.verify = await run('verify');
       skillState.readyPdf = fsx.readdirSync(pathx.join(dir, 'out')).filter(f => /\.pdf$/i.test(f)).length;
       for (const part of ['card', 'summary', 'pdf', 'links', 'next', 'nope']) skillState.parts[part] = await run('show', part);
       skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche-Card(-.+)?-\d{8}(-\d+)?\.png$/.test(f));
@@ -2190,7 +2191,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       skillState.goodDigest && skillState.goodDigest.ok === true && skillState.goodDigest.last === '2026-10-29' && JSON.stringify(skillState.goodDigest.span) === '["2018-02-03","2026-10-29"]' &&
       skillState.badDigest && skillState.badDigest.ok === false && ['a handle', 'a link', 'a phone number', 'starts with its date', 'over about 275000'].every(w => skillState.badDigest.problems.join(' ').includes(w)) &&
       skillState.workGone && skillState.digestGone && /## Working files and the digest/.test(skillMd) && /It is deleted as soon as the read is published/.test(skillMd) &&
-      /Later runs start from the digest/.test(skillMd) && !/room is left for later/.test(skillMd) && /about 110,000 characters on a first read, what replies answer included, about 40,000 more on each later one/.test(skillMd) && /page the 10 busiest conversations back as far as check-digest asks, the ones with the most in them furthest/.test(skillMd) && /on every later read while sources\/whatsapp\.txt is there/.test(skillMd) && /about 40,000 characters more of what check-digest lists as room/.test(skillMd) && /every moment the read cites is a line in it/.test(skillMd) && /2019-04-02 21:14 \[post\]/.test(skillMd) && /goes in once/.test(skillMd) && !/Friend A, Friend B… there too/.test(skillMd), JSON.stringify({ good: skillState.goodDigest, bad: skillState.badDigest && skillState.badDigest.problems }).slice(0, 800));
+      /A Fresh Psyche is a fresh read:\*\* `collect` reads their Instagram again and builds a new digest in place of the last one/.test(skillMd) && !/room is left for later/.test(skillMd) && /about 110,000 characters, what replies answer included\)/.test(skillMd) && /page the 10 busiest conversations back as far as check-digest asks, the ones with the most in them furthest/.test(skillMd) && /on every later read while sources\/whatsapp\.txt is there/.test(skillMd)  && /every moment the read cites is a line in it/.test(skillMd) && /2019-04-02 21:14 \[post\]/.test(skillMd) && /goes in once/.test(skillMd) && !/Friend A, Friend B… there too/.test(skillMd), JSON.stringify({ good: skillState.goodDigest, bad: skillState.badDigest && skillState.badDigest.problems }).slice(0, 800));
     check('the script checks what leaves the workspace itself (a signed file, whatever a guide says): a report too big, a part too long, or holding a handle, link or phone number is not sent; SKILL.md says so',
       ((L) => L && !L.fine.length && /no part of a report runs past 4000/.test(L.dms.join(' ')) && /has a handle/.test(L.handle.join(' ')) && /has a phone number/.test(L.phone.join(' ')) &&
         /more than a report holds/.test(L.big.join(' ')) && L.held && L.held.saved === false && /has a link/.test(L.held.problems.join(' ')))(skillState.leaving) &&
@@ -2252,7 +2253,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
     check('build-digest: a first digest from what was read, checked, with names, handles and numbers out, their own name as [you] in what others wrote, what each reply answers kept, a broadcast kept once, rebuilt within a read, never over an earlier read\'s digest; a build counts as a check in read timings',
       ((b) => b && b[0].ok === true && !/Kai|Mei|@kai|9123/.test(b[1]) && /^> Friend: Hey \[you\], free for tennis on Saturday\? call Friend on \[number\]/m.test(b[1]) &&
         (b[1].match(/Pls help me like and follow/g) || []).length === 1 && /^counts: 13 posts and stories · 12 with words · 1 comments · 3 conversations · 123 own messages read · without words: 2022 1$/m.test(b[1]) &&
-        /^## Posts and stories \(all read\)$/m.test(b[1]) && b[2] === true && b[4].ok === false && /already here/.test(b[4].problems[0]))(skillState.leaving && skillState.leaving.build) &&
+        /^## Posts and stories \(all read\)$/m.test(b[1]) && b[2] === true && b[4].ok === true)(skillState.leaving && skillState.leaving.build) &&
       require('../lib/timing.js').stages([['call:get_report_guide', -300], ['build-digest', -200], ['check-digest', -150], ['call:publish_psyche', -10]]).fixing === 50 &&
       /`python3 bin\/psyche\.py build-digest` picks the sample, keeps what each reply answers, takes out names, handles, links and numbers/.test(skillMd) && /Fetch what doesn't depend on anything else together, at once where Muse allows it/.test(skillMd),
       JSON.stringify(skillState.leaving && skillState.leaving.build && [skillState.leaving.build[0].problems, skillState.leaving.build[1].slice(0, 400), skillState.leaving.build[4]]).slice(0, 700));
@@ -2270,7 +2271,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
         /^counts: 15 posts and stories .* 3 conversations read \(the busiest\) · 48 own messages read · 440 followers · 636 following · 10 saved$/m.test(c[0].digest) &&
         c[1].r.ok === true && /too many requests/.test(c[1].r.stopped) && (c[1].calls.some(x => /^M thread /.test(x)) && !c[1].calls.some(x => /^M thread .* --after /.test(x)) && c[1].calls.filter(x => /^M thread /.test(x)).length <= 3 && c[1].calls.length < c[0].calls.length) && c[1].r.read.threads === 0 &&
         c[2].r.ok === true && !c[2].calls.some(x => /^M /.test(x)) && /^--account-id must be/.test(c[3].r.problems[0]) && c[3].calls.length === 0 &&
-        /already here/.test(c[4].r.problems[0]))(skillState.leaving && skillState.leaving.collect) &&
+        c[4].r.ok === true && c[4].r.read.threads === 3 && /^## Posts and stories/m.test(c[4].digest) && /reads: 1/.test(c[4].digest))(skillState.leaving && skillState.leaving.collect) &&
       ((g) => g.reading === 60 && g.fixing === 0 && g.writing === 240 && g.total === 310 && g.checks === 1)(require('../lib/timing.js').stages([['collect', -1900], ['check-digest', -1800], ['collect', -310],
         ['call:get_report_guide', -280], ['check-digest', -250], ['call:publish_psyche', -10]])) &&
       /mark\('collect'\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
@@ -2557,6 +2558,13 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
     check('Messenger\'s threads refresh steps down from a year (365, 180, 90) when its day limit is lower, with no note about the refused ones, and the read goes on',
       skillState.msgrDays && JSON.stringify(skillState.msgrDays.tried) === '[365,180,90]' && !skillState.msgrDays.notes.some(n => /cannot exceed/.test(n)) && skillState.msgrDays.chats > 0,
       JSON.stringify(skillState.msgrDays).slice(0, 400));
+    check('check it yourself: verify gives this copy\'s release and SHA-256 per file (the same numbers sha256sum gives), the public key and the GitHub list, and skill/RELEASES.md lists this release with the signed hashes and the key (README "Check it yourself")',
+      ((v, sig, list) => v && v.release === sig.release && v.sha256['bin/psyche.py'] === sig.hashes['bin/psyche.py'] && v.sha256['guide.json'] === sig.hashes['guide.json'] &&
+        v.publicKey === 'ff295f50202afe5313924d4ed60e397996164ad8db9aa8079d937c17d0bcbb8d' && v.compareWith === 'https://github.com/jaredsia-svg/psycheai-app/blob/main/skill/RELEASES.md' &&
+        list.includes('| ' + sig.release + ' | ') && ['SKILL.md', 'bin/psyche.py', 'guide.json'].every(f => list.includes('`' + sig.hashes[f] + '`')) && list.includes('`' + v.publicKey + '`') &&
+        /all three should match one row of https:\/\/github\.com\/jaredsia-svg\/psycheai-app\/blob\/main\/skill\/RELEASES\.md/.test(skillMd))(
+        skillState.verify, JSON.parse(fsx.readFileSync(new URL('../skill/SIGNATURE.json', import.meta.url), 'utf8')), fsx.readFileSync(new URL('../skill/RELEASES.md', import.meta.url), 'utf8')),
+      JSON.stringify(skillState.verify).slice(0, 400));
     check('show ready refuses while a read is newer than the saved Psyche, so the previous card and report never come back as the new ones; the run\'s file tag is kept outside the skill folder too, so a reinstall still gets a new file name (forget --everything deletes it)',
       skillState.readyStale && skillState.readyStale.saved === false && /not saved yet/.test(skillState.readyStale.error || '') && (skillState.readyStale.newer || []).includes('collect') &&
       !skillState.readyStale.card && !skillState.readyStale.report && skillState.tagKept && skillState.tagKept.fileTag === skillState.lastTag && /^\d{8}(-\d+)?$/.test(skillState.lastTag || '') && (skillState.forgetAll && JSON.stringify(skillState.forgetAll).length > 0),

@@ -40,4 +40,31 @@ const release = skill.release();
 const signature = crypto.sign(null, Buffer.from(skill.signedText(version, hashes)), key).toString('base64url');
 const signature2 = crypto.sign(null, Buffer.from(skill.signedText(version, hashes, release)), key).toString('base64url');
 fs.writeFileSync(out, JSON.stringify({ version, release, hashes, signature, signature2 }, null, 2) + '\n');
+// The public list of releases (README "Check it yourself"): each release's SHA-256 per file, on GitHub, where
+// anyone can compare an installed copy with \`sha256sum\` without trusting app.psycheai.io or this script.
+const pub = Buffer.from(crypto.createPublicKey(key).export({ format: 'der', type: 'spki' })).subarray(-32).toString('hex');
+const listPath = path.join(path.dirname(out), 'RELEASES.md');
+let rows = [];
+try { rows = fs.readFileSync(listPath, 'utf8').split('\n').filter(l => /^\| \d+ \|/.test(l)); } catch (err) { /* the first */ }
+const row = '| ' + release + ' | ' + new Date().toISOString().slice(0, 10) + ' | ' + ['SKILL.md', 'bin/psyche.py', 'guide.json'].map(f => '`' + hashes[f] + '`').join(' | ') + ' |';
+rows = [row].concat(rows.filter(l => !l.startsWith('| ' + release + ' |')));
+fs.writeFileSync(listPath, `# PsycheAI skill releases
+
+Every release of the PsycheAI skill for Muse, newest first, with the SHA-256 of each of its three files.
+An installed copy lives in \`~/workspace/skills/psycheai/\`. To check yours, ask Muse:
+
+> Run sha256sum on SKILL.md, bin/psyche.py and guide.json in ~/workspace/skills/psycheai, and compare them with github.com/jaredsia-svg/psycheai-app/blob/main/skill/RELEASES.md
+
+All three must match one row. \`sha256sum\` is part of the system, not PsycheAI's code, and this list is on
+GitHub, not on app.psycheai.io, so the check holds even if PsycheAI's server were in someone else's hands.
+The release number is in bin/psyche.py (\`RELEASE = …\`).
+
+Releases are signed with Ed25519. The public key, built into bin/psyche.py as \`SKILL_PUBLIC_KEY\`, is:
+
+\`${pub}\`
+
+| Release | Date | SKILL.md | bin/psyche.py | guide.json |
+|---|---|---|---|---|
+${rows.join('\n')}
+`);
 console.log('Signed skill', version, 'release', release, Object.keys(hashes).join(', '));
