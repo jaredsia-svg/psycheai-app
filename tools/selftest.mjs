@@ -2561,6 +2561,23 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
       skillState.readyStale && skillState.readyStale.saved === false && /not saved yet/.test(skillState.readyStale.error || '') && (skillState.readyStale.newer || []).includes('collect') &&
       !skillState.readyStale.card && !skillState.readyStale.report && skillState.tagKept && skillState.tagKept.fileTag === skillState.lastTag && /^\d{8}(-\d+)?$/.test(skillState.lastTag || '') && (skillState.forgetAll && JSON.stringify(skillState.forgetAll).length > 0),
       JSON.stringify({ stale: skillState.readyStale, kept: skillState.tagKept, last: skillState.lastTag }).slice(0, 400));
+    {
+      // A lighter report file (README "A lighter report file"): the card inside it as a JPEG, the shared card still the PNG.
+      const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys, os, tempfile
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+from PIL import Image, ImageDraw
+im = Image.new('RGBA', (1080, 1920)); d = ImageDraw.Draw(im)
+for y in range(1920): d.line([(0, y), (1080, y)], fill=(250 - y // 12, 230 - y // 20, 255, 255))
+for k in range(60): d.text((40 + (k % 6) * 170, 60 + (k // 6) * 180), 'Psyche %d' % k, fill=(40, 20, 60, 255))
+im = Image.blend(im, Image.merge('RGBA', [Image.effect_noise((1080, 1920), 60)] * 3 + [Image.new('L', (1080, 1920), 255)]), 0.25)
+path = os.path.join(tempfile.mkdtemp(), 'card.png'); im.save(path)
+b = m.report_card_b64(path)
+print(json.dumps([os.path.getsize(path), len(b) * 3 // 4, m._img_src(b)[:23], m._img_src('iVBORw0KGgo')[:22]]))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname], { env: { ...process.env, PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'ph-')) } }).toString());
+      check('the report file embeds its card as a JPEG at a fraction of the PNG\'s size, and a PNG still embeds as a PNG; the card they share stays the PNG in out/ (README "A lighter report file")',
+        got[2] === 'data:image/jpeg;base64,' && got[3] === 'data:image/png;base64,' && got[1] < got[0] / 2 && /report_card_b64\(os\.path\.join\(OUT, pics\[-1\]\)\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')), JSON.stringify(got));
+    }
+    check('after "I\'ve connected them", SKILL.md names one command for the re-check (accounts), with no memory search or first-run again',
+      /on "I've connected them", run `python3 bin\/psyche\.py accounts` once and go on from its button for their account \(`messages_connected`\): that one command rereads both account lists, so it is the whole check, with no memory search, no first-run again and no other list first/.test(skillMd));
     check('show ready names the report file the summary saved (its path is under "report"), with its size, when the report comes back in full',
       ((o) => o && /\/out\/Psyche-Report(-[^/ ]+)?-\d{8}(-\d+)?\.html$/.test((o.report || {}).file || '') && o.report.bytes > 1000 && JSON.stringify(o.missing) === '["card"]')(skillState.leaving && skillState.leaving.readyFull),
       JSON.stringify(skillState.leaving && skillState.leaving.readyFull));

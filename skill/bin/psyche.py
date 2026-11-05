@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 149
+RELEASE = 150
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -573,11 +573,41 @@ def _motive_boxes(mots, top):
 )
 
 
+def _img_src(b64):
+    """A data address for an embedded card: JPEG when the bytes are one (base64 "/9j/"), else PNG."""
+    return ('data:image/jpeg;base64,' if str(b64).startswith('/9j/') else 'data:image/png;base64,') + b64
+
+
+def report_card_b64(path):
+    """The card for inside the report file, as a JPEG (README "A lighter report file"): the 1080 x 1920 PNG
+    is about 700 KB, which made the report about 1 MB; at quality 85 it is about a quarter of that. The card
+    they share stays the PNG in out/. Without Pillow, or if it fails, the PNG as it is."""
+    with open(path, 'rb') as f:
+        raw = f.read()
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(raw))
+        if im.mode in ('RGBA', 'LA', 'P'):
+            im = im.convert('RGBA')
+            back = Image.new('RGB', im.size, (255, 255, 255))
+            back.paste(im, mask=im.split()[-1])
+            im = back
+        else:
+            im = im.convert('RGB')
+        buf = io.BytesIO()
+        im.save(buf, 'JPEG', quality=85, optimize=True, progressive=True)
+        if buf.tell() < len(raw):
+            raw = buf.getvalue()
+    except Exception:
+        pass
+    return base64.b64encode(raw).decode()
+
+
 def _overview(v, card_png=None):
     # The card sits beside "You are most like", big enough to want a tap, and opens full size
     # (README "The card in the Overview"); it is embedded here once.
     card = ('<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card full size">'
-            '<img class="cardpic" alt="Your Psyche Card" src="data:image/png;base64,' + card_png + '"><em>Your Psyche Card<br>Tap to open</em></button>') if card_png else ''
+            '<img class="cardpic" alt="Your Psyche Card" src="' + _img_src(card_png) + '"><em>Your Psyche Card<br>Tap to open</em></button>') if card_png else ''
     hero = ''
     if _s(v, 'character') or card:
         text = (('<small>You are most like</small><b>' + _e(_s(v, 'character')) + '</b>'
@@ -770,7 +800,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     if sample and card_png:
         banner += ('<div class="sample"><p>' + _e(sample.get('note') or '') + '</p>'
                    '<button type="button" class="cardbtn top" id="cardopen" aria-label="Open the Psyche Card full size">'
-                   '<img class="cardpic" alt="A sample Psyche Card" src="data:image/png;base64,' + card_png + '"><em>Tap to open</em></button>'
+                   '<img class="cardpic" alt="A sample Psyche Card" src="' + _img_src(card_png) + '"><em>Tap to open</em></button>'
                    + ('<p class="get">' + _e(sample['cta']) + '</p>' if sample.get('cta') else '') + '</div>')
     bar = '<nav aria-label="Sections">' + ''.join(nav) + '<button type="button" data-fold>Collapse all ▲</button></nav>'
     # The picture is embedded once, in the Overview; the full-screen view borrows it when opened.
@@ -877,8 +907,7 @@ def local_report(r):
     try:
         pics = sorted(f for f in os.listdir(OUT) if f.lower().endswith('.png'))
         if pics:
-            with open(os.path.join(OUT, pics[-1]), 'rb') as f:
-                card = base64.b64encode(f.read()).decode()
+            card = report_card_b64(os.path.join(OUT, pics[-1]))
     except OSError:
         pass
     try:
