@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 158
+RELEASE = 160
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1838,6 +1838,23 @@ def account_choice():
     return {'question': 'Which account should I read?' if len(buttons) > 1 else None, 'buttons': buttons}
 
 
+# When a first run can't go on, the words to say, so nothing further in SKILL.md is looked up (README "Nothing to
+# look up"): a read of SKILL.md partway through a run is what Muse's prompt-injection check has stopped.
+REPLY_NO_ACCOUNT = ("I can't see an Instagram account connected to your Muse yet. Connect your Instagram in Muse's settings, "
+                    "then send the prompt again.")
+REPLY_NO_LISTS = "I couldn't read your Instagram accounts just now. Please send the prompt again in a minute."
+REPLY_NO_SERVER = "PsycheAI can't be reached right now. Please send the prompt again in a few minutes."
+
+
+def with_reply(out):
+    """A result that can't go on gets its reply: no account, the lists unreadable, or PsycheAI unreachable."""
+    if out.get('error'):
+        out['reply'] = REPLY_NO_SERVER
+    elif out.get('accounts', 0) is None:
+        out['reply'] = REPLY_NO_LISTS if 'could not be read' in str(out.get('problem') or '') else REPLY_NO_ACCOUNT
+    return out
+
+
 def first_run():
     """Data only (README "First run in one call"): what start says and its two messages buttons (the welcome,
     sent before this ran), the account question and its buttons, and step 1's line. No instruction to Muse
@@ -1848,13 +1865,15 @@ def first_run():
     out['say'], out['reel'] = start.get('say'), start.get('reel')
     if start.get('error'):
         out['error'] = start['error']
-        return out
+        return with_reply(out)
     try:
         out.update(account_choice())
     except (RuntimeError, RateLimited) as err:
         out['accounts'] = None
         out['problem'] = 'The account lists could not be read here (%s).' % type(err).__name__
-        return out
+        return with_reply(out)
+    if out.get('accounts', 0) is None:
+        return with_reply(out)
     out['stepOne'] = STEP_ONE   # the reel is in the welcome now (README "The reel with the welcome")
     return out
 
@@ -4649,6 +4668,7 @@ def main(argv):
             out = account_choice()
         except (RuntimeError, RateLimited) as err:
             out = {'accounts': None, 'problem': 'The account lists could not be read here (%s).' % type(err).__name__}
+        with_reply(out)
         out['stepOne'] = FRESH_STEP_ONE
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return

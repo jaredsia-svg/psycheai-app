@@ -2588,6 +2588,20 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
         /viaEdge = edge && edge\.length >= 32 && req\.headers\['x-psyche-edge'\] === edge/.test(src) && /key: PSYCHE_EDGE_SECRET/.test(fsx.readFileSync(new URL('../render.yaml', import.meta.url), 'utf8')),
         JSON.stringify({ seen, loc: answer && answer.headers.get('location') }).slice(0, 400));
     }
+    {
+      // Nothing to look up (README "Nothing to look up"): a first run that can't go on has its reply in the result, and
+      // SKILL.md never sends Muse back into itself (a read of SKILL.md partway through was stopped by Muse's prompt-injection check).
+      const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(json.dumps([m.with_reply({'accounts': None, 'problem': 'No personal Instagram account came back.'}).get('reply'),
+                  m.with_reply({'accounts': None, 'problem': 'The account lists could not be read here (RuntimeError).'}).get('reply'),
+                  m.with_reply({'error': 'busy'}).get('reply'), m.with_reply({'accounts': [], 'buttons': []}).get('reply')]))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname], { env: { ...process.env, PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'ph-')) } }).toString());
+      check('a first run that can\'t go on answers with its reply (no Instagram account, the lists unreadable, PsycheAI unreachable), and SKILL.md never sends Muse back into itself to find what to do',
+        /^I can't see an Instagram account connected to your Muse yet\./.test(got[0] || '') && /^I couldn't read your Instagram accounts just now\./.test(got[1] || '') &&
+          /^PsycheAI can't be reached right now\./.test(got[2] || '') && got[3] === null &&
+          /If it has a `reply` \(no Instagram account connected to Muse yet, the account lists unreadable, or PsycheAI unreachable\), that reply is the whole answer: send it as it is, and the first run ends there\./.test(skillMd) &&
+          !/step 0 below|read this file again|run the two account lists yourself/.test(skillMd), JSON.stringify(got));
+    }
     check('show ready refuses while a read is newer than the saved Psyche, so the previous card and report never come back as the new ones; the run\'s file tag is kept outside the skill folder too, so a reinstall still gets a new file name (forget --everything deletes it)',
       skillState.readyStale && skillState.readyStale.saved === false && /not saved yet/.test(skillState.readyStale.error || '') && (skillState.readyStale.newer || []).includes('collect') &&
       !skillState.readyStale.card && !skillState.readyStale.report && skillState.tagKept && skillState.tagKept.fileTag === skillState.lastTag && /^\d{8}(-\d+)?$/.test(skillState.lastTag || '') && (skillState.forgetAll && JSON.stringify(skillState.forgetAll).length > 0),
