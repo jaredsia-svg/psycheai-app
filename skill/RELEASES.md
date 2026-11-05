@@ -15,5 +15,6 @@ Releases are signed with Ed25519. The public key, built into bin/psyche.py as `S
 
 | Release | Date | SKILL.md | bin/psyche.py | guide.json |
 |---|---|---|---|---|
+| 154 | 2026-11-05 | `c257ad8be940ec04166bc323fee031c55943f700ecb26426859e8de994b3b970` | `45798ba924751f7fd2fde93015130fc519750b75a469adc8aff48710fa9aa44c` | `211ed58351ca2be7f4eaa51bbb61be48f2fa08844696d6102222870d82af8edb` |
 | 153 | 2026-11-05 | `a5e80f55cb0dcc0f63eddec2a5cba8059443076bdb818270a814f329aa18e97f` | `0020d47fde472b97e2426d88c9000e8faf69896b2c10a630edb05fe0ec191e71` | `211ed58351ca2be7f4eaa51bbb61be48f2fa08844696d6102222870d82af8edb` |
 | 152 | 2026-11-05 | `23c9ec74fee8d3bfaa2d43f1ed7c7b8cb7e45a1fddcbb29fbae5d6dfef9103e8` | `1441771d627dd1bc81f8136b57382eb153f68fd7fba0f55a3ed477fb28b2e67d` | `211ed58351ca2be7f4eaa51bbb61be48f2fa08844696d6102222870d82af8edb` |

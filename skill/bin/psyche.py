@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 153
+RELEASE = 154
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -4182,7 +4182,7 @@ LABELS = frozenset([
     'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Not now',
     'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
-    'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
+    'WhatsApp, Facebook and Messenger', 'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
     'Done', 'Yes', 'No thanks', 'Someone else', 'I\'ll share it myself', 'Sync with someone else', 'Sync with someone new', 'Write it again',
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
@@ -4215,7 +4215,7 @@ def clean_result(value):
 
 # What's next after a Psyche, and the ideas to ask: the server's own (lib/next.js publish_psyche, lib/mcp.js
 # ASK_IDEAS and askIdeas), here so publishing asks nothing of it. The selftest holds them to the server's.
-AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Add WhatsApp or Facebook", "More"], "asButtons": True, "sources": ["WhatsApp chats", "Facebook and Messenger", "Facebook posts only"], "more": {"buttons": ["Weekly check-ins on my plan", "Join the Psyche Pair waitlist", "My data and privacy"]}}
+AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Add WhatsApp or Facebook", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger", "Facebook posts only"], "more": {"buttons": ["Weekly check-ins on my plan", "Join the Psyche Pair waitlist", "My data and privacy"]}}
 ASK_IDEAS = [
 "Who am I when I'm not being useful, impressive or needed?",
 "What do I keep trying to prove, and to whom?",
