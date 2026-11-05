@@ -36,6 +36,9 @@ services:
       # README "One name: psycheai.io"): the same value as the Worker's EDGE_SECRET, 32 characters or more.
       - key: PSYCHE_EDGE_SECRET
         sync: false
+      # The password for /admin/stats (lib/usage.js, README "Usage counts"), 24 characters or more; the page is off without it.
+      - key: PSYCHE_ADMIN_SECRET
+        sync: false
       # Where PsycheAI is, and the secret both servers share: set the same
       # PSYCHEAI_IMPORT_SECRET on the psycheai.io service.
       # One-tap sign-in; each is off until its client id is set.

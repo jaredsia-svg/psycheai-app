@@ -22,6 +22,7 @@ const store = require('./lib/store');
 const mcp = require('./lib/mcp');
 const pairform = require('./lib/pairform');
 const skill = require('./lib/skill');
+const usage = require('./lib/usage');
 const photos = require('./lib/photos');
 const weekly = require('./lib/weekly');
 const chat = require('./lib/chat');
@@ -256,6 +257,17 @@ async function handleCardPage(req, res, token, action) {
 async function route(req, res) {
   const url = new URL(req.url, 'http://local');
   try {
+    // Usage counts (lib/usage.js), behind PSYCHE_ADMIN_SECRET; off without it.
+    if (url.pathname === '/admin/stats' && req.method === 'GET') {
+      if (!process.env.PSYCHE_ADMIN_SECRET || process.env.PSYCHE_ADMIN_SECRET.length < 24) return send(res, 404, { error: 'Not found' });
+      if (!usage.authorised(req.headers.authorization)) {
+        res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="PsycheAI stats", charset="UTF-8"', 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' });
+        return res.end('Sign in to see the stats.');
+      }
+      if (url.searchParams.get('format') === 'json') return send(res, 200, usage.summary());
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
+      return res.end(usage.page());
+    }
     if (url.pathname === '/health') return send(res, 200, { ok: true, commit: String(process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null, readGuide: psyche.guideInfo(), pairWaitlist: require('./lib/waitlist').counts(), readTimings: require('./lib/timing').latest() });
     const icon = req.method === 'GET' && ICONS[url.pathname];
     if (icon) {
@@ -327,7 +339,10 @@ async function route(req, res) {
       if (!inBrowser && preview.isPreviewer(req.headers['user-agent'])) {
         return send(res, 200, preview.page({ ...shared, url: BASE + url.pathname, base: BASE, text: skill.bootstrap(code ? { code, name } : {}) }), 'text/html');
       }
-      if (!inBrowser) return send(res, 200, skill.bootstrap(code ? { code, name } : {}), 'text/markdown');
+      if (!inBrowser) {
+        usage.bump(code ? 'syncFetch' : 'installFetch');
+        return send(res, 200, skill.bootstrap(code ? { code, name } : {}), 'text/markdown');
+      }
       // /install opened in a browser: what PsycheAI is and the message to paste into Muse.
       if (!code) {
         const msg = skill.installPrompt();
@@ -414,11 +429,18 @@ async function route(req, res) {
       const f = skill.file(skillPath[1]);
       return f ? send(res, 200, f.body, f.type.split(';')[0]) : send(res, 404, { error: 'Not found' });
     }
-    if (url.pathname === '/skill/files' && req.method === 'GET') return send(res, 200, skill.manifest());
+    if (url.pathname === '/skill/files' && req.method === 'GET') {
+      // Counted by release, from the skill's User-Agent, nothing else (lib/usage.js).
+      const release = usage.releaseOf(req.headers['user-agent']);
+      if (release) usage.bump('updateChecks', Date.now(), release);
+      return send(res, 200, skill.manifest());
+    }
     // The card art the skill draws the Psyche Card with in Muse (README "The card is drawn in Muse"):
     // one pack for everyone, fetched once and checked against a hash the signed script holds.
     if (url.pathname === '/skill/card-art.zip' && (req.method === 'GET' || req.method === 'HEAD')) {
       const zip = require('node:fs').readFileSync(require('node:path').join(__dirname, 'assets', 'card-art.zip'));
+      // Fetched once per workspace, the first time a card is drawn: a count of first cards (lib/usage.js).
+      if (req.method === 'GET' && usage.releaseOf(req.headers['user-agent'])) usage.bump('cardArt');
       res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': zip.length, 'Cache-Control': 'public, max-age=86400' });
       return res.end(req.method === 'HEAD' ? undefined : zip);
     }
@@ -437,6 +459,7 @@ async function route(req, res) {
         || String(req.headers['cf-connecting-ip'] || req.headers['true-client-ip'] || '').trim()
         || String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || req.socket.remoteAddress;
       const r = skill.account(ip);
+      if (r.status === 200) usage.bump('installs');
       return send(res, r.status, r.body);
     }
     if (url.pathname === '/mcp') {

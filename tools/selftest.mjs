@@ -3233,6 +3233,45 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     shown(shortSvg, shortOnes) === 4 && !shortSvg.includes('>Hiking<'), JSON.stringify([shown(longSvg, longOnes), shown(shortSvg, shortOnes)]));
 }
 
+// ---------- usage counts (README "Usage counts") ----------
+{
+  const usage = require('../lib/usage.js');
+  const srv = createServer();
+  await new Promise(r => srv.listen(0, r));
+  const base = 'http://127.0.0.1:' + srv.address().port;
+  const saved = process.env.PSYCHE_ADMIN_SECRET;
+  delete process.env.PSYCHE_ADMIN_SECRET;
+  const off = (await fetch(base + '/admin/stats')).status;
+  process.env.PSYCHE_ADMIN_SECRET = 'x'.repeat(30);
+  const auth = pw => ({ authorization: 'Basic ' + Buffer.from('admin:' + pw).toString('base64') });
+  const noAuth = (await fetch(base + '/admin/stats')).status;
+  const wrong = (await fetch(base + '/admin/stats', { headers: auth('y'.repeat(30)) })).status;
+  const before = (await (await fetch(base + '/admin/stats?format=json', { headers: auth('x'.repeat(30)) })).json()).today;
+  const ua = { 'user-agent': 'PsycheAI-skill/161' };
+  await fetch(base + '/skill/files', { headers: ua });
+  await fetch(base + '/skill/card-art.zip', { headers: ua });
+  await fetch(base + '/install', { headers: { accept: 'text/markdown' } });
+  await fetch(base + '/skill/account', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.77' }, body: '{}' });
+  const res = await fetch(base + '/admin/stats?format=json', { headers: auth('x'.repeat(30)) });
+  const s = await res.json();
+  const html = await (await fetch(base + '/admin/stats', { headers: auth('x'.repeat(30)) })).text();
+  const stored = JSON.stringify(store.kvAll(usage.TABLE));
+  const keysOk = store.kvAll(usage.TABLE).every(([k, row]) => /^\d{4}-\d{2}-\d{2}$/.test(k) && Object.keys(row).every(x => usage.KINDS.includes(x) || x === 'releases') &&
+    Object.keys(row.releases || {}).every(r => /^\d+$/.test(r)));
+  check('the stats page is off without PSYCHE_ADMIN_SECRET, asks for the password, refuses a wrong one, and is never cached or indexed',
+    off === 404 && noAuth === 401 && wrong === 401 && res.headers.get('cache-control') === 'no-store', JSON.stringify([off, noAuth, wrong]));
+  check('it counts installs, Muse fetching the install link, first cards and update checks by release, from requests the server already gets',
+    s.today.installs === before.installs + 1 && s.today.installFetch === before.installFetch + 1 && s.today.cardArt === before.cardArt + 1 &&
+    s.today.updateChecks === before.updateChecks + 1 && s.releasesLast7Days['161'] >= 1 && s.accounts.total >= 1 && /Installs \(accounts made\)/.test(html) && !/<script/i.test(html),
+    JSON.stringify([before, s.today]));
+  check('the counts keep no address, id, code or user agent: a day, counts, and release numbers',
+    keysOk && !/203\.0\.113|PsycheAI-skill|user|token/i.test(stored), stored.slice(0, 300));
+  check('the skill is unchanged for this: it still sends no timings, so the welcome\'s privacy line holds',
+    !/urlopen|fetch\(|post\(/.test((require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8').match(/def send_timing\(\):[\s\S]*?\n\n\n/) || [''])[0]));
+  if (saved === undefined) delete process.env.PSYCHE_ADMIN_SECRET; else process.env.PSYCHE_ADMIN_SECRET = saved;
+  await new Promise(r => srv.close(r));
+}
+
 // ---------- summary ----------
 
 console.log(`${passed} passed, ${failures.length} failed`);
