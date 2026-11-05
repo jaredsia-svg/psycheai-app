@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 160
+RELEASE = 161
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -4106,7 +4106,9 @@ def depth_problems(answer):
     return problems
 
 
-MONTH_YEAR = re.compile(r'\b(January|February|March|April|May|June|July|August|September|October|November|December) (\d{4})\b')
+MONTH_YEAR = re.compile(r'\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.? (\d{4})\b')
+# "Oct 2026" and "October 2026" are one month: a group is keyed by its month's first three letters and its year.
+month_key = lambda m: m.group(1)[:3].lower() + ' ' + m.group(2)
 MOMENT_STOP = set('your you they them their this that with from about after before into over when then than what which while where have has had were was been being also just more most some only very said says say tell told show shows showed shown message messages story stories comment comments post posts thread threads exchange exchanges note friend friends people person someone they each other same again moment moments'.split())
 MOMENT_TIMES = 3
 
@@ -4123,7 +4125,7 @@ def reuse_problems(answer):
                 re.findall(r"[a-z][a-z'-]+", text[m.end():m.end() + 140].lower())[:14]
             words = {w[:5] for w in near if len(w) >= 4 and w not in MOMENT_STOP}
             if len(words) >= 2:
-                found.append({'when': m.group(0), 'words': words, 'at': at, 'text': text[m.start():m.start() + 70]})
+                found.append({'when': month_key(m), 'words': words, 'at': at, 'text': text[m.start():m.start() + 70]})
     groups = []
     for f in found:
         for g in groups:
