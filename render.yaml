@@ -32,6 +32,10 @@ services:
         generateValue: true
       - key: PSYCHE_STORE_KEY
         generateValue: true
+      # The secret psycheai.io's Cloudflare Worker sends with the asker's address (tools/cloudflare-worker.js,
+      # README "One name: psycheai.io"): the same value as the Worker's EDGE_SECRET, 32 characters or more.
+      - key: PSYCHE_EDGE_SECRET
+        sync: false
       # Where PsycheAI is, and the secret both servers share: set the same
       # PSYCHEAI_IMPORT_SECRET on the psycheai.io service.
       # One-tap sign-in; each is off until its client id is set.

@@ -429,7 +429,12 @@ async function route(req, res) {
     }
     if (url.pathname === '/skill/account' && req.method === 'POST') {
       // The address the edge saw, which a client can't set; the first X-Forwarded-For entry it can.
-      const ip = String(req.headers['cf-connecting-ip'] || req.headers['true-client-ip'] || '').trim()
+      // Through psycheai.io's Worker (tools/cloudflare-worker.js), every request comes from Cloudflare, so the
+      // Worker passes the asker's address, trusted only with the shared secret (README "One name: psycheai.io").
+      const edge = process.env.PSYCHE_EDGE_SECRET;
+      const viaEdge = edge && edge.length >= 32 && req.headers['x-psyche-edge'] === edge;
+      const ip = (viaEdge && String(req.headers['x-psyche-client-ip'] || '').trim())
+        || String(req.headers['cf-connecting-ip'] || req.headers['true-client-ip'] || '').trim()
         || String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || req.socket.remoteAddress;
       const r = skill.account(ip);
       return send(res, r.status, r.body);

@@ -2565,6 +2565,25 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
         /all three should match one row of https:\/\/github\.com\/jaredsia-svg\/psycheai-app\/blob\/main\/skill\/RELEASES\.md/.test(skillMd))(
         skillState.verify, JSON.parse(fsx.readFileSync(new URL('../skill/SIGNATURE.json', import.meta.url), 'utf8')), fsx.readFileSync(new URL('../skill/RELEASES.md', import.meta.url), 'utf8')),
       JSON.stringify(skillState.verify).slice(0, 400));
+    {
+      // psycheai.io's Worker (README "One name: psycheai.io"): the skill's paths passed to app.psycheai.io as they are,
+      // the asker's address in its own header with the shared secret, a client's own copies of those headers dropped,
+      // and a redirect to the app's address kept on psycheai.io.
+      const worker = (await import(new URL('./cloudflare-worker.js', import.meta.url).href)).default;
+      const seen = [];
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = async (url, init) => { seen.push({ url, h: Object.fromEntries(init.headers), method: init.method }); return new Response('ok', { status: 302, headers: { location: 'https://app.psycheai.io/sync/abc' } }); };
+      let answer;
+      try {
+        answer = await worker.fetch(new Request('https://psycheai.io/skill/files?x=1', { headers: { 'cf-connecting-ip': '203.0.113.9', 'x-psyche-edge': 'forged', 'x-psyche-client-ip': '1.1.1.1' } }), { EDGE_SECRET: 's'.repeat(40) });
+      } finally { globalThis.fetch = realFetch; }
+      const src = fsx.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+      check('psycheai.io\'s Worker passes the skill\'s paths to app.psycheai.io as they are, with the asker\'s address under the shared secret (a client\'s own copies dropped), keeps redirects on psycheai.io, and the app trusts that address only with the secret',
+        seen.length === 1 && seen[0].url === 'https://app.psycheai.io/skill/files?x=1' && seen[0].h['x-psyche-client-ip'] === '203.0.113.9' && seen[0].h['x-psyche-edge'] === 's'.repeat(40) &&
+        answer.headers.get('location') === 'https://psycheai.io/sync/abc' &&
+        /viaEdge = edge && edge\.length >= 32 && req\.headers\['x-psyche-edge'\] === edge/.test(src) && /key: PSYCHE_EDGE_SECRET/.test(fsx.readFileSync(new URL('../render.yaml', import.meta.url), 'utf8')),
+        JSON.stringify({ seen, loc: answer && answer.headers.get('location') }).slice(0, 400));
+    }
     check('show ready refuses while a read is newer than the saved Psyche, so the previous card and report never come back as the new ones; the run\'s file tag is kept outside the skill folder too, so a reinstall still gets a new file name (forget --everything deletes it)',
       skillState.readyStale && skillState.readyStale.saved === false && /not saved yet/.test(skillState.readyStale.error || '') && (skillState.readyStale.newer || []).includes('collect') &&
       !skillState.readyStale.card && !skillState.readyStale.report && skillState.tagKept && skillState.tagKept.fileTag === skillState.lastTag && /^\d{8}(-\d+)?$/.test(skillState.lastTag || '') && (skillState.forgetAll && JSON.stringify(skillState.forgetAll).length > 0),
