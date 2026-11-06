@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 161
+RELEASE = 162
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -954,15 +954,13 @@ def unsaved_read():
 
 
 def local_ready(r):
-    """show ready: the card and the report file saved, and What's next, in one call; the read's timings
-    sent beside them, so neither waits on the other (README "Straight to the card"). There is no PDF:
-    the report file is the whole report (README "The report file, not a PDF")."""
-    side = [threading.Thread(target=send_timing)]
-    for t in side:
-        t.start()
+    """show ready: the card and the report file saved, and What's next, in one call (README "Straight to
+    the card"). There is no PDF: the report file is the whole report (README "The report file, not a PDF")."""
+    try:
+        os.remove(os.path.join(HERE, '.timing.json'))   # left by releases before 162, which noted command times
+    except OSError:
+        pass
     card, report = local_card(r), local_report(r)
-    for t in side:
-        t.join(15)
     # Short, so a helper passes it on as it is: the two files (named only once saved, with their size:
     # this is the check, nothing to list after it) and What's next. The report's text is in the file.
     files = {}
@@ -1753,36 +1751,6 @@ def fetch_file(path):
     return get(path)
 
 
-# When each of this script's commands ran in a read (only its name), sent once
-# the Psyche is saved, so PsycheAI can see which stage takes the time
-# (README "Measuring a read"). Nothing from the read itself is in it.
-TIMING = os.path.join(HERE, '.timing.json')
-
-
-def mark(label):
-    try:
-        with open(TIMING) as f:
-            marks = json.load(f)
-    except (OSError, ValueError):
-        marks = []
-    marks = [m for m in marks if isinstance(m, list) and len(m) == 2 and time.time() - m[1] < 3 * 3600][-50:]
-    marks.append([label, time.time()])
-    try:
-        write_private([TIMING], marks)
-    except OSError:
-        pass
-
-
-def send_timing():
-    """The read's marks are cleared once it's delivered, and never sent anywhere (README "Nothing about them
-    leaves Muse"): they once went to PsycheAI as seconds per stage, the digest's size and whether messages
-    were in, which Muse rightly counted as something about them leaving."""
-    try:
-        os.remove(TIMING)
-    except OSError:
-        pass
-
-
 # ---------- first-run: status, start and both account lists in one call (README "First run in one call") ----------
 STEP_ONE = "On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready."
 # A later read's line, with no reel (the guide's step 1).
@@ -2520,7 +2488,8 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                     found = []
 
                     def topics(v):
-                        if isinstance(v, str) and 1 < len(v) <= 80:
+                        # Instagram's own labels for how a topic was found (INTERESTED, INFERRED_INTERESTED) aren't topics.
+                        if isinstance(v, str) and 1 < len(v) <= 80 and not re.fullmatch(r'[A-Z0-9_]+', v):
                             found.append(v)
                         elif isinstance(v, list):
                             for x in v:
@@ -4634,8 +4603,6 @@ def main(argv):
     if not argv or argv[0] in ('-h', '--help'):
         print(__doc__)
         return
-    if argv[0] in ('status', 'update', 'check-digest', 'build-digest', 'collect', 'prep', 'republish', 'report', 'checkin', 'why', 'correct') or (argv[0] in ('call', 'show') and len(argv) >= 2):
-        mark(argv[0] if argv[0] not in ('call', 'show') else argv[0] + ':' + re.sub(r'[^a-z_]', '', argv[1].lower())[:30])
     if argv[0] == 'status':
         account()
         out = {'ok': True, 'connected': True, 'version': local_version()}
@@ -4752,8 +4719,6 @@ def main(argv):
                               'newer': newer}, ensure_ascii=False, indent=1))
             return
         print(json.dumps(PARTS[argv[1]](last), ensure_ascii=False, indent=1), flush=True)
-        if os.path.exists(TIMING) and argv[1] != 'ready':
-            send_timing()
         return
     if argv[0] == 'check-digest':
         print(json.dumps(check_digest(), ensure_ascii=False, indent=1))
@@ -4788,10 +4753,7 @@ def main(argv):
             n = max(1, min(30, int(opts.get('--threads') or COLLECT_THREADS)))
         except ValueError:
             n = COLLECT_THREADS
-        mark('collect')             # a read starts here: an earlier attempt's marks don't count (lib/timing.js)
         out = collect(opts.get('--account-id'), opts.get('--messages-account-id'), opts.get('--me'), n, not opts.get('no'))
-        if out.get('ok') is not False or out.get('built'):
-            mark('check-digest')    # the digest is built and checked: the read's reading stage ends here
         # What it read, kept beside the digest (counts and notes only: no ID, cursor or message), so
         # "last-collect" can show it after a helper ran it (README "The last collect, kept").
         if out.get('read'):

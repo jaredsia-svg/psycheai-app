@@ -25,6 +25,6 @@ elif cmd == 'fetch-post-comments':
 elif cmd == 'saved-posts':
     page = int(opt.get('--after', '0')); print(json.dumps({'posts': [{'post_id': 'S%d%d' % (page, j)} for j in range(5)], 'has_next_page': page < 1, 'end_cursor': str(page + 1)}))
 elif cmd == 'current-interests':
-    print(json.dumps({'interests': [{'text': 'Distance running', 'type': 'interested'}, {'text': 'Cooking', 'type': 'interested'}], 'model_response_guidance': 'show them'}))
+    print(json.dumps({'interests': [{'text': 'Distance running', 'type': 'interested'}, {'text': 'Cooking', 'type': 'interested'}], 'sources': ['INTERESTED', 'INFERRED_INTERESTED'], 'model_response_guidance': 'show them'}))
 else:
     print('unknown', file=sys.stderr); sys.exit(3)

@@ -1912,12 +1912,8 @@ print(json.dumps({'got': got, 'status': status}))`;
         '## Interests', '- running, specialty coffee'].join('\n');
       fsx.writeFileSync(pathx.join(dir, 'digest', 'digest.md'), good);
       skillState.goodDigest = await run('check-digest');
-      // The read's stages: the script notes each command's name and when, and sends them once a Psyche is saved.
-      skillState.marks = JSON.parse(fsx.readFileSync(pathx.join(dir, '.timing.json'), 'utf8')).map(m => m[0]);
-      await execFile('python3', ['-c', `import importlib.util, sys
-spec = importlib.util.spec_from_file_location('psyche', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-m.mark('call:publish_psyche'); m.send_timing()`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: keep, NO_PROXY: '*', no_proxy: '*' }, timeout: 30000 });
-      skillState.timingCleared = !fsx.existsSync(pathx.join(dir, '.timing.json'));
+      // Since release 162 the script notes no command times at all (README "No timings in the skill").
+      skillState.noTimingFile = !fsx.existsSync(pathx.join(dir, '.timing.json'));
       // A new save clears the last PDF from out/, so an old one can't be attached in its place.
       fsx.mkdirSync(pathx.join(dir, 'out'), { recursive: true });
       fsx.writeFileSync(pathx.join(dir, 'out', 'Psyche Report - old.pdf'), '%PDF old');
@@ -2082,7 +2078,7 @@ print(json.dumps({'fine': m.answer_problems(fine),
      m.holding_problems({'careerAssessment': {'holdingBack': {'headline': 'Dull follow-through', 'detail': 'Routine admin slips.'}}, 'career': {'weaknesses': [{'title': 'Blunt in public', 'detail': 'Your verdicts land hard.'}]}})])[-1])(tempfile.mkdtemp()),
   'interests': (lambda d: (setattr(m, 'DIGEST', d + '/digest/digest.md'), m.build_digest([{'kind': 'story', 'date': '2024-01-0%d' % (1 + k), 'text': 'a story with words %d' % k} for k in range(3)],
     {'me': 'Mei Tan', 'messages': False, 'interests': ['2026', 'Singapore', '9123 4567', 'Artificial Intelligence']}), open(d + '/digest/digest.md').read())[-1])(tempfile.mkdtemp()),
-  'readyFull': (lambda d: (setattr(m, 'OUT', d + '/out'), setattr(m, 'local_pdf', lambda r: None), setattr(m, 'send_timing', lambda: None),
+  'readyFull': (lambda d: (setattr(m, 'OUT', d + '/out'), setattr(m, 'local_pdf', lambda r: None), 
     (lambda o: {k: v for k, v in o.items() if k != 'next'})(m.local_ready({'full': {'overview': {'character': 'Mulan', 'patterns': []}}, 'nextStep': {'buttons': ['x']}})))[-1])(tempfile.mkdtemp()),
   'saved': [m.ei_problems({'mbti': {'letters': [{'choice': 'I', 'why': 'Your setting is small and familiar: family gatherings, close friends, and a circle you return to across years', 'evidence': []}]}}),
     m.plan_problems({'wellness': {'suggestions': [{'title': 'Close one loop a week', 'detail': 'Pick one open plan or project each week, and send the single message that closes it: a date, a decision or a no.'}]}, 'careerAssessment': {'actions': [{'title': 'Close one open project loop', 'detail': 'Pick the side project with the most open threads, and send one message that decides its next step: a date, a scope or a pause.'}]}}),
@@ -2267,14 +2263,13 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
         (c[0].digest.match(/\(whole thread\)/g) || []).length === 3 && c[0].work === false && !c[0].r.stopped && /gate \[number\] regular|gate 429 regular/.test(c[0].digest) &&
         JSON.stringify(c[0].calls.filter(x => / thread /.test(x)).map(x => x.match(/T\d/)[0]).filter((x, i, a) => a.indexOf(x) === i).sort()) === '["T0","T1","T2"]' &&
         c[0].calls.findIndex(x => /^M top-recipients/.test(x)) < c[0].calls.findIndex(x => / thread /.test(x)) &&
-        !/Kai|Ana|Jun|Mei|mei\.t|@|U\d|I\d/.test(c[0].digest) && /^### Conversation 1: one-to-one, .*\(whole thread\)$/m.test(c[0].digest) && /^## Interests\n- Distance running$/m.test(c[0].digest) &&
+        !/Kai|Ana|Jun|Mei|mei\.t|@|U\d|I\d/.test(c[0].digest) && /^### Conversation 1: one-to-one, .*\(whole thread\)$/m.test(c[0].digest) && /^## Interests\n- Distance running$/m.test(c[0].digest) && !/INTERESTED/.test(c[0].digest) &&
         /^counts: 15 posts and stories .* 3 conversations read \(the busiest\) · 48 own messages read · 440 followers · 636 following · 10 saved$/m.test(c[0].digest) &&
         c[1].r.ok === true && /too many requests/.test(c[1].r.stopped) && (c[1].calls.some(x => /^M thread /.test(x)) && !c[1].calls.some(x => /^M thread .* --after /.test(x)) && c[1].calls.filter(x => /^M thread /.test(x)).length <= 3 && c[1].calls.length < c[0].calls.length) && c[1].r.read.threads === 0 &&
         c[2].r.ok === true && !c[2].calls.some(x => /^M /.test(x)) && /^--account-id must be/.test(c[3].r.problems[0]) && c[3].calls.length === 0 &&
         c[4].r.ok === true && c[4].r.read.threads === 3 && /^## Posts and stories/m.test(c[4].digest) && /reads: 1/.test(c[4].digest))(skillState.leaving && skillState.leaving.collect) &&
       ((g) => g.reading === 60 && g.fixing === 0 && g.writing === 240 && g.total === 310 && g.checks === 1)(require('../lib/timing.js').stages([['collect', -1900], ['check-digest', -1800], ['collect', -310],
         ['call:get_report_guide', -280], ['check-digest', -250], ['call:publish_psyche', -10]])) &&
-      /mark\('collect'\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
       /\*\*A first read in one command: collect\.\*\* For a first read \(or after starting over\), don't read Instagram yourself: run `python3 bin\/psyche\.py collect --account-id/.test(skillMd) &&
       /While it runs \(2 to 4 minutes\), don't wait idle: start it in the background where Muse allows it, then call get_report_guide and read its spec, rubric and outline/.test(skillMd) && /On a first read there's nothing to search memory for and no conversation list to open first/.test(skillMd) &&
       /Use its `rhythm` as given/.test(skillMd) && /It keeps no message as it came: what reaches disk is the digest/.test(skillMd) && /bin\/psyche\.py collect --account-id ID \[--messages-account-id ID\]/.test(skillMd),
@@ -2489,12 +2484,13 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
       const T = require('../lib/timing.js');
       const st = T.stages([['status', -600], ['call:get_report_guide', -560], ['check-digest', -200], ['check-digest', -150], ['call:publish_psyche', -20]]);
       const runs = (skillState.health && skillState.health.readTimings) || [];
-      check('a read\'s marks stay in Muse (README "Nothing about them leaves Muse"): the script notes only its commands\' names and when, sends them nowhere and clears them once a Psyche is shown; /health still reads stages from older releases, with no one\'s id or marks',
+      const py = fsx.readFileSync(pathx.join(dir, 'bin', 'psyche.py'), 'utf8');
+      check('the skill notes no timings at all (README "No timings in the skill"): no command times kept or sent, SKILL.md says nothing of them, an older release\'s file is cleared at show ready; /health still reads stages from older releases, with no one\'s id or marks',
         JSON.stringify(st) === JSON.stringify({ reading: 360, fixing: 50, writing: 130, saving: 20, total: 560, checks: 2 }) &&
-        (skillState.marks || []).includes('status') && (skillState.marks || []).includes('check-digest') && (skillState.marks || []).includes('call:start') &&
-        skillState.timingCleared === true && skillState.oldPdfGone === true && runs.length === 0 && !/\/skill\/timing/.test(fsx.readFileSync(pathx.join(dir, 'bin', 'psyche.py'), 'utf8')) &&
+        skillState.noTimingFile === true && skillState.oldPdfGone === true && runs.length === 0 && !/\/skill\/timing|def mark\(|send_timing|TIMING =/.test(py) &&
+        /os\.remove\(os\.path\.join\(HERE, '\.timing\.json'\)\)/.test(py) && !/how long each stage|notes when each of its commands/.test(require('../lib/skill.js').skillMd()) &&
         T.record({ marks: [['bad label!', -5], ['x', 5]] }).ok === false,
-        JSON.stringify({ st, marks: skillState.marks, cleared: skillState.timingCleared, runs }).slice(0, 600));
+        JSON.stringify({ st, noFile: skillState.noTimingFile, runs }).slice(0, 600));
     }
     {
       const P = skillState.parts || {};
@@ -3197,7 +3193,7 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     /there is no PDF, the report file is the whole report/.test(instructions.CORE_MUSE) &&
     /"Ask PsycheAI questions about myself", "Sync with a friend", "Add WhatsApp or Facebook", "More"/.test(instructions.CORE_MUSE) &&
     /There is no PDF: the report file is the whole report/.test(require('../lib/skill.js').skillMd()) && !/'Get the PDF'/.test(fsw.readFileSync(script, 'utf8')) &&
-    /out = local_publish\(args\) if argv\[1\] == 'publish_psyche' else call\(argv\[1\], args\)/.test(fsw.readFileSync(script, 'utf8')) && /side = \[threading\.Thread\(target=send_timing\)\]/.test(fsw.readFileSync(script, 'utf8')));
+    /out = local_publish\(args\) if argv\[1\] == 'publish_psyche' else call\(argv\[1\], args\)/.test(fsw.readFileSync(script, 'utf8')));
 }
 
 // ---------- the phone check (README "The phone check") ----------
@@ -3266,8 +3262,8 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     JSON.stringify([before, s.today]));
   check('the counts keep no address, id, code or user agent: a day, counts, and release numbers',
     keysOk && !/203\.0\.113|PsycheAI-skill|user|token/i.test(stored), stored.slice(0, 300));
-  check('the skill is unchanged for this: it still sends no timings, so the welcome\'s privacy line holds',
-    !/urlopen|fetch\(|post\(/.test((require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8').match(/def send_timing\(\):[\s\S]*?\n\n\n/) || [''])[0]));
+  check('the skill sends no timings, so the welcome\'s privacy line holds',
+    !/send_timing|\/skill\/timing/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
   if (saved === undefined) delete process.env.PSYCHE_ADMIN_SECRET; else process.env.PSYCHE_ADMIN_SECRET = saved;
   await new Promise(r => srv.close(r));
 }
