@@ -1230,7 +1230,7 @@
  },
  "deepSpec": "\n\n## Deep Psyche\nThis read is a Deep Psyche, which the user chose knowing it takes about 20 to 30 minutes. It is the same document to the same standards, from a sample about four times the reading plan's:\n- **About 800,000 characters of their own words at most:** posts and stories up to about 340,000 (comments up to about 40,000 of it); messages, when they agreed, up to about 440,000, across the 20 conversations they write in most, at most about 30,000 from any one; likes, saves, follows and searches up to about 30,000.\n- **A year at a time.** Read one year, oldest first, and keep short notes on it before the next: the dated moments that stand out, with counts; what keeps recurring; what started, stopped or changed since the year before. Then write the read from the notes, going back to the items themselves only for the evidence it cites.\n- **How they changed is part of the read:** trajectories, patterns and the confidence rationale use the years (\"ran most weeks 2019 to 2021, nothing since\"), and the rationale says it was a Deep Psyche and what was read, in counts, year by year.",
  "sync": {
-  "spec": "# A PsycheAI Sync: what it contains and the standards it meets\n\nA Sync is how two people get on: friends, family, anyone; never romance or dating. Both people agreed to it. It is written from each person's card-level profile (no report, no posts) and the derived facts, which are computed and settled. Person A is the user; person B is the other person. Each is called by the first name their profile gives.\n\n## What it contains: the same as a Sync on psycheai.io\nOne object matching the schema, in this order, shown to both people as one image (so each part is short enough to read there):\n1. **summary:** one warm line, under 25 words.\n2. **align:** two or three points: a title of a few words, two short sentences naming both people, and the evidence behind it.\n3. **differ:** two or three points, the same way, each with how the difference can work for them.\n4. **howToPartner:** three things for person A (forA) and three for person B (forB), each addressed to them as \"you\", one sentence of under about 120 characters; and two things they could do together.\n5. **caveats:** one or two sentences on what this cannot see.\n\n## Standards\n- Positive and encouraging throughout. Differences are differences with a way to make them work, never a fault in either person. No blame or labels, and no prediction that the connection will struggle.\n- The words tension, conflict, clash, friction, struggle, problem and incompatible are not used; \"difference\", \"disagreement\" or \"a different pace\" instead.\n- No score or percentage. The connection is never called a friendship or any other named relationship: \"you two\", \"your connection\".\n- Types are weighed in a sentence or two at most: E/I and S/N matter most, T/F less, J/P least; a score near 50 is a lean.\n- Only shared interests the derived facts list. Each point rests on something in the profiles, named in its evidence.\n- Profiles are inferences from social media; if either confidence is low, it is a conversation starter rather than a finding.",
+  "spec": "# A PsycheAI Sync: what it contains and the standards it meets\n\nA Sync is how two people get on: friends, family, anyone; never romance or dating. Both people agreed to it. It is written from each person's card-level profile (no report, no posts) and the derived facts, which are computed and settled. Person A is the user; person B is the other person. Each is called by the first name their profile gives.\n\n## What it contains: the same as a Sync on psycheai.io\nOne object matching the schema, in this order, shown to both people as one page (so each part is short enough to read there):\n1. **summary:** one warm line, under 25 words.\n2. **align:** two or three points: a title of a few words, two short sentences naming both people, and the evidence behind it.\n3. **differ:** two or three points, the same way, each with how the difference can work for them.\n4. **howToPartner:** three things for person A (forA) and three for person B (forB), each addressed to them as \"you\", one sentence of under about 120 characters; and two things they could do together.\n5. **caveats:** one or two sentences on what this cannot see.\n6. **inCommon** (optional): what the two of them share, as the page's \"What you share\". Up to four interests and three values, each a theme of a few words with each person's own item from their profile, word for word: an exact match is its own theme (\"Reading\"), and two different items share a theme only when it honestly covers both (pickleball and tennis: \"Racquet sports\"). Nothing is better than a stretch.\n\n## Standards\n- Positive and encouraging throughout. Differences are differences with a way to make them work, never a fault in either person. No blame or labels, and no prediction that the connection will struggle.\n- The words tension, conflict, clash, friction, struggle, problem and incompatible are not used; \"difference\", \"disagreement\" or \"a different pace\" instead.\n- No score or percentage. The connection is never called a friendship or any other named relationship: \"you two\", \"your connection\".\n- Types are weighed in a sentence or two at most: E/I and S/N matter most, T/F less, J/P least; a score near 50 is a lean.\n- Shared interests are the ones the derived facts list, plus those inCommon names under a theme that covers both. Each point rests on something in the profiles, named in its evidence.\n- Profiles are inferences from social media; if either confidence is low, it is a conversation starter rather than a finding.",
   "brief": "These two may be friends, family or anyone else close, and you are not told which. How they sync, vibe and relate turns on shared interests and activities, compatible energy, a similar appetite for contact, how each shows care, and how easily things flow between them. Whether they would actually enjoy time together matters more than any label. Nothing here is about romance or dating, and nothing should read that way.\n\nWhat matters most, in this order:\n  - Shared interests\n  - Energy match\n  - Appetite for contact\n  - How easily things flow\n  - Outlook and values\n\nThe fields that decide those most: interests, energy (how they keep in touch), extraversion, conflictStyle, agreeableness, values, loveReceiving and loveGiving (how each shows care).",
   "schema": {
    "type": "object",
@@ -1350,6 +1350,69 @@
     "caveats": {
      "type": "string",
      "description": "One or two sentences on what this read cannot see."
+    },
+    "inCommon": {
+     "type": "object",
+     "additionalProperties": false,
+     "description": "What the two of them share, shown as \"What you share\": interests and values, each under a theme that covers both. Leave out anything that is a stretch.",
+     "properties": {
+      "interests": {
+       "type": "array",
+       "maxItems": 4,
+       "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "theme",
+         "a",
+         "b"
+        ],
+        "properties": {
+         "theme": {
+          "type": "string",
+          "description": "A few words that honestly cover both: the item itself when they match (\"Reading\"), or what two different ones share (\"Racquet sports\")."
+         },
+         "a": {
+          "type": "string",
+          "description": "The first person's own item, word for word from their profile."
+         },
+         "b": {
+          "type": "string",
+          "description": "The second person's own item, word for word from their profile."
+         }
+        }
+       },
+       "description": "Up to four interests they share, from each profile's interests."
+      },
+      "values": {
+       "type": "array",
+       "maxItems": 3,
+       "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "theme",
+         "a",
+         "b"
+        ],
+        "properties": {
+         "theme": {
+          "type": "string",
+          "description": "A few words that honestly cover both: the item itself when they match (\"Reading\"), or what two different ones share (\"Racquet sports\")."
+         },
+         "a": {
+          "type": "string",
+          "description": "The first person's own item, word for word from their profile."
+         },
+         "b": {
+          "type": "string",
+          "description": "The second person's own item, word for word from their profile."
+         }
+        }
+       },
+       "description": "Up to three values they share, from each profile's values."
+      }
+     }
     }
    }
   }

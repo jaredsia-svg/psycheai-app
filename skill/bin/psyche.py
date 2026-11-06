@@ -83,7 +83,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 162
+RELEASE = 163
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -108,7 +108,7 @@ CORRECTIONS_KEPT = os.path.join(KEEP, 'corrections.json')
 # signed"): what Muse is asked to write comes from here, never from a server.
 GUIDE = os.path.join(HERE, 'guide.json')
 SYNC_TASK = ('\n\nWrite the Sync as one JSON object matching the schema, with "mode" set to "platonic", then call save_sync with it as answer. '
-             "Don't write it in the chat: save_sync gives back its PDF, which holds all of it.")
+             "Don't write it in the chat: save_sync gives back its page, which holds all of it.")
 KEYS = os.path.join(HERE, '.keys.json')
 KEYS_KEPT = os.path.join(KEEP, 'keys.json')
 SYNC_CODE = re.compile(r'/sync/([A-Za-z0-9_-]{22})(?![A-Za-z0-9_-])')
@@ -810,6 +810,299 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + roast
             + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + '</script></body></html>')
+
+
+# ---------- the Sync, as a page made here (README "The Sync is a page") ----------
+# get_sync and save_sync, asked with html, send the Sync as this person reads it and both cards; the page
+# is laid out here and saved in out/syncs/, and only its path goes on to Muse: the Sync's words and the
+# friend's card never pass through a tool result. Both cards small (tap for full size), the one line, then
+# everything open: MBTI, the Big Five, what motivates them, what they share, align, differ, tips, how read.
+SYNC_A, SYNC_B = '#7b3fa0', '#d1477a'
+SYNC_DIR = os.path.join(OUT, 'syncs')       # apart from out/'s own files: the report's write clears out/*.html
+MOTIVE_ORDER = ['self-direction', 'stimulation', 'hedonism', 'achievement', 'power', 'security', 'conformity', 'tradition', 'benevolence', 'universalism']
+SYNC_TRAITS = [('openness', 'Openness'), ('conscientiousness', 'Conscientious'), ('extraversion', 'Extraversion'), ('agreeableness', 'Agreeable'), ('neuroticism', 'Sensitivity')]
+SYNC_ART = ('<svg class="link" viewBox="0 0 120 120" aria-hidden="true"><defs>'
+            '<linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7b3fa0"/><stop offset="1" stop-color="#d1477a"/></linearGradient>'
+            '<radialGradient id="sglow"><stop offset="0" stop-color="#ffd9ec" stop-opacity=".9"/><stop offset="1" stop-color="#ffd9ec" stop-opacity="0"/></radialGradient></defs>'
+            '<circle cx="60" cy="60" r="58" fill="url(#sglow)"/>'
+            '<g class="spin"><circle cx="46" cy="60" r="24" fill="none" stroke="url(#sg)" stroke-width="5"/><circle cx="74" cy="60" r="24" fill="none" stroke="url(#sg)" stroke-width="5" stroke-opacity=".85"/></g>'
+            '<path class="beat" d="M60 70c-7-5-12-9-12-14a6 6 0 0 1 12-2 6 6 0 0 1 12 2c0 5-5 9-12 14z" fill="url(#sg)"/>'
+            '<g fill="#f2b84b"><path class="tw" d="M18 22l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/><path class="tw d2" d="M100 16l1.5 4.5 4.5 1.5-4.5 1.5-1.5 4.5-1.5-4.5-4.5-1.5 4.5-1.5z"/>'
+            '<path class="tw d3" d="M98 96l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></g></svg>')
+SYNC_CSS = '''
+.box{background:#fff;border:1px solid #e6dcec;border-top:4px solid var(--c);border-radius:20px;margin:0 0 14px;padding:4px 18px 18px;box-shadow:0 1px 2px rgba(36,26,46,.04),0 10px 30px rgba(36,26,46,.06)}
+.box>h2{display:flex;align-items:baseline;gap:12px;margin:14px 0 4px;font-size:21px;letter-spacing:-.01em}
+.box>h2 i{font-style:normal;font-weight:800;font-size:22px;color:var(--c)}
+.duo{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 70px minmax(0,1fr);align-items:start;gap:6px;margin-top:18px;padding:16px 6px 10px;border-radius:18px;background:radial-gradient(120% 90% at 50% 30%,#fbf1f8 0%,#fff 70%)}
+.duo .beam{position:absolute;left:26%;right:26%;top:92px;height:3px;border-radius:3px;background:linear-gradient(90deg,#7b3fa0,#d1477a);opacity:.35}
+.who{position:relative;text-align:center}
+.who button{all:unset;cursor:pointer;display:block;width:84px;max-width:100%;margin:0 auto;-webkit-tap-highlight-color:transparent}
+.who img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:10px;border:2px solid #fff;box-shadow:0 8px 22px rgba(91,42,134,.25)}
+.who .nopic{display:flex;align-items:center;justify-content:center;width:84px;aspect-ratio:9/16;margin:0 auto;border-radius:10px;background:linear-gradient(135deg,#7b3fa0,#d1477a);color:#fff;font-weight:800;font-size:26px}
+.who small{display:block;margin-top:10px;font-size:10px;font-weight:800;letter-spacing:.06em;white-space:nowrap;text-transform:uppercase;color:var(--mute)}
+.who b{display:block;font-size:18px;line-height:1.15;background:linear-gradient(135deg,#7b3fa0,#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.who span{display:block;font-size:12px;color:var(--mute);line-height:1.35;margin-top:3px}
+.who em{display:block;margin-top:5px;font-style:normal;font-size:10.5px;font-weight:700;color:var(--accent);opacity:.75}
+.mid{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;margin-top:38px}
+.mid .link{width:70px;height:70px}
+.mid i{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#c2366d;margin-top:2px}
+.spin{transform-origin:60px 60px;animation:spin 14s linear infinite}
+.beat{transform-origin:60px 60px;animation:beat 1.8s ease-in-out infinite}
+.tw{transform-box:fill-box;transform-origin:center;animation:tw 2.4s ease-in-out infinite}.tw.d2{animation-delay:.8s}.tw.d3{animation-delay:1.6s}
+@keyframes spin{to{transform:rotate(360deg)}}@keyframes beat{50%{transform:scale(1.12)}}@keyframes tw{50%{transform:scale(.4);opacity:.4}}
+@media (min-width:700px){.who button,.who .nopic{width:132px}.duo{grid-template-columns:minmax(0,1fr) 110px minmax(0,1fr)}.duo .beam{top:128px}.mid{margin-top:72px}.mid .link{width:86px;height:86px}.who small{font-size:11px}.who b{font-size:21px}.who span{font-size:13px}}
+@media (prefers-reduced-motion:reduce){.spin,.beat,.tw{animation:none}}
+.oneline{margin-top:14px;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#f3e9f8,#fdf0f6);border:1px solid #ead9f1;font-size:16.5px;line-height:1.45;font-weight:650;color:#3b2a49}
+.oneline small{display:block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin-bottom:4px}
+.key{display:flex;gap:14px;font-size:12.5px;color:var(--soft);margin:0 0 8px}
+.key i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.mb{display:grid;grid-template-columns:52px repeat(4,1fr);gap:4px;align-items:center}
+.mb span{font-size:13px;font-weight:650}
+.mb b{display:block;text-align:center;font-size:20px;padding:4px 0;border-radius:8px}
+.mb b.s{background:#e3f4ec;color:#22654a}
+.note{margin:8px 0 0;font-size:13.5px;color:var(--soft)}
+.db{display:grid;grid-template-columns:104px 1fr 54px;gap:6px 10px;align-items:center}
+.db>span{font-size:13.5px;font-weight:650}
+.db>em{font-style:normal;font-size:12.5px;text-align:right;color:var(--mute);white-space:nowrap}
+.db>em b:first-child{color:#7b3fa0}.db>em b:last-child{color:#d1477a}
+.tr{position:relative;height:22px}
+.tr:before{content:"";position:absolute;left:0;right:0;top:10px;height:2px;border-radius:2px;background:#eee6f2}
+.tr .gap{position:absolute;top:9px;height:4px;border-radius:4px;background:#e2cfe9}
+.tr .d{position:absolute;top:4px;width:14px;height:14px;margin-left:-7px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.ends{display:grid;grid-template-columns:104px 1fr 54px;gap:10px;font-size:10.5px;color:var(--mute);font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-top:2px}
+.ends div{display:flex;justify-content:space-between}
+.radar2{display:block;width:100%;max-width:420px;margin:0 auto}
+.radar2 text{font-size:11px;fill:#5a4f66}
+.radar2 text.top{font-weight:700;fill:#241a2e}
+.tops{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;font-size:13.5px}
+.tops div{padding:10px 12px;border-radius:12px;background:#faf6fc;border:1px solid #efe6f4}
+.tops b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.shared{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.sh{padding:12px;border-radius:14px;background:#eef8f2;border:1px solid #cfe9db}
+.sh p{margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#22654a}
+.sh ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.sh li{padding:7px 9px;border-radius:10px;background:#fff}
+.sh li b{display:block;font-size:13.5px;line-height:1.3;color:#1f5a42}
+.sh li span{display:block;font-size:11.5px;line-height:1.35;color:var(--mute);margin-top:2px}
+.sh li i{font-style:normal;font-weight:700}.sh li i.ia{color:#7b3fa0}.sh li i.ib{color:#d1477a}
+.sh li.none{color:var(--mute);font-size:13px}
+.tips h4{margin:14px 0 6px;font-size:15px}
+.tips ul{margin:0;padding-left:20px}.tips li{margin:4px 0}
+.tips .both{margin-top:16px;padding:12px 14px;border-radius:14px;background:#fdf0f6;border:1px solid #f4d6e4}
+.tips .both h4{margin-top:0}
+.conf{display:grid;grid-template-columns:auto 1fr auto;gap:8px 10px;align-items:center;font-size:13.5px;margin-top:10px}
+.conf div{height:8px;border-radius:99px;background:#f1eaf5;overflow:hidden}.conf div i{display:block;height:100%;border-radius:99px}
+.viewer{position:fixed;inset:0;z-index:20;background:rgba(20,12,28,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+.viewer[hidden]{display:none}
+.viewer img{max-width:100%;max-height:calc(100vh - 60px);border-radius:14px}
+.viewer span{margin-top:10px;color:#fff;opacity:.75;font-size:13px}
+'''
+SYNC_JS = '''(function(){var v=document.getElementById('viewer');if(!v)return;var big=v.querySelector('img');
+[].slice.call(document.querySelectorAll('[data-big]')).forEach(function(b){b.addEventListener('click',function(){var s=b.querySelector('img');big.src=s.src;big.alt=s.alt;v.hidden=false;});});
+v.addEventListener('click',function(){v.hidden=true;});document.addEventListener('keydown',function(e){if(e.key==='Escape')v.hidden=true;});})();'''
+
+
+def _first(card):
+    return (str((card or {}).get('firstName') or '').split(' ') or [''])[0] or 'Them'
+
+
+def _sync_mbti(a, b, na, nb):
+    ta, tb = str(a.get('mbti') or ''), str(b.get('mbti') or '')
+    if not (re.match(r'^[EI][NS][TF][JP]$', ta) and re.match(r'^[EI][NS][TF][JP]$', tb)):
+        return ''
+    same = [ta[i] == tb[i] for i in range(4)]
+    rows = ''.join('<span style="color:%s">%s</span>' % (col, _e(n)) + ''.join('<b class="%s">%s</b>' % ('s' if same[i] else '', t[i]) for i in range(4))
+                   for t, n, col in ((ta, na, SYNC_A), (tb, nb, SYNC_B)))
+    shared = ', '.join(ta[i] for i in range(4) if same[i])
+    note = ('%s and %s: you share <b>%s</b>, and differ on the other %d.' % (ta, tb, shared, 4 - sum(same)) if shared
+            else '%s and %s: no letter in common, which can make for a lot to learn from each other.' % (ta, tb))
+    return '<div class="mb">' + rows + '</div><p class="note">' + note + '</p>'
+
+
+def _sync_key(na, nb):
+    return '<div class="key"><span><i style="background:%s"></i>%s</span><span><i style="background:%s"></i>%s</span></div>' % (SYNC_A, _e(na), SYNC_B, _e(nb))
+
+
+def _sync_five(a, b, na, nb):
+    fa, fb = a.get('bigFive') or {}, b.get('bigFive') or {}
+    rows, close, far = [], [], []
+    for k, label in SYNC_TRAITS:
+        x, y = _num(fa.get(k)), _num(fb.get(k))
+        if x is None or y is None:
+            continue
+        lo, hi = min(x, y), max(x, y)
+        (close if hi - lo <= 10 else far if hi - lo > 25 else []).append(label.lower())
+        rows.append('<span>%s</span><div class="tr"><div class="gap" style="left:%d%%;width:%d%%"></div><div class="d" style="left:%d%%;background:%s"></div>'
+                    '<div class="d" style="left:%d%%;background:%s"></div></div><em><b>%d</b> · <b>%d</b></em>' % (label, lo, hi - lo, x, SYNC_A, y, SYNC_B, x, y))
+    if not rows:
+        return ''
+    note = '; '.join(x for x in ['Closest on ' + ' and '.join(close) if close else '', 'furthest apart on ' + ' and '.join(far) if far else ''] if x)
+    return (_sync_key(na, nb) + '<div class="db">' + ''.join(rows) + '</div><div class="ends"><span></span><div><span>Low</span><span>High</span></div><span></span></div>'
+            + ('<p class="note">' + _cap(note) + '.</p>' if note else ''))
+
+
+def _sync_tops(card):
+    """A card's top three motivations as keys, from their names on the card."""
+    by = {v.lower(): k for k, v in MOTIVATOR_LABELS.items()}
+    return [by[m.lower()] for m in _l(card.get('motivators')) if isinstance(m, str) and m.lower() in by][:3]
+
+
+def _sync_motives(a, b, na, nb):
+    ta, tb = _sync_tops(a), _sync_tops(b)
+    tops = ('<div class="tops">' + ''.join('<div><b style="color:%s">%s’s top three</b>%s</div>' % (col, _e(n), _e(', '.join(MOTIVATOR_LABELS[k] for k in t)))
+                                           for t, n, col in ((ta, na, SYNC_A), (tb, nb, SYNC_B)) if t) + '</div>') if ta or tb else ''
+    both = [MOTIVATOR_LABELS[k] for k in ta if k in tb]
+    note = '<p class="note">You share <b>%s</b> in your top three.</p>' % _e(', '.join(both)) if both else ''
+    ma, mb = a.get('motives'), b.get('motives')
+    if not (isinstance(ma, dict) and isinstance(mb, dict) and all(_num(ma.get(k)) is not None and _num(mb.get(k)) is not None for k in MOTIVE_ORDER)):
+        return tops + note            # a card from before this release carries no scores: the top threes alone
+    R, n = 92, len(MOTIVE_ORDER)
+    f = lambda v: ('%.1f' % v).rstrip('0').rstrip('.')
+    ang = lambda i: -math.pi / 2 + 2 * math.pi * i / n
+    pt = lambda i, s: (R * s / 100 * math.cos(ang(i)), R * s / 100 * math.sin(ang(i)))
+    svg = []
+    for ring in (25, 50, 75, 100):
+        svg.append('<polygon points="%s" fill="none" stroke="#e8e0ee" stroke-width="1"/>' % ' '.join(f(R * ring / 100 * math.cos(ang(i))) + ',' + f(R * ring / 100 * math.sin(ang(i))) for i in range(n)))
+    for i in range(n):
+        svg.append('<line x1="0" y1="0" x2="%s" y2="%s" stroke="#e8e0ee"/>' % (f(R * math.cos(ang(i))), f(R * math.sin(ang(i)))))
+    for m, t, col in ((ma, ta, SYNC_A), (mb, tb, SYNC_B)):
+        svg.append('<polygon points="%s" fill="%s" fill-opacity=".14" stroke="%s" stroke-width="2" stroke-linejoin="round"/>'
+                   % (' '.join('%s,%s' % tuple(map(f, pt(i, _num(m[k])))) for i, k in enumerate(MOTIVE_ORDER)), col, col))
+        for i, k in enumerate(MOTIVE_ORDER):
+            if k in t:
+                x, y = pt(i, _num(m[k]))
+                svg.append('<circle cx="%s" cy="%s" r="5" fill="%s" stroke="#fff" stroke-width="2"/>' % (f(x), f(y), col))
+    for i, k in enumerate(MOTIVE_ORDER):
+        a_ = ang(i)
+        lx, ly = (R + 12) * math.cos(a_), (R + 12) * math.sin(a_)
+        anchor = 'middle' if abs(math.cos(a_)) < 0.3 else ('start' if math.cos(a_) > 0 else 'end')
+        lines = _wrap(MOTIVATOR_LABELS[k])
+        dy0 = -13 * (len(lines) - 1) if math.sin(a_) < -0.3 else (10 if math.sin(a_) > 0.3 else 4 - 6.5 * (len(lines) - 1))
+        svg.append('<text class="%s" x="%s" y="%s" text-anchor="%s">%s</text>' % ('top' if k in ta or k in tb else '', f(lx), f(ly), anchor,
+                   ''.join('<tspan x="%s" dy="%s">%s</tspan>' % (f(lx), f(dy0) if j == 0 else '13', _e(w)) for j, w in enumerate(lines))))
+    return (_sync_key(na, nb) + '<svg class="radar2" viewBox="-190 -132 380 270" role="img" aria-label="Both of your ten motivations">' + ''.join(svg) + '</svg>'
+            + tops + note)
+
+
+def _sync_shared(report, a, b, na, nb):
+    """What you share: the Sync's own themes, or, for a Sync from before them, the exact matches on the two cards."""
+    common = report.get('inCommon') if isinstance(report.get('inCommon'), dict) else None
+    if common is None:
+        same = lambda xs, ys: [{'theme': x, 'a': x, 'b': x} for x in _l(xs) if isinstance(x, str) and x.lower() in [str(y).lower() for y in _l(ys)]]
+        common = {'interests': same(a.get('interests'), b.get('interests')), 'values': same(a.get('values'), b.get('values'))}
+
+    def column(title, items):
+        items = [x for x in _l(items) if isinstance(x, dict) and x.get('theme')]
+        rows = ''.join('<li><b>%s</b>%s</li>' % (_e(x['theme']), '' if str(x.get('a')).lower() == str(x.get('b')).lower() == str(x['theme']).lower() else
+                       '<span><i class="ia">%s</i> %s</span><span><i class="ib">%s</i> %s</span>' % (_e(na), _e(x.get('a')), _e(nb), _e(x.get('b')))) for x in items)
+        return '<div class="sh"><p>%s</p><ul>%s</ul></div>' % (title, rows or '<li class="none">None in common yet</li>')
+    if not (_l(common.get('interests')) or _l(common.get('values'))):
+        return ''
+    return '<div class="shared">' + column('Interests', common.get('interests')) + column('Values', common.get('values')) + '</div>'
+
+
+def _sync_points(items, lead):
+    pts = [p for p in _l(items) if isinstance(p, dict) and p.get('title')]
+    return ('<p class="soft def">' + _e(lead) + '</p>' + ''.join(
+        '<div class="pat"><span class="n">%d</span><div><b>%s</b><span class="soft">%s</span>%s</div></div>' % (i + 1, _e(p['title']), _e(p.get('detail')), _ev(p.get('evidence')))
+        for i, p in enumerate(pts))) if pts else ''
+
+
+def sync_html(report, me, them, pics=None, when=''):
+    """The Sync as one self-contained page: report as this person reads it (forA is theirs), me and them the two cards."""
+    if not isinstance(report, dict) or not report.get('summary'):
+        return None
+    me, them, pics = me if isinstance(me, dict) else {}, them if isinstance(them, dict) else {}, pics or {}
+    na, nb = _first(me), _first(them)
+    if na == nb:
+        nb = nb + ' (them)'
+
+    def who(card, n, key):
+        pic = pics.get(key)
+        img = ('<button type="button" data-big="1" aria-label="Open %s’s Psyche Card full size"><img alt="%s’s Psyche Card" src="%s"><em>Tap to open</em></button>'
+               % (_e(n), _e(n), _img_src(pic)) if pic else '<div class="nopic">%s</div>' % _e(n[:1]))
+        return ('<div class="who">' + img + ('<small>%s is most like</small><b>%s</b>' % (_e(n), _e(card.get('character'))) if card.get('character') else '')
+                + ('<span>%s</span>' % _e(card.get('headline')) if card.get('headline') else '') + '</div>')
+    duo = ('<div class="duo"><div class="beam"></div>' + who(me, na, 'me') + '<div class="mid">' + SYNC_ART + '<i>In sync</i></div>' + who(them, nb, 'them') + '</div>'
+           + '<div class="oneline"><small>In one line</small>' + _e(report['summary']) + '</div>')
+    glance = (_block('MBTI', _sync_mbti(me, them, na, nb)) + _block('Big Five', _sync_five(me, them, na, nb))
+              + _block('What motivates you', _sync_motives(me, them, na, nb)) + _block('What you share', _sync_shared(report, me, them, na, nb)))
+    play = report.get('howToPartner') if isinstance(report.get('howToPartner'), dict) else {}
+    li = lambda xs: '<ul>' + ''.join('<li>' + _e(x) + '</li>' for x in _l(xs) if isinstance(x, str)) + '</ul>'
+    tips = ('<div class="tips">' + ('<h4>For you, %s</h4>' % _e(na) + li(play.get('forA')) if _l(play.get('forA')) else '')
+            + ('<h4>For %s</h4>' % _e(nb) + li(play.get('forB')) if _l(play.get('forB')) else '')
+            + ('<div class="both"><h4>Both of you</h4>' + li(play.get('together')) + '</div>' if _l(play.get('together')) else '') + '</div>')
+    conf = ''.join('<span>%s</span><div><i style="width:%d%%;background:%s"></i></div><b>%d%%</b>' % (_e(n), _num(c.get('confidence')), col, _num(c.get('confidence')))
+                   for c, n, col in ((me, na, SYNC_A), (them, nb, SYNC_B)) if _num(c.get('confidence')) is not None)
+    how = (('<p style="margin-top:6px">' + _e(report.get('caveats')) + '</p>' if report.get('caveats') else '')
+           + ('<p class="soft" style="margin-bottom:0">Confidence score. The lower of the two is as far as this Sync can be trusted.</p><div class="conf">' + conf + '</div>' if conf else ''))
+    sections = [('You two', '#7b3fa0', duo), ('At a glance', '#2d5fa8', glance),
+                ('Where you align', '#2f7d6b', _sync_points(report.get('align'), 'What you have in common, or what suits each other, sharpest first.')),
+                ('Where you differ', '#c2571a', _sync_points(report.get('differ'), 'Real differences, and how each can work for you.')),
+                ('How to relate better', '#c2366d', tips), ('How this was read', '#6a4bb5', how)]
+    body = ''.join('<section class="box" style="--c:%s"><h2><i>%02d</i>%s</h2>%s</section>' % (c, i, _e(t), inner)
+                   for i, (t, c, inner) in enumerate((s for s in sections if s[2])))
+    title = '%s & %s · Psyche Sync' % (na, nb)
+    banner = ('<header class="banner" id="top">' + W_LOGO + '<div class="row"><div class="txt"><div class="facts">Psyche Sync</div>'
+              '<h1>' + _e(na) + ' &amp; ' + _e(nb) + '</h1><p class="lede">How you two click, from both your Psyche Cards: where you align, where you differ, and how to make the most of both.</p>'
+              + '<div class="sub">' + _e(' · '.join(x for x in [when, 'written by Muse'] if x)) + '</div></div></div></header>')
+    viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>' if pics else ''
+    foot = '<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace.</footer>'
+    return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
+            '<title>' + _e(title) + '</title><style>' + W_CSS + SYNC_CSS + '</style></head><body><div class="wrap">' + banner + '<div style="height:14px"></div>'
+            + body + foot + '</div>' + viewer + '<script>' + SYNC_JS + '</script></body></html>')
+
+
+def sync_card_pics(me, them):
+    """Both cards as pictures for the page: their own as it is in out/ (the one they have), the friend's drawn
+    here from the card the Sync holds. Either is left out if it can't be made; the page shows a letter instead."""
+    pics = {}
+    try:
+        own = sorted(f for f in os.listdir(OUT) if f.lower().endswith('.png'))
+        if own:
+            pics['me'] = report_card_b64(os.path.join(OUT, own[-1]))
+    except OSError:
+        pass
+    for key, card in (('me', me), ('them', them)):
+        if key in pics or not isinstance(card, dict) or not card.get('character'):
+            continue
+        tmp = None
+        try:
+            fd, tmp = tempfile.mkstemp(suffix='.png')
+            os.close(fd)
+            draw_card(card, tmp)
+            pics[key] = report_card_b64(tmp)
+        except Exception:            # no Pillow, no card art, or a card it can't draw: the page goes without
+            pass
+        finally:
+            if tmp and os.path.exists(tmp):
+                os.remove(tmp)
+    return pics
+
+
+def save_sync_page(content):
+    """Lay out the Sync get_sync or save_sync sent (content) and save it in out/syncs/: its path, or None."""
+    if not isinstance(content, dict):
+        return None
+    cards = content.get('cards') if isinstance(content.get('cards'), dict) else {}
+    me, them = cards.get('me') or {}, cards.get('them') or {}
+    try:
+        when = datetime.fromtimestamp(int(content.get('at')) / 1000).strftime('%-d %B %Y') if content.get('at') else ''
+    except (TypeError, ValueError, OverflowError, OSError):
+        when = ''
+    page = sync_html(content.get('report'), me, them, sync_card_pics(me, them), when)
+    if not page:
+        return None
+    name = re.sub(r'-{2,}', '-', re.sub(r'[^\w-]+', '-', 'Psyche-Sync-%s-%s' % (_first(me), _first(them)))).strip('-')
+    try:
+        os.makedirs(SYNC_DIR, exist_ok=True)
+        path = os.path.join(SYNC_DIR, name + '.html')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(page)
+        os.chmod(path, 0o600)
+        return path
+    except OSError:
+        return None
 
 
 # ---------- the phone check (README "The phone check") ----------
@@ -4221,10 +4514,21 @@ def known_label(label):
     return isinstance(label, str) and (label in LABELS or any(f.match(label) for f in LABEL_FORMS))
 
 
+def kept_item(v):
+    """A list item stays unless it's a button with a label this release doesn't know. A Sync in get_syncs
+    carries its name as label ("Yvonne"), so it's held to the button it makes, "Show my Sync with Yvonne":
+    dropping it took the Sync's id with it, and get_sync can't open a Sync without one (README "A Sync's id kept")."""
+    if not (isinstance(v, dict) and 'label' in v):
+        return True
+    if isinstance(v.get('sync'), str) and isinstance(v['label'], str):
+        return known_label('Show my Sync with ' + v['label'])
+    return known_label(v['label'])
+
+
 def clean_result(value):
     """The result with its unsigned lines left out and only known buttons kept."""
     if isinstance(value, list):
-        return [clean_result(v) for v in value if not (isinstance(v, dict) and 'label' in v and not known_label(v['label']))]
+        return [clean_result(v) for v in value if kept_item(v)]
     if not isinstance(value, dict):
         return value
     out = {}
@@ -4264,6 +4568,22 @@ def ask_ideas(patterns=None, n=4):
 
 
 SYNC_SENDS_CARD = ('sync_link', 'sync_with', 'get_syncs', 'get_sync', 'save_sync')
+SYNC_PAGE_TOOLS = ('get_sync', 'save_sync')
+
+
+def sync_card(answer, name):
+    """The card a Sync uses: the card summary and, only here, their ten motivation scores (README "What motivates
+    you, side by side"), so a friend's Sync can draw both on one chart. Numbers only, under the ten fixed names;
+    a Psyche on its own (publish_psyche's card) never carries them."""
+    card = card_summary(answer, name)
+    scores = {}
+    for m in _ls(_at(answer if isinstance(answer, dict) else {}, 'motivators', 'scores')):
+        k, v = _at(m, 'value'), _num(_at(m, 'score'))
+        if k in MOTIVATOR_LABELS and v is not None:
+            scores[k] = v
+    if len(scores) == len(MOTIVATOR_LABELS):
+        card['motives'] = scores
+    return card
 
 
 def call(tool, args, first=False):
@@ -4275,11 +4595,13 @@ def call(tool, args, first=False):
     if tool in SYNC_SENDS_CARD:
         kept = read_first([REPORT, REPORT_KEPT]) or {}
         if isinstance(kept.get('report'), dict):
-            saved_card = call('save_card', {'card': card_summary(kept['report'], kept.get('name') or '')})
+            saved_card = call('save_card', {'card': sync_card(kept['report'], kept.get('name') or '')})
             if isinstance(saved_card, dict) and saved_card.get('error'):
                 return saved_card
     if tool == 'sync_with':
         keep_keys(text=args.get('link'))     # the code in a friend's link is the key to their card and your Sync
+    if tool in SYNC_PAGE_TOOLS:
+        args = dict(args, html=True)         # the Sync comes back to be laid out here (README "The Sync is a page")
     msg = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': tool, 'arguments': args}}
     status, body = post('/mcp', msg, acc['access_token'], extra=key_headers())
     if status == 401:
@@ -4299,8 +4621,17 @@ def call(tool, args, first=False):
         back = out.pop('returning', None)
         if isinstance(back, dict) and not first and read_first([REPORT, REPORT_KEPT]):
             out = back
+    content = out.pop('content', None) if isinstance(out, dict) else None
     out = clean_result(with_pinned_guide(tool, args, out))
     files = [c for c in result.get('content', []) if c.get('type') == 'resource_link']
+    if tool in SYNC_PAGE_TOOLS and content is not None:
+        # Only the page's path goes on to Muse: the Sync's words and the friend's card stay in the file.
+        path = save_sync_page(content)
+        if path:
+            for k in ('attach', 'pdf', 'image', 'page'):
+                out.pop(k, None)
+            out['file'] = path
+            return out
     if files:
         out['files'] = files
     return out
@@ -4605,7 +4936,9 @@ def main(argv):
         return
     if argv[0] == 'status':
         account()
-        out = {'ok': True, 'connected': True, 'version': local_version()}
+        # hasPsyche: whether this workspace keeps their Psyche, so a friend's Sync link goes straight to
+        # the Sync rather than a welcome and a new read (README "Already have a Psyche"). Read here, sent nowhere.
+        out = {'ok': True, 'connected': True, 'version': local_version(), 'hasPsyche': bool(read_first([REPORT, REPORT_KEPT]))}
         try:
             latest = json.loads(get('/skill/files').decode()).get('version')
             out['update_available'] = bool(latest and latest != out['version'])
