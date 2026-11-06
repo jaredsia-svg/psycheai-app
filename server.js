@@ -324,7 +324,7 @@ async function route(req, res) {
     // gets a page.
     // /sync on its own is a locked link (README "Sync, locked on the device"): /sync#<code>, whose code a fetch never sends, so it answers as /install does.
     // /skill too (README "psycheai.io/skill"): psycheai.io's Worker passes /skill/… here, so /skill/ answers as /install.
-    const shortPath = /^\/(?:install|p|sync|skill)\/?$/.test(url.pathname) ? [url.pathname, undefined]
+    const shortPath = /^\/(?:install|p|sync|skill|together)\/?$/.test(url.pathname) ? [url.pathname, undefined]
       : /^\/(?:sync|p)\/([A-Za-z0-9_-]{22}|[a-z2-9]{8})\/?$/.exec(url.pathname);
     if (shortPath && req.method === 'GET') {
       const code = shortPath[1];

@@ -2099,6 +2099,68 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         E.skillRoute = await Promise.all(['/skill', '/skill/'].map(async x => (await fetch(base + x)).text()));
         skillState.e2e = E;
       }
+      // Psyche Together (README "Psyche Together"): two workspaces, a private questionnaire each, one joint read; nothing readable on the server,
+      // advice-only and safety answers never boxed, and a safety answer that flags stops the profile on the device.
+      {
+        const answerFor = (character, mbti) => ({ essence: { character, why: 'Steps up.' }, card: { headline: character + ' headline' }, mbti: { type: mbti, letters: mbti.split('').map(choice => ({ choice, strength: 'slight' })) },
+          bigFive: Object.fromEntries(['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism'].map((k, i) => [k, { score: 30 + i * 11 }])), interests: [{ name: 'Reading' }], values: [{ value: 'Craft' }],
+          topMotivators: ['benevolence'], attachment: { style: 'Leans secure' }, relationship: { loveLanguages: { giving: [{ language: 'Acts of service' }], receiving: [{ language: 'Quality time' }] } }, confidence: { score: 80 } });
+        const space = (name, answer) => {
+          const d = fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tg-')), k = fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tg-home-'));
+          fsx.mkdirSync(pathx.join(d, 'bin'));
+          fsx.writeFileSync(pathx.join(d, 'bin', 'psyche.py'), fsx.readFileSync(pathx.join(dir, 'bin', 'psyche.py')));
+          fsx.copyFileSync(new URL('../skill/guide.json', import.meta.url), pathx.join(d, 'guide.json'));
+          fsx.writeFileSync(pathx.join(d, 'report.json'), JSON.stringify({ report: answer, name }));
+          const go = async (...args) => JSON.parse((await execFile('python3', [pathx.join(d, 'bin', 'psyche.py'), ...args], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: k, NO_PROXY: '*', no_proxy: '*' }, timeout: 60000 })).stdout);
+          go.dir = d;
+          return go;
+        };
+        const answerAll = async (go, pick) => { for (let n = 0; n < 12; n++) { const q = await go('together', 'ask'); if (q.done) return; const a = {}; for (const it of q.items) a[it.id] = pick(it); await go('together', 'answer', JSON.stringify(a)); } };
+        const mei = space('Mei Tan', answerFor('Mulan', 'ENFJ')), ana = space('Ana Cruz', answerFor('Odysseus', 'INTP')), kai = space('Kai Ng', answerFor('Po', 'ESFP'));
+        const T = {};
+        T.none = await mei('together', 'status');
+        T.link = await mei('together', 'link');
+        T.code = ((/#([A-Za-z0-9_-]{22})$/.exec(T.link.url || '')) || [])[1];
+        T.join = await ana('together', 'join', T.link.invite);
+        T.first = await ana('together', 'ask');
+        const safe = it => (it.id === 's1' ? 'Yes' : /^s[23]$/.test(it.id) ? 'No' : it.buttons[0]);
+        await answerAll(mei, safe);
+        await answerAll(ana, it => (it.id === 'children' ? 'No' : safe(it)));
+        T.bad = await mei('together', 'answer', JSON.stringify({ children: 'Twelve', nope: 'x' }));
+        T.share = await mei('together', 'share', 's1', 'shared');
+        T.meiSent = await mei('together', 'submit');
+        T.anaSent = await ana('together', 'submit');
+        T.guide = await ana('together', 'guide');
+        const read = JSON.parse(fsx.readFileSync(new URL('./fixtures/together-read.json', import.meta.url), 'utf8'));
+        T.badRead = await ana('together', 'save', JSON.stringify({ ...read, summary: 'A 92% match.' }));
+        fsx.writeFileSync(pathx.join(ana.dir, 'together-read.json'), JSON.stringify(read));
+        T.saved = await ana('together', 'save', '@' + pathx.join(ana.dir, 'together-read.json'));
+        T.own = await mei('together', 'own');
+        T.foryou = await mei('together', 'foryou', JSON.stringify(['Keep one evening a week for the two of you.']));
+        T.meiShow = await mei('together', 'show');
+        T.meiPage = T.meiShow.file && fsx.existsSync(T.meiShow.file) ? fsx.readFileSync(T.meiShow.file, 'utf8') : '';
+        T.anaPage = T.saved.file && fsx.existsSync(T.saved.file) ? fsx.readFileSync(T.saved.file, 'utf8') : '';
+        // What Mei's box holds, opened with her code as Ana's Muse would: only shared answers.
+        T.box = JSON.parse((await execFile('python3', ['-c', `import importlib.util, sys, json
+spec = importlib.util.spec_from_file_location('psyche', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(json.dumps(m.together_profile()))`, pathx.join(mei.dir, 'bin', 'psyche.py')], { cwd: mei.dir, env: { ...process.env, PSYCHEAI_HOME: '/nonexistent-home' }, timeout: 30000 })).stdout);
+        // Kai: a safety answer that flags keeps everything on the device; his partner sees only that he hasn't sent.
+        const kaiLink = await kai('together', 'link');
+        const lee = space('Lee Ong', answerFor('Simba', 'ESTJ'));
+        await lee('together', 'join', kaiLink.invite);
+        await answerAll(kai, it => (it.id === 's2' ? 'Yes' : safe(it)));
+        T.kaiSent = await kai('together', 'submit');
+        T.leeStatus = await lee('together', 'status');
+        const ids = [];
+        for (const t of ['together', 'togetherof']) for (const [key, row] of store.kvAll(t)) ids.push(JSON.stringify([key, row]));
+        const kept = ids.join('\n');
+        T.leaks = ['Mei', 'Ana', 'Kai', 'Lee', 'Mulan', 'Odysseus', 'Leans secure', 'Acts of service', 'Yes, soon', '1 to 3 years', 'Under a year', 'together through it', read.summary.slice(0, 30)].filter(w => kept.includes(w))
+          .concat(T.code && kept.includes(T.code) ? ['the code'] : []);
+        T.end = await ana('together', 'end');
+        T.after = await mei('together', 'status');
+        T.bare = await (await fetch(base + '/together')).text();
+        skillState.together = T;
+      }
       skillState.lock = JSON.parse((await execFile('python3', ['-c', `import importlib.util, sys, json
 spec = importlib.util.spec_from_file_location('psyche', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 k = m.e2e_key('e2e-pair', 'AbCdEfGhIjKlMnOpQrStUv'); box = m.e2e_seal({'a': 'Mei', 'n': [1, 2]}, k)
@@ -2392,6 +2454,19 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
         canon(L.clean) === canon(js) && L.facts === sync.derivedFacts(js[0], js[1]) && canon(L.report[0]) === canon(jsReport.report) && canon(L.report[1]) === canon(jsReport.problems) && L.summary === null,
         JSON.stringify({ py: L.clean, js, facts: [L.facts, sync.derivedFacts(js[0], js[1])], report: [L.report, jsReport] }).slice(0, 2500));
     }
+    check('Psyche Together (README "Psyche Together"): an invite with its code after "#", a partner joins, each answers privately by buttons and sends, one Muse writes the read and both get a page with their own "For you"; advice-only and safety answers are never boxed, a flagged safety answer sends nothing and its partner only sees it unsent, a score or verdict comes back to fix, nothing readable is kept on the server, and either can end it for both',
+      ((T) => T && T.none.none && /\/together#[A-Za-z0-9_-]{22}$/.test(T.link.url) && /^Let's do a Psyche Together deep dive: .*Install 127\.0\.0\.1:\d+\/together#[A-Za-z0-9_-]{22} and start Psyche Together\.$/.test(T.link.invite) &&
+        T.join.joined && T.first.part === 'basics' && T.first.items.length === 4 && T.bad.saved === 0 && T.bad.problems.length === 2 && !!T.share.error &&
+        T.meiSent.sent && !T.meiSent.both && T.anaSent.sent && T.anaSent.both && T.guide.spec && T.guide.personA.name === 'Mei' && T.guide.personB.name === 'Ana' &&
+        T.guide.alignment.find(x => x.topic === 'children').status === 'talk' && T.guide.alignment.length === 8 && !JSON.stringify(T.guide).includes('"c1"') && !JSON.stringify(T.guide).includes('"s1"') &&
+        T.badRead.saved === false && /92%/.test(T.badRead.problems.join(' ')) && T.saved.written && T.meiShow.written &&
+        /<h1>Mei &amp; Ana<\/h1>/.test(T.meiPage) && /<h1>Ana &amp; Mei<\/h1>/.test(T.anaPage) && /Keep one evening a week for the two of you\./.test(T.meiPage) && !/Keep one evening a week/.test(T.anaPage) &&
+        /Worth talking about/.test(T.meiPage) && /Children/.test(T.meiPage) &&
+        T.box && Object.keys(T.box.answers).length > 20 && !['c1', 'c4', 'i1', 'h_more', 's1', 's2', 's3'].some(k => k in T.box.answers) && 'h_year' in T.box.answers &&
+        Object.keys(T.own.own).sort().join() === 'c1,c2,c3,c4,h_less,h_more,i1' && T.foryou.kept === 'only here' &&
+        T.kaiSent.sent === false && /deserve to feel safe/.test(T.kaiSent.private) && T.leeStatus.joined && T.leeStatus.theySent === false &&
+        T.leaks.length === 0 && T.end.ended && (T.after.error || T.after.none) && /^# PsycheAI skill for Muse/.test(T.bare))(skillState.together),
+      JSON.stringify(skillState.together && { ...skillState.together, meiPage: (skillState.together.meiPage || '').length, anaPage: (skillState.together.anaPage || '').length, guide: skillState.together.guide && Object.keys(skillState.together.guide) }).slice(0, 2500));
     check('explain and correct: the report\'s findings to pick from, each explained from their own digest lines (never a "> " context line) with what pulled the other way, corrections kept in the workspace and read before the next Psyche; the chat is named PsycheAI after the report',
       ((e) => e && JSON.stringify(e[0].pick.map(x => x.label)) === '["Most like Hiccup","Introversion over Extraversion","Fixes it before anyone asks"]' &&
         JSON.stringify(e[1].fromTheirOwnWords) === '["2026-07-12 21:00 Yes I can book the court and bring a friend"]' && JSON.stringify(e[1].otherWay) === '["books the court"]' &&

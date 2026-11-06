@@ -86,7 +86,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 165
+RELEASE = 166
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -4927,6 +4927,641 @@ def e2e_save(post_tool, other, info, answer):
     return res
 
 
+# ---------- Psyche Together (experimental: README "Psyche Together") ----------
+# A deep dive for two people in a relationship, done in each one's own Muse. Each partner answers a private
+# questionnaire here; only the answers they share, with their Psyche at card-plus depth, are locked into their
+# profile and sent; "your advice only" answers and the safety check never leave this workspace. When both
+# profiles are in, either partner's Muse writes the joint read to TOGETHER_SPEC, and it's locked and sent too.
+# The server keeps three boxes it can't open (lib/together.js). Its own product: Sync stays friends-only and
+# never romance, and nothing here is a score, a verdict or therapy.
+TOGETHER = os.path.join(HERE, 'together', 'state.json')
+TOGETHER_KEPT = os.path.join(KEEP, 'together.json')
+TOGETHER_E2E = re.compile(r'/together/?#([A-Za-z0-9_-]{22})(?![A-Za-z0-9_-])')
+SCALE = ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree']
+SETTLED = ['Very settled', 'Open to talking', 'Unsure']
+UNSURE = ('Haven\'t thought about it', 'Not sure', 'Maybe', 'Open to it')
+# The questionnaire: eight short parts and a private safety check. Each item: (id, question, options, default visibility).
+# shared: in the joint read · own: shapes only their own "For you" advice, never sent · private: never sent, can't be shared.
+TOGETHER_PARTS = [
+    {'id': 'basics', 'title': 'About us', 'items': [
+        ('together_for', 'How long have you been together?', ['Under a year', '1 to 3 years', '3 to 7 years', 'Over 7 years'], 'shared'),
+        ('living', 'Do you live together?', ['Yes', 'Not yet', 'No plans to'], 'shared'),
+        ('stage', 'Where are you two now?', ['Dating', 'Thinking about marriage', 'Engaged', 'Married'], 'shared'),
+        ('kids_now', 'Children already?', ['None', 'Yes, mine', 'Yes, theirs', 'Yes, ours'], 'shared')]},
+    {'id': 'decisions', 'title': 'The big decisions', 'settled': True, 'items': [
+        ('children', 'Children: what feels right to you?', ['Yes, soon', 'Yes, in a few years', 'Maybe', 'Probably not', 'No', 'Already have them, no more'], 'shared'),
+        ('marriage', 'Marriage?', ['Yes, within a year', 'Yes, someday', 'Not sure', 'Not for me', 'Already married'], 'shared'),
+        ('home', 'Where would you like to live in five years?', ['Where we are now', 'Somewhere new, same country', 'Abroad', 'Open to it'], 'shared'),
+        ('careers', 'If one of you got a great job somewhere else?', ['We\'d move', 'We\'d try long distance', 'Depends whose', 'Haven\'t thought about it'], 'shared'),
+        ('money', 'How would you like to run money together?', ['All joint', 'Joint for shared costs, rest our own', 'Separate', 'Haven\'t thought about it'], 'shared'),
+        ('spending', 'With money, you\'re more of a…', ['Saver', 'Spender', 'Somewhere in between'], 'shared'),
+        ('faith', 'How much does faith matter for your family life?', ['A lot', 'Some', 'Not much', 'Not at all'], 'shared'),
+        ('parents', 'If a parent needed care?', ['They\'d live with us', 'Nearby, and we\'d help', 'Paid care', 'Haven\'t thought about it'], 'shared')]},
+    {'id': 'everyday', 'title': 'Everyday life', 'items': [
+        ('weekends', 'Your ideal weekend', ['Plans with people', 'A mix', 'Quiet at home'], 'shared'),
+        ('recharge', 'After a long week you…', ['Go out', 'Stay in'], 'shared'),
+        ('tidy', 'At home you\'re…', ['Very tidy', 'Tidy enough', 'Relaxed about it'], 'shared'),
+        ('sleep', 'You\'re an…', ['Early bird', 'Night owl', 'It depends'], 'shared'),
+        ('phones', 'Phones at dinner?', ['Never', 'Sometimes', 'Doesn\'t bother me'], 'shared'),
+        ('apart', 'Time on your own each week', ['Lots', 'Some', 'Hardly any'], 'shared'),
+        ('chores', 'Household tasks should be…', ['Split evenly', 'Split by what each likes', 'Whoever has time'], 'shared')]},
+    {'id': 'love', 'title': 'How you love', 'items': [
+        ('l1', 'Which would mean more this week?', ['An evening with no phones', 'They take something off my plate'], 'shared'),
+        ('l2', 'Which would mean more?', ['They tell me what they love about me', 'A hug when I walk in'], 'shared'),
+        ('l3', 'Which would mean more?', ['A small gift that shows they listened', 'A whole day together'], 'shared'),
+        ('l4', 'Which would mean more?', ['They fix something I\'ve put off', 'A note saying they\'re proud of me'], 'shared'),
+        ('l5', 'Which would mean more?', ['Holding hands on a walk', 'A surprise they picked for me'], 'shared'),
+        ('give', 'What do you most naturally give?', ['Time together', 'Doing things for them', 'Kind words', 'Affection', 'Small gifts'], 'shared')]},
+    {'id': 'disagree', 'title': 'Disagreements', 'items': [
+        ('upset', 'After a tense exchange in the evening, you want…', ['Talk it through tonight', 'A little space, then talk', 'Sleep on it', 'Move on and not revisit'], 'shared'),
+        ('raise', 'When something bothers you, you usually…', ['Say so straight away', 'Wait for a good moment', 'Hint at it', 'Keep it to myself'], 'shared'),
+        ('back', 'What helps you come back?', ['A sincere sorry', 'A hug', 'Humour', 'Time', 'Talking it through'], 'shared'),
+        ('recurring', 'What do you two disagree about most?', ['Time and plans', 'Money', 'Chores', 'Family', 'Phones and attention', 'Not much'], 'shared')]},
+    {'id': 'closeness', 'title': 'Closeness', 'items': [
+        ('c1', 'I need reassurance that they\'re committed.', SCALE, 'own'),
+        ('c2', 'I\'m comfortable depending on them.', SCALE, 'own'),
+        ('c3', 'I need time to myself even when things are good.', SCALE, 'own'),
+        ('c4', 'When they\'re distant, I worry.', SCALE, 'own')]},
+    {'id': 'intimacy', 'title': 'Intimacy (you can skip this)', 'optional': True, 'items': [
+        ('i1', 'Physical closeness between you two:', ['We\'re both happy', 'Something to talk about', 'Prefer not to say'], 'own')]},
+    {'id': 'hopes', 'title': 'Hopes', 'items': [
+        ('h_year', 'A great year together would mostly be…', ['Building something together', 'Adventures and travel', 'Calm and close', 'Growing in our careers side by side'], 'shared'),
+        ('h_more', 'One thing you\'d like more of', ['Time together', 'Affection', 'Fun', 'Help at home', 'Talking'], 'own'),
+        ('h_less', 'One thing you\'d like less of', ['Phones', 'Rushing', 'Arguing about small things', 'Time apart', 'Nothing'], 'own')]},
+    {'id': 'safety', 'title': 'Just for you', 'private': True, 'items': [
+        ('s1', 'Do you feel safe with your partner?', ['Yes', 'No', 'Prefer not to say'], 'private'),
+        ('s2', 'Have you ever felt afraid of how they\'d react?', ['No', 'Yes', 'Prefer not to say'], 'private'),
+        ('s3', 'Do they control your money, your phone or who you see?', ['No', 'Yes', 'Prefer not to say'], 'private')]},
+]
+TOGETHER_ITEMS = {i[0]: {'q': i[1], 'options': i[2], 'vis': i[3], 'part': p['id']} for p in TOGETHER_PARTS for i in p['items']}
+DECISIONS = [i[0] for p in TOGETHER_PARTS if p['id'] == 'decisions' for i in p['items']]
+# The same group is the same direction ("Yes, soon" and "Yes, in a few years" agree on children; their timing is a detail).
+DECISION_GROUPS = {
+    'children': [['Yes, soon', 'Yes, in a few years'], ['Maybe'], ['Probably not', 'No'], ['Already have them, no more']],
+    'marriage': [['Yes, within a year', 'Yes, someday', 'Already married'], ['Not sure'], ['Not for me']],
+    'home': [['Where we are now'], ['Somewhere new, same country'], ['Abroad'], ['Open to it']],
+    'careers': [['We\'d move'], ['We\'d try long distance'], ['Depends whose']],
+    'money': [['All joint', 'Joint for shared costs, rest our own'], ['Separate']],
+    'spending': [['Saver', 'Somewhere in between'], ['Spender', 'Somewhere in between']],
+    'faith': [['A lot', 'Some'], ['Not much', 'Not at all']],
+    'parents': [['They\'d live with us', 'Nearby, and we\'d help'], ['Paid care']],
+}
+DECISION_LABELS = {'children': 'Children', 'marriage': 'Marriage', 'home': 'Where to live', 'careers': 'Careers and moves', 'money': 'Running money',
+                   'spending': 'Saving and spending', 'faith': 'Faith in family life', 'parents': 'Caring for parents'}
+SUPPORT = ('What you said matters, and you deserve to feel safe. Nothing you answered here goes to your partner or to PsycheAI, and your joint read won\'t be made. '
+           'If you\'re in danger now, call your local emergency number. To talk to someone in confidence, a domestic abuse helpline in your country can help '
+           '(in the US, 1-800-799-7233; in the UK, 0808 2000 247; in Singapore, 1800 777 0000).')
+
+
+def together_state():
+    s = read_first([TOGETHER, TOGETHER_KEPT]) or {}
+    return s if isinstance(s, dict) else {}
+
+
+def save_together(s):
+    write_private([TOGETHER, TOGETHER_KEPT], s)
+
+
+def _first_name(answer, name):
+    return re.split(r'\s+', str(name or '').strip())[0] or 'You'
+
+
+def _languages(answer, side):
+    return [str(_at(x, 'language')) for x in _ls(_at(answer, 'relationship', 'loveLanguages', side)) if _at(x, 'language')][:2]
+
+
+def together_ask(part=None):
+    """The next part to answer (or the one named): its items as buttons, with what each answer is for."""
+    s = together_state()
+    answers = s.get('answers') or {}
+    parts = [p for p in TOGETHER_PARTS if (part and p['id'] == part) or (not part and any(i[0] not in answers for i in p['items']) and p['id'] not in (s.get('skipped') or []))]
+    if not parts:
+        return {'done': True, 'say': 'That\'s everything. Send it when you\'re ready.', 'buttons': ['Send my answers', 'Change an answer']}
+    p = parts[0]
+    n = [x['id'] for x in TOGETHER_PARTS].index(p['id']) + 1
+    items = []
+    for iid, q, options, vis in p['items']:
+        items.append({'id': iid, 'question': q, 'buttons': options, 'shownTo': {'shared': 'both of you', 'own': 'your advice only', 'private': 'only you'}[vis]})
+        if p.get('settled'):
+            items.append({'id': iid + '.settled', 'question': 'How settled is that for you?', 'buttons': SETTLED, 'shownTo': 'both of you'})
+    return {'part': p['id'], 'title': p['title'], 'step': '%d of %d' % (n, len(TOGETHER_PARTS)), 'items': items,
+            'note': 'Only you see these. Change what anything is shared with any time.' if not p.get('private') else 'These three stay on this device, always.',
+            'skippable': True}
+
+
+def together_answer(given):
+    """Keep answers given as {"id": "option"} (and "id.settled"); only known options for known items."""
+    s = together_state()
+    answers, settled, problems = s.setdefault('answers', {}), s.setdefault('settled', {}), []
+    for key, value in (given or {}).items():
+        iid, is_settled = (key[:-8], True) if str(key).endswith('.settled') else (key, False)
+        item = TOGETHER_ITEMS.get(iid)
+        options = SETTLED if is_settled else (item or {}).get('options', [])
+        if not item or value not in options:
+            problems.append('%s: "%s" isn\'t one of its buttons' % (key, value))
+            continue
+        (settled if is_settled else answers)[iid] = value
+    save_together(s)
+    out = {'saved': len(given or {}) - len(problems), 'problems': problems}
+    if at_risk(s):
+        out['private'] = SUPPORT
+    out['next'] = together_ask()
+    return out
+
+
+def together_share(item, who):
+    """Change what an answer is shared with: shared or own. The safety check is never shared."""
+    s = together_state()
+    if item not in TOGETHER_ITEMS or TOGETHER_ITEMS[item]['vis'] == 'private' or who not in ('shared', 'own'):
+        return {'error': 'That answer can be shared or kept for your advice only, and the safety questions always stay on this device.'}
+    s.setdefault('vis', {})[item] = who
+    save_together(s)
+    return {'ok': True, 'item': item, 'shownTo': 'both of you' if who == 'shared' else 'your advice only'}
+
+
+def at_risk(s):
+    a = s.get('answers') or {}
+    return a.get('s1') == 'No' or a.get('s2') == 'Yes' or a.get('s3') == 'Yes'
+
+
+def _vis(s, iid):
+    item = TOGETHER_ITEMS[iid]
+    return 'private' if item['vis'] == 'private' else (s.get('vis') or {}).get(iid, item['vis'])
+
+
+def together_profile():
+    """What this partner sends, locked: their first name, their card, attachment and love languages from their Psyche,
+    and only the answers they share. "Your advice only" answers and the safety check are never in it."""
+    kept = read_first([REPORT, REPORT_KEPT]) or {}
+    answer = kept.get('report') if isinstance(kept.get('report'), dict) else None
+    if not answer:
+        return None
+    s = together_state()
+    shared = {k: v for k, v in (s.get('answers') or {}).items() if k in TOGETHER_ITEMS and _vis(s, k) == 'shared'}
+    att = _at(answer, 'attachment', 'style') or _at(answer, 'premiumAnalysis', 'attachment', 'style')
+    return {'firstName': _first_name(answer, kept.get('name')), 'card': sync_card(answer, kept.get('name') or ''),
+            'attachment': sync_plain(att, 80), 'loveGiving': _languages(answer, 'giving'), 'loveReceiving': _languages(answer, 'receiving'),
+            'answers': shared, 'settled': {k: v for k, v in (s.get('settled') or {}).items() if k in shared}}
+
+
+def _code_role():
+    s = together_state()
+    return s.get('code'), s.get('role')
+
+
+def together_link(post_tool):
+    if not _my_sync_card():
+        return {'error': 'Your Psyche comes first: Psyche Together works from both of yours.'}
+    s = together_state()
+    code = s.get('code') if s.get('role') == 'a' else None
+    while not code or len(code) != 22:
+        code = secrets.token_urlsafe(16)
+    out = post_tool('together_link', {'e2e': {'id': sync_id(code)}})
+    if not isinstance(out, dict) or out.get('error'):
+        return out
+    s.update(code=code, role='a')
+    save_together(s)
+    link = BASE + '/together#' + code
+    return {'url': link, 'invite': 'Let\'s do a Psyche Together deep dive: we each answer privately in our own Muse, then see what we share and what to talk about. '
+                                   'Paste this into your Muse app: Install %s and start Psyche Together.' % re.sub(r'^https?://', '', link),
+            'nextStep': _step('Here\'s your invite for your partner. Send it to them: they paste it into their Muse.', ['Send it on Instagram', 'I\'ll share it myself'])}
+
+
+def together_join(post_tool, text):
+    m = TOGETHER_E2E.search(str(text or ''))
+    if not m:
+        return {'error': 'That isn\'t a Psyche Together link (it reads …/together#…).'}
+    if not _my_sync_card():
+        return {'error': 'Your Psyche comes first: Psyche Together works from both of yours.'}
+    out = post_tool('together_join', {'e2e': {'id': sync_id(m.group(1))}})
+    if not isinstance(out, dict) or out.get('error'):
+        return out
+    s = together_state()
+    s.update(code=m.group(1), role='b')
+    save_together(s)
+    return {'joined': True, 'next': together_ask()}
+
+
+def _open_profiles(post_tool):
+    code, role = _code_role()
+    if not code:
+        return None, None, None, {'error': 'There\'s no Psyche Together in this workspace yet.'}
+    got = post_tool('together_get', {})
+    if not isinstance(got, dict) or got.get('error') or got.get('none'):
+        return None, None, None, got if isinstance(got, dict) and got.get('error') else {'error': 'This Psyche Together has ended.'}
+    e = got.get('e2e') or {}
+    key = e2e_key('together-profile', code)
+    profiles = {r: e2e_open((e.get('profiles') or {}).get(r), key) for r in ('a', 'b')}
+    read = e2e_open(e.get('read'), e2e_key('together-read', code)) if e.get('read') else None
+    return role, profiles, read, got
+
+
+def together_submit(post_tool):
+    s = together_state()
+    if at_risk(s):
+        # Nothing is sent, and the partner only ever sees that it isn't ready (README "Psyche Together": safety).
+        return {'sent': False, 'private': SUPPORT}
+    code, role = _code_role()
+    profile = together_profile()
+    if not code or not profile:
+        return {'error': 'There\'s no Psyche Together or no Psyche here yet.'}
+    out = post_tool('together_put', {'e2e': {'profile': e2e_seal(profile, e2e_key('together-profile', code))}})
+    if not isinstance(out, dict) or out.get('error'):
+        return out
+    s['sentAt'] = int(time.time() * 1000)
+    save_together(s)
+    both = (out.get('sent') or {}).get('a') and (out.get('sent') or {}).get('b')
+    return {'sent': True, 'both': bool(both),
+            'say': 'Sent, locked so only the two of you can read it.' + (' You\'re both in: I\'ll write your read now.' if both else ' I\'ll tell you when your partner has sent theirs.')}
+
+
+def together_status(post_tool):
+    s = together_state()
+    if not s.get('code'):
+        return {'none': True, 'nextStep': _step('Psyche Together is a deep dive for you and your partner, answered privately in each of your Muse. Start one?', ['Invite my partner', 'Not now'])}
+    role, profiles, read, got = _open_profiles(post_tool)
+    if role is None:
+        return got
+    other = 'b' if role == 'a' else 'a'
+    answered = len([k for k in (s.get('answers') or {}) if k in TOGETHER_ITEMS])
+    return {'joined': bool(got.get('joined')), 'youSent': bool(profiles.get(role)), 'theySent': bool(profiles.get(other)), 'written': bool(read),
+            'answered': '%d of %d' % (answered, len(TOGETHER_ITEMS)), 'partner': (profiles.get(other) or {}).get('firstName') if profiles.get(other) else None}
+
+
+def _group(item, value):
+    for i, g in enumerate(DECISION_GROUPS.get(item, [])):
+        if value in g:
+            return i
+    return None
+
+
+def together_alignment(a, b):
+    """The big decisions, compared the same way every time: aligned, talk about, or not discussed yet. Values only where both shared."""
+    out = []
+    for item in DECISIONS:
+        va, vb = (a.get('answers') or {}).get(item), (b.get('answers') or {}).get(item)
+        sa, sb = (a.get('settled') or {}).get(item), (b.get('settled') or {}).get(item)
+        if not va or not vb or va in UNSURE and vb in UNSURE or 'Haven\'t thought about it' in (va, vb):
+            status = 'not discussed'
+        elif va == vb or (_group(item, va) is not None and _group(item, va) == _group(item, vb)):
+            status = 'talk' if 'Unsure' in (sa, sb) else 'aligned'
+        else:
+            status = 'talk'
+        out.append({'topic': item, 'label': DECISION_LABELS[item], 'status': status, 'a': va, 'b': vb, 'settledA': sa, 'settledB': sb})
+    return out
+
+
+def _counsellor(alignment):
+    return sum(1 for x in alignment if x['status'] == 'talk' and 'Unsure' in (x.get('settledA'), x.get('settledB'))) >= 2 or \
+        sum(1 for x in alignment if x['status'] == 'talk') >= 4
+
+
+def together_love_cross(a, b):
+    na, nb = a.get('firstName') or 'A', b.get('firstName') or 'B'
+    lines = []
+    for x, y, nx, ny in ((a, b, na, nb), (b, a, nb, na)):
+        if x.get('loveGiving') and y.get('loveReceiving'):
+            lines.append('%s gives %s most; %s feels loved most through %s.' % (nx, ' and '.join(x['loveGiving']).lower(), ny, ' and '.join(y['loveReceiving']).lower()))
+    return lines
+
+
+TOGETHER_SPEC = """# Psyche Together: the joint read
+A deep dive for two people in a relationship, read from both of their Psyches and what each chose to share from a private questionnaire. Person A made the invite; person B joined. Call each by their first name.
+
+## What it contains
+One JSON object matching the schema. Each part is short: it is read on a phone, and every line should be something they can talk about tonight.
+1. summary: one warm line about the two of them, under 25 words.
+2. howYouLove: for A and for B, one sentence each on how they give love and how they most like to receive it, then one on what that means together. Use loveCross: it is computed.
+3. pattern: the pattern the two of them make together (attachment leanings and how each handles a disagreement meeting), a title, two sentences, and one sentence on what breaks the loop.
+4. disagreements: two sentences on how hard conversations start and end for them, then one repair phrase each could use, in their own voice.
+5. rhythms: two or three everyday points from their answers, each a title and one sentence: easy matches and small trade-offs.
+6. bigDecisions: for each topic alignment marks "talk", one sentence on why it is worth talking about, never which of them is right.
+7. strengths: three, each a title, one sentence and what in them shows it.
+8. growth: two things to practise, each a title and one sentence, framed as practice, never as a fault.
+9. conversations: up to five conversations to have, each a topic, why it matters to them, a script of three to five short steps (who speaks first, what the listener says back, when to stop), and minutes (10 to 20).
+10. plan: four weeks, one small step a week, together.
+11. caveats: one or two sentences on what this read cannot see.
+
+## Standards
+- Warm, specific and practical. Differences are differences with a way to work with them, never a fault in either person, and never a prediction about the relationship.
+- No score, percentage, rating or verdict. The words tension, conflict, clash, friction, struggle, problem, incompatible, toxic and red flag are not used.
+- Coaching, never therapy, counselling, treatment or diagnosis. Where they would benefit from a counsellor (alignment's counsellor is true, or several big decisions are unsure), say so plainly in caveats.
+- Only what is in the profiles and alignment. Children, marriage, faith, money and intimacy come only from their own answers: never guess them.
+- Use their first names, never he or she, and never quote either of them or name anyone else."""
+
+_TEXT = {'type': 'string'}
+_POINT = {'type': 'object', 'additionalProperties': False, 'required': ['title', 'detail'], 'properties': {'title': _TEXT, 'detail': _TEXT, 'evidence': _TEXT}}
+TOGETHER_SCHEMA = {
+    'type': 'object', 'additionalProperties': False,
+    'required': ['summary', 'howYouLove', 'pattern', 'disagreements', 'rhythms', 'bigDecisions', 'strengths', 'growth', 'conversations', 'plan', 'caveats'],
+    'properties': {
+        'summary': _TEXT,
+        'howYouLove': {'type': 'object', 'additionalProperties': False, 'required': ['a', 'b', 'together'], 'properties': {'a': _TEXT, 'b': _TEXT, 'together': _TEXT}},
+        'pattern': {'type': 'object', 'additionalProperties': False, 'required': ['title', 'detail', 'breakTheLoop'], 'properties': {'title': _TEXT, 'detail': _TEXT, 'breakTheLoop': _TEXT}},
+        'disagreements': {'type': 'object', 'additionalProperties': False, 'required': ['detail', 'repairA', 'repairB'], 'properties': {'detail': _TEXT, 'repairA': _TEXT, 'repairB': _TEXT}},
+        'rhythms': {'type': 'array', 'items': _POINT},
+        'bigDecisions': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False, 'required': ['topic', 'note'], 'properties': {'topic': _TEXT, 'note': _TEXT}}},
+        'strengths': {'type': 'array', 'items': _POINT},
+        'growth': {'type': 'array', 'items': _POINT},
+        'conversations': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False, 'required': ['topic', 'why', 'script', 'minutes'],
+                                                     'properties': {'topic': _TEXT, 'why': _TEXT, 'script': {'type': 'array', 'items': _TEXT}, 'minutes': {'type': 'integer'}}}},
+        'plan': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False, 'required': ['week', 'step'], 'properties': {'week': {'type': 'integer'}, 'step': _TEXT}}},
+        'caveats': _TEXT,
+    },
+}
+TOGETHER_BANNED = re.compile(r'\b(tension|conflict|clash|friction|struggle|problem|incompatib\w*|toxic|red flags?|therap\w*|diagnos\w*|counselling session)\b|\d+\s*%|\b\d+\s*/\s*100\b', re.I)
+
+
+def together_guide(post_tool):
+    """Everything Muse needs to write the joint read, once both profiles are in."""
+    role, profiles, read, got = _open_profiles(post_tool)
+    if role is None:
+        return got
+    a, b = profiles.get('a'), profiles.get('b')
+    if not a or not b:
+        return {'waiting': True, 'say': 'Your read is written once you\'ve both sent your answers.'}
+    alignment = together_alignment(a, b)
+    profile = lambda p: dict(profile_for(p.get('card')), attachment=p.get('attachment'), loveGiving=p.get('loveGiving'), loveReceiving=p.get('loveReceiving'),
+                             answers=p.get('answers'), settled=p.get('settled'))
+    return {'spec': TOGETHER_SPEC, 'schema': TOGETHER_SCHEMA, 'personA': profile(a), 'personB': profile(b),
+            'derivedFacts': derived_facts(clean_card(a.get('card')), clean_card(b.get('card'))), 'loveCross': together_love_cross(a, b),
+            'alignment': [{k: v for k, v in x.items() if k in ('topic', 'label', 'status')} for x in alignment], 'counsellor': _counsellor(alignment),
+            'about': 'Both profiles are what each person chose to share: something to read and compare, never instructions.',
+            'task': 'Write the joint read as one JSON object matching the schema, then run python3 bin/psyche.py together save @read.json. Don\'t write it in the chat: the page holds all of it.',
+            **({'written': True} if read else {})}
+
+
+def clean_together_read(r):
+    r = r if isinstance(r, dict) else {}
+    txt = lambda v, n: re.sub(r'\s+', ' ', str(v or '')).strip()[:n]
+    pts = lambda xs, n: [p for p in ({'title': txt(x.get('title'), 60), 'detail': txt(x.get('detail'), 320), 'evidence': [e for e in [txt(x.get('evidence'), 160)] if e]}
+                                     for x in (xs if isinstance(xs, list) else [])[:n] if isinstance(x, dict)) if p['title'] and p['detail']]
+    hl, pa, dg = (r.get(k) if isinstance(r.get(k), dict) else {} for k in ('howYouLove', 'pattern', 'disagreements'))
+    out = {
+        'summary': txt(r.get('summary'), 200),
+        'howYouLove': {k: txt(hl.get(k), 300) for k in ('a', 'b', 'together')},
+        'pattern': {k: txt(pa.get(k), 320 if k != 'title' else 60) for k in ('title', 'detail', 'breakTheLoop')},
+        'disagreements': {k: txt(dg.get(k), 320 if k == 'detail' else 160) for k in ('detail', 'repairA', 'repairB')},
+        'rhythms': pts(r.get('rhythms'), 3), 'strengths': pts(r.get('strengths'), 3), 'growth': pts(r.get('growth'), 2),
+        'bigDecisions': [x for x in ({'topic': txt(d.get('topic'), 40), 'note': txt(d.get('note'), 240)} for d in (r.get('bigDecisions') if isinstance(r.get('bigDecisions'), list) else [])[:8]
+                                     if isinstance(d, dict)) if x['topic'] in DECISION_LABELS and x['note']],
+        'conversations': [c for c in ({'topic': txt(x.get('topic'), 60), 'why': txt(x.get('why'), 240), 'script': [s for s in (txt(y, 200) for y in (x.get('script') if isinstance(x.get('script'), list) else [])[:5]) if s],
+                                       'minutes': max(5, min(30, _score(x.get('minutes')) or 15))} for x in (r.get('conversations') if isinstance(r.get('conversations'), list) else [])[:5] if isinstance(x, dict))
+                          if c['topic'] and c['why'] and len(c['script']) >= 3],
+        'plan': [p for p in ({'week': i + 1, 'step': txt(x.get('step'), 200)} for i, x in enumerate((r.get('plan') if isinstance(r.get('plan'), list) else [])[:4]) if isinstance(x, dict)) if p['step']],
+        'caveats': txt(r.get('caveats'), 400),
+    }
+    problems = []
+    for need, msg in [(out['summary'], 'summary is missing'), (all(out['howYouLove'].values()), 'howYouLove needs a, b and together'),
+                      (all(out['pattern'].values()), 'pattern needs a title, detail and breakTheLoop'), (all(out['disagreements'].values()), 'disagreements needs detail, repairA and repairB'),
+                      (len(out['strengths']) >= 2, 'strengths needs three, each a title and detail'), (len(out['growth']) >= 1, 'growth needs two, each a title and detail'),
+                      (len(out['conversations']) >= 2, 'conversations needs two to five, each with a topic, why and a script of three to five steps'),
+                      (len(out['plan']) == 4, 'plan needs one step for each of four weeks'), (out['caveats'], 'caveats is missing')]:
+        if not need:
+            problems.append(msg)
+    w = TOGETHER_BANNED.search(json.dumps(out, ensure_ascii=False))
+    if w:
+        problems.append('"%s" isn\'t used in Psyche Together: no scores or verdicts, nothing clinical, and "difference" or "disagreement" for the rest' % w.group(0))
+    leak = answer_problems(out)
+    return out, problems + [p for p in (leak or []) if p not in problems]
+
+
+def together_save(post_tool, read):
+    role, profiles, old, got = _open_profiles(post_tool)
+    if role is None:
+        return got
+    if not profiles.get('a') or not profiles.get('b'):
+        return {'error': 'The read can be saved once you\'ve both sent your answers.'}
+    out, problems = clean_together_read(read)
+    if problems:
+        return {'saved': False, 'problems': problems}
+    code, _ = _code_role()
+    data = {'read': out, 'by': role, 'at': int(time.time() * 1000)}
+    put = post_tool('together_put', {'e2e': {'read': e2e_seal(data, e2e_key('together-read', code))}})
+    if not isinstance(put, dict) or put.get('error'):
+        return put
+    return together_show(post_tool, saved=True)
+
+
+def together_show(post_tool, saved=False):
+    role, profiles, read, got = _open_profiles(post_tool)
+    if role is None:
+        return got
+    if not read:
+        return {'written': False, 'say': 'Your read isn\'t written yet.'}
+    other = 'b' if role == 'a' else 'a'
+    path = save_together_page(read, profiles, role)
+    them = (profiles.get(other) or {}).get('firstName') or 'your partner'
+    res = {'written': True, 'summary': sync_plain(read['read'].get('summary'), 200),
+           'nextStep': _step('Your Psyche Together with %s.' % them, ['Let %s know' % them, 'Our 4 weeks', 'Done'] if saved else ['Our 4 weeks', 'Done'])}
+    if path:
+        res['file'] = path
+    return res
+
+
+def together_foryou(text):
+    """Their own coaching, written by their own Muse from their "advice only" answers: kept here, never sent."""
+    s = together_state()
+    s['forYou'] = [t for t in (re.sub(r'\s+', ' ', str(x)).strip()[:300] for x in (text if isinstance(text, list) else [text])) if t][:5]
+    save_together(s)
+    return {'ok': True, 'kept': 'only here'}
+
+
+def together_own():
+    """What their own Muse writes "For you" from: the answers kept for their advice only (never sent)."""
+    s = together_state()
+    return {k: v for k, v in (s.get('answers') or {}).items() if k in TOGETHER_ITEMS and _vis(s, k) == 'own'}
+
+
+def together_end(post_tool):
+    out = post_tool('together_end', {})
+    for f in (TOGETHER, TOGETHER_KEPT):
+        if os.path.exists(f):
+            os.remove(f)
+    shutil.rmtree(os.path.join(OUT, 'together'), ignore_errors=True)
+    return {'ended': True} if isinstance(out, dict) and not out.get('error') else out
+
+
+TOGETHER_CSS = '''
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12.5px;font-weight:650;background:#f3e9f8;color:#6a3590}
+.chip.b{background:#fdeef4;color:#a8335f}
+.cross{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:8px}
+.cross>div{padding:12px;border-radius:14px;background:#faf6fc;border:1px solid #efe6f4;min-width:0}
+.cross b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.cross p{margin:4px 0 0;font-size:14px}
+.loop{margin-top:10px;padding:12px 14px;border-radius:14px;background:#eef8f2;border:1px solid #cfe9db;font-size:14.5px}
+.loop b{color:#22654a}
+.repair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.repair div{padding:10px 12px;border-radius:12px;background:#fdf0f6;border:1px solid #f4d6e4;font-size:14px;min-width:0}
+.repair i{font-style:normal;font-weight:700;display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.side{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+.side th,.side td{text-align:left;padding:7px 6px;border-bottom:1px solid #f0eaf4;vertical-align:top}
+.side th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.dec{display:grid;gap:8px;margin-top:8px}
+.dec h4{margin:10px 0 2px;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.dec .row{padding:10px 12px;border-radius:12px;border:1px solid #efe6f4;background:#fff}
+.dec .row b{display:block;font-size:14.5px}
+.dec .row span{display:block;font-size:13px;color:var(--mute);margin-top:2px}
+.dec .row p{margin:6px 0 0;font-size:14px}
+.st-aligned h4{color:#22654a}.st-talk h4{color:#9a5b12}.st-not h4{color:#5a4f66}
+.st-aligned .row{border-color:#cfe9db;background:#f6fbf8}.st-talk .row{border-color:#f1dcc0;background:#fffaf2}
+.convo{padding:12px 14px;border-radius:14px;border:1px solid #efe6f4;margin-top:10px}
+.convo b{display:block;font-size:15.5px}
+.convo small{color:var(--mute);font-weight:700;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+.convo ol{margin:8px 0 0;padding-left:20px}.convo li{margin:3px 0;font-size:14px}
+.weeks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.weeks div{padding:10px 12px;border-radius:12px;background:#faf6fc;border:1px solid #efe6f4;font-size:14px;min-width:0}
+.weeks i{font-style:normal;font-weight:800;color:#c2366d;display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.foryou{padding:12px 14px;border-radius:14px;background:#f3e9f8;border:1px solid #e3d2ee}
+.foryou small{display:block;font-size:11.5px;color:var(--mute);margin-top:8px}
+.counsel{margin-top:10px;padding:12px 14px;border-radius:14px;background:#fffaf2;border:1px solid #f1dcc0;font-size:14px}
+@media (max-width:480px){.weeks,.repair,.cross{grid-template-columns:1fr}}
+'''
+EVERYDAY = [('weekends', 'Weekends'), ('recharge', 'After a long week'), ('tidy', 'At home'), ('sleep', 'Sleep'), ('phones', 'Phones at dinner'), ('apart', 'Time alone'), ('chores', 'Household tasks')]
+BASIC_WORDS = {'living': {'Yes': 'living together', 'Not yet': 'not living together yet'}, 'stage': {'Dating': 'dating', 'Thinking about marriage': 'thinking about marriage', 'Engaged': 'engaged', 'Married': 'married'}}
+
+
+def together_html(read, profiles, role, for_you=None, pics=None):
+    data = read.get('read') if isinstance(read, dict) else None
+    if not isinstance(data, dict) or not data.get('summary'):
+        return None
+    other = 'b' if role == 'a' else 'a'
+    me, them = profiles.get(role) or {}, profiles.get(other) or {}
+    cm, ct = clean_card(me.get('card')), clean_card(them.get('card'))
+    nm, nt = me.get('firstName') or first_of(cm), them.get('firstName') or first_of(ct)
+    pics = pics or {}
+    mine = lambda d: d.get(role) if isinstance(d, dict) else None      # a value keyed a/b, for this reader
+    theirs = lambda d: d.get(other) if isinstance(d, dict) else None
+
+    def who(card, n, key):
+        pic = pics.get(key)
+        img = ('<button type="button" data-big="1" aria-label="Open %s’s Psyche Card full size"><img alt="%s’s Psyche Card" src="%s"><em>Tap to open</em></button>' % (_e(n), _e(n), _img_src(pic))
+               if pic else '<div class="nopic">%s</div>' % _e(n[:1]))
+        return ('<div class="who">' + img + ('<small>%s is most like</small><b>%s</b>' % (_e(n), _e(card.get('character'))) if card.get('character') else '')
+                + ('<span>%s</span>' % _e(card.get('headline')) if card.get('headline') else '') + '</div>')
+    basics = [x for x in [(me.get('answers') or {}).get('together_for') and 'Together ' + me['answers']['together_for'].lower(),
+                          BASIC_WORDS['living'].get((me.get('answers') or {}).get('living')), BASIC_WORDS['stage'].get((me.get('answers') or {}).get('stage'))] if x]
+    duo = ('<div class="duo"><div class="beam"></div>' + who(cm, nm, 'me') + '<div class="mid">' + SYNC_ART + '<i>Together</i></div>' + who(ct, nt, 'them') + '</div>'
+           + '<div class="oneline"><small>%s</small>%s</div>' % (_e(' · '.join(basics) or 'You two'), _e(data['summary'])))
+    att = ''.join('<div><b style="color:%s">%s</b><span class="chip%s">%s</span></div>' % (col, _e(n), cls, _e(p.get('attachment'))) for p, n, col, cls in ((me, nm, SYNC_A, ''), (them, nt, SYNC_B, ' b')) if p.get('attachment'))
+    glance = (_block('MBTI', _sync_mbti(cm, ct, nm, nt)) + _block('Big Five', _sync_five(cm, ct, nm, nt)) + _block('What motivates you', _sync_motives(cm, ct, nm, nt))
+              + (_block('Attachment, leaning', '<div class="cross">' + att + '</div>') if att else ''))
+    hl = data['howYouLove']
+    lang = lambda p: '<div class="chips">' + ''.join('<span class="chip">gives %s</span>' % _e(x.lower()) for x in p.get('loveGiving') or []) + ''.join('<span class="chip b">wants %s</span>' % _e(x.lower()) for x in p.get('loveReceiving') or []) + '</div>'
+    love = ('<div class="cross"><div><b style="color:%s">%s</b>%s<p>%s</p></div><div><b style="color:%s">%s</b>%s<p>%s</p></div></div>' % (SYNC_A, _e(nm), lang(me), _e(mine(hl)), SYNC_B, _e(nt), lang(them), _e(theirs(hl)))
+            + '<div class="loop"><b>Together:</b> %s</div>' % _e(hl.get('together')))
+    pat = data['pattern']
+    pattern = '<p class="soft def">%s</p><h3 style="margin-top:12px">%s</h3><p>%s</p><div class="loop"><b>What breaks the loop:</b> %s</div>' % (
+        _e('How the two of you meet when things get hard.'), _e(pat['title']), _e(pat['detail']), _e(pat['breakTheLoop']))
+    dg = data['disagreements']
+    repairs = {'a': dg.get('repairA'), 'b': dg.get('repairB')}
+    disagree = '<p>%s</p><div class="repair"><div><i style="color:%s">%s could say</i>“%s”</div><div><i style="color:%s">%s could say</i>“%s”</div></div>' % (
+        _e(dg['detail']), SYNC_A, _e(nm), _e(repairs[role]), SYNC_B, _e(nt), _e(repairs[other]))
+    rows = ''.join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % (_e(label), _e((me.get('answers') or {}).get(k, '–')), _e((them.get('answers') or {}).get(k, '–')))
+                   for k, label in EVERYDAY if (me.get('answers') or {}).get(k) or (them.get('answers') or {}).get(k))
+    rhythms = ('<p class="soft def">Easy matches and small trade-offs.</p>' + (('<table class="side"><tr><th></th><th>%s</th><th>%s</th></tr>%s</table>' % (_e(nm), _e(nt), rows)) if rows else '')
+               + _sync_points(data['rhythms'], '').replace('<p class="soft def"></p>', ''))
+    alignment = together_alignment(me if role == 'a' else them, them if role == 'a' else me)
+    notes = {d['topic']: d['note'] for d in data['bigDecisions']}
+    groups = []
+    for status, title, cls in (('aligned', 'Aligned', 'st-aligned'), ('talk', 'Worth talking about', 'st-talk'), ('not discussed', 'Not discussed yet', 'st-not')):
+        items = [x for x in alignment if x['status'] == status]
+        if not items:
+            continue
+        def answers_of(x):
+            va, vb = (x['a'], x['b']) if role == 'a' else (x['b'], x['a'])
+            return '%s: %s · %s: %s' % (nm, va or 'not shared', nt, vb or 'not shared')
+        groups.append('<div class="%s"><h4>%s</h4>%s</div>' % (cls, title, ''.join('<div class="row"><b>%s</b><span>%s</span>%s</div>' % (
+            _e(x['label']), _e(answers_of(x)), '<p>%s</p>' % _e(notes[x['topic']]) if notes.get(x['topic']) else '') for x in items)))
+    counsel = ('<div class="counsel"><b>Worth doing with a counsellor.</b> Several of these are still open for one or both of you. A counsellor who works with couples '
+               'before marriage can help you talk them through.</div>') if _counsellor(alignment) else ''
+    decisions = '<div class="dec">' + ''.join(groups) + '</div>' + counsel if groups else ''
+    convos = ''.join('<div class="convo"><small>%d minutes</small><b>%s</b><p class="soft" style="margin:4px 0 0">%s</p><ol>%s</ol></div>' % (
+        c['minutes'], _e(c['topic']), _e(c['why']), ''.join('<li>%s</li>' % _e(s) for s in c['script'])) for c in data['conversations'])
+    weeks = '<div class="weeks">' + ''.join('<div><i>Week %d</i>%s</div>' % (p['week'], _e(p['step'])) for p in data['plan']) + '</div>'
+    foryou = ('<div class="foryou"><ul style="margin:0;padding-left:18px">' + ''.join('<li>%s</li>' % _e(x) for x in for_you) + '</ul><small>Written in your own Muse from the answers you kept for your advice only. '
+              + _e(nt) + ' never sees this, and it was never sent.</small></div>') if for_you else ''
+    how = ('<p style="margin-top:6px">%s</p>' % _e(data['caveats'])
+           + '<p class="soft">Read from both of your Psyches and the answers each of you chose to share. Answers kept for your advice only, and the safety questions, never left either of your phones. '
+             'This is coaching, not counselling or therapy: for anything that feels heavy, talk to a counsellor.</p>')
+    sections = [('You two', '#7b3fa0', duo), ('At a glance', '#2d5fa8', glance), ('How you each love', '#c2366d', love), ('Your pattern together', '#6a4bb5', pattern),
+                ('Disagreements and repair', '#c2571a', disagree), ('Everyday rhythms', '#2f7d6b', rhythms), ('The big decisions', '#9a5b12', decisions),
+                ('Strengths', '#2f7d6b', _sync_points(data['strengths'], 'What the two of you already do well.')), ('To practise', '#c2571a', _sync_points(data['growth'], 'Two things to practise, together.')),
+                ('Conversations to have', '#7b3fa0', convos), ('Your 4 weeks', '#c2366d', weeks), ('For you', '#6a4bb5', foryou), ('How this was read', '#5a4f66', how)]
+    body = ''.join('<section class="box" style="--c:%s"><h2><i>%02d</i>%s</h2>%s</section>' % (c, i, _e(t), inner) for i, (t, c, inner) in enumerate(s for s in sections if s[2]))
+    when = ''
+    try:
+        when = datetime.fromtimestamp(int(read.get('at')) / 1000).strftime('%-d %B %Y') if read.get('at') else ''
+    except (TypeError, ValueError, OverflowError, OSError):
+        pass
+    banner = ('<header class="banner" id="top">' + W_LOGO + '<div class="row"><div class="txt"><div class="facts">Psyche Together</div>'
+              '<h1>' + _e(nm) + ' &amp; ' + _e(nt) + '</h1><p class="lede">Your deep dive, from both of your Psyches and what each of you chose to share: how you love, how you disagree, the big decisions, and what to talk about next.</p>'
+              + '<div class="sub">' + _e(' · '.join(x for x in [when, 'written by Muse'] if x)) + '</div></div></div></header>')
+    viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>' if pics else ''
+    return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
+            '<title>' + _e('%s & %s · Psyche Together' % (nm, nt)) + '</title><style>' + W_CSS + SYNC_CSS + TOGETHER_CSS + '</style></head><body><div class="wrap">' + banner
+            + '<div style="height:14px"></div>' + body + '<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace.</footer></div>' + viewer
+            + '<script>' + SYNC_JS + '</script></body></html>')
+
+
+def save_together_page(read, profiles, role):
+    other = 'b' if role == 'a' else 'a'
+    pics = sync_card_pics((profiles.get(role) or {}).get('card'), clean_card((profiles.get(other) or {}).get('card')))
+    page = together_html(read, profiles, role, together_state().get('forYou'), pics)
+    if not page:
+        return None
+    names = [(profiles.get(r) or {}).get('firstName') or 'You' for r in (role, other)]
+    path = os.path.join(OUT, 'together', re.sub(r'-{2,}', '-', re.sub(r'[^\w-]+', '-', 'Psyche-Together-%s-%s' % tuple(names))).strip('-') + '.html')
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(page)
+        os.chmod(path, 0o600)
+        return path
+    except OSError:
+        return None
+
+
+def together_cli(argv):
+    """python3 bin/psyche.py together <link | join LINK | ask [PART] | answer JSON | share ID shared|own | submit | status | guide | save @FILE | show | own | foryou JSON | end>"""
+    cmd = argv[0] if argv else 'status'
+    arg = argv[1] if len(argv) > 1 else None
+    load = lambda a: json.loads(open(a[1:]).read() if str(a).startswith('@') else a)
+    if cmd == 'link':
+        return together_link(post_tool)
+    if cmd == 'join':
+        return together_join(post_tool, ' '.join(argv[1:]))
+    if cmd == 'ask':
+        return together_ask(arg)
+    if cmd == 'answer':
+        return together_answer(load(arg) if arg else {})
+    if cmd == 'skip':
+        s = together_state()
+        s['skipped'] = sorted(set((s.get('skipped') or []) + [arg]))
+        save_together(s)
+        return together_ask()
+    if cmd == 'share':
+        return together_share(arg, argv[2] if len(argv) > 2 else '')
+    if cmd == 'submit':
+        return together_submit(post_tool)
+    if cmd == 'status':
+        return together_status(post_tool)
+    if cmd == 'guide':
+        return together_guide(post_tool)
+    if cmd == 'save':
+        return together_save(post_tool, load(arg) if arg else {})
+    if cmd == 'show':
+        return together_show(post_tool)
+    if cmd == 'own':
+        return {'own': together_own(), 'about': 'Their own answers, kept for their advice only: write up to five short "For you" points from these and their own report, then python3 bin/psyche.py together foryou \'["…"]\'. Never sent.'}
+    if cmd == 'foryou':
+        return together_foryou(load(arg) if arg else [])
+    if cmd == 'end':
+        return together_end(post_tool)
+    return {'error': 'Unknown: ' + together_cli.__doc__}
+
+
 # ---------- result lines (README "Result lines are signed") ----------
 # A result's own lines on how to show it, and its buttons, come live from the
 # server, unsigned. Its show, after and first lines are left out (SKILL.md
@@ -5522,13 +6157,16 @@ def main(argv):
     if argv[0] == 'check-digest':
         print(json.dumps(check_digest(), ensure_ascii=False, indent=1))
         return
+    if argv[0] == 'together':
+        print(json.dumps(together_cli(argv[1:]), ensure_ascii=False, indent=1))
+        return
     if argv[0] == 'forget':
         everything = '--everything' in argv[1:]
         for d in (WORK, SOURCES, NOTES) + ((os.path.dirname(DIGEST), OUT) if everything else ()):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT):
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, TOGETHER, TOGETHER_KEPT):
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))
