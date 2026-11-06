@@ -322,7 +322,8 @@ async function route(req, res) {
     // names, still answer, for invites already sent). Muse fetching it gets a
     // short page pointing at SKILL.md; a person opening a friend's in a browser
     // gets a page.
-    const shortPath = /^\/(?:install|p)\/?$/.test(url.pathname) ? [url.pathname, undefined]
+    // /sync on its own is a locked link (README "Sync, locked on the device"): /sync#<code>, whose code a fetch never sends, so it answers as /install does.
+    const shortPath = /^\/(?:install|p|sync)\/?$/.test(url.pathname) ? [url.pathname, undefined]
       : /^\/(?:sync|p)\/([A-Za-z0-9_-]{22}|[a-z2-9]{8})\/?$/.exec(url.pathname);
     if (shortPath && req.method === 'GET') {
       const code = shortPath[1];
