@@ -6,7 +6,7 @@
 // is untouched (the Worker runs only on the routes below).
 //
 // Routes to add in Cloudflare (Workers > this Worker > Settings > Domains & Routes):
-//   psycheai.io/skill/*
+//   psycheai.io/skill/*      (bare psycheai.io/skill, the install address, is psycheai.io's own route: README "psycheai.io/skill")
 //   psycheai.io/sync/*
 //   psycheai.io/mcp
 //

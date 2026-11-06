@@ -323,7 +323,8 @@ async function route(req, res) {
     // short page pointing at SKILL.md; a person opening a friend's in a browser
     // gets a page.
     // /sync on its own is a locked link (README "Sync, locked on the device"): /sync#<code>, whose code a fetch never sends, so it answers as /install does.
-    const shortPath = /^\/(?:install|p|sync)\/?$/.test(url.pathname) ? [url.pathname, undefined]
+    // /skill too (README "psycheai.io/skill"): psycheai.io's Worker passes /skill/… here, so /skill/ answers as /install.
+    const shortPath = /^\/(?:install|p|sync|skill)\/?$/.test(url.pathname) ? [url.pathname, undefined]
       : /^\/(?:sync|p)\/([A-Za-z0-9_-]{22}|[a-z2-9]{8})\/?$/.exec(url.pathname);
     if (shortPath && req.method === 'GET') {
       const code = shortPath[1];
@@ -335,7 +336,7 @@ async function route(req, res) {
       const BASE = require('./lib/config').BASE_URL;
       const shared = code
         ? { title: (name || 'A friend') + ' wants to see how you two sync', description: 'Paste this link into Muse: PsycheAI writes your Psyche Card from your own Instagram and shows how you two click.' }
-        : { title: 'PsycheAI for Muse', description: 'Your personal AI coach that already knows you: a Psyche Card and report from your own Instagram. Paste into Muse: psycheai.io/muse' };
+        : { title: 'PsycheAI for Muse', description: 'Your personal AI coach that already knows you: a Psyche Card and report from your own Instagram. Paste into Muse: psycheai.io/skill' };
       // A link previewer (WhatsApp, an Instagram DM, iMessage…) gets the preview, with the same text as its body (README "Link previews").
       if (!inBrowser && preview.isPreviewer(req.headers['user-agent'])) {
         return send(res, 200, preview.page({ ...shared, url: BASE + url.pathname, base: BASE, text: skill.bootstrap(code ? { code, name } : {}) }), 'text/html');

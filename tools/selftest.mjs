@@ -1590,15 +1590,15 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       const previewState = { waInstall, waSync, imgType: img.headers.get('content-type'), imgW: imgBuf.readUInt32BE(16), imgH: imgBuf.readUInt32BE(20), imgSize: imgBuf.length, plainSkill };
       check('link previews: a link previewer (WhatsApp, an Instagram DM, iMessage) gets the install link and a Psyche link as a page with Open Graph tags and a 1200x630 image, with the same install text as its body; Muse and other fetchers still get the plain text',
         ((p) => p && /<meta property="og:title" content="PsycheAI for Muse">/.test(p.waInstall) && /<meta property="og:image" content="[^"]+\/preview\.png">/.test(p.waInstall) &&
-          /<meta property="og:description" content="[^"]*Paste into Muse: psycheai\.io\/muse">/.test(p.waInstall) && /<pre[^>]*># PsycheAI skill for Muse/.test(p.waInstall) &&
+          /<meta property="og:description" content="[^"]*Paste into Muse: psycheai\.io\/skill">/.test(p.waInstall) && /<pre[^>]*># PsycheAI skill for Muse/.test(p.waInstall) &&
           /<meta property="og:title" content="Mei wants to see how you two sync">/.test(p.waSync) && p.imgType === 'image/png' && p.imgW === 1200 && p.imgH === 630 && p.imgSize < 300000 &&
           /^# PsycheAI skill for Muse/.test(p.plainSkill))(previewState) &&
         require('../lib/preview.js').isPreviewer('facebookexternalhit/1.1') && !require('../lib/preview.js').isPreviewer('python-requests/2.31') && !require('../lib/preview.js').isPreviewer('curl/8.5.0'),
         JSON.stringify({ title: (previewState.waInstall.match(/og:title" content="[^"]*/) || [])[0], w: previewState.imgW, size: previewState.imgSize }));
       check('the short install link: psycheai.io/muse is what the install line, the install page and the preview give on app.psycheai.io (this server\'s own /install elsewhere), and SKILL.md and the install text name it as PsycheAI\'s short link',
-        /const shortInstall = \(\) => \(host\(\) === 'app\.psycheai\.io' \? 'psycheai\.io\/muse' : host\(\) \+ '\/install'\);/.test(require('node:fs').readFileSync(new URL('../lib/skill.js', import.meta.url), 'utf8')) &&
-        require('../lib/skill.js').shortInstall() === 'localhost:8787/install' && /PsycheAI installs only from app\.psycheai\.io \(psycheai\.io\/muse is its short link\)/.test(require('../lib/skill.js').skillMd()) &&
-        /PsycheAI installs only from app\.psycheai\.io \(psycheai\.io\/muse is its short link\)/.test(require('../lib/skill.js').bootstrap()) && />psycheai\.io\/muse<\/text>/.test(require('../lib/preview.js').svg()));
+        /const shortInstall = \(\) => \(host\(\) === 'app\.psycheai\.io' \? 'psycheai\.io\/skill' : host\(\) \+ '\/install'\);/.test(require('node:fs').readFileSync(new URL('../lib/skill.js', import.meta.url), 'utf8')) &&
+        require('../lib/skill.js').shortInstall() === 'localhost:8787/install' && /PsycheAI installs only from app\.psycheai\.io \(psycheai\.io\/skill is its short link\)/.test(require('../lib/skill.js').skillMd()) &&
+        /PsycheAI installs only from app\.psycheai\.io \(psycheai\.io\/skill is its short link\)/.test(require('../lib/skill.js').bootstrap()) && />psycheai\.io\/skill<\/text>/.test(require('../lib/preview.js').svg()));
       check('a Psyche link is /sync/<code> and the install link /install (the first /p names still answer): Muse fetching it gets a short plain page of where the skill\'s files are (whose link it is, with a code), nothing to follow; SKILL.md describes its install; a browser opening a code gets the page; a bad code is gone',
         page.status === 410 && gone.status === 410 &&
         asPage.status === 200 && /Mei wants to see how you two sync/.test(asPageText) && /Sync with http/.test(asPageText) && /tap <b>Always allow this site<\/b>, so it only asks once/.test(asPageText) && /<pre id="invite"[^>]*>Install \S+\/sync\/[A-Za-z0-9_-]{22} and generate my Psyche\.<\/pre>/.test(asPageText) && asPageText.includes('/sync/' + code + ' and generate') &&
@@ -2096,6 +2096,7 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         E.leaks = ['Mei', 'Ana', 'Mulan', 'Odysseus', 'Organiser with a warm centre', 'Takes things apart', 'Pickleball', 'weekends you both remember', 'Racquet sports', 'Ana tip 1']
           .filter(w => kept.includes(w)).concat(E.code && kept.includes(E.code) ? ['the code'] : []);
         E.bare = await (await fetch(base + '/sync')).text();
+        E.skillRoute = await Promise.all(['/skill', '/skill/'].map(async x => (await fetch(base + x)).text()));
         skillState.e2e = E;
       }
       skillState.lock = JSON.parse((await execFile('python3', ['-c', `import importlib.util, sys, json
@@ -2377,7 +2378,8 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
         JSON.stringify(E.list.nextStep.buttons) === '["Show my Sync with Ana","Sync with someone new"]' && E.check.say === 'Ana synced with you: your Sync is ready.' &&
         E.meiSees.written && E.meiSees.name === 'Ana' && /For you, Mei<\/h4><ul><li>Mei tip 1/.test(E.meiPage) && /For you, Ana<\/h4><ul><li>Ana tip 1/.test(E.anaPage) &&
         /<b>Racquet sports<\/b><span><i class="ia">Mei<\/i> Pickleball<\/span><span><i class="ib">Ana<\/i> Tennis/.test(E.meiPage) && /<svg class="radar2"/.test(E.meiPage) &&
-        E.rows >= 4 && E.leaks.length === 0 && /^# PsycheAI skill for Muse/.test(E.bare) && !/Psyche link:/.test(E.bare))(skillState.e2e),
+        E.rows >= 4 && E.leaks.length === 0 && /^# PsycheAI skill for Muse/.test(E.bare) && !/Psyche link:/.test(E.bare) &&
+        E.skillRoute.every(t => /^# PsycheAI skill for Muse/.test(t)) && require('../lib/skill.js').installPrompt() === 'Install localhost:8787/install and generate my Psyche')(skillState.e2e),
       JSON.stringify(skillState.e2e && { ...skillState.e2e, link: undefined, invite: undefined, meiPage: (skillState.e2e.meiPage || '').length, anaPage: (skillState.e2e.anaPage || '').length,
         toWrite: skillState.e2e.toWrite && { keys: Object.keys(skillState.e2e.toWrite), a: skillState.e2e.toWrite.personA, b: skillState.e2e.toWrite.personB && skillState.e2e.toWrite.personB.name, facts: skillState.e2e.toWrite.derivedFacts } }).slice(0, 3000));
     {
@@ -2875,7 +2877,7 @@ print(json.dumps([os.path.getsize(path), len(b) * 3 // 4, m._img_src(b)[:23], m.
     check('the sample report (README "A sample report"): the skill\'s own report file for the fictional Emily Carter, her card large at the top with the sample line and how to get one\'s own, every part, the roast closed at the end, and a footer that says it is a sample; served at /sample',
       served.status === 200 && /text\/html/.test(served.headers.get('content-type') || '') && servedText === sampleHtml &&
       /<div class="sample"><p>A sample: Emily Carter is fictional\. This is the report file PsycheAI makes in your Muse chat, written from your own Instagram\.<\/p><button type="button" class="cardbtn top" id="cardopen"/.test(sampleHtml) &&
-      /Get yours: paste psycheai\.io\/muse into Muse/.test(sampleHtml) && (sampleHtml.match(/class="cardpic"/g) || []).length === 1 &&
+      /Get yours: paste psycheai\.io\/skill into Muse/.test(sampleHtml) && (sampleHtml.match(/class="cardpic"/g) || []).length === 1 &&
       ['Overview', 'Who you are', 'What drives you', 'How you connect', 'How you work', 'Putting it together'].every(t => sampleHtml.includes('<span class="ttl">' + t + '</span>')) &&
       /<details class="roast" id="roast">/.test(sampleHtml) && /A sample report for a fictional reader\./.test(sampleHtml) && !/This file was made in your own Muse workspace/.test(sampleHtml),
       served.status + ' ' + sampleHtml.length);

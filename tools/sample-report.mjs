@@ -34,7 +34,7 @@ except ImportError:
 page = m.report_html(json.load(open(sys.argv[3])), 'Emily Carter', 'A sample report', base64.b64encode(raw).decode(), None,
                      'Sample Psyche Report', json.load(open(sys.argv[4])),
                      {'note': 'A sample: Emily Carter is fictional. This is the report file PsycheAI makes in your Muse chat, written from your own Instagram.',
-                      'cta': 'Get yours: paste psycheai.io/muse into Muse'})
+                      'cta': 'Get yours: paste psycheai.io/skill into Muse'})
 sys.stdout.write(page)`;
 const page = execFileSync('python3', ['-c', py, join(app, 'skill', 'bin', 'psyche.py'), join(site, 'promo', 'assets', 'card-char-mulan.png'),
   join(work, 'view.json'), join(work, 'bonus.json')], { maxBuffer: 1 << 26 }).toString();
