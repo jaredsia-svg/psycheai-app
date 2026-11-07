@@ -804,22 +804,22 @@ function signup(email, d) {
   const all = instructions.MUSE_PROCEDURE;
   // The core: the PsycheAI read, self first, no questions.
   check('the core asks for access first, Instagram and its messages, and offers to connect messages when they aren\'t, with a reason that isn\'t Pair', /0\. Before reading anything, one short question at a time, so they never wait on a blank chat\. The first message goes at once, before any tool/.test(core) && /their Instagram messages/.test(core) &&
-    /the buttons "I've connected them" and "Continue without messages"/.test(core) && /the connect link or button Muse gives back from that check, for them to tap \(never tap it or start connecting yourself; only without one, say Muse's settings is where\)/.test(core) && /once they say they've connected them \(the button or their own words\), check again and start/.test(core) && /Then the messages question: "Your chat messages make it much sharper: that's where you're most yourself\.", with the buttons "Include my messages \(Recommended\)" and "Posts only", and no others; when they have already said which \(in their own words\), leave the question out\. While they read it, look up/.test(core) &&
+    /the buttons "I've connected them" and "Continue without messages" in that same message, under the link \(never words that point to buttons that aren't shown/.test(core) && /the connect link or button Muse gives back from that check, for them to tap \(never tap it or start connecting yourself; only without one, say Muse's settings is where\)/.test(core) && /once they say they've connected them \(the button or their own words\), check again and start/.test(core) && /Then the messages question: "Your chat messages make it much sharper: that's where you're most yourself\.", with the buttons "Include my messages \(Recommended\)" and "Posts only", and no others; when they have already said which \(in their own words\), leave the question out\. While they read it, look up/.test(core) &&
     /On their tap, reply at once: with more than one account, "Which account should I read\?" with a button naming each \("@name"\), and no other buttons; with one, no question\./.test(core) &&
     /"Posts only" reads posts and stories only \(with the skill, collect --no-messages\) and nothing more is asked about messages/.test(core) && /from the lists of accounts on Muse's two Instagram connections \(no message is read\)/.test(core) &&
     /MESSAGES FIRST then runs for "Include my messages" on an account whose messages aren't connected, and decides what comes next/.test(core) && (core.match(/Your messages are where you're most yourself/g) || []).length === 1 && /Your messages are where you're most yourself/.test(core) && !/message your matches straight from here/.test(core));
   check('Sync starts from the user\'s own link, is written from PsycheAI\'s guide, never as JSON or a score, and a No is never told',
     /up to 10 of the people they message most on Instagram, from their own messages, as buttons by name/.test(core) && /When they tap a name, send the invite to that person as an Instagram message, say in one line who it went to/.test(core) && /never send them to PsycheAI/.test(core) && /don't ask again what they just chose/.test(core) && /never retell it in the chat, never show the JSON, and no score/.test(core) && /call save_sync with it/.test(core) &&
-      /"Sync with a friend": call sync_link/.test(core) && /A Psyche link someone sent them \(app\.psycheai\.io\/sync\/…\): it never syncs on its own\..*What's next starts with one more button, "Sync with <the friend's first name>".*A Sync happens only when they choose it: on that tap.*call sync_with with link, then get_sync/.test(core) &&
-      /Syncing is the one thing that shares, so it's said when they choose it: .*"Syncing shares your Psyche Card's few lines and motivation scores with the friends you sync with, locked on your device so PsycheAI can't read them: never your report or your messages\.", with the buttons "Sync" and "Not now"/.test(core) &&
+      /"Sync with a friend": call sync_link/.test(core) && /A Psyche link someone sent them \(app\.psycheai\.io\/sync\/…\): it never syncs on its own\..*What's next starts with one more button, "Sync with <the friend's first name>".*A Sync happens only when they choose it: on that tap, call sync_with with link\. With the skill and a link with # in it, its result also has what get_sync gives, so write the Sync from it and save it as its save line says; otherwise call get_sync with the sync id it returns/.test(core) &&
+      /Syncing is the one thing that shares, so it's said when they choose it: .*"Syncing shares your Psyche Card's few lines and motivation scores with the friends you sync with, locked on your device so PsycheAI can't read them: never your report or your messages\."/.test(core) && /go straight on as below, with no question and no extra tap/.test(core) && !/with the buttons "Sync" and "Not now"/.test(core) &&
       /PsycheAI never takes a handle/.test(core) && /never dating, and nothing to do with Psyche Pair/.test(core) && /call get_syncs once/.test(core));
   check('a friend\'s Psyche link with a Psyche already kept goes straight to the Sync (no welcome, no new read), a Sync from a friend\'s link offers to let them know on Instagram, and the morning check is set with a line, not a question',
-    /If they already have one \(with the skill, status says hasPsyche\), even when the message also says "generate my Psyche", there is no welcome and no new read: reply at once, "You already have your Psyche, so you can sync straight away\.", with "Sync with <the friend's first name>"/.test(core) &&
+    /If they already have one \(with the skill, status says hasPsyche\), their Psyche is already made, so there is no welcome and no new read: with the skill, run python3 bin\/psyche\.py sync-preview <the link>, which looks at the link without syncing, and reply with its nextStep as it is/.test(core) && /without the skill, reply "You already have your Psyche, so you can sync straight away\.", with "Sync with <the friend's first name>"/.test(core) && !/even when the message also says "generate my Psyche"/.test(core) &&
     /After a Sync made from a link someone sent them, its buttons start with "Let <their first name> know"\. On that tap, find that person among the people they message on Instagram/.test(core) &&
     /"I just synced with you on PsycheAI\. Ask your Muse: Show my Syncs"/.test(core) &&
     /A daily Sync check, set once: when sync_link says offerDailyCheck, right after its invite, set a daily reminder/.test(core) && /Say in one line, with no question first, "I'll check each morning and only tell you if a friend has synced\./.test(core) &&
     !/Want me to check each morning|"Yes, every morning"/.test(core) &&
-    /When the message carries a friend's Psyche link \(.*\/sync\/<code>\) and status says `hasPsyche`: true, they already have their Psyche, so there is no introduction and no new read/.test(require('../lib/skill.js').skillMd()) &&
+    /When the message carries a friend's Psyche link \(.*\/sync\/<code>\) and status says `hasPsyche`: true, their Psyche is already made, so there is no introduction and no new read: run `python3 bin\/psyche\.py sync-preview <the link>`, which looks at the link without syncing, and reply with its nextStep as it is/.test(require('../lib/skill.js').skillMd()) &&
     /unless it carries a friend's Psyche link and status says `hasPsyche`: true/.test(require('../lib/skill.js').skillMd()));
   check('nothing the host is handed sets its role: no "You are…" in the instructions, the guides or a tool description',
     !/\byou are (running|psycheai|an?\b)/i.test(instructions.MUSE_PROCEDURE + instructions.CHATGPT_PROCEDURE + JSON.stringify(mcp.TOOLS)) && /^PsycheAI is a personal AI coach/.test(core) && !/connector/i.test(require("../lib/skill.js").skillMd()));
@@ -1039,7 +1039,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
     !('page' in pub) && /^For the chat: sections is the report in short, each a title and its points \(its finding as bullets\)/.test(pub.show) && !/Instagram Story|Attach the|give its link/.test(pub.show) && !('pdf' in pub) && pub.sections.length === 2 && pub.sections[0].title === 'Overview' && !('points' in pub.sections[0]) && JSON.stringify(pub.sections[1].points) === JSON.stringify(['MBTI: ENFJ.', 'Big Five: high Openness (80).']) && JSON.stringify(pub.attach) === '[]' && !/PDF/.test(pub.show) && !('full' in pub) && /Nothing of the report is kept on PsycheAI's servers, so there is no link to it on psycheai\.io\./.test(pub.show) &&
     !/What your Instagram shows that you might not/.test(instructions.MUSE_PROCEDURE) &&
     !/story/.test(pub.show) && !/Share your card to your Instagram Story: <story>/.test(instructions.MUSE_PROCEDURE) && /image is their Psyche Card as a picture/.test(pub.show) &&
-    /"Your Psyche Card and Report are ready\." Then their Psyche Card as a picture \(publish_psyche's image; with the PsycheAI skill, the file \`python3 bin\/psyche\.py show card\` saves, or its image link if it saved none\), right under that line/.test(instructions.MUSE_PROCEDURE) &&
+    /"Your Psyche Card and Report are ready\." The first time, .*"I've named this chat PsycheAI, so it's easy to find\." Then their Psyche Card as a picture \(publish_psyche's image; with the PsycheAI skill, the file \`python3 bin\/psyche\.py show card\` saves, or its image link if it saved none\), right under those lines/.test(instructions.MUSE_PROCEDURE) &&
     !/Share my card to Instagram Story/.test(instructions.MUSE_PROCEDURE + JSON.stringify(pub.nextStep || {})) &&
     /The Psyche Card is always this picture\./.test(instructions.MUSE_PROCEDURE));
   {
@@ -1258,7 +1258,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
         all.length > 100 && boxes.length >= 1 && !/Mei|Ana|Mulan|Moana|ENFJ|hiking|platonic|howToPartner/.test(all) && !boxes.some(b => /Mulan|Moana|hiking|platonic|howToPartner|quiet organiser/.test(b)) &&
         !all.includes(code) && store.kvGet('synccode', keyring.syncId(code)).u === user.id, JSON.stringify({ len: all.length, n: boxes.length, plain: (/Mei|Ana|Mulan|Moana|ENFJ|hiking|platonic|howToPartner/.exec(all) || [null])[0], code: all.includes(code) }));
     }
-    check('Sync: someone not here yet gets a one-paste invite: what their friend got and that it\'s private, then install the skill, make their card, sync', /^I got [^.]{2,40} for my Psyche Card\. Get yours now and sync with me by pasting this into your Muse app: Install \S+\/sync\/[A-Za-z0-9_-]{22} and generate my Psyche\.$/.test(invite.invite) && require('../lib/skill.js').installPrompt({ code: 'abcdefgh', name: 'Mei', character: 'Mulan<script>' }) === 'I got Mulanscript for my Psyche Card. Get yours now and sync with me by pasting this into your Muse app: Install localhost:8787/sync/abcdefgh and generate my Psyche.' && sync.linkOwner(invite.invite) === user.id);
+    check('Sync: someone not here yet gets a one-paste invite naming the sender, never "I" (pasted by the friend, "I got Baymax" read as the friend\'s own card), with the name twice and no pronoun, then install the skill, make their card, sync', /^([^.]{1,30}) got [^.]{2,40}\. Get your own Psyche Card and sync with \1 by pasting this into your Muse app: Install \S+\/sync\/[A-Za-z0-9_-]{22} and generate my Psyche\.$/.test(invite.invite) && require('../lib/skill.js').installPrompt({ code: 'abcdefgh', name: 'Mei!', character: 'Mulan<script>' }) === 'Mei got Mulanscript. Get your own Psyche Card and sync with Mei by pasting this into your Muse app: Install localhost:8787/sync/abcdefgh and generate my Psyche.' && require('../lib/skill.js').installPrompt({ code: 'abcdefgh', character: 'Mulan' }) === 'I got Mulan for my Psyche Card. Get yours now and sync with me by pasting this into your Muse app: Install localhost:8787/sync/abcdefgh and generate my Psyche.' && !/\b(his|her|him)\b/.test(invite.invite) && sync.linkOwner(invite.invite) === user.id);
     const keys = JSON.stringify(Object.keys(store.kvAll ? Object.fromEntries(store.kvAll('syncreq')) : {})) + JSON.stringify(Object.fromEntries(store.kvAll('synchandle')));
     check('Sync: no handle appears in a key', !/jun\.lee|mei\.tan/i.test(keys));
     check('Sync: only the card is kept, locked under the code, never the report', !/The quiet organiser/.test(JSON.stringify(store.kvGet('synccard', user.id))) &&
@@ -2078,13 +2078,19 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
           fsx.writeFileSync(pathx.join(d, 'bin', 'psyche.py'), fsx.readFileSync(pathx.join(dir, 'bin', 'psyche.py')));
           fsx.copyFileSync(new URL('../skill/guide.json', import.meta.url), pathx.join(d, 'guide.json'));
           fsx.writeFileSync(pathx.join(d, 'report.json'), JSON.stringify({ report: answer, name }));
-          return async (...args) => JSON.parse((await execFile('python3', [pathx.join(d, 'bin', 'psyche.py'), ...args], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: k, NO_PROXY: '*', no_proxy: '*' }, timeout: 60000 })).stdout);
+          const run = async (...args) => JSON.parse((await execFile('python3', [pathx.join(d, 'bin', 'psyche.py'), ...args], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: k, NO_PROXY: '*', no_proxy: '*' }, timeout: 60000 })).stdout);
+          run.dir = d;
+          return run;
         };
         const mei = workspace('Mei Tan', answerFor('Mulan', 'ENFJ', 'Organiser with a warm centre', ['Pickleball', 'Reading']));
         const ana = workspace('Ana Cruz', answerFor('Odysseus', 'INTP', 'Takes things apart to fix them', ['Tennis', 'Reading']));
         const E = {};
         E.link = await mei('call', 'sync_link', '{}');
         E.code = ((/#([A-Za-z0-9_-]{22})$/.exec(E.link.url || '')) || [])[1];
+        // A friend's link, looked at first (README "A friend's link, named first"): whose it is and the reply, with nothing synced; their own link says so.
+        E.preview = await ana('sync-preview', E.link.url);
+        E.ownPreview = await mei('sync-preview', E.link.url);
+        E.listBefore = await mei('call', 'get_syncs', '{}');
         E.joined = await ana('call', 'sync_with', JSON.stringify({ link: E.invite = E.link.invite }));
         E.toWrite = await ana('call', 'get_sync', JSON.stringify({ sync: E.joined.sync }));
         const syncAnswer = { mode: 'platonic', summary: 'Mei plans and Ana sparks: weekends you both remember.',
@@ -2092,10 +2098,15 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
           differ: [{ title: 'Different paces', detail: 'Mei plans early and Ana late.', evidence: [] }],
           howToPartner: { forA: ['Ana tip 1', 'Ana tip 2', 'Ana tip 3'], forB: ['Mei tip 1', 'Mei tip 2', 'Mei tip 3'], together: ['Dinner', 'A list'] }, caveats: 'Two cards only.',
           inCommon: { interests: [{ theme: 'Racquet sports', a: 'Tennis', b: 'Pickleball' }, { theme: 'Skydiving', a: 'Skydiving', b: 'Reading' }], values: [] } };
-        E.saved = await ana('call', 'save_sync', JSON.stringify({ sync: E.joined.sync, answer: syncAnswer }));
+        // Saved the way sync_with's save line says, from work/sync-answer.json, which goes once it's saved.
+        fsx.mkdirSync(pathx.join(ana.dir, 'work'), { recursive: true });
+        fsx.writeFileSync(pathx.join(ana.dir, 'work', 'sync-answer.json'), JSON.stringify({ sync: E.joined.sync, answer: syncAnswer }));
+        E.saved = await ana('call', 'save_sync', '@' + pathx.join(ana.dir, 'work', 'sync-answer.json'));
+        E.answerGone = !fsx.existsSync(pathx.join(ana.dir, 'work', 'sync-answer.json'));
         E.bad = await ana('call', 'save_sync', JSON.stringify({ sync: E.joined.sync, answer: { ...syncAnswer, summary: 'A clash of styles.' } }));
-        E.list = await mei('call', 'get_syncs', '{}');
         E.check = await mei('call', 'get_syncs', JSON.stringify({ check: true }));
+        E.checkPage = E.check.file && fsx.existsSync(E.check.file) ? fsx.readFileSync(E.check.file, 'utf8') : '';
+        E.list = await mei('call', 'get_syncs', '{}');
         E.meiSees = await mei('call', 'get_sync', JSON.stringify({ sync: E.list.syncs && E.list.syncs[0] && E.list.syncs[0].sync }));
         E.meiPage = E.meiSees.file && fsx.existsSync(E.meiSees.file) ? fsx.readFileSync(E.meiSees.file, 'utf8') : '';
         E.book = E.list.book && fsx.existsSync(E.list.book) ? fsx.readFileSync(E.list.book, 'utf8') : '';
@@ -2309,7 +2320,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       skillState.verify = await run('verify');
       skillState.readyPdf = fsx.readdirSync(pathx.join(dir, 'out')).filter(f => /\.pdf$/i.test(f)).length;
       for (const part of ['card', 'summary', 'pdf', 'links', 'next', 'nope']) skillState.parts[part] = await run('show', part);
-      skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche-Card(-.+)?-\d{8}(-\d+)?\.png$/.test(f));
+      skillState.cardKept = fsx.readdirSync(pathx.join(dir, 'out')).some(f => /^Psyche-Card(-.+)?-\d{8}(-\d+){0,2}\.png$/.test(f));
       skillState.pdfLocal = skillState.parts.pdf && skillState.parts.pdf.file ? fsx.readFileSync(skillState.parts.pdf.file, 'utf8') : null;
       // The skill folder's account deleted, as when the skill is removed and installed again: the spare copy keeps the same account.
       const before = JSON.parse(fsx.readFileSync(pathx.join(dir, '.account.json'), 'utf8')).refresh_token;
@@ -2381,8 +2392,17 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       /Only when they Sync does anything of theirs leave: their card summary \(the few lines on their Psyche Card, and their scores on the ten motivations\) and the written Sync, both locked here under the Sync link's code before they're sent, so PsycheAI keeps and passes them on but can't read them/.test(skillMd) &&
       /A result's `file` is a file saved here for the chat \(a Sync's page\): attach it\./.test(skillMd),
       JSON.stringify(skillState.syncPage));
+    check('a friend\'s link is named before anything is synced (sync-preview: their name and character, and the reply with "Sync with <name>"), their own link says so, sync_with gives what get_sync gives with how to save it, the answer file goes once saved, and a new Sync comes as its own page from the morning check and from My Syncs, the same page the friend got (README "One call to a Sync", "A new Sync, as its own page")',
+      ((E) => E && E.preview && E.preview.own === false && E.preview.with === 'Mei' && E.preview.character === 'Mulan' && E.preview.hasPsyche === true &&
+        E.preview.nextStep && E.preview.nextStep.say === 'Mei sent you their Psyche link. You already have your Psyche, so you can sync straight away.' && JSON.stringify(E.preview.nextStep.buttons) === '["Sync with Mei","Not now"]' &&
+        E.ownPreview && E.ownPreview.own === true && /your own Psyche link/.test(E.ownPreview.nextStep.say) && !(E.listBefore.syncs || []).length &&
+        E.joined.status === 'synced' && E.joined.with === 'Mei' && E.joined.personA && E.joined.personB && E.joined.derivedFacts && E.joined.schema && !('next' in E.joined) &&
+        /call save_sync @work\/sync-answer\.json/.test(E.joined.save || '') && /incompatible/.test(E.joined.save) && E.answerGone &&
+        E.check.quiet === false && /Psyche-Sync-Mei-Ana\.html$/.test(E.check.file || '') && JSON.stringify(E.check.buttons) === '["Sync with someone new","Done"]' && E.check.sync === E.list.syncs[0].sync &&
+        /Mei plans and Ana sparks/.test(E.checkPage) && /Psyche-Sync-Mei-Ana\.html$/.test(E.list.file || '') && E.list.book && E.list.file !== E.list.book)(skillState.e2e),
+      JSON.stringify(((E) => E && { preview: E.preview, own: E.ownPreview, joined: E.joined && Object.keys(E.joined), save: E.joined && E.joined.save, gone: E.answerGone, check: E.check, list: E.list && { file: E.list.file, book: E.list.book } })(skillState.e2e)).slice(0, 1500));
     check('Sync, locked on the device (README "Sync, locked on the device"): a link made here carries its code after "#", a friend syncs, writes and saves, the other side reads it by name with the tips the right way round and a page of its own, the morning check names them, a banned word comes back to fix, and nothing readable (no name, card text, summary or code) is kept on the server',
-      ((E) => E && E.code && /^http:\/\/127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.url) && /^I got Mulan for my Psyche Card\. Get yours now and sync with me by pasting this into your Muse app: Install 127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22} and generate my Psyche\.$/.test(E.link.invite) &&
+      ((E) => E && E.code && /^http:\/\/127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.url) && /^([^.]{1,30}) got Mulan\. Get your own Psyche Card and sync with \1 by pasting this into your Muse app: Install 127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22} and generate my Psyche\.$/.test(E.link.invite) &&
         E.link.offerDailyCheck === true && E.link.nextStep && E.joined.status === 'synced' && E.joined.with === 'Mei' && E.toWrite.spec && E.toWrite.personB.name === 'Mei' && E.toWrite.personA.name === 'Ana' &&
         !('motives' in E.toWrite.personA) && /Interests in common \(exact matches only\): Reading/.test(E.toWrite.derivedFacts) && /save_sync gives back its page/.test(E.toWrite.task) &&
         E.saved.saved && E.saved.name === 'Mei' && /Racquet sports/.test(E.anaPage) && !/Skydiving/.test(E.anaPage) && E.bad.saved === false && /clash/.test(E.bad.problems.join(' ')) &&
@@ -2413,9 +2433,9 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       /EXPLAIN AND CORRECT, with the PsycheAI skill, when they ask why you said something or say something in it is off \(there are no buttons for these\)\. "Explain why you said this": run python3 bin\/psyche\.py why/.test(instructions.MUSE_PROCEDURE) && /"Not me", "Partly" and "Used to be"/.test(instructions.MUSE_PROCEDURE) &&
       /move it only as far as the rest of the evidence allows/.test(instructions.MUSE_PROCEDURE) && /Never argue with a correction/.test(instructions.MUSE_PROCEDURE) &&
       /What they corrected \(python3 bin\/psyche\.py correct, with no ID, lists it\) is read before writing/.test(instructions.MUSE_PROCEDURE) &&
-      /name this one "PsycheAI" and end with one line, "I've named this chat PsycheAI, so it's easy to find\."/.test(instructions.MUSE_PROCEDURE) &&
+      /2\. ONE message: "Your Psyche Card and Report are ready\." The first time, if Muse lets you rename a chat: name this one "PsycheAI" just before this message, and right after that first line add one line, "I've named this chat PsycheAI, so it's easy to find\."/.test(instructions.MUSE_PROCEDURE) && !/end with one line, "I've named this chat/.test(instructions.MUSE_PROCEDURE) &&
       // Muse can rename a chat but not pin one (7 Nov 2026): the first run renames it when the Psyche is delivered, in plain words, and no line asks for a pin.
-      /Then, the first time, name this chat "PsycheAI" \(Muse can rename a chat\) and say so in one line: "I've named this chat PsycheAI, so it's easy to find\."/.test(require('../lib/skill.js').skillMd()) &&
+      /The first time, name this chat "PsycheAI" \(Muse can rename a chat\) just before that message, and put one line in it right after "Your Psyche Card and Report are ready\.": "I've named this chat PsycheAI, so it's easy to find\."/.test(require('../lib/skill.js').skillMd()) &&
       !/\bpin (it|this chat)\b|Pin it in your chat list/i.test(instructions.MUSE_PROCEDURE + require('../lib/skill.js').skillMd()) &&
       !/without telling|silently|don't mention|do not mention|is the go-ahead|read this file again/i.test(require('../lib/skill.js').skillMd()),
       JSON.stringify(skillState.leaving && skillState.leaving.explain).slice(0, 500));
@@ -2549,10 +2569,10 @@ print(json.dumps([m.depth_problems(thin), band, m.depth_problems(full), m.canoni
 spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 m.local_time({'user_local': '2026-11-03 01:37:00', 'utc': '2026-11-02 17:37:00'})
 off = m.SEEN_OFFSET[0]
-day = m.local_now().strftime('%d%m%Y')
-print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_tag({'fileTag': day + '-2'}), m.file_tag({'fileTag': '01012020 (4)'}), day]))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
+day = m.local_now().strftime('%d%m%Y-%H%M')
+print(json.dumps([off, m.file_tag(None), m.file_tag({'fileTag': day}), m.file_tag({'fileTag': day + '-2'}), m.file_tag({'fileTag': m.local_now().strftime('%d%m%Y')}), day]))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
       const src = fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8');
-      check('each run\'s files have names of their own, on the user\'s date: the first Psyche saved on a day is "…-03112026", the next "…-2", then "-3", with no spaces (Muse\'s chat showed "Image not found" for a name with them); the date is the user\'s, from the offset their Instagram times showed (user_local beside utc, kept by collect), not Muse\'s UTC clock (the Muse phone app showed its stored copy of the last run\'s report under the same name)',
+      check('each run\'s files have names of their own, on the user\'s date and time ("…-03112026-0137"), with no history needed, so a new Psyche after "Delete my PsycheAI data" never reuses a deleted run\'s name (Muse on a laptop showed the deleted run\'s card); a second save in the same minute adds "-2", then "-3", with no spaces (Muse\'s chat showed "Image not found" for a name with them); the date is the user\'s, from the offset their Instagram times showed (user_local beside utc, kept by collect), not Muse\'s UTC clock (the Muse phone app showed its stored copy of the last run\'s report under the same name)',
         got[0] === 480 && got[1] === got[5] && got[2] === got[5] + '-2' && got[3] === got[5] + '-3' && got[4] === got[5] &&
         /out = dict\(out, fileTag=file_tag\(read_first\(\[LAST\]\) or read_first\(\[TAG_KEPT\]\)\)\)/.test(src) && /write_private\(\[TAG_KEPT\], \{'fileTag': out\['fileTag'\]\}\)/.test(src) && /'utcOffset': SEEN_OFFSET\[0\]/.test(src) && /tag = \(read_first\(\[LAST\]\) or \{\}\)\.get\('fileTag'\)/.test(src), JSON.stringify(got));
     }
@@ -2615,7 +2635,7 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
       ((S) => S && /\/sync#[A-Za-z0-9_-]{22}$/.test(S.url || '') && /Install \S+\/sync#/.test(S.invite || ''))(skillState.syncAfterLocal), JSON.stringify(skillState.syncAfterLocal).slice(0, 300));
     check('publishing sends nothing about them (README "Nothing leaves Muse unless they Sync"): the saved Psyche keeps its card summary here, no card key comes back, and the card is drawn here as a PNG',
       ((A) => A && A.last.ok && A.last.card && A.last.card.fullName === 'Mei Tan' && !('image' in A.last) && !('cardKey' in A.last) && !A.keys.card)(skillState.afterBare) &&
-        ((C) => C && /\/out\/Psyche-Card(-[^/ ]+)?-\d{8}(-\d+)?\.png$/.test(C.file || '') && C.magic === 'PNG')(skillState.afterBareReady),
+        ((C) => C && /\/out\/Psyche-Card(-[^/ ]+)?-\d{8}(-\d+){0,2}\.png$/.test(C.file || '') && C.magic === 'PNG')(skillState.afterBareReady),
       JSON.stringify({ last: skillState.afterBare && Object.keys(skillState.afterBare.last), keys: skillState.afterBare && Object.keys(skillState.afterBare.keys), card: skillState.afterBareReady }).slice(0, 400));
     check('every command runs as python3 bin/psyche.py: a file fetched with curl isn\'t executable, and a Muse run lost its first collect to "Permission denied" (exit 126)',
       /Every command runs as `python3 bin\/psyche\.py <command>`, never `bin\/psyche\.py` on its own/.test(skillMd) && !/(?<!python3 )`bin\/psyche\.py (collect|call|show|status|first-run|check-answer)/.test(skillMd) &&
@@ -2683,7 +2703,7 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
       check('a saved Psyche is shown a part at a time: card (saved as a picture), summary (the report file), pdf (now the report file too: there is no PDF), next, each with only its own piece, and no links part: nothing is kept to link to',
         P.summary && P.summary.sections[0].title === 'Overview' && !P.summary.url && P.pdf && JSON.stringify(P.pdf) === JSON.stringify(P.summary) &&
         P.links && /^Parts: ready, card, summary, pdf, next$/.test(P.links.error || '') && P.next && P.next.nextStep.buttons[0] === 'Reveal my roast 🔥' && P.nope && /Parts: ready, card, summary/.test(P.nope.error) &&
-        P.card && /\/out\/Psyche-Card(-[^/ ]+)?-\d{8}(-\d+)?\.png$/.test(P.card.file || '') && skillState.cardKept === true && /`python3 bin\/psyche\.py show card` \(their Psyche Card as a picture/.test(skillMd) && /never a file sent earlier in the chat, which would be the last Psyche/.test(skillMd) &&
+        P.card && /\/out\/Psyche-Card(-[^/ ]+)?-\d{8}(-\d+){0,2}\.png$/.test(P.card.file || '') && skillState.cardKept === true && /`python3 bin\/psyche\.py show card` \(their Psyche Card as a picture/.test(skillMd) && /never a file sent earlier in the chat, which would be the last Psyche/.test(skillMd) &&
         /\*\*After publish_psyche \(or republish\)\*\* the script answers only that it's saved/.test(skillMd), JSON.stringify(P).slice(0, 500));
     }
     check('a bare answer file publishes with --name (no failed first publish for want of {"answer", "name"}); check-answer returns findings only, never a line telling Muse to publish (Muse flagged one)',
@@ -2787,7 +2807,7 @@ print(json.dumps([m.with_reply({'accounts': None, 'problem': 'No personal Instag
     }
     check('show ready refuses while a read is newer than the saved Psyche, so the previous card and report never come back as the new ones; the run\'s file tag is kept outside the skill folder too, so a reinstall still gets a new file name (forget --everything deletes it)',
       skillState.readyStale && skillState.readyStale.saved === false && /not saved yet/.test(skillState.readyStale.error || '') && (skillState.readyStale.newer || []).includes('collect') &&
-      !skillState.readyStale.card && !skillState.readyStale.report && skillState.tagKept && skillState.tagKept.fileTag === skillState.lastTag && /^\d{8}(-\d+)?$/.test(skillState.lastTag || '') && (skillState.forgetAll && JSON.stringify(skillState.forgetAll).length > 0),
+      !skillState.readyStale.card && !skillState.readyStale.report && skillState.tagKept && skillState.tagKept.fileTag === skillState.lastTag && /^\d{8}-\d{4}(-\d+)?$/.test(skillState.lastTag || '') && (skillState.forgetAll && JSON.stringify(skillState.forgetAll).length > 0),
       JSON.stringify({ stale: skillState.readyStale, kept: skillState.tagKept, last: skillState.lastTag }).slice(0, 400));
     {
       // A lighter report file (README "A lighter report file"): the card inside it as a JPEG, the shared card still the PNG.
@@ -2807,10 +2827,10 @@ print(json.dumps([os.path.getsize(path), len(b) * 3 // 4, m._img_src(b)[:23], m.
     check('after "I\'ve connected them", SKILL.md names the one command that rereads the lists (accounts), and tells Muse to skip nothing (a line saying "no memory search" was flagged by Muse\'s safety check)',
       /on "I've connected them", `python3 bin\/psyche\.py accounts` rereads both account lists, and its button for their account \(`messages_connected`\) says whether they're connected now/.test(skillMd) && !/no memory search|no first-run again/.test(skillMd));
     check('show ready names the report file the summary saved (its path is under "report"), with its size, when the report comes back in full',
-      ((o) => o && /\/out\/Psyche-Report(-[^/ ]+)?-\d{8}(-\d+)?\.html$/.test((o.report || {}).file || '') && o.report.bytes > 1000 && JSON.stringify(o.missing) === '["card"]')(skillState.leaving && skillState.leaving.readyFull),
+      ((o) => o && /\/out\/Psyche-Report(-[^/ ]+)?-\d{8}(-\d+){0,2}\.html$/.test((o.report || {}).file || '') && o.report.bytes > 1000 && JSON.stringify(o.missing) === '["card"]')(skillState.leaving && skillState.leaving.readyFull),
       JSON.stringify(skillState.leaving && skillState.leaving.readyFull));
     check('show ready: the card and the report file saved and What\'s next given in one call, no PDF, and SKILL.md delivers with it on the helper\'s return, before anything else',
-      ((R) => R && R.say === 'Your Psyche Card and Report are ready.' && /\/out\/Psyche-Card(-[^/ ]+)?-\d{8}(-\d+)?\.png$/.test((R.card || {}).file || '') && R.card.bytes > 0 && ((skillState.parts.summary || {}).report ? /\/out\/Psyche-Report(-[^/ ]+)?-\d{8}(-\d+)?\.html$/.test((R.report || {}).file || '') && R.report.bytes > 0 && !R.missing : JSON.stringify(R.missing) === '["report"]' && !R.report) && !R.summary && !/sections|image/.test(JSON.stringify(R).replace(/askIdeas[\s\S]*/, '')) && JSON.stringify(R).length < 2500 && R.next && R.next.nextStep.buttons[0] === 'Reveal my roast 🔥')(skillState.parts && skillState.parts.ready) &&
+      ((R) => R && R.say === 'Your Psyche Card and Report are ready.' && /\/out\/Psyche-Card(-[^/ ]+)?-\d{8}(-\d+){0,2}\.png$/.test((R.card || {}).file || '') && R.card.bytes > 0 && ((skillState.parts.summary || {}).report ? /\/out\/Psyche-Report(-[^/ ]+)?-\d{8}(-\d+){0,2}\.html$/.test((R.report || {}).file || '') && R.report.bytes > 0 && !R.missing : JSON.stringify(R.missing) === '["report"]' && !R.report) && !R.summary && !/sections|image/.test(JSON.stringify(R).replace(/askIdeas[\s\S]*/, '')) && JSON.stringify(R).length < 2500 && R.next && R.next.nextStep.buttons[0] === 'Reveal my roast 🔥')(skillState.parts && skillState.parts.ready) &&
       skillState.readyPdf === 0 && /is put together in one call: `python3 bin\/psyche\.py show ready` saves the card and the report file and gives What's next/.test(skillMd) &&
       /## First run, in order\n/.test(skillMd) && /4\. When the helper returns: deliver at once, before anything else\. show ready's result is the check \(it names each file only once it is saved, with its size\), so there is nothing to list, read back or note to memory first/.test(skillMd) && /this is the whole path, and it needs no working list or to-do list/.test(skillMd) &&
       /The helper's brief, sent as written with the <…> filled in:\n"Write a fresh Psyche for <their full name>\. Reply only with the result below; this brief has what the read needs\. In ~\/workspace\/skills\/psycheai: 1\) Start in the background: <that collect command> --me \"<their full name>\"\. 2\)/.test(skillMd) &&
