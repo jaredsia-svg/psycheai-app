@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 174
+RELEASE = 175
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -935,6 +935,21 @@ SYNC_CSS = '''
 .tops{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;font-size:13.5px}
 .tops div{padding:10px 12px;border-radius:12px;background:#faf6fc;border:1px solid #efe6f4}
 .tops b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.active{display:grid;grid-template-columns:92px 1fr;gap:12px;align-items:end}
+.ov{align-self:center;text-align:center;padding:12px 6px;border-radius:16px;background:linear-gradient(135deg,#f3e9f8,#fdf0f6);border:1px solid #ead9f1}
+.ov b{display:block;font-size:28px;line-height:1;background:linear-gradient(135deg,#7b3fa0,#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ov span{display:block;margin-top:4px;font-size:10.5px;line-height:1.25;color:var(--mute);font-weight:650}
+.acs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.ac{text-align:center}
+.bars{display:flex;align-items:flex-end;justify-content:center;gap:3px;height:110px;padding-top:16px;border-bottom:2px solid #eee6f2}
+.bars i{position:relative;display:block;width:42%;max-width:22px;border-radius:6px 6px 2px 2px}
+.bars b{font-style:normal;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:9.5px;font-weight:700;color:var(--soft);white-space:nowrap;padding-bottom:1px}
+.ac span{display:block;margin-top:5px;font-size:11px;line-height:1.25;color:var(--soft);font-weight:650}
+.wk{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.wk>div{padding:10px 12px;border-radius:12px;background:#faf6fc;border:1px solid #efe6f4;border-left:4px solid var(--c);font-size:12.5px;line-height:1.3;color:var(--soft)}
+.wk small{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--c)}
+.wk b{font-size:18px;color:#241a2e;margin-right:5px}.wk div div{display:inline}
+.wk em{display:block;font-style:normal;margin-top:2px}
 .shared{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .sh{padding:12px;border-radius:14px;background:#eef8f2;border:1px solid #cfe9db}
 .sh p{margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#22654a}
@@ -998,6 +1013,32 @@ def _sync_five(a, b, na, nb):
     note = '; '.join(x for x in ['Closest on ' + ' and '.join(close) if close else '', 'furthest apart on ' + ' and '.join(far) if far else ''] if x)
     return (_sync_key(na, nb) + '<div class="db">' + ''.join(rows) + '</div><div class="ends"><span></span><div><span>Low</span><span>High</span></div><span></span></div>'
             + ('<p class="note">' + _cap(note) + '.</p>' if note else ''))
+
+
+def _sync_active(a, b, na, nb):
+    """When each is active: the four shares of the day side by side, how much the two days overlap, the weekend
+    and the busiest day. Only from the times on what each read held, and said so."""
+    xa, xb = clean_activity(a.get('activity')), clean_activity(b.get('activity'))
+    if not (xa and xb):
+        return ''
+    icons = {'late': '🌙', 'morning': '🌅', 'afternoon': '☀️', 'evening': '🌆'}
+    top = max(1, max(max(xa[k], xb[k]) for k, _, _ in ACTIVITY_BANDS))
+    cols = ''.join('<div class="ac"><div class="bars"><i style="height:%d%%;background:%s"><b>%d%%</b></i><i style="height:%d%%;background:%s"><b>%d%%</b></i></div>'
+                   '<span>%s<br>%s</span></div>' % (max(2, round(88 * xa[k] / top)), SYNC_A, xa[k], max(2, round(88 * xb[k] / top)), SYNC_B, xb[k], icons[k], label)
+                   for k, label, _ in ACTIVITY_BANDS)
+    overlap = sum(min(xa[k], xb[k]) for k, _, _ in ACTIVITY_BANDS)
+    peak = lambda x: max(ACTIVITY_BANDS, key=lambda band: x[band[0]])
+    pa, pb = peak(xa), peak(xb)
+    if pa[0] == pb[0]:
+        lead = 'You both peak in the %s.' % pa[1].lower()
+    else:
+        lead = '%s peaks in the %s, %s in the %s.' % (_e(na), pa[1].lower(), _e(nb), pb[1].lower())
+    full = lambda d: FULL_DAYS[DAY_NAMES.index(d)]
+    tile = lambda x, n, col: ('<div style="--c:%s"><small>%s</small><div><b>%d%%</b>activity on weekends</div><em>Most active: %s</em></div>'
+                              % (col, _e(n), x['weekend'], full(x['day'])))
+    return (_sync_key(na, nb) + '<div class="active"><div class="ov"><b>%d%%</b><span>overlap</span></div><div class="acs">%s</div></div>' % (overlap, cols)
+            + '<div class="wk">' + tile(xa, na, SYNC_A) + tile(xb, nb, SYNC_B) + '</div>'
+            + '<p class="note">%s Online activity only.</p>' % lead)
 
 
 def _sync_tops(card):
@@ -1086,7 +1127,8 @@ def sync_sections(report, me, them, pics=None):
     duo = ('<div class="duo"><div class="beam"></div>' + who(me, na, 'me') + '<div class="mid">' + SYNC_ART + '<i>In sync</i></div>' + who(them, nb, 'them') + '</div>'
            + '<div class="oneline"><small>In one line</small>' + _e(report['summary']) + '</div>')
     glance = (_block('MBTI', _sync_mbti(me, them, na, nb)) + _block('Big Five', _sync_five(me, them, na, nb))
-              + _block('What motivates you', _sync_motives(me, them, na, nb)) + _block('What you share', _sync_shared(report, me, them, na, nb)))
+              + _block('What motivates you', _sync_motives(me, them, na, nb)) + _block('When you’re each active', _sync_active(me, them, na, nb))
+              + _block('What you share', _sync_shared(report, me, them, na, nb)))
     play = report.get('howToPartner') if isinstance(report.get('howToPartner'), dict) else {}
     li = lambda xs: '<ul>' + ''.join('<li>' + _e(x) + '</li>' for x in _l(xs) if isinstance(x, str)) + '</ul>'
     tips = ('<div class="tips">' + ('<h4>For you, %s</h4>' % _e(na) + li(play.get('forA')) if _l(play.get('forA')) else '')
@@ -1642,6 +1684,56 @@ def rhythm(stamps):
             'hours': ', '.join('%s %d%%' % (b, round(100 * sum(hours[h] for h in r) / n)) for b, r in bands),
             'peak': '%02d:00 to %02d:00' % (peak, (peak + 3) % 24),
             'busiest day': names[max(range(7), key=lambda i: days[i])], 'weekend': '%d%%' % round(100 * (days[5] + days[6]) / max(1, sum(days)))}
+
+
+# The same count as numbers, only for a Sync's card (README "When you're each active"): the four shares of the
+# day, the weekend's share and the busiest day. None under 30 timed lines, as rhythm.
+ACTIVITY_BANDS = [('late', 'Late night', range(0, 5)), ('morning', 'Morning', range(5, 12)), ('afternoon', 'Afternoon', range(12, 18)), ('evening', 'Evening', range(18, 24))]
+DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+FULL_DAYS = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays']
+
+
+def activity(stamps):
+    if len(stamps) < 30:
+        return None
+    hours, days = [0] * 24, [0] * 7
+    for d, h in stamps:
+        hours[h % 24] += 1
+        try:
+            days[datetime.strptime(d, '%Y-%m-%d').weekday()] += 1
+        except ValueError:
+            pass
+    n, dn = len(stamps), max(1, sum(days))
+    out = {k: round(100 * sum(hours[h] for h in r) / n) for k, _, r in ACTIVITY_BANDS}
+    out.update({'weekend': round(100 * (days[5] + days[6]) / dn), 'day': DAY_NAMES[max(range(7), key=lambda i: days[i])]})
+    return out
+
+
+def digest_activity(path=None):
+    """activity() of the digest on this device: its timed posts, comments and messages, counted, nothing else kept."""
+    try:
+        with open(path or DIGEST, encoding='utf-8') as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return None
+    section, stamps = None, []
+    for line in lines:
+        if line.startswith('## '):
+            section = line[3:].strip().replace(' (all read)', '')
+        elif section in ('Posts and stories', 'Comments', 'Messages') and TIMED.match(line):
+            stamps.append((line[:10], int(line[11:13].rstrip(':'))))
+    return activity(stamps)
+
+
+def clean_activity(a):
+    """A card's activity as numbers only: four whole shares from 0 to 100, the weekend's, and a day's short name; or None."""
+    if not isinstance(a, dict):
+        return None
+    out = {k: _score(a.get(k)) for k in [b[0] for b in ACTIVITY_BANDS] + ['weekend']}
+    if any(v is None for v in out.values()) or a.get('day') not in DAY_NAMES:
+        return None
+    out['day'] = a['day']
+    return out
 
 
 def check_digest(path=None):
@@ -4943,6 +5035,7 @@ def clean_card(c):
         'loveGiving': _plain_list(card.get('loveGiving'), 2, 30),
         'confidence': _score(card.get('confidence')),
         'motives': scores if scores and all(v is not None for v in scores.values()) else None,
+        'activity': clean_activity(card.get('activity')),
     }
 
 
@@ -5399,6 +5492,9 @@ def sync_card(answer, name):
             scores[k] = v
     if len(scores) == len(MOTIVATOR_LABELS):
         card['motives'] = scores
+    act = digest_activity()
+    if act:
+        card['activity'] = act
     return card
 
 

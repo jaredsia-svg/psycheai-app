@@ -811,7 +811,7 @@ function signup(email, d) {
   check('Sync starts from the user\'s own link, is written from PsycheAI\'s guide, never as JSON or a score, and a No is never told',
     /up to 10 of the people they message most on Instagram, from their own messages, as buttons by name/.test(core) && /When they tap a name, send the invite to that person as an Instagram message, say in one line who it went to/.test(core) && /never send them to PsycheAI/.test(core) && /don't ask again what they just chose/.test(core) && /never retell it in the chat, never show the JSON, and no score/.test(core) && /call save_sync with it/.test(core) &&
       /"Sync with a friend": call sync_link/.test(core) && /A Psyche link someone sent them \(app\.psycheai\.io\/sync\/…\): it never syncs on its own\..*What's next starts with one more button, "Sync with <the friend's first name>".*A Sync happens only when they choose it: on that tap, call sync_with with link\. With the skill and a link with # in it, its result also has what get_sync gives, so write the Sync from it and save it as its save line says; otherwise call get_sync with the sync id it returns/.test(core) &&
-      /Syncing is the one thing that shares, so it's said when they choose it: .*"Syncing shares your Psyche Card's few lines and motivation scores with the friends you sync with, locked on your device so PsycheAI can't read them: never your report or your messages\."/.test(core) && /go straight on as below, with no question and no extra tap/.test(core) && !/with the buttons "Sync" and "Not now"/.test(core) &&
+      /Syncing is the one thing that shares, so it's said when they choose it: .*"Syncing shares your Psyche Card's few lines, motivation scores and activity times with the friends you sync with, locked on your device so PsycheAI can't read them: never your report or your messages\."/.test(core) && /go straight on as below, with no question and no extra tap/.test(core) && !/with the buttons "Sync" and "Not now"/.test(core) &&
       /PsycheAI never takes a handle/.test(core) && /never dating, and nothing to do with Psyche Pair/.test(core) && /call get_syncs once/.test(core));
   check('a friend\'s Psyche link with a Psyche already kept goes straight to the Sync (no welcome, no new read), a Sync from a friend\'s link offers to let them know on Instagram, and the morning check is set with a line, not a question',
     /If they already have one \(with the skill, status says hasPsyche\), their Psyche is already made, so there is no welcome and no new read: with the skill, run python3 bin\/psyche\.py sync-preview <the link>, which looks at the link without syncing, and reply with its nextStep as it is/.test(core) && /without the skill, reply "You already have your Psyche, so you can sync straight away\.", with "Sync with <the friend's first name>"/.test(core) && !/even when the message also says "generate my Psyche"/.test(core) &&
@@ -1229,6 +1229,16 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
             sync.cleanCard({ character: 'Mulan', motives: ten }).motives.power === 22 && sync.cleanCard({ character: 'Mulan' }).motives === null &&
             !/motives/.test(JSON.stringify((await sync.get(store.getUser(user.id), { sync: ana.id, rewrite: true })).personA)),
             JSON.stringify(kept));
+          // When each is active (README "When you're each active"): numbers and a day's name only, all or none, and the Sync guide never sees them.
+          const act = { late: 4, morning: 12.4, afternoon: 30, evening: 54, weekend: 41, day: 'Sat' };
+          const keptAct = psyche.cleanCard({ character: 'Mulan', activity: { ...act, note: 'my posts' } });
+          check('a card keeps the activity shares only as whole numbers and a day name, all or none, and the Sync guide never sees them',
+            JSON.stringify(keptAct.activity) === JSON.stringify({ late: 4, morning: 12, afternoon: 30, evening: 54, weekend: 41, day: 'Sat' }) &&
+            !('activity' in psyche.cleanCard({ character: 'Mulan', activity: { ...act, day: 'Caturday' } })) &&
+            !('activity' in psyche.cleanCard({ character: 'Mulan', activity: { ...act, late: '4' } })) &&
+            sync.cleanCard({ character: 'Mulan', activity: act }).activity.evening === 54 && sync.cleanCard({ character: 'Mulan' }).activity === null &&
+            !/activity|weekend/.test(JSON.stringify((await sync.get(store.getUser(user.id), { sync: ana.id, rewrite: true })).personA)),
+            JSON.stringify(keptAct));
         }
       }
       check('Sync link: ending it by id is silent and works', sync.remove(ana, { sync: user.id }).ok && !sync.list(ana).syncs.length);
@@ -1750,7 +1760,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       !JSON.stringify(back.options).includes('Deep Psyche') && JSON.stringify(back.options.find(o => o.id === 'more').buttons.filter(b => !/^Psyche Pair|matches|My Syncs/.test(b))) === '["Weekly check-ins on my plan","Add WhatsApp or Facebook","My data and privacy"]' && JSON.stringify(back.options.find(o => o.id === 'more').sources) === '["WhatsApp, Facebook and Messenger","WhatsApp chats","Facebook and Messenger","Facebook posts only"]' &&
       JSON.stringify(back.options.find(o => o.id === 'more').whatsapp.buttons) === '["I\'ve shared my chats","Not now"]' &&
       /ADDING A SOURCE \("Add WhatsApp or Facebook"\): answer at once, with no tool first: "Which would you like to add\?" with the buttons "WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger" and "Facebook posts only"/.test(instructions.MUSE_PROCEDURE) && /ALL THREE \("WhatsApp, Facebook and Messenger"\): the WhatsApp steps first/.test(instructions.MUSE_PROCEDURE) && /Then ONE fresh Psyche from the digest and everything in sources\/, written once with all of it, never once per source\./.test(instructions.MUSE_PROCEDURE) && /run python3 bin\/psyche\.py collect-facebook --me "<their full name>" \(with --no-messenger for "Facebook posts only"\)/.test(instructions.MUSE_PROCEDURE) && /Never read Facebook or Messenger yourself, and never read Muse's own Messenger side chat/.test(instructions.MUSE_PROCEDURE) && /with no count of messages/.test(instructions.MUSE_PROCEDURE) && /FACEBOOK \("Facebook and Messenger", "Facebook posts only", or "add my Facebook"\):/.test(instructions.MUSE_PROCEDURE) && /Without the skill, read their own Facebook posts through Muse's Facebook connection the same way, never Messenger/.test(instructions.MUSE_PROCEDURE) &&
-      /MY DATA AND PRIVACY/.test(instructions.MUSE_PROCEDURE) && /"Your Instagram is read right here in your Muse account: nothing to export or upload\."/.test(instructions.MUSE_PROCEDURE) && /None of your posts, messages or report go to PsycheAI; only if you Sync, your card's few lines and motivation scores are shared, locked under your Sync link\."/.test(instructions.MUSE_PROCEDURE) && !/PsycheAI received only your finished Psyche/.test(instructions.MUSE_PROCEDURE) && /"Yes, delete everything"/.test(instructions.MUSE_PROCEDURE) &&
+      /MY DATA AND PRIVACY/.test(instructions.MUSE_PROCEDURE) && /"Your Instagram is read right here in your Muse account: nothing to export or upload\."/.test(instructions.MUSE_PROCEDURE) && /None of your posts, messages or report go to PsycheAI; only if you Sync, your card's few lines, motivation scores and activity times are shared, locked under your Sync link\."/.test(instructions.MUSE_PROCEDURE) && !/PsycheAI received only your finished Psyche/.test(instructions.MUSE_PROCEDURE) && /"Yes, delete everything"/.test(instructions.MUSE_PROCEDURE) &&
       /de-identified here, in your own Muse workspace, before it's read/.test(mcp.WHATSAPP_HOW) && /Your chats, and the report written from them, never go to PsycheAI\./.test(mcp.WHATSAPP_HOW) && !/only the report written from them/.test(mcp.WHATSAPP_HOW) && /Export chat, Without media/.test(mcp.WHATSAPP_HOW) &&
       /WHATSAPP \("WhatsApp chats", "add my WhatsApp chats"/.test(instructions.MUSE_PROCEDURE) && !/"Deep Psyche\. DMs included"/.test(instructions.MUSE_PROCEDURE) && /Never read a WhatsApp export yourself/.test(instructions.MUSE_PROCEDURE) &&
       /read only the file it wrote \(sources\/whatsapp\.txt\), never the export/.test(instructions.MUSE_PROCEDURE) && /never a message that just ends/.test(instructions.MUSE_PROCEDURE) &&
@@ -2028,7 +2038,9 @@ d = tempfile.mkdtemp(); m.OUT = d; m.SYNC_DIR = os.path.join(d, 'syncs'); m.REPO
 TEN = dict(zip(m.MOTIVE_ORDER, [82, 70, 52, 48, 22, 35, 28, 30, 74, 60]))
 ME = {'firstName': 'Mei', 'character': 'Mulan', 'headline': 'Organiser', 'mbti': 'ENFJ', 'bigFive': {'openness': 61, 'conscientiousness': 84, 'extraversion': 55, 'agreeableness': 79, 'neuroticism': 44},
       'motivators': ['Care for your people', 'Achievement', 'Security'], 'interests': ['Pickleball', 'Reading'], 'values': ['Craft'], 'confidence': 86, 'motives': TEN}
-THEM = dict(ME, firstName='Ana', character='Odysseus', headline='<img src=x onerror=alert(1)>', mbti='INTP', interests=['Tennis', 'Reading'], confidence=78, motives=dict(TEN, power=90))
+ME['activity'] = {'late': 2, 'morning': 18, 'afternoon': 30, 'evening': 50, 'weekend': 36, 'day': 'Sat'}
+THEM = dict(ME, firstName='Ana', character='Odysseus', headline='<img src=x onerror=alert(1)>', mbti='INTP', interests=['Tennis', 'Reading'], confidence=78, motives=dict(TEN, power=90),
+            activity={'late': 22, 'morning': 8, 'afternoon': 25, 'evening': 45, 'weekend': 30, 'day': 'Sun', 'extra': '<b>'})
 R = {'summary': 'Mei plans, Ana sparks.', 'align': [{'title': 'A1', 'detail': 'D', 'evidence': ['Mei: Openness 61']}], 'differ': [{'title': 'B1', 'detail': 'D', 'evidence': []}],
      'howToPartner': {'forA': ['t1'], 'forB': ['t2'], 'together': ['t3']}, 'caveats': 'C.', 'inCommon': {'interests': [{'theme': 'Racquet sports', 'a': 'Pickleball', 'b': 'Tennis'}], 'values': []}}
 sent = []
@@ -2054,6 +2066,12 @@ one = open(m.build_book(), encoding='utf-8').read()
 m.prune_syncs(set())
 gone = m.build_book() is None and m.book_path() is None
 ans = {'motivators': {'scores': [{'value': k, 'score': v} for k, v in TEN.items()]}, 'essence': {'character': 'Mulan'}}
+noact = m.sync_html(R, ME, dict(THEM, activity=None))
+m.DIGEST = os.path.join(d, 'digest.md')
+open(m.DIGEST, 'w').write(chr(10).join(['# Psyche digest', 'last: 2026-11-01', '', '## Posts and stories'] + ['2026-11-0%d 21:15 a caption' % (1 + i % 7) for i in range(30)]
+                          + ['2026-11-02 08:00 a morning one', '## Interests', '2026-11-01 03:00 not counted', '']))
+digact = m.digest_activity()
+synccard = m.sync_card(ans, 'Mei')
 buf = io.StringIO()
 m.get = lambda *a, **k: (_ for _ in ()).throw(m.urllib.error.URLError('offline'))
 with contextlib.redirect_stdout(buf):
@@ -2065,6 +2083,9 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
   'escaped': '<img src=x' not in page, 'pics': 'src="data:image/jpeg;base64,/9j/AAAA"' in pic and 'src="data:image/png;base64,iVBORw0K"' in pic, 'summaryOnce': page.count('Mei plans, Ana sparks.') == 1,
   'plain': {'radar': '<svg class="radar2"' in plain, 'tops': 'top three' in plain, 'reading': 'Reading' in plain}, 'empty': m.sync_html({}, ME, THEM),
   'card': 'motives' in m.card_summary(ans, 'Mei'), 'syncCard': sorted((m.sync_card(ans, 'Mei').get('motives') or {}).keys()) == sorted(TEN),
+  'active': [k in page for k in ['When you’re each active', '<div class="active">', '<b>80%</b><span>overlap', 'You both peak in the evening.', '<b>36%</b>activity on weekends', 'Most active: Saturdays', 'Most active: Sundays', 'Online activity only.']],
+  'activeOrder': page.index('What motivates you') < page.index('When you’re each active') < page.index('What you share'), 'noActive': 'When you’re each active' not in noact,
+  'digestActivity': digact, 'syncCardActivity': synccard.get('activity'), 'summaryActivity': 'activity' in m.card_summary(ans, 'Mei'),
   'partial': 'motives' in m.sync_card({'motivators': {'scores': [{'value': 'power', 'score': 5}]}}, 'Mei'), 'status': json.loads(buf.getvalue()).get('hasPsyche')}))`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: keep, NO_PROXY: '*', no_proxy: '*' }, timeout: 60000 })).stdout);
       // Sync, locked on the device (README "Sync, locked on the device"): two workspaces sync through this server, and nothing readable lands here.
       {
@@ -2398,8 +2419,11 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
       JSON.stringify(skillState.leaving && skillState.leaving.syncsKept));
     check('the Sync is a page made in the workspace (README "The Sync is a page"): get_sync asks with html, the page holds both cards\' charts, the radar, What you share and the Confidence score, a friend\'s text is escaped, and only the page\'s path reaches Muse; the ten scores ride only on the card a Sync uses, and status says whether a Psyche is kept',
       ((p) => p && p.sentHtml === true && JSON.stringify(p.keys) === '["file","name","summary","written"]' && p.inSyncs && Object.values(p.page).every(Boolean) && p.escaped && p.pics && p.summaryOnce && JSON.stringify(p.receipt) === JSON.stringify([[{ 'posts and stories': 239, comments: 30, threads: 15 }, 'Read here in Muse: 239 posts and stories, 30 comments and 15 conversations, names removed.'], [{ 'posts and stories': 1, comments: 1, threads: 0 }, 'Read here in Muse: 1 posts and stories and 1 comment, names removed.']]) && JSON.stringify(p.book) === '[2,true,1,true,true]' &&
-        p.plain.radar === false && p.plain.tops && p.plain.reading && p.empty === null && p.card === false && p.syncCard && p.partial === false && p.status === false)(skillState.syncPage) &&
-      /Only when they Sync does anything of theirs leave: their card summary \(the few lines on their Psyche Card, and their scores on the ten motivations\) and the written Sync, both locked here under the Sync link's code before they're sent, so PsycheAI keeps and passes them on but can't read them/.test(skillMd) &&
+        p.plain.radar === false && p.plain.tops && p.plain.reading && p.empty === null && p.card === false && p.syncCard && p.partial === false && p.status === false &&
+        p.active.every(Boolean) && p.activeOrder && p.noActive && p.summaryActivity === false &&
+        JSON.stringify(p.digestActivity) === '{"late":0,"morning":3,"afternoon":0,"evening":97,"weekend":29,"day":"Mon"}' &&
+        JSON.stringify(p.syncCardActivity) === JSON.stringify(p.digestActivity))(skillState.syncPage) &&
+      /Only when they Sync does anything of theirs leave: their card summary \(the few lines on their Psyche Card, their scores on the ten motivations, and when they're active: the shares of their day and week from the times in their digest\) and the written Sync, both locked here under the Sync link's code before they're sent, so PsycheAI keeps and passes them on but can't read them/.test(skillMd) &&
       /A result's `file` is a file saved here for the chat \(a Sync's page\): attach it\./.test(skillMd),
       JSON.stringify(skillState.syncPage));
     check('a friend\'s link is named before anything is synced (sync-preview: their name and character, and the reply with "Sync with <name>"), their own link says so, sync_with gives what get_sync gives with how to save it, the answer file goes once saved, and a new Sync comes as its own page from the morning check and from My Syncs, the same page the friend got (README "One call to a Sync", "A new Sync, as its own page")',
