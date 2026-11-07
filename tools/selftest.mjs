@@ -1774,7 +1774,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       nextFor('sync_with', { status: 'synced' }) === null &&
       /call sync_link, send its invite to the person they named as an Instagram message, and say in one line that it went/.test(instructions.MUSE_PROCEDURE));
     check('results end with a next step: a line and buttons', pubNext.asButtons && JSON.stringify(pubNext.buttons) === '["Ask PsycheAI questions about myself","Sync with a friend","Add WhatsApp or Facebook","More"]' && JSON.stringify(pubNext.sources) === '["WhatsApp, Facebook and Messenger","WhatsApp chats","Facebook and Messenger","Facebook posts only"]' && JSON.stringify(pubNext.more.buttons) === '["Weekly check-ins on my plan","Find potential romantic matches","My data and privacy"]' && pubNext.say === 'What\'s next?' && /whenever they ask what else they can do: call start/.test(instructions.MUSE_PROCEDURE) && /Anything you offer is a button/.test(instructions.MUSE_PROCEDURE) &&
-      /THE ROAST: their report's send-up and its advice are in the appendix of their report file \("Your roast 🔥", closed until they open it\), with no button for it/.test(instructions.MUSE_PROCEDURE) && !/Reveal my roast/.test(instructions.MUSE_PROCEDURE) && /class="roast" id="roast"/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
+      /THE ROAST: their report's send-up and its advice are an intermission in their report file, after What drives you \("Your roast 🔥", closed until they open it\), with no button for it; the regret \("What will you regret most when you're old\?"\) is a second one, after How you work/.test(instructions.MUSE_PROCEDURE) && !/Reveal my roast/.test(instructions.MUSE_PROCEDURE) && /class="roast" id="roast"/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
       nextFor('get_weekly_matches', { cards: [{ firstName: 'Mei' }, { firstName: 'Jun', picked: true }], picksLeft: 2 }).buttons[0] === 'Pick Mei' &&
       nextFor('get_syncs', { incoming: [], syncs: [] }).buttons[0] === 'Sync with a friend' && nextFor('publish_psyche', { error: 'x' }) === null &&
       nextFor('respond_to_intro', { ok: true, status: 'mutual' }).buttons.includes('Swap Instagram'));
@@ -2089,6 +2089,9 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         const E = {};
         E.link = await mei('call', 'sync_link', '{}');
         E.code = ((/#([A-Za-z0-9_-]{22})$/.exec(E.link.url || '')) || [])[1];
+        // My Syncs from the first link (README "My Syncs from the first link"): there, empty, before anyone syncs.
+        E.early = (d => { try { const f = fsx.readdirSync(d).filter(x => /^Psyche-Syncs-.*\.html$/.test(x)); return f.map(x => fsx.readFileSync(pathx.join(d, x), 'utf8')); } catch (e) { return []; } })(pathx.join(mei.dir, 'out', 'syncs'));
+        E.anaEarly = (d => { try { return fsx.readdirSync(d).length; } catch (e) { return 0; } })(pathx.join(ana.dir, 'out', 'syncs'));
         // A friend's link, looked at first (README "A friend's link, named first"): whose it is and the reply, with nothing synced; their own link says so.
         E.preview = await ana('sync-preview', E.link.url);
         E.ownPreview = await mei('sync-preview', E.link.url);
@@ -2407,6 +2410,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
         /call save_sync @work\/sync-answer\.json/.test(E.joined.save || '') && /incompatible/.test(E.joined.save) && E.answerGone &&
         E.check.quiet === false && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.check.file || '') && JSON.stringify(E.check.buttons) === '["Sync with someone new","Done"]' && E.check.sync === E.list.syncs[0].sync &&
         /Mei plans and Ana sparks/.test(E.checkPage) &&
+        E.early.length === 1 && /<b>No Syncs yet\.<\/b> When a friend syncs with you, they'll appear here\./.test(E.early[0]) && !/class="sbk"/.test(E.early[0]) && E.anaEarly === 0 &&
         // Both cards at phone width (README "Sync pages Muse can show"): the page well under the report's size, each card small, and a fallback to the initial.
         E.checkPage.length < 330000 && (E.checkPage.match(/<img alt="[^"]*’s Psyche Card" data-initial="[A-Z]" src="data:image\/jpeg;base64,[^"]{1000,140000}"/g) || []).length === 2 &&
         /querySelectorAll\('img\[data-initial\]'\)/.test(E.checkPage) && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.list.file || '') && E.list.book && E.list.file !== E.list.book)(skillState.e2e),
@@ -2998,6 +3002,20 @@ print(json.dumps([os.path.getsize(path), len(b) * 3 // 4, m._img_src(b)[:23], m.
     check('the Muse skill: the install prompt is one short line, the short link and "generate my Psyche"; the link\'s copy says how to install, and without a word on messages, the go-ahead comes first',
       skillMod.installPrompt() === 'Install localhost:8787/install and generate my Psyche' && skillMod.installPrompt({ code: 'abcdefgh', name: 'Mei' }).endsWith('/sync/abcdefgh and generate my Psyche.') &&
       /begin with step 0's message with its messages question, then the account question only with more than one account, then MESSAGES FIRST, then step 1, with no Generate button/.test(skillMod.skillMd()) && /it is ready once `python3 -m py_compile bin\/psyche\.py` passes and `python3 bin\/psyche\.py status` says connected/.test(skillMod.skillMd()), skillMod.installPrompt());
+  }
+  {
+    // Two intermissions (README "Two intermissions"): the roast after What drives you, the regret after How you work, both closed, no appendix.
+    const order = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, sys, json, re
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+view = {k: {'x': 1} for k, _, _ in m.W_PARTS}
+m.W_BUILD = {k: (lambda d, k=k: ('<p>' + k + '</p>', 'tease')) for k, _, _ in m.W_PARTS}
+m._overview = lambda d, c=None: ('<p>overview</p>', 'tease'); m._who = lambda d, n='': ('<p>whoYouAre</p>', 'tease')
+html = m.report_html(view, 'Mei Tan', bonus={'harsh': 'Burn one.\\n\\nBurn two.', 'advice': 'Kind.'}, regret='Regret one.\\n\\nRegret two, and one thing to do this month.')
+marks = re.findall(r'data-section="([^"]+)"|<details class="roast( regret)?" id="(roast|regret)"', html)
+print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix' in html, 'parts': '6 parts' in html, 'closed': html.count('<details class="roast') == 2 and ' open' not in re.findall(r'<details[^>]*>', html)[0]}))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
+    check('two intermissions in the report file (README "Two intermissions"): the roast after What drives you and the regret after How you work, each closed until opened, no appendix, and the parts still counted as six',
+      JSON.stringify(order.order) === JSON.stringify(['Overview', 'Who you are', 'What drives you', 'roast', 'How you connect', 'How you work', 'regret', 'Putting it together']) &&
+      order.appendix === false && order.parts && order.closed, JSON.stringify(order));
   }
   {
     const sampleHtml = require('node:fs').readFileSync(new URL('../assets/sample-report.html', import.meta.url), 'utf8');

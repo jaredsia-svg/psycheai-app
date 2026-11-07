@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 173
+RELEASE = 174
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -393,6 +393,7 @@ p{margin:0 0 10px}
 .sample .cardpic{width:min(320px,76vw);transform:none}
 .roast{background:#fff;border:1px solid #f0c9d7;border-radius:20px;padding:0;margin:4px 0 14px;overflow:hidden}
 .roast summary{list-style:none;cursor:pointer;display:grid;gap:4px;padding:16px 18px;background:linear-gradient(120deg,#5b2a86,#c2366d);color:#fff}
+.roast.regret summary{background:linear-gradient(120deg,#2d3f8f,#6a4bb5)}
 .roast summary::-webkit-details-marker{display:none}
 .roast summary b{font-size:19px}
 .roast summary .soft{color:#f6e6f0;font-size:13.5px}
@@ -751,12 +752,28 @@ W_BUILD = {'overview': _overview, 'whoYouAre': _who, 'whatDrivesYou': _drives, '
 W_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
 
-def report_html(view, name='', when='', card_png=None, pages=None, doc_title=None, bonus=None, sample=None):
-    """The whole report as one self-contained HTML file, from view (full, with the evidence, when given), and
-    the roast (bonus, from the report kept here) as its appendix, closed until they open it (README "The roast in the appendix")."""
+def report_html(view, name='', when='', card_png=None, pages=None, doc_title=None, bonus=None, sample=None, regret=None):
+    """The whole report as one self-contained HTML file, from view (full, with the evidence, when given), with two
+    intermissions, each closed until they open it (README "Two intermissions"): the roast (bonus, from the report kept
+    here) after What drives you, and the regret ("What will you regret most when you're old?") after How you work."""
     if not isinstance(view, dict):
         return None
     ov = view.get('overview') if isinstance(view.get('overview'), dict) else {}
+    paras = lambda t: ''.join('<p>' + _e(x.strip()) + '</p>' for x in re.split(r'\n\s*\n', t) if x.strip())
+    roast = ''
+    if isinstance(bonus, dict) and isinstance(bonus.get('harsh'), str) and bonus['harsh'].strip():
+        roast = ('<details class="roast" id="roast"><summary><span class="badge">Intermission</span><b>Your roast 🔥</b>'
+                 '<span class="soft">Deliberately unkind, and just for you. Not on your card, never in a link. Tap to open.</span></summary>'
+                 '<p class="salt">🧂 An AI being deliberately harsh about your data: not an assessment and not a diagnosis. Argue with it, and if any of it lands heavier than that, talk to someone you trust or a professional.</p>'
+                 '<div class="burn"><h3>🔥 The least charitable assessment of you</h3>' + paras(bonus['harsh']) + '</div>'
+                 + ('<div class="kind"><h3>💬 What an honest friend would tell you</h3>' + paras(bonus['advice']) + '</div>' if isinstance(bonus.get('advice'), str) and bonus['advice'].strip() else '')
+                 + '</details>')
+    regret_box = ''
+    if isinstance(regret, str) and regret.strip():
+        regret_box = ('<details class="roast regret" id="regret"><summary><span class="badge">Intermission</span><b>What will you regret most when you\'re old? 🕰️</b>'
+                      '<span class="soft">The one regret your own patterns point to, and what to do about it now. Tap to open.</span></summary>'
+                      '<div class="kind">' + paras(regret) + '</div></details>')
+    after = {'whatDrivesYou': roast, 'howYouWork': regret_box}
     parts, nav, i = [], [], 0
     for key, title, colour in W_PARTS:
         data = view.get(key) if isinstance(view.get(key), dict) else {}
@@ -768,6 +785,8 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
                      '<span class="num">%02d</span><span class="ttl">%s</span><span class="tease">%s</span>%s</button><div class="body">%s</div></section>'
                      % (' open' if i == 0 else '', sid, colour, _e(title), 'true' if i == 0 else 'false', i, _e(title), _e(tease), W_CHEV, inner))
         nav.append('<a href="#%s" style="--c:%s" aria-current="%s"><i>%02d</i>%s</a>' % (sid, colour, 'true' if i == 0 else 'false', i, _e(title)))
+        if after.get(key):
+            parts.append(after.pop(key))
         i += 1
     if not parts:
         return None
@@ -782,18 +801,9 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
                   + ('<p>' + _e(m.get('rationale')) + '</p>' if m.get('rationale') else '')
                   + _ev(c.get('basedOn'))
                   + '</div>')
-    roast = ''
-    if isinstance(bonus, dict) and isinstance(bonus.get('harsh'), str) and bonus['harsh'].strip():
-        paras = lambda t: ''.join('<p>' + _e(x.strip()) + '</p>' for x in re.split(r'\n\s*\n', t) if x.strip())
-        roast = ('<details class="roast" id="roast"><summary><span class="badge">Appendix</span><b>Your roast 🔥</b>'
-                 '<span class="soft">Deliberately unkind, and just for you. Not on your card, never in a link. Tap to open.</span></summary>'
-                 '<p class="salt">🧂 An AI being deliberately harsh about your data: not an assessment and not a diagnosis. Argue with it, and if any of it lands heavier than that, talk to someone you trust or a professional.</p>'
-                 '<div class="burn"><h3>🔥 The least charitable assessment of you</h3>' + paras(bonus['harsh']) + '</div>'
-                 + ('<div class="kind"><h3>💬 What an honest friend would tell you</h3>' + paras(bonus['advice']) + '</div>' if isinstance(bonus.get('advice'), str) and bonus['advice'].strip() else '')
-                 + '</details>')
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
-    facts = ' · '.join(x for x in ['%d parts' % len(parts), ('%d pages' % pages) if pages else '', ('%d%% signal strength' % score) if score is not None else ''] if x)
+    facts = ' · '.join(x for x in ['%d parts' % i, ('%d pages' % pages) if pages else '', ('%d%% signal strength' % score) if score is not None else ''] if x)
     banner = ('<header class="banner" id="top">' + W_LOGO + '<div class="row"><div class="txt"><div class="facts">' + _e(facts) + '</div><h1>' + _e(title) + '</h1>'
               + '<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it.</p>'
               + ('<div class="sub">' + _e(when) + '</div>' if when else '')
@@ -810,7 +820,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>' + ('A sample report for a fictional reader. Yours is made in your own Muse workspace, and PsycheAI keeps no copy of it.'
             if sample else 'This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.') + '</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
-            '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + roast
+            '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + ''.join(v for v in after.values() if v)
             + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + '</script></body></html>')
 
 
@@ -1229,6 +1239,9 @@ def prune_syncs(ids):
 
 
 BOOK_CSS = """
+.empty{display:flex;gap:16px;align-items:center;padding:18px;border-radius:20px;background:#fff;box-shadow:0 6px 20px rgba(91,42,134,.1)}
+.empty img{width:84px;border-radius:12px;box-shadow:0 4px 12px rgba(91,42,134,.2)}
+.empty p{margin:0;font-size:16px;line-height:1.45;color:#5b4a6b}.empty b{color:#2a1238}
 .find{display:flex;gap:8px;align-items:center;margin:0 0 14px}
 .find input{flex:1;min-width:0;padding:11px 14px;border-radius:12px;border:1px solid var(--line);font:inherit;font-size:15px;background:#fff;color:var(--ink)}
 .find input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
@@ -1267,6 +1280,11 @@ def sync_book_html(entries, own=None):
     banner = ('<header class="banner" id="top">' + W_LOGO + '<div class="row"><div class="txt"><div class="facts">My Syncs</div><h1>Your Syncs</h1>'
               '<p class="lede">Every Sync you\'ve opened, newest first. Tap one to see all of it.</p><div class="sub">%d %s</div></div></div></header>' % (n, 'Sync' if n == 1 else 'Syncs'))
     find = '<div class="find"><input id="find" type="search" placeholder="Find a friend" aria-label="Find a friend by name"></div>' if n > 3 else ''
+    # Before anyone has synced (README "My Syncs from the first link"): their own card and a line, so the file is there
+    # from the moment they share their link.
+    if not n:
+        rows = ['<div class="empty">' + ('<img alt="Your Psyche Card" data-me="1" src="">' if own else '') +
+                '<p><b>No Syncs yet.</b> When a friend syncs with you, they\'ll appear here.</p></div>']
     mecard = '<img id="mecard" alt="" hidden src="%s">' % _img_src(own) if own else ''
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>'
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
@@ -1315,7 +1333,8 @@ def build_book():
     """Make My Syncs again from what's kept: its path, or None when there's no Sync (and the old book goes)."""
     s = sync_store()
     entries = sorted(((k, v) for k, v in s.items() if isinstance(v, dict) and isinstance(v.get('report'), dict)), key=lambda kv: -(int(kv[1].get('at') or 0)))
-    if not entries:
+    # With no Sync yet, the book is kept (empty) once they've made their own link, and goes otherwise.
+    if not entries and not (any(x.get('own') for x in e2e_codes()) and read_first([REPORT, REPORT_KEPT])):
         for f in os.listdir(SYNC_DIR) if os.path.isdir(SYNC_DIR) else []:
             if BOOK_FILE.match(f):
                 try:
@@ -1441,7 +1460,8 @@ def local_report(r):
         when = ''
     pages = None                  # no PDF (README "The report file, not a PDF"): no page count to show
     page = report_html(r.get('full') or r.get('view'), kept.get('name') or '', when, card, pages, file_label('Psyche Report', title=True),
-                       (kept.get('report') or {}).get('bonus') if isinstance(kept.get('report'), dict) else None)
+                       (kept.get('report') or {}).get('bonus') if isinstance(kept.get('report'), dict) else None,
+                       regret=(kept.get('report') or {}).get('regret') if isinstance(kept.get('report'), dict) else None)
     if not page:
         return out
     try:
@@ -4634,6 +4654,9 @@ def depth_problems(answer):
     paras = [x for x in re.split(r'\n\s*\n', harsh) if x.strip()]
     if harsh and (len(paras) < 2 or len(harsh) < 350):
         problems.append('bonus.harsh is %d characters in %d paragraph(s): the roast is two or three short paragraphs (350 characters or more), each naming real specifics from the digest' % (len(harsh), len(paras)))
+    regret = answer.get('regret')
+    if 'regret' in answer and not (isinstance(regret, str) and len(regret.strip()) >= 300 and len([x for x in re.split(r'\n\s*\n', regret) if x.strip()]) >= 2):
+        problems.append('regret: two or three short paragraphs (300 characters or more) on the one regret their own patterns point to, ending on one thing to do this month (README "Two intermissions")')
     seen = {}
     for p in answer.get('patterns') or []:
         if not isinstance(p, dict):
@@ -5061,6 +5084,7 @@ def e2e_link(post_tool):
         return out
     if not own:
         keep_e2e(code, True)
+    build_book()        # My Syncs, empty until a friend syncs, so it's in their Library from the first link
     link = BASE + '/sync#' + code
     res = {'url': link, 'invite': invite_text(link, card.get('character'), card.get('firstName')), 'note': out.get('note'),
            'nextStep': _step('Here\'s your Psyche link and invite: one paste in a friend\'s Muse sets up PsycheAI, makes their Psyche and syncs you. Who should I send it to?',
