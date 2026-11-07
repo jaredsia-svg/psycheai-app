@@ -2406,7 +2406,10 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
         E.joined.status === 'synced' && E.joined.with === 'Mei' && E.joined.personA && E.joined.personB && E.joined.derivedFacts && E.joined.schema && !('next' in E.joined) &&
         /call save_sync @work\/sync-answer\.json/.test(E.joined.save || '') && /incompatible/.test(E.joined.save) && E.answerGone &&
         E.check.quiet === false && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.check.file || '') && JSON.stringify(E.check.buttons) === '["Sync with someone new","Done"]' && E.check.sync === E.list.syncs[0].sync &&
-        /Mei plans and Ana sparks/.test(E.checkPage) && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.list.file || '') && E.list.book && E.list.file !== E.list.book)(skillState.e2e),
+        /Mei plans and Ana sparks/.test(E.checkPage) &&
+        // Both cards at phone width (README "Sync pages Muse can show"): the page well under the report's size, each card small, and a fallback to the initial.
+        E.checkPage.length < 330000 && (E.checkPage.match(/<img alt="[^"]*’s Psyche Card" data-initial="[A-Z]" src="data:image\/jpeg;base64,[^"]{1000,140000}"/g) || []).length === 2 &&
+        /querySelectorAll\('img\[data-initial\]'\)/.test(E.checkPage) && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.list.file || '') && E.list.book && E.list.file !== E.list.book)(skillState.e2e),
       JSON.stringify(((E) => E && { preview: E.preview, own: E.ownPreview, joined: E.joined && Object.keys(E.joined), save: E.joined && E.joined.save, gone: E.answerGone, check: E.check, list: E.list && { file: E.list.file, book: E.list.book } })(skillState.e2e)).slice(0, 1500));
     {
       const v = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, sys, json, os, tempfile, time
@@ -2459,8 +2462,6 @@ ans = lambda s: {'confidence': {'score': s, 'level': 'very low' if s < 40 else '
 digest(600); tiny = [m.evidence_size(), m.confidence_problems(ans(42)), m.confidence_problems(ans(39)), m.thin_cap()[0], 'thinLine' in m.local_ready({})]
 digest(25000); mid = [m.thin_cap()[0], m.confidence_problems(ans(65)), m.confidence_problems(ans(59))]
 digest(25000, 30000); full = [m.thin_cap()[0], m.confidence_problems(ans(75)), 'thinLine' in m.local_ready({})]
-th = lambda name, uid='9': {'users': [{'id': 'ME', 'username': 'jeff'}, {'id': uid, 'username': name}]}
-own = [m.ours(th('psycheai.io'), 'ME', 'ME'), m.ours(th('@PsycheAI.io'), 'ME', 'ME'), m.ours(th('yvonne'), 'ME', 'ME'), m.ours({'users': [{'id': '9', 'username': 'psycheai.io'}, {'id': '8', 'username': 'yvonne'}]}, 'ME', 'ME')]
 import io, contextlib
 os.remove(m.DIGEST)
 m.collect = lambda *a, **k: {'ok': False, 'read': {'posts': 0, 'threads': 0}, 'notes': [], 'stopped': None, 'problems': ['Nothing came back from Instagram to build a digest from.']}
@@ -2470,12 +2471,12 @@ buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
     m.main(['collect', '--account-id', 'ACC1'])
 nothing = json.loads(buf.getvalue()).get('tooThin')
-print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'own': own, 'say': m.THIN_SAY, 'line': m.THIN_LINE, 'nothing': nothing, 'labels': m.known_label('Make it anyway') and m.known_label('Add WhatsApp or Facebook') and m.known_label("I've connected another account")}))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname], { env: envReal }).toString());
+print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'say': m.THIN_SAY, 'line': m.THIN_LINE, 'nothing': nothing, 'labels': m.known_label('Make it anyway') and m.known_label('Add WhatsApp or Facebook') and m.known_label("I've connected another account")}))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname], { env: envReal }).toString());
       const md = require('../lib/skill.js').skillMd();
-      check('a thin read is said and capped (README "A thin read, said and capped"): their own writing counted as psycheai.io counts it (not the "> " lines they answered, nor dates and tags); under 20,000 characters collect offers "Add WhatsApp or Facebook" and "Make it anyway", and the score is at most 39 ("very low"); under 50,000 read in all, at most 59 with a line offering more; PsycheAI\'s own chat is never read',
+      check('a thin read is said and capped (README "A thin read, said and capped"): their own writing counted as psycheai.io counts it (not the "> " lines they answered, nor dates and tags); under 20,000 characters collect offers "Add WhatsApp or Facebook" and "Make it anyway", and the score is at most 39 ("very low"); under 50,000 read in all, at most 59 with a line offering more',
         T.tiny[0][0] === 594 && /at most 39 \(very low\)/.test(T.tiny[1][0] || '') && T.tiny[2].length === 0 && T.tiny[3] === 39 && T.tiny[4] === true &&
         T.mid[0] === 59 && /at most 59 \(low\)/.test(T.mid[1][0] || '') && T.mid[2].length === 0 && T.full[0] === null && T.full[1].length === 0 && T.full[2] === false &&
-        JSON.stringify(T.own) === '[true,true,false,false]' && T.labels === true &&
+        T.labels === true &&
         // Nothing at all (README "Nothing to read, said"): its own reply, the account by name, no "Make it anyway", and words that never point at buttons.
         T.nothing && T.nothing.nothing === true && T.nothing.say === "There's nothing on @su.pport8962 for me to read yet: no posts, stories, comments or messages of your own. If your main Instagram is a different account, connect it in Muse and tell me when it's connected. Or add WhatsApp chats or Facebook instead." &&
         JSON.stringify(T.nothing.buttons) === '["Add WhatsApp or Facebook","I\'ve connected another account"]' && !('anyway' in T.nothing) && !/\b(tap|button|below)\b/i.test(T.nothing.say) &&
@@ -2495,7 +2496,7 @@ print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'own': own, 'say': m.T
         JSON.stringify(E.list.nextStep.buttons) === '["Show my Sync with Ana","Sync with someone new"]' && E.check.say === 'Ana synced with you: your Sync is ready.' &&
         E.meiSees.written && E.meiSees.name === 'Ana' && /For you, Mei<\/h4><ul><li>Mei tip 1/.test(E.meiPage) && /For you, Ana<\/h4><ul><li>Ana tip 1/.test(E.anaPage) &&
         /<b>Racquet sports<\/b><span><i class="ia">Mei<\/i> Pickleball<\/span><span><i class="ib">Ana<\/i> Tennis/.test(E.meiPage) && /<svg class="radar2"/.test(E.meiPage) &&
-        /\/syncs\/My-Syncs-\d{8}-\d{4}(-\d+)?\.html$/.test(E.list.book || '') && /<details class="sbk" data-name="ana">/.test(E.book) && /weekends you both remember/.test(E.book) && (E.book.match(/id="mecard"/g) || []).length <= 1 &&
+        /\/syncs\/Psyche-Syncs-Mei-Tan-\d{8}-\d{4}(-\d+)?\.html$/.test(E.list.book || '') && /<details class="sbk" data-name="ana">/.test(E.book) && /weekends you both remember/.test(E.book) && (E.book.match(/id="mecard"/g) || []).length <= 1 &&
         /<svg class="radar2"/.test(E.book) && E.check.book === E.list.book &&
         E.rows >= 4 && E.leaks.length === 0 && /^# PsycheAI skill for Muse/.test(E.bare) && !/Psyche link:/.test(E.bare) &&
         E.skillRoute.every(t => /^# PsycheAI skill for Muse/.test(t)) && require('../lib/skill.js').installPrompt() === 'Install localhost:8787/install and generate my Psyche')(skillState.e2e),

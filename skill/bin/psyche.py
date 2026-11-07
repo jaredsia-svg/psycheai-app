@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 172
+RELEASE = 173
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -945,7 +945,8 @@ SYNC_CSS = '''
 .viewer img{max-width:100%;max-height:calc(100vh - 60px);border-radius:14px}
 .viewer span{margin-top:10px;color:#fff;opacity:.75;font-size:13px}
 '''
-SYNC_JS = '''(function(){var v=document.getElementById('viewer');if(!v)return;var big=v.querySelector('img');
+SYNC_JS = '''(function(){[].slice.call(document.querySelectorAll('img[data-initial]')).forEach(function(i){function f(){var b=i.closest('button')||i,d=document.createElement('div');d.className='nopic';d.textContent=i.getAttribute('data-initial');b.parentNode.replaceChild(d,b);}if(i.complete&&i.getAttribute('src')&&!i.naturalWidth)f();else i.addEventListener('error',f);});})();
+(function(){var v=document.getElementById('viewer');if(!v)return;var big=v.querySelector('img');
 [].slice.call(document.querySelectorAll('[data-big]')).forEach(function(b){b.addEventListener('click',function(){var s=b.querySelector('img');big.src=s.src;big.alt=s.alt;v.hidden=false;});});
 v.addEventListener('click',function(){v.hidden=true;});document.addEventListener('keydown',function(e){if(e.key==='Escape')v.hidden=true;});})();'''
 
@@ -1067,8 +1068,9 @@ def sync_sections(report, me, them, pics=None):
     def who(card, n, key):
         pic = pics.get(key)
         src = 'src="%s"' % _img_src(pic) if pic and pic != OWN_CARD else 'data-me="1" src=""'
-        img = ('<button type="button" data-big="1" aria-label="Open %s’s Psyche Card full size"><img alt="%s’s Psyche Card" %s><em>Tap to open</em></button>'
-               % (_e(n), _e(n), src) if pic else '<div class="nopic">%s</div>' % _e(n[:1]))
+        # A picture that still won't load gives way to their initial, never a broken image.
+        img = ('<button type="button" data-big="1" aria-label="Open %s’s Psyche Card full size"><img alt="%s’s Psyche Card" data-initial="%s" %s><em>Tap to open</em></button>'
+               % (_e(n), _e(n), _e(n[:1]), src) if pic else '<div class="nopic">%s</div>' % _e(n[:1]))
         return ('<div class="who">' + img + ('<small>%s is most like</small><b>%s</b>' % (_e(n), _e(card.get('character'))) if card.get('character') else '')
                 + ('<span>%s</span>' % _e(card.get('headline')) if card.get('headline') else '') + '</div>')
     duo = ('<div class="duo"><div class="beam"></div>' + who(me, na, 'me') + '<div class="mid">' + SYNC_ART + '<i>In sync</i></div>' + who(them, nb, 'them') + '</div>'
@@ -1150,7 +1152,9 @@ def save_sync_page(content, sync=None):
         return None
     cards = content.get('cards') if isinstance(content.get('cards'), dict) else {}
     me, them = cards.get('me') or {}, cards.get('them') or {}
-    pics = sync_card_pics(me, them)
+    # Both cards at phone width (README "Sync pages Muse can show"): at full size the page was over 600 KB and
+    # Muse's own viewer showed it without its two cards, while the report, one card and about 370 KB, showed fine.
+    pics = {k: _small_pic(v, 720) for k, v in sync_card_pics(me, them).items() if v}
     if sync:
         keep_sync(sync, content, pics.get('them'))
         build_book()
@@ -1174,7 +1178,16 @@ def save_sync_page(content, sync=None):
 # shown, or the morning check finds one; a Sync the server no longer lists drops out. Kept here only, never sent.
 SYNC_STORE = os.path.join(HERE, 'syncs.json')
 SYNC_STORE_KEPT = os.path.join(KEEP, 'syncs.json')
-BOOK_NAME = 'My-Syncs.html'
+BOOK_NAME = 'My-Syncs.html'       # the name before release 173; now Psyche-Syncs-<their name>-<date and time>.html
+BOOK_FILE = re.compile(r'^(My-Syncs|Psyche-Syncs(-[^/]*?)?)(-\d{8}-\d{4}(-\d+)?)?\.html$')
+
+
+def book_base():
+    """My Syncs' file name before its time (README "Names that match"): Psyche-Syncs-Mei-Tan, beside
+    Psyche-Card-… and Psyche-Report-…, and plural, so it's never taken for one Sync's page (Psyche-Sync-Mei-Ana-…)."""
+    kept = read_first([REPORT, REPORT_KEPT]) or {}
+    name = re.sub(r'[^\w .&()-]', '', str(kept.get('name') or '')).strip()[:60]
+    return re.sub(r'-{2,}', '-', re.sub(r'[^\w-]+', '-', 'Psyche-Syncs-' + name)).strip('-')
 
 
 def sync_store():
@@ -1292,7 +1305,7 @@ def write_versioned(folder, base, text):
 def book_path():
     """The book as it is now, or None."""
     try:
-        got = sorted(f for f in os.listdir(SYNC_DIR) if re.match(r'^My-Syncs(-\d{8}-\d{4}(-\d+)?)?\.html$', f))
+        got = sorted(f for f in os.listdir(SYNC_DIR) if BOOK_FILE.match(f))
     except OSError:
         return None
     return max((os.path.join(SYNC_DIR, f) for f in got), key=os.path.getmtime) if got else None
@@ -1304,7 +1317,7 @@ def build_book():
     entries = sorted(((k, v) for k, v in s.items() if isinstance(v, dict) and isinstance(v.get('report'), dict)), key=lambda kv: -(int(kv[1].get('at') or 0)))
     if not entries:
         for f in os.listdir(SYNC_DIR) if os.path.isdir(SYNC_DIR) else []:
-            if re.match(r'^My-Syncs(-\d{8}-\d{4}(-\d+)?)?\.html$', f):
+            if BOOK_FILE.match(f):
                 try:
                     os.remove(os.path.join(SYNC_DIR, f))
                 except OSError:
@@ -1319,7 +1332,7 @@ def build_book():
         pass
     try:
         os.makedirs(SYNC_DIR, exist_ok=True)
-        return write_versioned(SYNC_DIR, BOOK_NAME[:-5], sync_book_html(entries, own))
+        return write_versioned(SYNC_DIR, book_base(), sync_book_html(entries, own))
     except OSError:
         return None
 
@@ -2936,15 +2949,6 @@ def pages(fetch, cursor_of, limit=COLLECT_PAGES):
         after = nxt
 
 
-OWN_ACCOUNTS = ('psycheai.io',)
-
-
-def ours(th, account, m_account):
-    """A one-to-one thread with PsycheAI's own Instagram account."""
-    others = [u for u in th.get('users') or [] if str(u.get('id')) not in (str(account), str(m_account))]
-    return len(others) == 1 and str(others[0].get('username') or '').lower().lstrip('@') in OWN_ACCOUNTS
-
-
 def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, with_messages=True):
     # A Fresh Psyche starts over (README "A fresh read is a fresh read"): the last read's digest goes and this
     # one is built from what Instagram holds now. Added chats and Facebook (sources/) stay.
@@ -3095,9 +3099,6 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                         if len(ranked) >= threads:
                             break
                     ranked.sort(key=lambda th: -score.get(str(th.get('score_map_key')), 0))
-                    # A chat with PsycheAI's own Instagram account isn't theirs to read (README "A thin read, said and capped"):
-                    # Jeff's one conversation was it, so his Psyche was written from messages to PsycheAI.
-                    ranked = [th for th in ranked if not ours(th, account, m_account)]
                     # Two passes: every thread to an even share of the room first, then, ranked by their own
                     # words as the digest ranks them, the room left goes to the busiest with more to read,
                     # none past the site's ceiling. Cursors stay in memory.
