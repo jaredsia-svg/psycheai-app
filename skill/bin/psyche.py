@@ -86,7 +86,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 165
+RELEASE = 166
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -821,6 +821,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
 # friend's card never pass through a tool result. Both cards small (tap for full size), the one line, then
 # everything open: MBTI, the Big Five, what motivates them, what they share, align, differ, tips, how read.
 SYNC_A, SYNC_B = '#7b3fa0', '#d1477a'
+OWN_CARD = '<own card>'      # in My Syncs, their own card is embedded once and each Sync borrows it
 SYNC_DIR = os.path.join(OUT, 'syncs')       # apart from out/'s own files: the report's write clears out/*.html
 MOTIVE_ORDER = ['self-direction', 'stimulation', 'hedonism', 'achievement', 'power', 'security', 'conformity', 'tradition', 'benevolence', 'universalism']
 SYNC_TRAITS = [('openness', 'Openness'), ('conscientiousness', 'Conscientious'), ('extraversion', 'Extraversion'), ('agreeableness', 'Agreeable'), ('neuroticism', 'Sensitivity')]
@@ -1011,10 +1012,9 @@ def _sync_points(items, lead):
         for i, p in enumerate(pts))) if pts else ''
 
 
-def sync_html(report, me, them, pics=None, when=''):
-    """The Sync as one self-contained page: report as this person reads it (forA is theirs), me and them the two cards."""
-    if not isinstance(report, dict) or not report.get('summary'):
-        return None
+def sync_sections(report, me, them, pics=None):
+    """A Sync's sections, as (first names, [(title, colour, html)]): the page and My Syncs both lay them out. A picture given as
+    OWN_CARD is filled in by the page's script from the one copy of their own card (My Syncs embeds it once)."""
     me, them, pics = me if isinstance(me, dict) else {}, them if isinstance(them, dict) else {}, pics or {}
     na, nb = _first(me), _first(them)
     if na == nb:
@@ -1022,8 +1022,9 @@ def sync_html(report, me, them, pics=None, when=''):
 
     def who(card, n, key):
         pic = pics.get(key)
-        img = ('<button type="button" data-big="1" aria-label="Open %s’s Psyche Card full size"><img alt="%s’s Psyche Card" src="%s"><em>Tap to open</em></button>'
-               % (_e(n), _e(n), _img_src(pic)) if pic else '<div class="nopic">%s</div>' % _e(n[:1]))
+        src = 'src="%s"' % _img_src(pic) if pic and pic != OWN_CARD else 'data-me="1" src=""'
+        img = ('<button type="button" data-big="1" aria-label="Open %s’s Psyche Card full size"><img alt="%s’s Psyche Card" %s><em>Tap to open</em></button>'
+               % (_e(n), _e(n), src) if pic else '<div class="nopic">%s</div>' % _e(n[:1]))
         return ('<div class="who">' + img + ('<small>%s is most like</small><b>%s</b>' % (_e(n), _e(card.get('character'))) if card.get('character') else '')
                 + ('<span>%s</span>' % _e(card.get('headline')) if card.get('headline') else '') + '</div>')
     duo = ('<div class="duo"><div class="beam"></div>' + who(me, na, 'me') + '<div class="mid">' + SYNC_ART + '<i>In sync</i></div>' + who(them, nb, 'them') + '</div>'
@@ -1043,8 +1044,16 @@ def sync_html(report, me, them, pics=None, when=''):
                 ('Where you align', '#2f7d6b', _sync_points(report.get('align'), 'What you have in common, or what suits each other, sharpest first.')),
                 ('Where you differ', '#c2571a', _sync_points(report.get('differ'), 'Real differences, and how each can work for you.')),
                 ('How to relate better', '#c2366d', tips), ('How this was read', '#6a4bb5', how)]
+    return na, nb, [x for x in sections if x[2]]
+
+
+def sync_html(report, me, them, pics=None, when=''):
+    """The Sync as one self-contained page: report as this person reads it (forA is theirs), me and them the two cards."""
+    if not isinstance(report, dict) or not report.get('summary'):
+        return None
+    na, nb, sections = sync_sections(report, me, them, pics)
     body = ''.join('<section class="box" style="--c:%s"><h2><i>%02d</i>%s</h2>%s</section>' % (c, i, _e(t), inner)
-                   for i, (t, c, inner) in enumerate((s for s in sections if s[2])))
+                   for i, (t, c, inner) in enumerate(sections))
     title = '%s & %s · Psyche Sync' % (na, nb)
     banner = ('<header class="banner" id="top">' + W_LOGO + '<div class="row"><div class="txt"><div class="facts">Psyche Sync</div>'
               '<h1>' + _e(na) + ' &amp; ' + _e(nb) + '</h1><p class="lede">How you two click, from both your Psyche Cards: where you align, where you differ, and how to make the most of both.</p>'
@@ -1083,17 +1092,25 @@ def sync_card_pics(me, them):
     return pics
 
 
-def save_sync_page(content):
-    """Lay out the Sync get_sync or save_sync sent (content) and save it in out/syncs/: its path, or None."""
+def _when(at):
+    try:
+        return datetime.fromtimestamp(int(at) / 1000).strftime('%-d %B %Y') if at else ''
+    except (TypeError, ValueError, OverflowError, OSError):
+        return ''
+
+
+def save_sync_page(content, sync=None):
+    """Lay out the Sync get_sync or save_sync sent (content) and save it in out/syncs/: its path, or None.
+    With its id, it's kept for My Syncs too, and the book is made again (README "My Syncs")."""
     if not isinstance(content, dict):
         return None
     cards = content.get('cards') if isinstance(content.get('cards'), dict) else {}
     me, them = cards.get('me') or {}, cards.get('them') or {}
-    try:
-        when = datetime.fromtimestamp(int(content.get('at')) / 1000).strftime('%-d %B %Y') if content.get('at') else ''
-    except (TypeError, ValueError, OverflowError, OSError):
-        when = ''
-    page = sync_html(content.get('report'), me, them, sync_card_pics(me, them), when)
+    pics = sync_card_pics(me, them)
+    if sync:
+        keep_sync(sync, content, pics.get('them'))
+        build_book()
+    page = sync_html(content.get('report'), me, them, pics, _when(content.get('at')))
     if not page:
         return None
     name = re.sub(r'-{2,}', '-', re.sub(r'[^\w-]+', '-', 'Psyche-Sync-%s-%s' % (_first(me), _first(them)))).strip('-')
@@ -1102,6 +1119,127 @@ def save_sync_page(content):
         path = os.path.join(SYNC_DIR, name + '.html')
         with open(path, 'w', encoding='utf-8') as f:
             f.write(page)
+        os.chmod(path, 0o600)
+        return path
+    except OSError:
+        return None
+
+
+# ---------- My Syncs (README "My Syncs") ----------
+# Every Sync opened here, kept in the workspace (syncs.json, with a spare copy in ~/.psycheai) and laid out as one
+# book, out/syncs/My-Syncs.html: newest first, a row each that opens into the whole Sync, a search by name, and
+# smaller card pictures (their own embedded once). Made again whenever a Sync is opened or saved, My Syncs is
+# shown, or the morning check finds one; a Sync the server no longer lists drops out. Kept here only, never sent.
+SYNC_STORE = os.path.join(HERE, 'syncs.json')
+SYNC_STORE_KEPT = os.path.join(KEEP, 'syncs.json')
+BOOK_NAME = 'My-Syncs.html'
+
+
+def sync_store():
+    s = read_first([SYNC_STORE, SYNC_STORE_KEPT]) or {}
+    return s if isinstance(s, dict) else {}
+
+
+def _small_pic(b64, width=360):
+    """A card picture for the book: about 360 by 640 at JPEG quality 80, a few tens of kilobytes. As it is without Pillow."""
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(base64.b64decode(b64))).convert('RGB')
+        im.thumbnail((width, width * 16 // 9))
+        out = io.BytesIO()
+        im.save(out, 'JPEG', quality=80, optimize=True)
+        return base64.b64encode(out.getvalue()).decode()
+    except Exception:
+        return b64
+
+
+def keep_sync(sid, content, pic=None):
+    if not sid or not isinstance(content, dict) or not isinstance(content.get('report'), dict) or not content['report'].get('summary'):
+        return
+    s = sync_store()
+    old = s.get(str(sid)) if isinstance(s.get(str(sid)), dict) else {}
+    cards = content.get('cards') if isinstance(content.get('cards'), dict) else {}
+    if not pic and not old.get('pic'):
+        pic = sync_card_pics(None, cards.get('them') or {}).get('them')
+    s[str(sid)] = {'report': content['report'], 'at': content.get('at'), 'cards': {'me': cards.get('me') or {}, 'them': cards.get('them') or {}},
+                   'pic': _small_pic(pic) if pic else old.get('pic')}
+    write_private([SYNC_STORE, SYNC_STORE_KEPT], s)
+
+
+def prune_syncs(ids):
+    s = sync_store()
+    kept = {k: v for k, v in s.items() if k in ids}
+    if len(kept) != len(s):
+        write_private([SYNC_STORE, SYNC_STORE_KEPT], kept)
+
+
+BOOK_CSS = """
+.find{display:flex;gap:8px;align-items:center;margin:0 0 14px}
+.find input{flex:1;min-width:0;padding:11px 14px;border-radius:12px;border:1px solid var(--line);font:inherit;font-size:15px;background:#fff;color:var(--ink)}
+.find input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+details.sbk{background:#fff;border:1px solid #e6dcec;border-radius:20px;margin:0 0 12px;box-shadow:0 1px 2px rgba(36,26,46,.04),0 10px 30px rgba(36,26,46,.06);overflow:hidden}
+details.sbk>summary{list-style:none;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 14px;cursor:pointer}
+details.sbk>summary::-webkit-details-marker{display:none}
+details.sbk>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:18px}
+.thumbs{display:flex}.thumbs img,.thumbs .nopic{width:34px;height:60px;object-fit:cover;border-radius:6px;border:2px solid #fff;box-shadow:0 2px 6px rgba(91,42,134,.2)}
+.thumbs .nopic{display:flex;align-items:center;justify-content:center;font-size:14px}
+.thumbs>*+*{margin-left:-10px}
+.sline{min-width:0}.sline b{display:block;font-size:16px}.sline span{display:block;font-size:13.5px;color:var(--soft);line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sdate{font-size:12px;color:var(--mute);white-space:nowrap}
+details.sbk[open]>summary{border-bottom:1px solid #efe6f4}
+.sbody{padding:4px 14px 14px}.sbody .box{box-shadow:none;margin-top:12px}
+.none{color:var(--soft);font-size:14px;padding:6px 2px}
+"""
+BOOK_JS = """(function(){var me=document.getElementById('mecard');if(me)[].slice.call(document.querySelectorAll('img[data-me]')).forEach(function(i){i.src=me.getAttribute('src');});
+var f=document.getElementById('find'),rows=[].slice.call(document.querySelectorAll('details.sbk')),none=document.getElementById('none');
+if(f)f.addEventListener('input',function(){var q=f.value.trim().toLowerCase(),n=0;rows.forEach(function(r){var hit=!q||r.getAttribute('data-name').indexOf(q)>=0;r.hidden=!hit;if(hit)n++;});if(none)none.hidden=n>0;});})();"""
+
+
+def sync_book_html(entries, own=None):
+    """My Syncs: entries are the kept Syncs, newest first; own is their card picture, embedded once."""
+    rows = []
+    for sid, e in entries:
+        cards = e.get('cards') or {}
+        me, them = cards.get('me') or {}, cards.get('them') or {}
+        pics = {'me': OWN_CARD if own else None, 'them': e.get('pic')}
+        na, nb, sections = sync_sections(e['report'], me, them, pics)
+        thumb = lambda key, n: ('<img alt="" %s>' % ('data-me="1" src=""' if pics[key] == OWN_CARD else 'src="%s"' % _img_src(pics[key]))) if pics.get(key) else '<div class="nopic">%s</div>' % _e(n[:1])
+        body = ''.join('<section class="box" style="--c:%s"><h2>%s</h2>%s</section>' % (c, _e(t), inner) for t, c, inner in sections)
+        rows.append('<details class="sbk" data-name="%s"><summary><div class="thumbs">%s%s</div><div class="sline"><b>%s</b><span>%s</span></div><span class="sdate">%s</span></summary><div class="sbody">%s</div></details>'
+                    % (_e(nb.lower()), thumb('me', na), thumb('them', nb), _e(nb + (' · ' + them['character'] if them.get('character') else '')),
+                       _e(e['report'].get('summary')), _e(_when(e.get('at'))), body))
+    n = len(rows)
+    banner = ('<header class="banner" id="top">' + W_LOGO + '<div class="row"><div class="txt"><div class="facts">My Syncs</div><h1>Your Syncs</h1>'
+              '<p class="lede">Every Sync you\'ve opened, newest first. Tap one to see all of it.</p><div class="sub">%d %s</div></div></div></header>' % (n, 'Sync' if n == 1 else 'Syncs'))
+    find = '<div class="find"><input id="find" type="search" placeholder="Find a friend" aria-label="Find a friend by name"></div>' if n > 3 else ''
+    mecard = '<img id="mecard" alt="" hidden src="%s">' % _img_src(own) if own else ''
+    viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>'
+    return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
+            '<title>My Syncs</title><style>' + W_CSS + SYNC_CSS + BOOK_CSS + '</style></head><body><div class="wrap">' + banner + '<div style="height:14px"></div>' + find
+            + ''.join(rows) + '<p class="none" id="none" hidden>No Sync with that name.</p><footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace, from the Syncs kept here.</footer></div>'
+            + mecard + viewer + '<script>' + BOOK_JS + SYNC_JS + '</script></body></html>')
+
+
+def build_book():
+    """Make My Syncs again from what's kept: its path, or None when there's no Sync (and the old book goes)."""
+    s = sync_store()
+    entries = sorted(((k, v) for k, v in s.items() if isinstance(v, dict) and isinstance(v.get('report'), dict)), key=lambda kv: -(int(kv[1].get('at') or 0)))
+    path = os.path.join(SYNC_DIR, BOOK_NAME)
+    if not entries:
+        if os.path.exists(path):
+            os.remove(path)
+        return None
+    own = None
+    try:
+        cards = sorted(f for f in os.listdir(OUT) if f.lower().endswith('.png'))
+        if cards:
+            own = _small_pic(report_card_b64(os.path.join(OUT, cards[-1])))
+    except OSError:
+        pass
+    try:
+        os.makedirs(SYNC_DIR, exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(sync_book_html(entries, own))
         os.chmod(path, 0o600)
         return path
     except OSError:
@@ -4836,6 +4974,8 @@ def e2e_list(out):
         s = sync_plain(w.get('summary'), 200) if w else None
         if s:
             x['summary'] = s
+            # Kept for My Syncs (README "My Syncs"), so the book has it before it's opened.
+            keep_sync(x.get('sync'), {'report': w, 'at': (data.get('written') or {}).get('at'), 'cards': {'me': clean_card((data.get('cards') or {}).get(role)), 'them': them}})
     seen, used = {}, set()
     for x in syncs:
         seen[x.get('name')] = seen.get(x.get('name'), 0) + 1
@@ -4860,7 +5000,11 @@ def e2e_check(out):
         code, data = _open_pair(x.get('e2e'))
         if data is not None:
             role = (x.get('e2e') or {}).get('role')
-            names.append(first_of(clean_card((data.get('cards') or {}).get('b' if role == 'a' else 'a'))))
+            them = clean_card((data.get('cards') or {}).get('b' if role == 'a' else 'a'))
+            names.append(first_of(them))
+            w = oriented_report(data.get('written'), role)
+            if w:
+                keep_sync(x.get('sync'), {'report': w, 'at': (data.get('written') or {}).get('at'), 'cards': {'me': clean_card((data.get('cards') or {}).get(role)), 'them': them}})
     if not names:
         return {'quiet': True}
     said = ' and '.join(names) if len(names) < 3 else '%s and %d more' % (', '.join(names[:2]), len(names) - 2)
@@ -4888,7 +5032,7 @@ def e2e_get(post_tool, other, info, rewrite=False):
         return {'error': 'One of the two cards is gone. Ask them to sync again.'}
     written = None if rewrite else oriented_report(data.get('written'), role)
     if written:
-        path = save_sync_page({'report': written, 'at': (data.get('written') or {}).get('at'), 'cards': {'me': me, 'them': them}})
+        path = save_sync_page({'report': written, 'at': (data.get('written') or {}).get('at'), 'cards': {'me': me, 'them': them}}, other)
         res = {'written': True, 'name': first_of(them), 'summary': sync_plain(written.get('summary'), 200), 'sync': other,
                'nextStep': _step('Your Sync with %s.' % first_of(them), ['Sync with someone else', 'Write it again', 'Done'])}
         if path:
@@ -4919,7 +5063,7 @@ def e2e_save(post_tool, other, info, answer):
     out = _put_pair(post_tool, other, code, data)
     if not isinstance(out, dict) or out.get('error'):
         return out
-    path = save_sync_page({'report': report, 'at': data['written']['at'], 'cards': {'me': me, 'them': them}})
+    path = save_sync_page({'report': report, 'at': data['written']['at'], 'cards': {'me': me, 'them': them}}, other)
     res = {'saved': True, 'name': first_of(them), 'summary': sync_plain(report['summary'], 200), 'sync': other,
            'nextStep': _step('Your Sync with %s is ready. They\'ll see the same Sync on their side.' % first_of(them), ['Sync with someone else', 'Done'])}
     if path:
@@ -5077,6 +5221,13 @@ def call(tool, args, first=False):
         return clean_result(e2e_get(post_tool, str(args.get('sync')), out['e2e'], bool(args.get('rewrite'))))
     if tool == 'get_syncs' and isinstance(out, dict):
         out = e2e_check(out) if args.get('check') and 'locked' in out else e2e_list(out) if 'syncs' in out else out
+        # My Syncs (README "My Syncs"): only what the server still lists, made again as one book.
+        if isinstance(out.get('syncs'), list):
+            prune_syncs(set(str(x.get('sync')) for x in out['syncs'] if isinstance(x, dict)))
+        if isinstance(out.get('syncs'), list) or out.get('quiet') is False:
+            book = build_book()
+            if book:
+                out['book'] = book
     if out.get('cardKey'):
         keep_keys(card=out.pop('cardKey'))
     if tool == 'sync_link' and out.get('url'):
@@ -5092,7 +5243,7 @@ def call(tool, args, first=False):
     files = [c for c in result.get('content', []) if c.get('type') == 'resource_link']
     if tool in SYNC_PAGE_TOOLS and content is not None:
         # Only the page's path goes on to Muse: the Sync's words and the friend's card stay in the file.
-        path = save_sync_page(content)
+        path = save_sync_page(content, args.get('sync'))
         if path:
             for k in ('attach', 'pdf', 'image', 'page'):
                 out.pop(k, None)
@@ -5528,7 +5679,7 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT):
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT):
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))

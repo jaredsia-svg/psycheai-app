@@ -2042,6 +2042,14 @@ out = m.call('get_sync', {'sync': 'u_ana'})
 page = open(out['file'], encoding='utf-8').read() if out.get('file') else ''
 plain = m.sync_html(dict(R, inCommon=None), dict(ME, motives=None), THEM)
 pic = m.sync_html(R, ME, THEM, {'me': '/9j/AAAA', 'them': 'iVBORw0K'})
+m.SYNC_STORE, m.SYNC_STORE_KEPT = os.path.join(d, 'syncs.json'), os.path.join(d, 'syncs-kept.json')
+for sid, nm, at in (('u_one', 'Ana', 1762400000000), ('u_two', 'Bo', 1762500000000)):
+    m.keep_sync(sid, {'report': R, 'at': at, 'cards': {'me': ME, 'them': dict(THEM, firstName=nm)}}, 'iVBORw0K')
+two = open(m.build_book(), encoding='utf-8').read()
+m.prune_syncs({'u_one'})
+one = open(m.build_book(), encoding='utf-8').read()
+m.prune_syncs(set())
+gone = m.build_book() is None and not os.path.exists(os.path.join(m.SYNC_DIR, 'My-Syncs.html'))
 ans = {'motivators': {'scores': [{'value': k, 'score': v} for k, v in TEN.items()]}, 'essence': {'character': 'Mulan'}}
 buf = io.StringIO()
 m.get = lambda *a, **k: (_ for _ in ()).throw(m.urllib.error.URLError('offline'))
@@ -2049,6 +2057,7 @@ with contextlib.redirect_stdout(buf):
     m.main(['status'])
 print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(out.keys()), 'inSyncs': os.path.dirname(out.get('file') or '') == m.SYNC_DIR,
   'page': {k: k in page for k in ['<svg class="radar2"', 'Racquet sports', 'Pickleball', 'Confidence score', 'What you share', 'In sync', 'Mei &amp; Ana', 'Where you differ']},
+  'book': [two.count('class="sbk"'), two.index('data-name="bo"') < two.index('data-name="ana"'), one.count('class="sbk"'), 'data-name="ana"' in one, gone],
   'escaped': '<img src=x' not in page, 'pics': 'src="data:image/jpeg;base64,/9j/AAAA"' in pic and 'src="data:image/png;base64,iVBORw0K"' in pic, 'summaryOnce': page.count('Mei plans, Ana sparks.') == 1,
   'plain': {'radar': '<svg class="radar2"' in plain, 'tops': 'top three' in plain, 'reading': 'Reading' in plain}, 'empty': m.sync_html({}, ME, THEM),
   'card': 'motives' in m.card_summary(ans, 'Mei'), 'syncCard': sorted((m.sync_card(ans, 'Mei').get('motives') or {}).keys()) == sorted(TEN),
@@ -2087,6 +2096,7 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         E.check = await mei('call', 'get_syncs', JSON.stringify({ check: true }));
         E.meiSees = await mei('call', 'get_sync', JSON.stringify({ sync: E.list.syncs && E.list.syncs[0] && E.list.syncs[0].sync }));
         E.meiPage = E.meiSees.file && fsx.existsSync(E.meiSees.file) ? fsx.readFileSync(E.meiSees.file, 'utf8') : '';
+        E.book = E.list.book && fsx.existsSync(E.list.book) ? fsx.readFileSync(E.list.book, 'utf8') : '';
         E.anaPage = E.saved.file && fsx.existsSync(E.saved.file) ? fsx.readFileSync(E.saved.file, 'utf8') : '';
         // Everything this server keeps for the two of them (other tests' rows aside): their cards, codes, Sync and any Psyche row.
         const ids = [E.joined && E.joined.sync, E.list && E.list.syncs && E.list.syncs[0] && E.list.syncs[0].sync].filter(Boolean);
@@ -2364,7 +2374,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       /^No sync id was given/.test((await require('../lib/sync.js').get({ id: 'u_nobody' }, {})).error),
       JSON.stringify(skillState.leaving && skillState.leaving.syncsKept));
     check('the Sync is a page made in the workspace (README "The Sync is a page"): get_sync asks with html, the page holds both cards\' charts, the radar, What you share and the Confidence score, a friend\'s text is escaped, and only the page\'s path reaches Muse; the ten scores ride only on the card a Sync uses, and status says whether a Psyche is kept',
-      ((p) => p && p.sentHtml === true && JSON.stringify(p.keys) === '["file","name","summary","written"]' && p.inSyncs && Object.values(p.page).every(Boolean) && p.escaped && p.pics && p.summaryOnce &&
+      ((p) => p && p.sentHtml === true && JSON.stringify(p.keys) === '["file","name","summary","written"]' && p.inSyncs && Object.values(p.page).every(Boolean) && p.escaped && p.pics && p.summaryOnce && JSON.stringify(p.book) === '[2,true,1,true,true]' &&
         p.plain.radar === false && p.plain.tops && p.plain.reading && p.empty === null && p.card === false && p.syncCard && p.partial === false && p.status === false)(skillState.syncPage) &&
       /Only when they Sync does anything of theirs leave: their card summary \(the few lines on their Psyche Card, and their scores on the ten motivations\) and the written Sync, both locked here under the Sync link's code before they're sent, so PsycheAI keeps and passes them on but can't read them/.test(skillMd) &&
       /A result's `file` is a file saved here for the chat \(a Sync's page\): attach it\./.test(skillMd),
@@ -2378,6 +2388,8 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
         JSON.stringify(E.list.nextStep.buttons) === '["Show my Sync with Ana","Sync with someone new"]' && E.check.say === 'Ana synced with you: your Sync is ready.' &&
         E.meiSees.written && E.meiSees.name === 'Ana' && /For you, Mei<\/h4><ul><li>Mei tip 1/.test(E.meiPage) && /For you, Ana<\/h4><ul><li>Ana tip 1/.test(E.anaPage) &&
         /<b>Racquet sports<\/b><span><i class="ia">Mei<\/i> Pickleball<\/span><span><i class="ib">Ana<\/i> Tennis/.test(E.meiPage) && /<svg class="radar2"/.test(E.meiPage) &&
+        /\/syncs\/My-Syncs\.html$/.test(E.list.book || '') && /<details class="sbk" data-name="ana">/.test(E.book) && /weekends you both remember/.test(E.book) && (E.book.match(/id="mecard"/g) || []).length <= 1 &&
+        /<svg class="radar2"/.test(E.book) && E.check.book === E.list.book &&
         E.rows >= 4 && E.leaks.length === 0 && /^# PsycheAI skill for Muse/.test(E.bare) && !/Psyche link:/.test(E.bare) &&
         E.skillRoute.every(t => /^# PsycheAI skill for Muse/.test(t)) && require('../lib/skill.js').installPrompt() === 'Install localhost:8787/install and generate my Psyche')(skillState.e2e),
       JSON.stringify(skillState.e2e && { ...skillState.e2e, link: undefined, invite: undefined, meiPage: (skillState.e2e.meiPage || '').length, anaPage: (skillState.e2e.anaPage || '').length,
