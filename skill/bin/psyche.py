@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 176
+RELEASE = 177
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -3759,6 +3759,9 @@ SAME_FRAME = set('a an of to in on at as so or be by is it not but no too very s
 # "Someone who…" or "A partner who…", and counting the frame made any two needs half the same (README "The same
 # point, not the same frame"): one read was refused seven times over its fourth need.
 SAME_TITLE_FRAME = set('someone somebody who partner person people keeps keep'.split())
+# A run of six words carries a point only with three words of substance, and the frame a list's details share
+# ("so you need a partner who…", "rather than someone who…") is not substance (README "The frame is not the point").
+SAME_RUN_FRAME = SAME_TITLE_FRAME | set('need needs rather'.split())
 
 
 def ei_problems(data):
@@ -3790,7 +3793,7 @@ def same_point(a, b):
     if title_in(a, b) or title_in(b, a):
         return True
     wa, wb = words(text_of(a)), words(text_of(b))
-    weighty = lambda run: sum(1 for w in run if w not in SAME_COMMON and w not in SAME_FRAME) >= 3
+    weighty = lambda run: sum(1 for w in run if w not in SAME_COMMON and w not in SAME_FRAME and w not in SAME_RUN_FRAME) >= 3
     runs = {' '.join(wa[i:i + 6]) for i in range(len(wa) - 5) if weighty(wa[i:i + 6])}
     return any(' '.join(wb[i:i + 6]) in runs for i in range(len(wb) - 5))
 
@@ -4713,11 +4716,12 @@ def evidence_problems(data):
         ev = [x for x in (items if isinstance(items, list) else []) if isinstance(x, str) and x.strip()]
         if not ev:
             continue
-        bad = next((x for x in ev if EV_SPAN.search(x) or (not EV_YEAR.search(x) and (strict or not re.search(r'\d', x)))), None)
-        if bad:
+        # Every such item, not only the first, so one pass fixes them all (README "Every summary at once").
+        bad = [x for x in ev if EV_SPAN.search(x) or (not EV_YEAR.search(x) and (strict or not re.search(r'\d', x)))]
+        for x in bad:
             out.append('%s: "%s" is a summary of many, not a moment: use the one dated thing they did or wrote that shows it best ("your May 2025 comment fixing a friend\'s recipe")%s'
-                       % (at, bad[:70], '' if strict else ', or the count or rhythm behind it'))
-        elif not any(EV_MONTH.search(x) or EV_YEAR.search(x) for x in ev):
+                       % (at, x[:70], '' if strict else ', or the count or rhythm behind it'))
+        if not bad and not any(EV_MONTH.search(x) or EV_YEAR.search(x) for x in ev):
             out.append('%s: none of its items is a dated moment: make at least one the dated thing they did or wrote that shows it best' % at)
         if len(out) >= 6:
             break

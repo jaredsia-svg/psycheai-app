@@ -2645,8 +2645,9 @@ print(json.dumps([names, interest, m.evidence_problems(bad), m.evidence_problems
         got[0][0] === 'thanks [handle] and [name]!' && got[0][1] === 'This is [name] showing us a stray puppy, he works with [name]' && got[0][2] === "find [name] and [name] at [name]'s place" &&
         got[0][3] === 'Merry Christmas! Will you mark it? May grace and hope be with you' && got[1] === 'Taylor Swift', JSON.stringify(got.slice(0, 2)));
       check('check-answer, as psycheai.io: evidence that is a summary rather than a moment ("across years", "spanning 2012 to 2026", "in 2025 and 2026", words with no date or count) is sent back for the MBTI letters, wellbeing, attachment and patterns; a count or rhythm passes outside patterns',
-        got[2].length === 5 && /^patterns\[0\]\.evidence: "Hosts dinners often" is a summary of many, not a moment/.test(got[2][0]) && got[2].some(p => /^mbti\.letters\[0\]\.evidence: "Starts threads and proposes outings across years"/.test(p)) &&
-        got[2].some(p => /^mbti\.letters\[1\]/.test(p)) && got[2].some(p => /^wellness\.meaning\.evidence: "Threads spanning 2012 to 2026"/.test(p)) && got[2].some(p => /^attachment\.derivedFrom: "Reflections in 2025 and 2026"/.test(p)) &&
+        got[2].length === 6 && /^patterns\[0\]\.evidence: "Hosts dinners often" is a summary of many, not a moment/.test(got[2][0]) && got[2].some(p => /^mbti\.letters\[0\]\.evidence: "Starts threads and proposes outings across years"/.test(p)) &&
+        // Both of mbti.letters[1]'s undated items, not only the first (README "Every summary at once").
+        got[2].some(p => /^mbti\.letters\[1\]\.evidence: "Joins new groups for tennis"/.test(p)) && got[2].some(p => /^mbti\.letters\[1\]\.evidence: "Plays pickleball"/.test(p)) && got[2].some(p => /^wellness\.meaning\.evidence: "Threads spanning 2012 to 2026"/.test(p)) && got[2].some(p => /^attachment\.derivedFrom: "Reflections in 2025 and 2026"/.test(p)) &&
         got[3].length === 0 && /evidence_problems/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')), JSON.stringify(got.slice(2, 4)).slice(0, 600));
       check('check-answer fails where publish would: a value outside its list (as psycheai.io matches it, case and spaces aside) or of the wrong type is a problem, not a note, so a read isn\'t published only to come back (a Muse run published with trajectories outside the list)',
         /answer\.t is "growing", not one of the allowed values \(rising, phasic\)/.test(got[4].join(' ')) && /answer\.n should be an integer/.test(got[4].join(' ')) && got[5].length === 0 &&
@@ -2715,6 +2716,22 @@ diff = [("Someone who shows up, not just says it", "Someone who is steady with m
 print(json.dumps([[m.same_point(N(a), N(b)) for a, b in same], [m.same_point(N(a), N(b)) for a, b in diff]]))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
       check('two needs are the same point by what they say, not by "Someone who…" (one read was refused seven times over its fourth need), and short titles that differ by one word are the same point ("Close one open bet", "Pick one open bet")',
         got[0].every(Boolean) && !got[1].some(Boolean), JSON.stringify(got));
+    }
+    {
+      // README "The frame is not the point": a read's needs were refused four times running, each a different pair,
+      // because every detail said "so you need a partner who…", a run of six words the test counted as substance.
+      const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+a = {'title': 'Someone who names feelings plainly', 'detail': 'You hide low moods behind jokes, so you need a partner who asks once more, rather than someone who takes the first joke as the answer.'}
+b = {'title': 'Someone steady about money and plans', 'detail': 'You swing between holding for a twenty-fold gain and eyeing a move to Thailand, so you need a partner who can plan a month ahead, rather than someone who chases the next idea.'}
+c = {'title': 'Someone who argues back, kindly', 'detail': 'Debate is how you think, so a partner who holds a different view without taking it personally suits you.'}
+d = {'title': 'Someone who disagrees out loud', 'detail': 'Debate is how you think, so a partner who holds a different view without taking it personally suits you.'}
+ev = m.evidence_problems({'attachment': {'derivedFrom': ['fifteen threads running 2018 to 2026', 'you met their parents three weeks in, then pulled back', 'you hide sadness in jokes, January 2023']}})
+print(json.dumps([m.same_point(a, b), m.same_point(c, d), len(ev), ev]))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
+      check('two needs are not the same point for sharing "so you need a partner who…" or "rather than someone who…", while the same words of substance still are; and check-answer names every summary in a list at once, not only the first',
+        got[0] === false && got[1] === true && got[2] === 2 && /fifteen threads/.test(got[3][0]) && /three weeks in/.test(got[3][1]), JSON.stringify(got));
+      check('the helper\'s brief says to fix a field by loading answer.json and setting it, not by find-and-replace on the file',
+        /fix its problems until it passes: change each field it names by loading answer\.json, setting that field and saving it, since a find-and-replace on the file can change the same words in another field/.test(fsx.readFileSync(new URL('../lib/skill.js', import.meta.url), 'utf8')));
     }
     check('the two intermissions close when a part opens, when the other intermission opens, and on Collapse all (README "Intermissions close")',
       ((src) => /function only\(p\)\{shut\(\);/.test(src) && /function all\(\)\{shut\(\);/.test(src) &&
