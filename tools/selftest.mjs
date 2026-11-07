@@ -2461,12 +2461,25 @@ digest(25000); mid = [m.thin_cap()[0], m.confidence_problems(ans(65)), m.confide
 digest(25000, 30000); full = [m.thin_cap()[0], m.confidence_problems(ans(75)), 'thinLine' in m.local_ready({})]
 th = lambda name, uid='9': {'users': [{'id': 'ME', 'username': 'jeff'}, {'id': uid, 'username': name}]}
 own = [m.ours(th('psycheai.io'), 'ME', 'ME'), m.ours(th('@PsycheAI.io'), 'ME', 'ME'), m.ours(th('yvonne'), 'ME', 'ME'), m.ours({'users': [{'id': '9', 'username': 'psycheai.io'}, {'id': '8', 'username': 'yvonne'}]}, 'ME', 'ME')]
-print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'own': own, 'say': m.THIN_SAY, 'line': m.THIN_LINE, 'labels': m.known_label('Make it anyway') and m.known_label('Add WhatsApp or Facebook')}))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname], { env: envReal }).toString());
+import io, contextlib
+os.remove(m.DIGEST)
+m.collect = lambda *a, **k: {'ok': False, 'read': {'posts': 0, 'threads': 0}, 'notes': [], 'stopped': None, 'problems': ['Nothing came back from Instagram to build a digest from.']}
+m.ig = lambda cli, *a, **k: {'accounts': [{'username': 'su.pport8962', 'user_fbid': 'ACC1'}]}
+m.write_private = lambda *a, **k: None
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    m.main(['collect', '--account-id', 'ACC1'])
+nothing = json.loads(buf.getvalue()).get('tooThin')
+print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'own': own, 'say': m.THIN_SAY, 'line': m.THIN_LINE, 'nothing': nothing, 'labels': m.known_label('Make it anyway') and m.known_label('Add WhatsApp or Facebook') and m.known_label("I've connected another account")}))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname], { env: envReal }).toString());
       const md = require('../lib/skill.js').skillMd();
       check('a thin read is said and capped (README "A thin read, said and capped"): their own writing counted as psycheai.io counts it (not the "> " lines they answered, nor dates and tags); under 20,000 characters collect offers "Add WhatsApp or Facebook" and "Make it anyway", and the score is at most 39 ("very low"); under 50,000 read in all, at most 59 with a line offering more; PsycheAI\'s own chat is never read',
         T.tiny[0][0] === 594 && /at most 39 \(very low\)/.test(T.tiny[1][0] || '') && T.tiny[2].length === 0 && T.tiny[3] === 39 && T.tiny[4] === true &&
         T.mid[0] === 59 && /at most 59 \(low\)/.test(T.mid[1][0] || '') && T.mid[2].length === 0 && T.full[0] === null && T.full[1].length === 0 && T.full[2] === false &&
         JSON.stringify(T.own) === '[true,true,false,false]' && T.labels === true &&
+        // Nothing at all (README "Nothing to read, said"): its own reply, the account by name, no "Make it anyway", and words that never point at buttons.
+        T.nothing && T.nothing.nothing === true && T.nothing.say === "There's nothing on @su.pport8962 for me to read yet: no posts, stories, comments or messages of your own. If your main Instagram is a different account, connect it in Muse and tell me when it's connected. Or add WhatsApp chats or Facebook instead." &&
+        JSON.stringify(T.nothing.buttons) === '["Add WhatsApp or Facebook","I\'ve connected another account"]' && !('anyway' in T.nothing) && !/\b(tap|button|below)\b/i.test(T.nothing.say) &&
+        /On "I've connected another account" \(or their own words saying so\): `python3 bin\/psyche\.py accounts` rereads both account lists/.test(md) &&
         /^There isn't much of your own writing on Instagram to read yet, so your Psyche would be mostly a guess\./.test(T.say) &&
         /3\) When collect answers: if its result has tooThin and this brief doesn't say to write it even though it's thin, return only that tooThin as your result and write nothing\./.test(md) &&
         /On "Make it anyway": send its anyway line as its own message, then start ONE helper with the same brief with its step 1 left out/.test(md) &&

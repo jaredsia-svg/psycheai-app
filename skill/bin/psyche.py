@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 171
+RELEASE = 172
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5297,7 +5297,7 @@ LABELS = frozenset([
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
     'Explain why you said this', 'Correct something', 'More', 'Fresh Psyche', 'Add WhatsApp as data source', 'My data and privacy',
-    'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
+    'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$')]
 
 
@@ -5541,6 +5541,22 @@ THIN_SAY = ("There isn't much of your own writing on Instagram to read yet, so y
             "Adding WhatsApp chats or Facebook makes it much sharper.")
 THIN_LINE = "Your read was on the thin side: adding WhatsApp chats or Facebook makes it sharper."
 ANYWAY_LINE = "On it. Writing your Psyche takes about 5 minutes. I'll show it here when it's ready."
+# Nothing at all came back (README "Nothing to read, said"): no Make it anyway, since there's nothing to write from.
+# The words never point at the buttons, so they read right even if a button doesn't show.
+NOTHING_SAY = ("There's nothing on %s for me to read yet: no posts, stories, comments or messages of your own. "
+               "If your main Instagram is a different account, connect it in Muse and tell me when it's connected. "
+               "Or add WhatsApp chats or Facebook instead.")
+
+
+def username_of(account_id):
+    """The @name of the account read, from Muse's own account list, or None."""
+    try:
+        for a in instagram_accounts(ig(IG_CLI, 'accounts')):
+            if a['id'] == str(account_id) and re.match(r'^[A-Za-z0-9._]{1,30}$', a['username']):
+                return a['username']
+    except (RuntimeError, RateLimited):
+        pass
+    return None
 
 
 def evidence_size():
@@ -5978,7 +5994,11 @@ def main(argv):
                                            **({'utcOffset': SEEN_OFFSET[0]} if SEEN_OFFSET[0] is not None else {}),
                                            **{k: out[k] for k in ('ok', 'read', 'notes', 'stopped', 'problems', 'characters') if k in out}})
         own, _ = evidence_size()
-        if out.get('ok') and own < MIN_OWN_WRITING:
+        if not out.get('ok') and any('Nothing came back' in str(p) for p in out.get('problems') or []):
+            who = username_of(opts.get('--account-id'))
+            out['tooThin'] = {'ownWriting': 0, 'nothing': True, 'say': NOTHING_SAY % ('@' + who if who else 'your Instagram'),
+                              'buttons': ['Add WhatsApp or Facebook', "I've connected another account"]}
+        elif out.get('ok') and own < MIN_OWN_WRITING:
             # Too little to read well (README "A thin read, said and capped"): the read stops here, with the offer.
             out['tooThin'] = {'ownWriting': own, 'say': THIN_SAY, 'buttons': ['Add WhatsApp or Facebook', 'Make it anyway'], 'anyway': ANYWAY_LINE}
         print(json.dumps(out, ensure_ascii=False, indent=1))
