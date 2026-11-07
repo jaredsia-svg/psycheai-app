@@ -9,7 +9,7 @@ copy what it asks for from below and adjust.
 1. Both services deployed: app.psycheai.io (this repo, `main`) and psycheai.io
    (psycheai, `claude/instagram-personality-compatibility-oqhpa3`).
 2. `https://app.psycheai.io/health` answers `{"ok":true,…}`.
-3. The pages load: psycheai.io/muse, /muse-privacy, /muse-terms, /muse-docs.
+3. The pages load: psycheai.io/skill (and /muse, which answers the same), /muse-privacy, /muse-terms, /muse-docs.
 4. **Reviewer account on:** in Render (psycheai-app → Environment) set `PSYCHE_EMAIL_SIGNIN=1` for the review (connecting otherwise makes an account with no sign-in page, so the reviewer couldn't reach their seeded account), and
    - `PSYCHE_REVIEWER_EMAIL`: an address you give Meta, e.g. muse-review@psycheai.io
    - `PSYCHE_REVIEWER_CODE`: six digits you give Meta

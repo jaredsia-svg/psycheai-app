@@ -10,7 +10,7 @@
 //   GET  /card/:token.png     a card as an image, for the chat (lib/cardimage.js)
 //   GET  /card/:token.pdf     a Sync as PsycheAI's Sync PDF (lib/sync.js pdfFor)
 //   GET  /m/:token            the card page; POST /m/:token/:action for its buttons
-//   GET  /, /add-to-muse, /privacy, /terms, /safety   301 to psycheai.io/muse (lib/site.js)
+//   GET  /, /add-to-muse, /privacy, /terms, /safety   301 to psycheai.io/skill and the /muse-* pages (lib/site.js)
 //   GET  /intro/:id?t=&a=     answer an intro from an email link
 //   GET  /chat/:id?t=         the private chat page for a mutual match
 //   POST /chat/:id?t=         send a message from that page (form post)

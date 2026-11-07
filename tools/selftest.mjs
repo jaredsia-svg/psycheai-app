@@ -1714,7 +1714,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
   const b = (await post('/dev/signup', { email: 'b@example.com' })).body;
   const init = await post('/mcp', { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: mcp.PROTOCOL_VERSION } }, a.token);
   check('initialize names PsycheAI\'s icon and site, and the icons are served', init.body.result.serverInfo.icons.some(i => /\/icon\.png$/.test(i.src) && i.sizes[0] === '512x512') &&
-    init.body.result.serverInfo.websiteUrl === 'https://psycheai.io/muse' &&
+    init.body.result.serverInfo.websiteUrl === 'https://psycheai.io/skill' &&
     (await fetch(base + '/icon.png')).headers.get('content-type') === 'image/png' && (await fetch(base + '/favicon.ico')).status === 200);
   check('initialize returns server info and the core instructions', init.body.result.serverInfo.name === 'psycheai' && /Call get_report_guide/.test(init.body.result.instructions));
   const note = await post('/mcp', { jsonrpc: '2.0', method: 'notifications/initialized' }, a.token);
@@ -2411,7 +2411,11 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       /EXPLAIN AND CORRECT, with the PsycheAI skill, when they ask why you said something or say something in it is off \(there are no buttons for these\)\. "Explain why you said this": run python3 bin\/psyche\.py why/.test(instructions.MUSE_PROCEDURE) && /"Not me", "Partly" and "Used to be"/.test(instructions.MUSE_PROCEDURE) &&
       /move it only as far as the rest of the evidence allows/.test(instructions.MUSE_PROCEDURE) && /Never argue with a correction/.test(instructions.MUSE_PROCEDURE) &&
       /What they corrected \(python3 bin\/psyche\.py correct, with no ID, lists it\) is read before writing/.test(instructions.MUSE_PROCEDURE) &&
-      /name this one "PsycheAI" and end with one line, "I've named this chat PsycheAI\. Pin it in your chat list to find me again: check-ins come here too\."/.test(instructions.MUSE_PROCEDURE),
+      /name this one "PsycheAI" and end with one line, "I've named this chat PsycheAI, so it's easy to find\."/.test(instructions.MUSE_PROCEDURE) &&
+      // Muse can rename a chat but not pin one (7 Nov 2026): the first run renames it when the Psyche is delivered, in plain words, and no line asks for a pin.
+      /Then, the first time, name this chat "PsycheAI" \(Muse can rename a chat\) and say so in one line: "I've named this chat PsycheAI, so it's easy to find\."/.test(require('../lib/skill.js').skillMd()) &&
+      !/\bpin (it|this chat)\b|Pin it in your chat list/i.test(instructions.MUSE_PROCEDURE + require('../lib/skill.js').skillMd()) &&
+      !/without telling|silently|don't mention|do not mention|is the go-ahead|read this file again/i.test(require('../lib/skill.js').skillMd()),
       JSON.stringify(skillState.leaving && skillState.leaving.explain).slice(0, 500));
     check('results are data: the guide call carries no line telling Muse what to send (sayFirst is gone: SKILL.md and the guide put the wait line first), and the script prints no "show", "publish" or "sayFirst" lines (README "Results are data")',
       JSON.stringify(skillState.leaving && skillState.leaving.sayFirst) === '[false,false]' &&
@@ -3024,7 +3028,7 @@ print(json.dumps([os.path.getsize(path), len(b) * 3 // 4, m._img_src(b)[:23], m.
   const selfPage = await (await fetch(myCard.structuredContent.page.replace(/^http:\/\/localhost:\d+/, base))).text();
   check('your own card page has no buttons, and says how to change it', /Your Psyche Card/.test(selfPage) && !/<button/.test(selfPage) && /tell Muse what to fix/.test(selfPage));
   check('pages escape what users wrote', !/<script>alert/.test(selfPage));
-  for (const [path, to] of [['/', '/muse'], ['/add-to-muse', '/muse#add'], ['/privacy', '/muse-privacy'], ['/terms', '/muse-terms'], ['/safety', '/muse-pair#safety'], ['/docs', '/muse-docs']]) {
+  for (const [path, to] of [['/', '/skill'], ['/add-to-muse', '/skill#add'], ['/privacy', '/muse-privacy'], ['/terms', '/muse-terms'], ['/safety', '/muse-pair#safety'], ['/docs', '/muse-docs']]) {
     const moved = await fetch(base + path, { redirect: 'manual' });
     check('the old page ' + path + ' redirects to psycheai.io' + to, moved.status === 301 && moved.headers.get('location').endsWith(to), moved.headers.get('location'));
   }
