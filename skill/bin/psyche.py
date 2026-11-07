@@ -6,7 +6,9 @@ What it does, in full:
     sends nothing about them unless they choose to Sync (local_publish, SYNC_SENDS_CARD)
   - runs only Muse's own Instagram, Messenger and Facebook tools (/opt/hatch/bin) and curl
   - writes only in this skill's folder (~/workspace/skills/psycheai/), ~/.psycheai/ (a spare
-    copy of the account keys) and a temporary folder it removes after each request
+    copy of the account keys), a temporary folder it removes after each request, and
+    copies of their latest card, report and My Syncs in ~/workspace/your_files/ (Muse's Library),
+    replacing only copies it made there
   - standard library only; the files are signed (SIGNATURE.json), and update installs only a
     newer release whose signature checks out
 
@@ -86,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 169
+RELEASE = 170
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -187,9 +189,6 @@ def local_card(r):
         out = {}
         try:
             os.makedirs(OUT, exist_ok=True)
-            for old in os.listdir(OUT):
-                if old.lower().endswith('.png'):
-                    os.remove(os.path.join(OUT, old))
             path = draw_card(r['card'], os.path.join(OUT, file_label('Psyche Card') + '.png'))
             os.chmod(path, 0o600)
             out['file'] = path
@@ -205,9 +204,6 @@ def local_card(r):
         status, body = fetch('GET', link, {'Accept': 'image/png', 'User-Agent': agent()})
         if not body.startswith(b'\x89PNG'):
             raise ValueError('not a PNG')
-        for old in os.listdir(OUT):
-            if old.lower().endswith('.png'):
-                os.remove(os.path.join(OUT, old))
         path = os.path.join(OUT, file_label('Psyche Card') + '.png')
         with open(path, 'wb') as f:
             f.write(body)
@@ -825,7 +821,52 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
 # everything open: MBTI, the Big Five, what motivates them, what they share, align, differ, tips, how read.
 SYNC_A, SYNC_B = '#7b3fa0', '#d1477a'
 OWN_CARD = '<own card>'      # in My Syncs, their own card is embedded once and each Sync borrows it
-SYNC_DIR = os.path.join(OUT, 'syncs')       # apart from out/'s own files: the report's write clears out/*.html
+SYNC_DIR = os.path.join(OUT, 'syncs')
+# Muse's Library shows ~/workspace/your_files, flat, with no folders (README "In Muse's Library"): the latest card,
+# report and My Syncs are copied there, so they're found without scrolling back through a chat. Only files this
+# script put there (listed in .library.json) are ever replaced or removed: nothing else in your_files is touched.
+YOUR_FILES = os.environ.get('PSYCHEAI_YOUR_FILES') or os.path.join(os.path.dirname(os.path.dirname(HERE)), 'your_files')
+LIBRARY_LIST = os.path.join(HERE, '.library.json')
+
+
+def mirror_library():
+    """Make the Library's PsycheAI files the latest ones: this Psyche's card and report, and My Syncs. A newer
+    one replaces the older copy; with none (after "Delete everything"), the copies go."""
+    if not os.path.isdir(YOUR_FILES):
+        return
+    want = [p for p in (current_out('Psyche Card', '.png'), current_out('Psyche Report', '.html'), book_path()) if p]
+    names = {os.path.basename(p): p for p in want}
+    placed = [n for n in ((read_first([LIBRARY_LIST]) or {}).get('files') or []) if isinstance(n, str) and n == os.path.basename(n)]
+    kept = []
+    for name, src in names.items():
+        dst = os.path.join(YOUR_FILES, name)
+        if os.path.exists(dst) and name not in placed:
+            continue                    # a file of theirs with the same name: never overwritten
+        try:
+            if not (os.path.exists(dst) and os.path.getsize(dst) == os.path.getsize(src) and os.path.getmtime(dst) >= os.path.getmtime(src)):
+                shutil.copyfile(src, dst)
+                os.chmod(dst, 0o600)
+            kept.append(name)
+        except OSError:
+            pass
+    for name in placed:
+        if name not in kept:
+            try:
+                os.remove(os.path.join(YOUR_FILES, name))
+            except OSError:
+                pass
+    if kept or placed:
+        if kept:
+            write_private([LIBRARY_LIST], {'files': kept})
+        elif os.path.exists(LIBRARY_LIST):
+            os.remove(LIBRARY_LIST)
+
+
+def current_out(kind, ext):
+    """This Psyche's own card or report in out/, by the name it was saved under (file_label), or None. Earlier
+    Psyches' files stay in out/ so the chat still opens them (README "Past Psyches stay in the chat")."""
+    path = os.path.join(OUT, file_label(kind) + ext)
+    return path if os.path.isfile(path) else None
 MOTIVE_ORDER = ['self-direction', 'stimulation', 'hedonism', 'achievement', 'power', 'security', 'conformity', 'tradition', 'benevolence', 'universalism']
 SYNC_TRAITS = [('openness', 'Openness'), ('conscientiousness', 'Conscientious'), ('extraversion', 'Extraversion'), ('agreeableness', 'Agreeable'), ('neuroticism', 'Sensitivity')]
 SYNC_ART = ('<svg class="link" viewBox="0 0 120 120" aria-hidden="true"><defs>'
@@ -1073,9 +1114,9 @@ def sync_card_pics(me, them):
     here from the card the Sync holds. Either is left out if it can't be made; the page shows a letter instead."""
     pics = {}
     try:
-        own = sorted(f for f in os.listdir(OUT) if f.lower().endswith('.png'))
+        own = current_out('Psyche Card', '.png')
         if own:
-            pics['me'] = report_card_b64(os.path.join(OUT, own[-1]))
+            pics['me'] = report_card_b64(own)
     except OSError:
         pass
     for key, card in (('me', me), ('them', them)):
@@ -1116,14 +1157,12 @@ def save_sync_page(content, sync=None):
     page = sync_html(content.get('report'), me, them, pics, _when(content.get('at')))
     if not page:
         return None
-    name = re.sub(r'-{2,}', '-', re.sub(r'[^\w-]+', '-', 'Psyche-Sync-%s-%s' % (_first(me), _first(them)))).strip('-')
+    base = re.sub(r'-{2,}', '-', re.sub(r'[^\w-]+', '-', 'Psyche-Sync-%s-%s' % (_first(me), _first(them)))).strip('-')
     try:
         os.makedirs(SYNC_DIR, exist_ok=True)
-        path = os.path.join(SYNC_DIR, name + '.html')
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(page)
-        os.chmod(path, 0o600)
-        return path
+        # A name of its own each time it's laid out (README "Sync files with their time"): a rewritten Sync under
+        # the same name could show the old copy in Muse, as a card did (README "A name for each run, after a delete too").
+        return write_versioned(SYNC_DIR, base, page)
     except OSError:
         return None
 
@@ -1223,28 +1262,64 @@ def sync_book_html(entries, own=None):
             + mecard + viewer + '<script>' + BOOK_JS + SYNC_JS + '</script></body></html>')
 
 
+def write_versioned(folder, base, text):
+    """Save text as base-<local date and time>.html and return its path (README "Sync files with their time"). The same
+    text as the file already there keeps that file and its name, so a file already shown in the chat still opens;
+    a change gets a new name, so no Muse app shows its stored copy of the old one. Earlier versions stay, so a
+    file shown earlier in the chat still opens (README "Past Psyches stay in the chat")."""
+    os.makedirs(folder, exist_ok=True)
+    old = re.compile(r'^%s(-\d{8}-\d{4}(-\d+)?)?\.html$' % re.escape(base))
+    taken = sorted(f for f in os.listdir(folder) if old.match(f))
+    if taken:
+        newest = os.path.join(folder, max(taken, key=lambda x: os.path.getmtime(os.path.join(folder, x))))
+        try:
+            with open(newest, encoding='utf-8') as fh:
+                if fh.read() == text:
+                    return newest
+        except OSError:
+            pass
+    tag = local_now().strftime('%d%m%Y-%H%M')
+    name, n = '%s-%s.html' % (base, tag), 2
+    while name in taken and n < 50:
+        name, n = '%s-%s-%d.html' % (base, tag, n), n + 1
+    path = os.path.join(folder, name)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(text)
+    os.chmod(path, 0o600)
+    return path
+
+
+def book_path():
+    """The book as it is now, or None."""
+    try:
+        got = sorted(f for f in os.listdir(SYNC_DIR) if re.match(r'^My-Syncs(-\d{8}-\d{4}(-\d+)?)?\.html$', f))
+    except OSError:
+        return None
+    return max((os.path.join(SYNC_DIR, f) for f in got), key=os.path.getmtime) if got else None
+
+
 def build_book():
     """Make My Syncs again from what's kept: its path, or None when there's no Sync (and the old book goes)."""
     s = sync_store()
     entries = sorted(((k, v) for k, v in s.items() if isinstance(v, dict) and isinstance(v.get('report'), dict)), key=lambda kv: -(int(kv[1].get('at') or 0)))
-    path = os.path.join(SYNC_DIR, BOOK_NAME)
     if not entries:
-        if os.path.exists(path):
-            os.remove(path)
+        for f in os.listdir(SYNC_DIR) if os.path.isdir(SYNC_DIR) else []:
+            if re.match(r'^My-Syncs(-\d{8}-\d{4}(-\d+)?)?\.html$', f):
+                try:
+                    os.remove(os.path.join(SYNC_DIR, f))
+                except OSError:
+                    pass
         return None
     own = None
     try:
-        cards = sorted(f for f in os.listdir(OUT) if f.lower().endswith('.png'))
-        if cards:
-            own = _small_pic(report_card_b64(os.path.join(OUT, cards[-1])))
+        card = current_out('Psyche Card', '.png')
+        if card:
+            own = _small_pic(report_card_b64(card))
     except OSError:
         pass
     try:
         os.makedirs(SYNC_DIR, exist_ok=True)
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(sync_book_html(entries, own))
-        os.chmod(path, 0o600)
-        return path
+        return write_versioned(SYNC_DIR, BOOK_NAME[:-5], sync_book_html(entries, own))
     except OSError:
         return None
 
@@ -1342,9 +1417,9 @@ def local_report(r):
     kept = read_first([REPORT, REPORT_KEPT]) or {}
     card = None
     try:
-        pics = sorted(f for f in os.listdir(OUT) if f.lower().endswith('.png'))
-        if pics:
-            card = report_card_b64(os.path.join(OUT, pics[-1]))
+        pic = current_out('Psyche Card', '.png')
+        if pic:
+            card = report_card_b64(pic)
     except OSError:
         pass
     try:
@@ -1358,9 +1433,6 @@ def local_report(r):
         return out
     try:
         os.makedirs(OUT, exist_ok=True)
-        for old in os.listdir(OUT):
-            if old.lower().endswith('.html'):
-                os.remove(os.path.join(OUT, old))
         path = os.path.join(OUT, file_label('Psyche Report') + '.html')
         with open(path, 'w', encoding='utf-8') as f:
             f.write(page)
@@ -1422,6 +1494,8 @@ def local_ready(r):
     last = read_first([LAST_COLLECT]) or {}
     if isinstance(last.get('read'), dict):
         out['read'], out['readLine'] = read_receipt(last['read'])
+    if os.path.exists(DIGEST) and thin_cap()[0] is not None:
+        out['thinLine'] = THIN_LINE
     if len(files) < 2:
         out['missing'] = [k for k in ('card', 'report') if k not in files]
     return out
@@ -1438,8 +1512,15 @@ PARTS = {
 
 def saved(out):
     """Keep a publish result here and say only that it's saved, and its parts."""
-    # The last Psyche's files go, so only this one's can be attached.
-    shutil.rmtree(OUT, ignore_errors=True)
+    # The last Psyche's files stay, so the chat still opens them (README "Past Psyches stay in the chat"); this one's
+    # get names of their own (file_tag), and only they are attached or copied to the Library. A PDF left by a
+    # release before the report file still goes, so it's never attached in place of the report.
+    try:
+        for old in os.listdir(OUT):
+            if old.lower().endswith('.pdf'):
+                os.remove(os.path.join(OUT, old))
+    except OSError:
+        pass
     out = dict(out, fileTag=file_tag(read_first([LAST]) or read_first([TAG_KEPT])))
     write_private([LAST], out)
     write_private([TAG_KEPT], {'fileTag': out['fileTag']})
@@ -2262,6 +2343,31 @@ REPLY_NO_LISTS = "I couldn't read your Instagram accounts just now. Please send 
 REPLY_NO_SERVER = "PsycheAI can't be reached right now. Please send the prompt again in a few minutes."
 
 
+# When their messages aren't connected, the reply comes ready-made, with Meta's own connect link and the two
+# buttons (README "Connect, ready-made"): Muse looked the link up itself (two connector guides, two commands),
+# wrote its own message round it, and once said "Then tap below" over buttons that weren't shown. The words
+# never point at the buttons, so they read right even if a button doesn't show.
+CONNECT_SAY = ("Your Instagram messages aren't connected yet. They're where you're most yourself: with them, your report reads "
+               "how you talk to the people closest to you, not just what you post. Names are removed and nothing is quoted.")
+CONNECT_BUTTONS = ["I've connected them", 'Continue without messages']
+
+
+def with_connect(out):
+    """connectMessages, when an account's messages aren't connected: say (with the link) and buttons."""
+    if not any(b.get('messages_connected') is False for b in out.get('buttons') or [] if isinstance(b, dict)):
+        return out
+    try:
+        link = (ig(IGM_CLI, 'connect-url') or {}).get('connect_url')
+    except (RuntimeError, RateLimited):
+        link = None
+    if isinstance(link, str) and re.match(r'^https://[A-Za-z0-9.-]+(/[^\s()<>\[\]]*)?$', link):
+        say = CONNECT_SAY + '\n\nConnect them here: [Connect Instagram Messages](%s)' % link
+    else:
+        say = CONNECT_SAY + " You can connect them in Muse's settings, under Instagram Messages."
+    out['connectMessages'] = {'say': say, 'buttons': list(CONNECT_BUTTONS)}
+    return out
+
+
 def with_reply(out):
     """A result that can't go on gets its reply: no account, the lists unreadable, or PsycheAI unreachable."""
     if out.get('error'):
@@ -2290,6 +2396,7 @@ def first_run():
         return with_reply(out)
     if out.get('accounts', 0) is None:
         return with_reply(out)
+    with_connect(out)
     out['stepOne'] = STEP_ONE   # the reel is in the welcome now (README "The reel with the welcome")
     return out
 
@@ -2829,6 +2936,15 @@ def pages(fetch, cursor_of, limit=COLLECT_PAGES):
         after = nxt
 
 
+OWN_ACCOUNTS = ('psycheai.io',)
+
+
+def ours(th, account, m_account):
+    """A one-to-one thread with PsycheAI's own Instagram account."""
+    others = [u for u in th.get('users') or [] if str(u.get('id')) not in (str(account), str(m_account))]
+    return len(others) == 1 and str(others[0].get('username') or '').lower().lstrip('@') in OWN_ACCOUNTS
+
+
 def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, with_messages=True):
     # A Fresh Psyche starts over (README "A fresh read is a fresh read"): the last read's digest goes and this
     # one is built from what Instagram holds now. Added chats and Facebook (sources/) stay.
@@ -2979,6 +3095,9 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                         if len(ranked) >= threads:
                             break
                     ranked.sort(key=lambda th: -score.get(str(th.get('score_map_key')), 0))
+                    # A chat with PsycheAI's own Instagram account isn't theirs to read (README "A thin read, said and capped"):
+                    # Jeff's one conversation was it, so his Psyche was written from messages to PsycheAI.
+                    ranked = [th for th in ranked if not ours(th, account, m_account)]
                     # Two passes: every thread to an even share of the room first, then, ranked by their own
                     # words as the digest ranks them, the room left goes to the busiest with more to read,
                     # none past the site's ceiling. Cursors stay in memory.
@@ -5178,7 +5297,7 @@ LABELS = frozenset([
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
     'Explain why you said this', 'Correct something', 'More', 'Fresh Psyche', 'Add WhatsApp as data source', 'My data and privacy',
-    'Delete everything', 'Yes, delete everything', 'Cancel', 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
+    'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$')]
 
 
@@ -5403,6 +5522,57 @@ def answer_problems(answer):
     return problems[:20]
 
 
+# How much of their own writing a read has (README "A thin read, said and capped"), as psycheai.io counts it
+# (docs/digest.js ownWritingChars): their own lines only (posts, comments, their messages, and any WhatsApp or
+# Facebook added), never the "> " lines they answered, and without the date and tags. Under MIN_OWN_WRITING the
+# site makes no card; here the read stops and offers more data or "Make it anyway", capped at 39. Under
+# THIN_EVIDENCE characters in all it's a thin read, capped at 59, with a line offering more data.
+def _env_int(name, default):
+    try:
+        return int(os.environ[name]) if os.environ.get(name, '').strip() != '' else default
+    except ValueError:
+        return default
+
+
+MIN_OWN_WRITING = _env_int('PSYCHEAI_MIN_WRITING', 20000)     # the same setting psycheai.io's server reads
+THIN_EVIDENCE = _env_int('PSYCHEAI_THIN_EVIDENCE', 50000)
+OWN_LINE = re.compile(r'^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2})?\s*((?:\[[^\]]{1,12}\]\s*)*)(.*)$')
+THIN_SAY = ("There isn't much of your own writing on Instagram to read yet, so your Psyche would be mostly a guess. "
+            "Adding WhatsApp chats or Facebook makes it much sharper.")
+THIN_LINE = "Your read was on the thin side: adding WhatsApp chats or Facebook makes it sharper."
+ANYWAY_LINE = "On it. Writing your Psyche takes about 5 minutes. I'll show it here when it's ready."
+
+
+def evidence_size():
+    """(their own writing, all the evidence) in characters, from the digest and anything added in sources/."""
+    own = total = 0
+    for path in (DIGEST, os.path.join(SOURCES, 'whatsapp.txt'), os.path.join(SOURCES, 'facebook.txt')):
+        try:
+            with open(path, encoding='utf-8') as f:
+                lines = f.read().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            if line.startswith('>'):
+                total += len(line)
+                continue
+            m = OWN_LINE.match(line.strip())
+            if m:
+                own += len(m.group(2).strip())
+                total += len(m.group(2).strip())
+    return own, total
+
+
+def thin_cap():
+    """(the score's ceiling for how little was read, or None, and why)."""
+    own, total = evidence_size()
+    if own < MIN_OWN_WRITING:
+        return 39, '%d characters of their own writing (under %d)' % (own, MIN_OWN_WRITING)
+    if total < THIN_EVIDENCE:
+        return 59, '%d characters read in all (under %d)' % (total, THIN_EVIDENCE)
+    return None, ''
+
+
 # The website's confidence rubric (psycheai.io lib/prompts.js CONFIDENCE_SCORING, README "Confidence follows
 # the rubric"): Instagram, its messages included, is one strong source and stops at 79; Facebook (posts or
 # Messenger) or WhatsApp chats lift it to 86, both to 90. Checked here because the score is a number, not a judgement.
@@ -5418,10 +5588,13 @@ def confidence_problems(answer):
     strong = 1 + bool(re.search(r'facebook|messenger', sources) or os.path.exists(os.path.join(SOURCES, 'facebook.txt'))) + os.path.exists(os.path.join(SOURCES, 'whatsapp.txt'))
     cap, read = {1: 79, 2: 86}.get(strong, 90), {1: 'Instagram alone', 2: 'two strong sources'}.get(strong, 'Instagram, Facebook and WhatsApp')
     score, problems = conf['score'], []
-    if score > cap:
+    low, why = thin_cap() if os.path.exists(DIGEST) else (None, '')
+    if low is not None and score > low:
+        problems.append('confidence.score is %d: with %s it is at most %d (%s), whatever the sources: a thin read is mostly a guess.' % (score, why, low, 'very low' if low < 40 else 'low'))
+    elif score > cap:
         problems.append('confidence.score is %d: from %s it is at most %d (65 to 79 for Instagram, its messages included; 72 to 86 with Facebook or WhatsApp chats; 76 to 90 with both).' % (score, read, cap))
     level = 'high' if score >= 75 else 'moderate' if score >= 60 else 'low' if score >= 40 else 'very low'
-    if conf.get('level') and conf['level'] != level and score <= cap:
+    if conf.get('level') and conf['level'] != level and score <= cap and (low is None or score <= low):
         problems.append('confidence.level is "%s" for a score of %d: it is "%s" (high from 75, moderate 60 to 74, low 40 to 59, very low under 40).' % (conf['level'], score, level))
     return problems
 
@@ -5680,8 +5853,9 @@ def main(argv):
             out = account_choice()
         except (RuntimeError, RateLimited) as err:
             out = {'accounts': None, 'problem': 'The account lists could not be read here (%s).' % type(err).__name__}
-        with_reply(out)
-        out['stepOne'] = FRESH_STEP_ONE
+        with_reply(with_connect(out))
+        # A first Psyche gets the first line even after "I've connected them"; a fresh one, its own (README "Connect, ready-made").
+        out['stepOne'] = FRESH_STEP_ONE if read_first([REPORT, REPORT_KEPT]) else STEP_ONE
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'call' and len(argv) >= 2:
@@ -5803,6 +5977,10 @@ def main(argv):
             write_private([LAST_COLLECT], {'at': datetime.now().strftime('%Y-%m-%d %H:%M'), 'account': account_tag(opts.get('--account-id')), 'messages': not opts.get('no'),
                                            **({'utcOffset': SEEN_OFFSET[0]} if SEEN_OFFSET[0] is not None else {}),
                                            **{k: out[k] for k in ('ok', 'read', 'notes', 'stopped', 'problems', 'characters') if k in out}})
+        own, _ = evidence_size()
+        if out.get('ok') and own < MIN_OWN_WRITING:
+            # Too little to read well (README "A thin read, said and capped"): the read stops here, with the offer.
+            out['tooThin'] = {'ownWriting': own, 'say': THIN_SAY, 'buttons': ['Add WhatsApp or Facebook', 'Make it anyway'], 'anyway': ANYWAY_LINE}
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'last-collect':
@@ -5836,4 +6014,11 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    try:
+        main(sys.argv[1:])
+    finally:
+        # The Library's copies follow out/ after every command (README "In Muse's Library").
+        try:
+            mirror_library()
+        except Exception:
+            pass

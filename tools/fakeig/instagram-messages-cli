@@ -7,6 +7,8 @@ log = open(os.environ['FAKEIG_LOG'], 'a'); log.write('M ' + ' '.join(a) + '\n');
 if cmd == 'accounts':
     print(json.dumps({'accounts': [{'username': 'mei.t', 'user_fbid': 'ACC1', 'connected': True}, {'username': 'mei.shop', 'user_fbid': 'BIZ1', 'connected': False},
                                    {'username': 'mei.alt', 'user_fbid': 'ALT1', 'connected': False}], '_meta': {'fbids': ['ACC1', 'BIZ1', 'ALT1']}})); sys.exit(0)
+if cmd == 'connect-url':
+    print(json.dumps({'connect_url': 'https://agent.meta.ai/connect/instagram_messages'})); sys.exit(0)
 if os.environ.get('FAKE_429') == cmd: print('HTTP 429 Too Many Requests', file=sys.stderr); sys.exit(1)
 if cmd == 'thread' and int(opt.get('--first', '0')) > int(os.environ.get('FAKE_MAX_FIRST', '1000')): print('first must be at most ' + os.environ['FAKE_MAX_FIRST'], file=sys.stderr); sys.exit(2)
 ME = opt.get('--account-id')
