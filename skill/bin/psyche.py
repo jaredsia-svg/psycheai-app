@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 177
+RELEASE = 178
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5515,6 +5515,10 @@ def sync_card(answer, name):
             scores[k] = v
     if len(scores) == len(MOTIVATOR_LABELS):
         card['motives'] = scores
+    # Their daily rhythm, as shares only, for the Sync page's chart (README "The daily rhythm, back in a Sync").
+    act = digest_activity()
+    if act:
+        card['activity'] = act
     return card
 
 
