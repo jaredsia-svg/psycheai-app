@@ -86,7 +86,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 167
+RELEASE = 168
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1368,6 +1368,17 @@ def local_report(r):
     return out
 
 
+def read_receipt(read):
+    """The counts under the report, posts and stories as one (README "Posts and stories, one kind"), and the line itself."""
+    got = {k: v for k, v in (read or {}).items() if isinstance(v, int) and not isinstance(v, bool)}
+    both = got.get('posts', 0) + got.get('stories', 0)
+    counts = {'posts and stories': both, 'comments': got.get('comments', 0), 'threads': got.get('threads', 0)}
+    plural = lambda n, word: '{:,} {}{}'.format(n, word, '' if n == 1 else 's')
+    parts = ['{:,} posts and stories'.format(both)] + ([plural(got['comments'], 'comment')] if got.get('comments') else []) \
+        + ([plural(got['threads'], 'conversation')] if got.get('threads') else [])
+    return counts, 'Read here in Muse: %s, names removed.' % (', '.join(parts[:-1]) + ' and ' + parts[-1] if len(parts) > 1 else parts[0])
+
+
 def unsaved_read():
     """What was read after the last saved Psyche, if anything (README "Never the previous Psyche as the new
     one"): a collect, a digest written to, or a chat added since last-psyche.json was written. Publishing
@@ -1407,7 +1418,7 @@ def local_ready(r):
     # What was read, for the receipt under the report (counts only, from the last collect).
     last = read_first([LAST_COLLECT]) or {}
     if isinstance(last.get('read'), dict):
-        out['read'] = {k: v for k, v in last['read'].items() if k in ('stories', 'posts', 'comments', 'threads') and isinstance(v, int)}
+        out['read'], out['readLine'] = read_receipt(last['read'])
     if len(files) < 2:
         out['missing'] = [k for k in ('card', 'report') if k not in files]
     return out
@@ -2591,7 +2602,9 @@ def build_digest(given=None, given_meta=None):
             continue
         seen.add(key)
         words += 1
-        posts.append('%s [%s] %s' % (stamp(x), x['kind'], keep_ends(text) if len(text) > 1500 else text))
+        # One kind of line for posts, reels, stories and highlights (README "Posts and stories, one kind"): which
+        # request an item came back in isn't what it is, and the guide reads them all by their words and dates.
+        posts.append('%s %s' % (stamp(x), keep_ends(text) if len(text) > 1500 else text))
     all_posts = len(posts)
     posts = thin(posts, POSTS_MAX)
     comments = thin(['%s %s' % (stamp(x), scrub(str(x.get('text') or ''))) for x in sorted((x for x in items if x['kind'] == 'comment'), key=lambda x: x['t'])
@@ -5713,7 +5726,13 @@ def main(argv):
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'last-collect':
-        print(json.dumps(read_first([LAST_COLLECT]) or {'error': 'No collect has run here yet.'}, ensure_ascii=False, indent=1))
+        last = read_first([LAST_COLLECT]) or {'error': 'No collect has run here yet.'}
+        # Posts and stories as one count, as the receipt says it (README "Posts and stories, one kind").
+        if isinstance(last.get('read'), dict) and ('posts' in last['read'] or 'stories' in last['read']):
+            r = dict(last['read'])
+            both = (r.pop('posts', 0) or 0) + (r.pop('stories', 0) or 0)
+            last['read'] = dict({'posts and stories': both}, **r)
+        print(json.dumps(last, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'check-answer' and len(argv) >= 2:
         print(json.dumps(check_answer(argv[1]), ensure_ascii=False, indent=1))

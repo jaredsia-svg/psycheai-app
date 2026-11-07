@@ -2042,6 +2042,7 @@ out = m.call('get_sync', {'sync': 'u_ana'})
 page = open(out['file'], encoding='utf-8').read() if out.get('file') else ''
 plain = m.sync_html(dict(R, inCommon=None), dict(ME, motives=None), THEM)
 pic = m.sync_html(R, ME, THEM, {'me': '/9j/AAAA', 'them': 'iVBORw0K'})
+receipt = [m.read_receipt({'posts': 0, 'stories': 239, 'comments': 30, 'threads': 15}), m.read_receipt({'stories': 1, 'comments': 1})]
 m.SYNC_STORE, m.SYNC_STORE_KEPT = os.path.join(d, 'syncs.json'), os.path.join(d, 'syncs-kept.json')
 for sid, nm, at in (('u_one', 'Ana', 1762400000000), ('u_two', 'Bo', 1762500000000)):
     m.keep_sync(sid, {'report': R, 'at': at, 'cards': {'me': ME, 'them': dict(THEM, firstName=nm)}}, 'iVBORw0K')
@@ -2058,6 +2059,7 @@ with contextlib.redirect_stdout(buf):
 print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(out.keys()), 'inSyncs': os.path.dirname(out.get('file') or '') == m.SYNC_DIR,
   'page': {k: k in page for k in ['<svg class="radar2"', 'Racquet sports', 'Pickleball', 'Confidence score', 'What you share', 'In sync', 'Mei &amp; Ana', 'Where you differ']},
   'book': [two.count('class="sbk"'), two.index('data-name="bo"') < two.index('data-name="ana"'), one.count('class="sbk"'), 'data-name="ana"' in one, gone],
+  'receipt': [list(receipt[0]), list(receipt[1])],
   'escaped': '<img src=x' not in page, 'pics': 'src="data:image/jpeg;base64,/9j/AAAA"' in pic and 'src="data:image/png;base64,iVBORw0K"' in pic, 'summaryOnce': page.count('Mei plans, Ana sparks.') == 1,
   'plain': {'radar': '<svg class="radar2"' in plain, 'tops': 'top three' in plain, 'reading': 'Reading' in plain}, 'empty': m.sync_html({}, ME, THEM),
   'card': 'motives' in m.card_summary(ans, 'Mei'), 'syncCard': sorted((m.sync_card(ans, 'Mei').get('motives') or {}).keys()) == sorted(TEN),
@@ -2332,7 +2334,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       skillState.goodDigest && skillState.goodDigest.ok === true && skillState.goodDigest.last === '2026-10-29' && JSON.stringify(skillState.goodDigest.span) === '["2018-02-03","2026-10-29"]' &&
       skillState.badDigest && skillState.badDigest.ok === false && ['a handle', 'a link', 'a phone number', 'starts with its date', 'over about 275000'].every(w => skillState.badDigest.problems.join(' ').includes(w)) &&
       skillState.workGone && skillState.digestGone && /## Working files and the digest/.test(skillMd) && /It is deleted as soon as the read is published/.test(skillMd) &&
-      /A Fresh Psyche is a fresh read:\*\* `collect` reads their Instagram again and builds a new digest in place of the last one/.test(skillMd) && !/room is left for later/.test(skillMd) && /about 110,000 characters, what replies answer included\)/.test(skillMd) && /page the 10 busiest conversations back as far as check-digest asks, the ones with the most in them furthest/.test(skillMd) && /on every later read while sources\/whatsapp\.txt is there/.test(skillMd)  && /every moment the read cites is a line in it/.test(skillMd) && /2019-04-02 21:14 \[post\]/.test(skillMd) && /goes in once/.test(skillMd) && !/Friend A, Friend B… there too/.test(skillMd), JSON.stringify({ good: skillState.goodDigest, bad: skillState.badDigest && skillState.badDigest.problems }).slice(0, 800));
+      /A Fresh Psyche is a fresh read:\*\* `collect` reads their Instagram again and builds a new digest in place of the last one/.test(skillMd) && !/room is left for later/.test(skillMd) && /about 110,000 characters, what replies answer included\)/.test(skillMd) && /page the 10 busiest conversations back as far as check-digest asks, the ones with the most in them furthest/.test(skillMd) && /on every later read while sources\/whatsapp\.txt is there/.test(skillMd)  && /every moment the read cites is a line in it/.test(skillMd) && /2019-04-02 21:14 their caption/.test(skillMd) && !/\d \[(post|story)\] /.test(skillMd) && /goes in once/.test(skillMd) && !/Friend A, Friend B… there too/.test(skillMd), JSON.stringify({ good: skillState.goodDigest, bad: skillState.badDigest && skillState.badDigest.problems }).slice(0, 800));
     check('the script checks what leaves the workspace itself (a signed file, whatever a guide says): a report too big, a part too long, or holding a handle, link or phone number is not sent; SKILL.md says so',
       ((L) => L && !L.fine.length && /no part of a report runs past 4000/.test(L.dms.join(' ')) && /has a handle/.test(L.handle.join(' ')) && /has a phone number/.test(L.phone.join(' ')) &&
         /more than a report holds/.test(L.big.join(' ')) && L.held && L.held.saved === false && /has a link/.test(L.held.problems.join(' ')))(skillState.leaving) &&
@@ -2374,7 +2376,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       /^No sync id was given/.test((await require('../lib/sync.js').get({ id: 'u_nobody' }, {})).error),
       JSON.stringify(skillState.leaving && skillState.leaving.syncsKept));
     check('the Sync is a page made in the workspace (README "The Sync is a page"): get_sync asks with html, the page holds both cards\' charts, the radar, What you share and the Confidence score, a friend\'s text is escaped, and only the page\'s path reaches Muse; the ten scores ride only on the card a Sync uses, and status says whether a Psyche is kept',
-      ((p) => p && p.sentHtml === true && JSON.stringify(p.keys) === '["file","name","summary","written"]' && p.inSyncs && Object.values(p.page).every(Boolean) && p.escaped && p.pics && p.summaryOnce && JSON.stringify(p.book) === '[2,true,1,true,true]' &&
+      ((p) => p && p.sentHtml === true && JSON.stringify(p.keys) === '["file","name","summary","written"]' && p.inSyncs && Object.values(p.page).every(Boolean) && p.escaped && p.pics && p.summaryOnce && JSON.stringify(p.receipt) === JSON.stringify([[{ 'posts and stories': 239, comments: 30, threads: 15 }, 'Read here in Muse: 239 posts and stories, 30 comments and 15 conversations, names removed.'], [{ 'posts and stories': 1, comments: 1, threads: 0 }, 'Read here in Muse: 1 posts and stories and 1 comment, names removed.']]) && JSON.stringify(p.book) === '[2,true,1,true,true]' &&
         p.plain.radar === false && p.plain.tops && p.plain.reading && p.empty === null && p.card === false && p.syncCard && p.partial === false && p.status === false)(skillState.syncPage) &&
       /Only when they Sync does anything of theirs leave: their card summary \(the few lines on their Psyche Card, and their scores on the ten motivations\) and the written Sync, both locked here under the Sync link's code before they're sent, so PsycheAI keeps and passes them on but can't read them/.test(skillMd) &&
       /A result's `file` is a file saved here for the chat \(a Sync's page\): attach it\./.test(skillMd),
@@ -2432,7 +2434,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT}))`, pathx.join(dir, 'bin',
       /Without a widget: the same findings as buttons/.test(instructions.MUSE_PROCEDURE) && /When Muse can show a widget, the check-in is one: the step, those four as options and a box for a line/.test(instructions.MUSE_PROCEDURE));
     check('build-digest: a first digest from what was read, checked, with names, handles and numbers out, their own name as [you] in what others wrote, what each reply answers kept, a broadcast kept once, rebuilt within a read, never over an earlier read\'s digest; a build counts as a check in read timings',
       ((b) => b && b[0].ok === true && !/Kai|Mei|@kai|9123/.test(b[1]) && /^> Friend: Hey \[you\], free for tennis on Saturday\? call Friend on \[number\]/m.test(b[1]) &&
-        (b[1].match(/Pls help me like and follow/g) || []).length === 1 && /^counts: 13 posts and stories · 12 with words · 1 comments · 3 conversations · 123 own messages read · without words: 2022 1$/m.test(b[1]) &&
+        (b[1].match(/Pls help me like and follow/g) || []).length === 1 && !/^\d{4}-\d\d-\d\d( \d\d:\d\d)? \[(post|story)\] /m.test(b[1]) && /^counts: 13 posts and stories · 12 with words · 1 comments · 3 conversations · 123 own messages read · without words: 2022 1$/m.test(b[1]) &&
         /^## Posts and stories \(all read\)$/m.test(b[1]) && b[2] === true && b[4].ok === true)(skillState.leaving && skillState.leaving.build) &&
       require('../lib/timing.js').stages([['call:get_report_guide', -300], ['build-digest', -200], ['check-digest', -150], ['call:publish_psyche', -10]]).fixing === 50 &&
       /`python3 bin\/psyche\.py build-digest` picks the sample, keeps what each reply answers, takes out names, handles, links and numbers/.test(skillMd) && /Fetch what doesn't depend on anything else together, at once where Muse allows it/.test(skillMd),
@@ -2704,7 +2706,8 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
         raw = fsx.readFileSync(pathx.join(tmp, 'digest', 'last-collect.json'), 'utf8');
       } catch (e) { kept = { error: String(e.message).slice(0, 300) }; }
       check('the last collect is kept beside the digest (its read, notes and stopped: counts only, no ID or message), and last-collect shows it after a helper ran collect',
-        ran && ran.ok === true && kept && JSON.stringify(kept.read) === JSON.stringify(ran.read) && /pages, \d+ messages a page on average, 100 asked/.test(kept.read['conversation pages'] || '') &&
+        ran && ran.ok === true && kept && kept.read['posts and stories'] === (ran.read.posts || 0) + (ran.read.stories || 0) && !('stories' in kept.read) &&
+          Object.keys(ran.read).filter(k => !['posts', 'stories'].includes(k)).every(k => JSON.stringify(kept.read[k]) === JSON.stringify(ran.read[k])) && /pages, \d+ messages a page on average, 100 asked/.test(kept.read['conversation pages'] || '') &&
         !/ACC1|T0|T1|T2|U0|Kai|Ana|Jun|Saturday/.test(raw) && (fsx.statSync(pathx.join(tmp, 'digest', 'last-collect.json')).mode & 0o777) === 0o600 &&
         /bin\/psyche\.py last-collect +# what the last collect read/.test(skillMd), JSON.stringify(kept).slice(0, 400));
       fsx.rmSync(tmp, { recursive: true, force: true });
@@ -3371,7 +3374,7 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
       /text\(v && \(v\.value \|\| v\), 60\)/.test(require('node:fs').readFileSync(new URL('../lib/psyche.js', import.meta.url), 'utf8')) &&
       /calc\(28px \+ env\(safe-area-inset-bottom\)\)/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
       /initial-scale=1, viewport-fit=cover/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
-  check('the receipt under the report says only what was read, names removed', /as a receipt: "Read here in Muse: 239 stories, 30 comments and 15 conversations, names removed\." Then "What's next\?"/.test(instructions.CORE_MUSE) && !/names removed\. PsycheAI received only your finished Psyche/.test(instructions.CORE_MUSE));
+  check('the receipt under the report says only what was read, names removed', /one line from what was read, show ready's readLine as it is, as a receipt \(such as "Read here in Muse: 239 posts and stories, 30 comments and 15 conversations, names removed\."\)\. Then "What's next\?"/.test(instructions.CORE_MUSE) && !/names removed\. PsycheAI received only your finished Psyche/.test(instructions.CORE_MUSE));
   check('the chat shows the card, then the report as a file, then "What\'s next?": no widget and no PDF (README "The report as a file", "The report file, not a PDF")',
     /their whole report is a file: right under the card picture, attach the HTML file python3 bin\/psyche\.py show summary saves \(report\), their Psyche Report, as a file they open, never as a widget and never pasted; it is never skipped\./.test(instructions.CORE_MUSE) &&
     /there is no PDF, the report file is the whole report/.test(instructions.CORE_MUSE) &&
