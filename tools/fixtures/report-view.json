@@ -763,7 +763,8 @@
        "detail": "Operations, programme or project leadership – where finishing things is the job, not the extra."
       }
      ]
-    }
+    },
+    "regret": "If the quiet-organiser pattern holds, the regret most likely to find you is not a missed chance but a missing person: you. Four years of posts plan trips, birthdays and deadlines for everyone else, and 41 of 47 deadlines were closed, yet no caption in all that time says what you wanted, or that the load was heavy.\n\nPeople who live this way rarely regret the help they gave. They regret that nobody, themselves included, ever got to know what they would have chosen. One thing to do this month: plan one day around something only you want, put it in the calendar before anyone else's plans, and tell one person about it afterwards."
    }
   },
   "full": {
@@ -1929,7 +1930,7 @@
       ]
      },
      {
-      "title": "Mock second strength",
+      "title": "Mock steady follow-through",
       "detail": "Mock detail.",
       "pattern": "none",
       "raisedBy": [
@@ -1964,7 +1965,7 @@
       "reflect": "Mock reflection question for the reader?"
      },
      {
-      "title": "Mock second area",
+      "title": "Mock pause before replying",
       "detail": "Mock detail.",
       "pattern": "p1",
       "raisedBy": [
@@ -2554,11 +2555,11 @@
    "puttingItTogether": {
     "buildOn": [
      "Mock strength to build on",
-     "Mock second strength"
+     "Mock steady follow-through"
     ],
     "workOn": [
      "Mock area to develop",
-     "Mock second area"
+     "Mock pause before replying"
     ],
     "whenItShows": "Mock counter-move for the moment they notice it.",
     "plan": [
@@ -2585,7 +2586,7 @@
       "detail": "Mock detail on using it deliberately."
      },
      {
-      "title": "Mock second strength",
+      "title": "Mock steady follow-through",
       "detail": "Mock detail."
      }
     ],
@@ -2601,7 +2602,7 @@
       "reflect": "Mock reflection question for the reader?"
      },
      {
-      "title": "Mock second area",
+      "title": "Mock pause before replying",
       "detail": "Mock detail.",
       "signs": [
        "Mock early sign"
@@ -2639,7 +2640,7 @@
       "when": "This year",
       "step": "Mock change for this year.",
       "detail": "",
-      "from": "Mock second area"
+      "from": "Mock pause before replying"
      }
     ]
    },

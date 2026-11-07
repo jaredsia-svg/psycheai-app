@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 175
+RELEASE = 176
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -137,6 +137,15 @@ def local_now():
     if isinstance(off, int) and -840 <= off <= 840:
         return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=off)
     return datetime.now()
+
+
+def local_at(ts):
+    """A moment (seconds since 1970) on the user's clock, as local_now: Muse's machine runs on UTC, so a
+    report written at 00:07 in Singapore was dated the day before."""
+    off = (read_first([LAST_COLLECT]) or {}).get('utcOffset')
+    if isinstance(off, int) and -840 <= off <= 840:
+        return datetime.fromtimestamp(ts, timezone.utc).replace(tzinfo=None) + timedelta(minutes=off)
+    return datetime.fromtimestamp(ts)
 
 
 def file_tag(previous=None):
@@ -426,10 +435,13 @@ function set(p,open){p.classList.toggle('open',open);p.querySelector('button').s
   chips.forEach(function(c){if(c.getAttribute('href')==='#'+p.id){c.setAttribute('aria-current',open?'true':'false');
     if(open){var n=c.parentNode;n.scrollLeft=Math.max(0,c.offsetLeft-n.clientWidth/2+c.clientWidth/2);}}});}
 function go(el){requestAnimationFrame(function(){requestAnimationFrame(function(){try{el.scrollIntoView({block:'start',behavior:'instant'});}catch(e){el.scrollIntoView(true);}});});}
-function only(p){parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);go(p);}
+// The two intermissions (the roast, the regret) close when a part opens, or when the other one opens.
+var breaks=[].slice.call(document.querySelectorAll('details.roast'));function shut(keep){breaks.forEach(function(d){if(d!==keep)d.open=false;});}
+breaks.forEach(function(d){d.addEventListener('toggle',function(){if(d.open)shut(d);});});
+function only(p){shut();parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);go(p);}
 parts.forEach(function(p){p.querySelector('button').addEventListener('click',function(){if(p.classList.contains('open'))set(p,false);else only(p);});});
 chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();var p=document.querySelector(c.getAttribute('href'));if(p)only(p);});});
-function all(){parts.forEach(function(q){set(q,false);});go(document.getElementById('top'));}
+function all(){shut();parts.forEach(function(q){set(q,false);});go(document.getElementById('top'));}
 [].slice.call(document.querySelectorAll('[data-fold]')).forEach(function(b){b.addEventListener('click',all);});
 // The radar: a tap on a point or a name shows its score, what it is, and the reader's own line.
 var tip=document.getElementById('mtip'),pts=[].slice.call(document.querySelectorAll('.radar .pt'));
@@ -1192,7 +1204,7 @@ def sync_card_pics(me, them):
 
 def _when(at):
     try:
-        return datetime.fromtimestamp(int(at) / 1000).strftime('%-d %B %Y') if at else ''
+        return local_at(int(at) / 1000).strftime('%-d %B %Y') if at else ''
     except (TypeError, ValueError, OverflowError, OSError):
         return ''
 
@@ -1497,7 +1509,7 @@ def local_report(r):
     except OSError:
         pass
     try:
-        when = datetime.fromtimestamp(os.path.getmtime(LAST)).strftime('%-d %B %Y')
+        when = local_at(os.path.getmtime(LAST)).strftime('%-d %B %Y')
     except (OSError, ValueError):
         when = ''
     pages = None                  # no PDF (README "The report file, not a PDF"): no page count to show
@@ -3743,6 +3755,10 @@ CLOSE_CIRCLE = re.compile(r'\b(close|small|tight|tight-knit|trusted|familiar)\b[
 PRIVATE_ACCOUNT = re.compile(r'\b(private account|account is private)\b', re.I)
 SAME_COMMON = set('the and you your one this that with for from into next week weeks month year quarter each before after then them their what when will would more than about which have has its are was were can could just only also'.split())
 SAME_FRAME = set('a an of to in on at as so or be by is it not but no too very strength strengths pressure under becomes become behind tired turns'.split())
+# How a list's titles are framed, never what they say: the ideal partner's needs and what to be careful of all start
+# "Someone who…" or "A partner who…", and counting the frame made any two needs half the same (README "The same
+# point, not the same frame"): one read was refused seven times over its fourth need.
+SAME_TITLE_FRAME = set('someone somebody who partner person people keeps keep'.split())
 
 
 def ei_problems(data):
@@ -3760,14 +3776,17 @@ def ei_problems(data):
 
 
 def same_point(a, b):
-    stems = lambda t: [w[:5] for w in re.findall(r'[a-z]{3,}', str(t or '').lower()) if w not in SAME_COMMON]
+    stems = lambda t: [w[:5] for w in re.findall(r'[a-z]{3,}', str(t or '').lower()) if w not in SAME_COMMON and w not in SAME_TITLE_FRAME]
     words = lambda t: re.findall(r'[a-z0-9]+', str(t or '').lower())
     text_of = lambda x: str(x.get('title')) + ' ' + str(x.get('detail') or '')
 
     def title_in(x, y):
         t = list(dict.fromkeys(stems(x.get('title'))))
         other = set(stems(text_of(y) if len(t) >= 4 else y.get('title')))
-        return len(t) >= 2 and sum(1 for w in t if w in other) / len(t) >= 0.75
+        shared = sum(1 for w in t if w in other)
+        # A short title (two or three words that count) is the same point when all but one match ("Close one open
+        # bet", "Pick one open bet"); a longer one at three in four, as before.
+        return len(t) >= 2 and (shared >= 2 and shared >= len(t) - 1 if len(t) <= 3 else shared / len(t) >= 0.75)
     if title_in(a, b) or title_in(b, a):
         return True
     wa, wb = words(text_of(a)), words(text_of(b))
@@ -5492,9 +5511,6 @@ def sync_card(answer, name):
             scores[k] = v
     if len(scores) == len(MOTIVATOR_LABELS):
         card['motives'] = scores
-    act = digest_activity()
-    if act:
-        card['activity'] = act
     return card
 
 
