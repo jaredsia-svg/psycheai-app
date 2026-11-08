@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 45
+RELEASE = 46
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2021,17 +2021,13 @@ def check_read(r, view, has_chat=False):
             at = 'chapters.%s.areas.%s' % (cid, a)
             evs = L(x.get('evidence'))
             kinds_ = [D(e).get('kind') for e in evs]
-            ok_ev = (2 <= len(evs) <= 4 and all(D(e).get('kind') in EVIDENCE_KINDS and T(D(e).get('text')) and len(T(D(e).get('text'))) <= 200 for e in evs)
+            ok_ev = (len(evs) <= 4 and all(D(e).get('kind') in EVIDENCE_KINDS and T(D(e).get('text')) and len(T(D(e).get('text'))) <= 200 for e in evs)
                      and all(DATED.search(T(D(e).get('when'))) for e in evs if D(e).get('kind') == 'moment'))
-            need(ok_ev or (a == 'know' and not evs), '%s.evidence: two to four pieces (three is best), each {kind: messages, psyches, report or moment, text (at most 200 characters)}, a moment with its when (a month and year)' % at)
-            if has_chat and a != 'know':
-                need(any(k == 'messages' and re.search(r'\d', T(D(e).get('text'))) for k, e in zip(kinds_, evs)),
-                     '%s.evidence: one messages piece with a real count from the conversation (a number, never "dozens" or "thousands")' % at)
-            if a in PSY_AREAS:
-                need('psyches' in kinds_, '%s.evidence: one psyches piece, the trait that bears on this, in words' % at)
+            need(ok_ev, '%s.evidence: at most four pieces, only what shows this area\'s own question, each {kind: messages, psyches, report or moment, text (at most 200 characters)}, a moment with its when (a month and year)' % at)
+            need(all(re.search(r'\d', T(D(e).get('text'))) for k, e in zip(kinds_, evs) if k == 'messages'),
+                 '%s.evidence: a messages piece carries its real count (a number, never "dozens" or "thousands")' % at)
             if a in PILLARS:
-                need(0 < len(T(x.get('seen'))) <= 160 and x.get('verdict') in VERDICTS,
-                     '%s: seen (how you both see it, one line, at most 160 characters, never whose) and verdict (matches, better or closer)' % at)
+                need(0 < len(T(x.get('seen'))) <= 160, '%s: seen (how you both see it, one line, at most 160 characters, never whose)' % at)
             nx = L(x.get('next'))
             need(0 < len(T(x.get('means'))) <= 320 and 1 <= len(nx) <= 3 and all(0 < len(T(D(y).get('do'))) <= 160 and 0 < len(T(D(y).get('because'))) <= 200 for y in nx),
                  '%s: means (one or two sentences, at most 320 characters) and next (one to three steps, each do, at most 160 characters, and because, at most 200: the evidence or trait it comes from)' % at)
@@ -2053,7 +2049,16 @@ def check_read(r, view, has_chat=False):
     signs_ = lambda x: all(2 <= len(L(D(x).get(k))) <= 3 and all(T(y) and len(T(y)) <= 90 for y in L(D(x).get(k))) for k in ('a', 'b'))
     short_ = lambda xs, lo, hi: lo <= len(L(xs)) <= hi and all(T(x) and len(T(x)) <= 40 for x in L(xs))
     low_ = lambda xs: {T(x).lower() for x in L(xs) if T(x)}
-    need(two_(A_('close', 'loves').get('care')), 'chapters.close.areas.loves.care: a and b, what makes each feel cared for')
+    bd = D(A_('close', 'connection').get('bids'))
+    if has_chat and 'connection' in (view.get('pillars') or {}):
+        nums = [bd.get(k) for k in ('seen', 'toward', 'away', 'against')]
+        need(all(isinstance(n, int) and n >= 0 for n in nums) and nums[0] > 0 and nums[1] + nums[2] + nums[3] == nums[0]
+             and len(L(bd.get('missed'))) <= 2 and all(DATED.search(T(D(m).get('when'))) and 0 < len(T(D(m).get('text'))) <= 200 for m in L(bd.get('missed'))),
+             'chapters.close.areas.connection.bids: the bids for attention you counted in the sample (seen), how many were turned toward, away (missed, ignored, changed the subject) and against (met sharply), adding up to seen, and up to two missed ones (when, text)')
+    hz = D(A_('future', 'future').get('horizons'))
+    if 'future' in (view.get('pillars') or {}):
+        need(all(0 < len(T(hz.get(k))) <= 180 for k in ('5', '10', '15')),
+             'chapters.future.areas.future.horizons: 5, 10 and 15, what you both want by then, from your answers, decisions, reports and messages (at most 180 characters each; where nothing says, say it isn\'t talked about yet)')
     for a_, nm_, lo_ in (('interests', 'life', 1), ('values', 'future', 2)):
         grp = D(A_(nm_, a_).get('columns'))
         dup_ = sorted((low_(grp.get('a')) | low_(grp.get('b'))) & low_(grp.get('shared')))
@@ -2067,8 +2072,8 @@ def check_read(r, view, has_chat=False):
     need(two_(A_('secure', 'attachment').get('reassure')), 'chapters.secure.areas.attachment.reassure: a and b, what reassures each')
     cy = A_('disagree', 'cycle')
     need(len(L(cy.get('steps'))) == 4 and all(T(x) and len(T(x)) <= 110 for x in L(cy.get('steps'))) and two_(cy.get('under')) and signs_(cy.get('signs'))
-         and two_(cy.get('moves')) and T(cy.get('askYourself')),
-         'chapters.disagree.areas.cycle: steps (four, naming who, at most 110 characters), under (a and b), signs (a and b, two or three each, under 90 characters), moves (a and b), askYourself')
+         and two_(cy.get('moves')),
+         'chapters.disagree.areas.cycle: steps (four, naming who, at most 110 characters), signs (a and b, two or three early signs each, under 90 characters), under (a and b, the need underneath) and moves (a and b, each one\'s move when they see the signs)')
     im = D(r.get('intermission'))
     need(T(im.get('title')) and 3 <= len(L(im.get('lines'))) <= 5 and all(T(x) and len(T(x)) <= 220 for x in L(im.get('lines'))), 'intermission: a title and three to five short, light lines')
     pn = D(r.get('plan'))
@@ -2927,6 +2932,16 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .tl.Strong,.tl.Aligned{background:#eef6f1}.tl.Strong b,.tl.Aligned b{color:#2f6f53}.tl.Steady{background:#eaf1f9}.tl.Steady b{color:#2b5d8f}
 .tl.Worth-attention,.tl.Talk-about{background:#fbeeed}.tl.Worth-attention b,.tl.Talk-about b{color:#a8322a}.tl.Info{background:#f3ecf8}.tl.Info b{color:#7b3fa0}
 .ws .tk2{margin:6px 0 0;font-size:13.5px;color:var(--soft)}
+.flow{display:grid;grid-template-columns:1fr 18px 1fr;gap:6px;align-items:center;margin:8px 0;padding:10px 12px;border-radius:12px;background:#faf7fb;border:1px solid #eee6f3}
+.flow small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}.flow b{font-size:14px;font-weight:650}.flow>i{font-style:normal;color:var(--mute);text-align:center}
+.flow>span{grid-column:1/-1;font-size:12.5px;font-weight:700}.flow>span.ok{color:#2f6f53}.flow>span.ok:before{content:"✓ Meets: "}.flow>span.no{color:#2b5d8f}.flow>span.no:before{content:"• "}
+.bids p{margin:4px 0;font-size:14.5px}.bids .bar{display:flex;height:10px;border-radius:6px;overflow:hidden;background:#f1ebf5;margin:6px 0}.bids .bar i{display:block}.bids .t,.kt{background:#2f6f53}.bids .w,.kw{background:#9fb6cf}.bids .g,.kg{background:#a8322a}
+.kt,.kw,.kg{display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 4px 0 2px}.bids .miss{font-size:13.5px;color:var(--soft)}.bids .miss b{color:var(--ink);font-weight:650}
+.hz{display:grid;gap:8px}.hz>div{padding:10px 12px;border-radius:12px;background:#faf7fb;border:1px solid #eee6f3}.hz b{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--c)}.hz p{margin:3px 0 0;font-size:14.5px}
+.who2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}.who2>div{padding:10px 12px;border-radius:12px;background:#faf7fb;border:1px solid #eee6f3}.who2 b{display:flex;align-items:center;gap:6px;font-size:14px}
+.who2 b span{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:#fff;background:#7b3fa0}.who2>div+div b span{background:#d1477a}
+.who2 p{margin:6px 0 0;font-size:14px}.who2 small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+@media (max-width:420px){.who2{grid-template-columns:1fr}}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -3467,61 +3482,90 @@ def page(box, s):
             lis = ''.join('<li><i title="%s">%s</i><span>%s%s</span></li>' % (_e(ICON.get(e.get('kind'), ('•', ''))[1]), ICON.get(e.get('kind'), ('•', ''))[0],
                                                                          ('<b>%s</b> · ' % _e(e.get('when'))) if e.get('kind') == 'moment' and e.get('when') else '', _e(e.get('text')))
                           for e in evs)
-            data_ = ''
+            # The area's own result first (README "Psyche Together, release 46"): what it is, before the evidence for it.
+            lead, data_ = '', ''
             if aid == 'life':
                 data_ += _rhythm(sig, who).replace('<h3>Your day, side by side</h3>', '<p class="lbl" style="margin-top:10px">Your day, side by side</p>')
+            elif aid == 'loves':
+                gv = lambda p_: [str(y) for y in p_.get('caresBy') or []]
+                rv = lambda p_: [str(y) for y in p_.get('feelsCaredForBy') or []]
+                flow = lambda giver, gp, taker, tp: ('<div class="flow"><div><small>%s gives</small><b>%s</b></div><i>→</i><div><small>%s feels loved by</small><b>%s</b></div><span class="%s">%s</span></div>'
+                                                     % (_e(giver), _e(', '.join(gv(gp)) or '–'), _e(taker), _e(', '.join(rv(tp)) or '–'),
+                                                        'ok' if set(y.lower() for y in gv(gp)) & set(y.lower() for y in rv(tp)) else 'no',
+                                                        _e(', '.join(y for y in gv(gp) if y.lower() in set(z.lower() for z in rv(tp)))) or 'Different'))
+                if gv(pa_) or gv(pb_):
+                    lead = flow(names[0], pa_, names[1], pb_) + flow(names[1], pb_, names[0], pa_)
+            elif aid == 'connection':
+                bd = D(x.get('bids'))
+                if bd.get('seen'):
+                    pct = lambda k: int(100.0 * (bd.get(k) or 0) / bd['seen'] + 0.5)
+                    lead = ('<div class="bids"><p><b>%d of %d</b> bids for attention in your messages were turned toward (%d%%)</p><div class="bar"><i class="t" style="width:%d%%"></i><i class="w" style="width:%d%%"></i><i class="g" style="width:%d%%"></i></div>'
+                            '<p class="soft"><span class="kt"></span>Turned toward %d · <span class="kw"></span>Turned away %d · <span class="kg"></span>Turned against %d</p>%s</div>'
+                            % (bd.get('toward') or 0, bd['seen'], pct('toward'), pct('toward'), pct('away'), pct('against'), bd.get('toward') or 0, bd.get('away') or 0, bd.get('against') or 0,
+                               ''.join('<p class="miss"><b>Missed · %s</b> %s</p>' % (_e(D(m).get('when')), _e(D(m).get('text'))) for m in bd.get('missed') or [])))
             elif aid == 'interests':
-                data_ += cols(D(x.get('columns')) or D(c.get('enjoy')))
+                lead = cols(D(x.get('columns')) or D(c.get('enjoy')))
             elif aid == 'values':
-                data_ += cols(D(x.get('columns')) or D(c.get('alike')))
+                lead = cols(D(x.get('columns')) or D(c.get('alike')))
+            elif aid == 'future':
+                hz = D(x.get('horizons'))
+                if hz:
+                    lead = '<div class="hz">%s</div>' % ''.join('<div><b>In %s years</b><p>%s</p></div>' % (k, _e(hz.get(k))) for k in ('5', '10', '15') if hz.get(k))
             elif aid == 'decisions':
                 lines = D(x.get('lines')) or {y.get('topic'): y.get('line') for y in c.get('decisions') or [] if isinstance(y, dict)}
-                data_ += ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p>%s</div>'
-                                 % (_e(y['label']), _lv(y['result']), _e(names[0]), _e(y.get('a') or '-'), _e(names[1]), _e(y.get('b') or '-'),
-                                    ('<p>%s</p>' % _e(lines.get(y['topic']))) if lines.get(y['topic']) else '') for y in dec)
+                lead = ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p>%s</div>'
+                               % (_e(y['label']), _lv(y['result']), _e(names[0]), _e(y.get('a') or '-'), _e(names[1]), _e(y.get('b') or '-'),
+                                  ('<p>%s</p>' % _e(lines.get(y['topic']))) if lines.get(y['topic']) else '') for y in dec)
             elif aid == 'know':
                 kw = D(view.get('know'))
-                data_ += '<p class="lbl" style="margin-top:10px">Worth knowing about each other</p>' + ''.join('<div class="row"><b>About %s</b><p>%s</p><p><span>%s</span></p></div>' % (_e(y.get('about')), _e(y.get('q')), _e(y.get('answer'))) for y in kw.get('items') or [])
+                lead = '<p class="lbl" style="margin-top:6px">Worth knowing about each other</p>' + ''.join('<div class="row"><b>About %s</b><p>%s</p><p><span>%s</span></p></div>' % (_e(y.get('about')), _e(y.get('q')), _e(y.get('answer'))) for y in kw.get('items') or [])
+            elif aid == 'attachment':
+                rs = D(x.get('reassure')) or {'a': c.get('a'), 'b': c.get('b')}
+                lead = '<div class="who2">%s</div>' % ''.join('<div><b><span>%s</span>%s</b><p>%s</p>%s</div>' % (_initial(n_), _e(n_), _e(p_.get('attachment') or '–'),
+                                                                                                              ('<p class="soft">Reassured by: %s</p>' % _e(rs.get(k_))) if rs.get(k_) else '')
+                                                                for n_, p_, k_ in ((names[0], pa_, 'a'), (names[1], pb_, 'b')))
             elif aid == 'cycle':
                 cy = D(c.get('cycle'))
                 steps_ = x.get('steps') or cy.get('steps')
-                data_ += _cycle({'steps': steps_}, names) if steps_ else ''
+                lead = _cycle({'steps': steps_}, names) if steps_ else ''
+            st_lead = ('<div class="st">%s</div>' % lead) if lead else ''
             st2 = ('<div class="st"><span class="sl">What the evidence shows</span>%s%s</div>' % (('<ul class="evd">%s</ul>' % lis) if lis else '', data_)) if (lis or data_) else ''
-            # 3. What it means, and what to do about it
+            # 3. What it means, and what to do about it (no verdict tag: the area's own badge already says it)
             means = x.get('means') or x.get('meaning') or pv.get('headline')
-            vd = VERDICTS.get(x.get('verdict')) or ({'more': VERDICTS['better'], 'less': VERDICTS['closer'], 'same': VERDICTS['matches']}.get(pv.get('signal')) if not x.get('means') else None)
             extra = ''
-            if aid == 'loves':
-                care = D(got(x, 'care'))
-                extra = two(care.get('a'), care.get('b'), 'What makes %s feel cared for' % names[0], 'What makes %s feel cared for' % names[1]) if care.get('a') else ''
-            elif aid == 'security':
+            if aid == 'security':
                 extra = signs2(got(x, 'signs'), 'When %s is feeling unsure' % names[0], 'When %s is feeling unsure' % names[1])
-            elif aid == 'attachment':
-                rs = D(x.get('reassure')) or {'a': c.get('a'), 'b': c.get('b')}
-                extra = two(rs.get('a'), rs.get('b'), 'What reassures %s' % names[0], 'What reassures %s' % names[1]) if rs.get('a') else ''
             elif aid == 'growth' and D(c.get('growth')).get('a') and not x.get('means'):
                 extra = two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
             elif aid == 'cycle':
                 cy = D(c.get('cycle'))
-                extra = signs2(got(x, 'signs'), 'Early signs, for %s' % names[0], 'Early signs, for %s' % names[1])
-                und = D(x.get('under')) or {'a': cy.get('a'), 'b': cy.get('b')}
-                extra += two(und.get('a'), und.get('b'), 'Under it, for %s' % names[0], 'Under it, for %s' % names[1]) if und.get('a') else ''
-                mv = D(got(x, 'moves'))
-                extra += two(mv.get('a'), mv.get('b'), 'Your move, %s' % names[0], 'Your move, %s' % names[1]) if mv.get('a') else ''
-                q_ = got(x, 'askYourself')
-                extra += ('<div class="callout key2"><span class="lbl">A question to ask yourself</span>%s</div>' % _e(q_)) if q_ else ''
+                sg, und, mv = D(got(x, 'signs')), D(x.get('under')) or {'a': cy.get('a'), 'b': cy.get('b')}, D(got(x, 'moves'))
+                if sg.get('a') or mv.get('a'):
+                    extra = '<div class="who2">%s</div>' % ''.join(
+                        '<div><b><span>%s</span>%s</b>%s%s%s</div>' % (_initial(n_), _e(n_),
+                                                                     ('<p><small>Watch for</small>%s</p>' % _e('; '.join(sg.get(k_) or []))) if sg.get(k_) else '',
+                                                                     ('<p><small>Underneath</small>%s</p>' % _e(und.get(k_))) if und.get(k_) else '',
+                                                                     ('<p><small>Your move</small>%s</p>' % _e(mv.get(k_))) if mv.get(k_) else '')
+                        for n_, k_ in ((names[0], 'a'), (names[1], 'b')))
             elif aid == 'know':
                 mine_k = D(view.get('knowBy')).get(s.get('role'))
                 if mine_k and not gentle:
                     extra = ('<div class="minebox"><span class="lbl">🔒 Just for you · %s never sees this</span><p>You knew %d of %d about %s.%s</p></div>'
                              % (_e(other), mine_k[0], mine_k[1], _e(other), '' if mine_k[0] == mine_k[1] else ' The answers above are a good place to start asking.'))
-            nx = ''.join('<li><b>%s</b><span>Because %s</span></li>' % (_e(D(y).get('do')), _e(re.sub(r'^(because|since)\s+', '', str(D(y).get('because') or ''), flags=re.I)))
+            def because_(t):
+                t = re.sub(r'^(because|since)\s+', '', str(t or '').strip(), flags=re.I)
+                w_ = t.split(' ', 1)[0] if t else ''
+                keep_ = w_.rstrip(",.'s") in names or w_[:2].isupper() or w_ in ('I', 'MBTI')
+                return t if keep_ or not t else t[0].lower() + t[1:]
+            nx = ''.join('<li><b>%s</b><span>Because %s</span></li>' % (_e(D(y).get('do')), _e(because_(D(y).get('because'))))
                          for y in x.get('next') or [] if D(y).get('do'))
-            st3 = ('<div class="st means"><span class="sl">What it means</span>%s%s%s%s</div>'
-                   % (('<span class="vd %s">%s</span>' % (_e(x.get('verdict') or ''), _e(vd))) if vd else '', ('<p>%s</p>' % _e(means)) if means else '', extra,
+            st3 = ('<div class="st means"><span class="sl">What it means</span>%s%s%s</div>'
+                   % (('<p>%s</p>' % _e(means)) if means else '', extra,
                       ('<span class="sl" style="margin-top:12px">Next steps</span><ul class="nx">%s</ul>' % nx) if nx else '')) if (means or extra or nx) else ''
-            if st1 or st2 or st3:
-                inner += '<div class="area" id="%s-%s"><div class="at"><b>%s</b>%s</div>%s%s%s</div>' % (cid, aid, _e(nm), badge(cid, aid, True), st1, st2, st3)
+            if st1 or st_lead or st2 or st3:
+                tm_ = re.search(r'class="tl ([\w-]+)"><small>.*?</small><b>(.*?)</b>', tile(cid, aid, nm))
+                pill_ = ('<span class="lv %s">%s</span>' % (tm_.group(1), tm_.group(2))) if tm_ else ''       # the same words and colour as its tile at a glance
+                inner += '<div class="area" id="%s-%s"><div class="at"><b>%s</b>%s</div>%s%s%s%s</div>' % (cid, aid, _e(nm), pill_, st1, st_lead, st2, st3)
         if not ar and (c.get('askEachOther') or c.get('tryThis')):          # an older read's chapter-wide steps
             inner += ('<div class="callout ask"><span class="lbl">Try together</span>%s%s</div>'
                       % (''.join('<p class="q">%s</p>' % _e(y) for y in c.get('askEachOther') or []), ('<p><b>This week:</b> %s</p>' % _e(c.get('tryThis'))) if c.get('tryThis') else ''))
