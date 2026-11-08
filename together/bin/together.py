@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 38
+RELEASE = 39
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1868,7 +1868,7 @@ DATED = re.compile(r'\b(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sep
 
 # The read's five chapters, in order, numbered as the glance and the page show them (README "Psyche Together,
 # release 16"): (id, number, title, its pillars, its research lines).
-CHAPTERS = [('close', '01', 'Bids & Responsiveness', ['appreciation', 'connection', 'desire'], ['appreciation', 'connection']),
+CHAPTERS = [('close', '01', 'Care & Connection', ['appreciation', 'connection', 'desire'], ['appreciation', 'connection']),
             ('life', '02', 'Fairness, Rhythm & Interests', ['needs', 'life'], ['needs', 'life']),
             ('future', '03', 'Values, Decisions & Growth', ['future', 'growth'], ['values', 'future', 'growth']),
             ('secure', '04', 'Attachment & Commitment', ['security'], ['security']),
@@ -1876,6 +1876,20 @@ CHAPTERS = [('close', '01', 'Bids & Responsiveness', ['appreciation', 'connectio
 # README "Psyche Together, release 18": a plain title, and under it the research it comes from.
 # Release 38: one title per chapter, saying what it covers; no subtitle under a chapter.
 SUBTITLES = {'plan': 'Small steps from every chapter'}
+# Release 39: each chapter is made of named areas, the same names and order as its row in At a glance's Where you
+# stand. A pillar area carries its check-in level; the others a count, a match or a short status.
+AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages'), ('connection', 'Connection'), ('desire', 'Closeness')],
+         'life': [('needs', 'Fairness'), ('life', 'Rhythm'), ('interests', 'Interests')],
+         'future': [('values', 'Values'), ('decisions', 'Big decisions'), ('future', 'Shared future'), ('growth', 'Growth')],
+         'secure': [('security', 'Security'), ('attachment', 'Attachment')],
+         'disagree': [('disagreements', 'Repair'), ('cycle', 'Your cycle')]}
+PSY_AREAS = ['loves', 'connection', 'needs', 'life', 'values', 'growth', 'security', 'attachment', 'disagreements', 'cycle']
+STATUS_AREAS = ['attachment', 'cycle']
+
+
+def areas_of(cid, view):
+    """A chapter's areas that apply: a pillar area only when the couple view has it, big decisions only with decisions."""
+    return [(a, n) for a, n in AREAS.get(cid, []) if (a not in PILLARS or a in (view.get('pillars') or {})) and (a != 'decisions' or view.get('decisions'))]
 PLAN_TITLE = 'Your 28-day practice'
 
 
@@ -1913,9 +1927,9 @@ def check_read(r, view, has_chat=False):
         ov = D(r.get('overall'))
         need(T(ov.get('title')) and 0 < len(T(ov.get('detail'))) <= 400, 'overall: a title and a detail of one or two sentences, at most 400 characters, for the couple, never whose')
     tr = L(r.get('truths'))
-    need([D(x).get('kind') for x in tr] == ['strength', 'edge', 'surprise'] and all(T(D(x).get('title')) and 200 <= len(T(D(x).get('detail'))) <= 700
+    need([D(x).get('kind') for x in tr] == ['strength', 'edge', 'surprise'] and all(T(D(x).get('title')) and 350 <= len(T(D(x).get('detail'))) <= 900
                                                                                   and D(x).get('chapter') in CHAPTER_IDS and ev(D(x).get('evidence')) for x in tr),
-         'truths: exactly three, strength, edge and surprise in that order, each a title, a detail of 200 to 700 characters, its chapter (close, secure, disagree, life or future) and dated evidence')
+         'truths: exactly three, strength, edge and surprise in that order, each a title, a detail of 350 to 900 characters, its chapter (close, secure, disagree, life or future) and dated evidence')
     pl = D(r.get('pillars'))
     for p in view['pillars']:
         x = D(pl.get(p))
@@ -1928,11 +1942,20 @@ def check_read(r, view, has_chat=False):
     ch = D(r.get('chapters'))
     for cid in CHAPTER_IDS:
         c = D(ch.get(cid))
-        need(0 < len(T(c.get('traits'))) <= 320, 'chapters.%s.traits: one or two sentences (at most 320 characters) on what your two Psyches, shown here side by side, mean for this part of you two' % cid)
-        lo_, hi_ = {'disagree': (300, 700), 'secure': (300, 800)}.get(cid, (350, 1100))
         paras_ = len([x for x in T(c.get('detail')).split('\n') if x.strip()])
-        need(0 < len(T(c.get('takeaway'))) <= 240 and lo_ <= len(T(c.get('detail'))) <= hi_ and paras_ <= (1 if cid in ('disagree', 'secure') else 2) and ev(c.get('evidence')),
-             'chapters.%s: a takeaway (at most 240 characters), a detail of %d to %d characters in %s, and dated evidence' % (cid, lo_, hi_, 'one paragraph' if cid in ('disagree', 'secure') else 'two paragraphs at most'))
+        need(0 < len(T(c.get('takeaway'))) <= 240 and 300 <= len(T(c.get('detail'))) <= 900 and paras_ <= 2 and (not c.get('evidence') or ev(c.get('evidence'))),
+             'chapters.%s: a takeaway (at most 240 characters) and a detail, why it happens, of 300 to 900 characters in two paragraphs at most' % cid)
+        ar = D(c.get('areas'))
+        want = [a for a, _ in areas_of(cid, view)]
+        stray = [a for a in ar if a not in want]
+        need(not stray, 'chapters.%s.areas: %s isn\'t one of this chapter\'s areas (%s)' % (cid, ', '.join(stray), ', '.join(want)))
+        for a in want:
+            x = D(ar.get(a))
+            ok = (0 < len(T(x.get('meaning'))) <= 220 and 1 <= len(L(x.get('evidence'))) <= 2 and ev(x.get('evidence'))
+                  and (a not in PSY_AREAS or 0 < len(T(x.get('psyches'))) <= 320) and (a not in STATUS_AREAS or 0 < len(T(x.get('status'))) <= 32))
+            need(ok, 'chapters.%s.areas.%s: meaning (one sentence, at most 220 characters), one or two dated evidence%s%s'
+                 % (cid, a, ', psyches (at most 320 characters: what your two Psyches mean for this, the issue itself)' if a in PSY_AREAS else '',
+                    ', status (at most 32 characters, a few words)' if a in STATUS_AREAS else ''))
     c = D(ch.get('close'))
     need(T(c.get('bids')) and T(D(c.get('care')).get('a')) and T(D(c.get('care')).get('b')) and len(L(c.get('askEachOther'))) == 2 and T(c.get('tryThis')),
          'chapters.close: bids, care a and b, two askEachOther, tryThis')
@@ -2801,6 +2824,14 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .fb{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0 0;font-size:13px;color:var(--mute)}.fb>button{all:unset;cursor:pointer;font-size:17px;padding:2px 6px;border-radius:8px}.fb>button.on{background:#f3e9f8}
 .fbx{flex-basis:100%}.fbx textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:14px;resize:none;margin:6px 0}.fbok{flex-basis:100%;margin:2px 0 0}
 @media print{nav,.foldall{display:none}.js .part:not(.open) .body{display:block}}
+.area{margin:12px 0;padding:14px 16px;border-radius:16px;background:#fff;border:1px solid #eee6f3}
+.area .at{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.area .at b{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--c)}.area .at .lv{margin-left:auto}.area .at .lv+.lv{margin-left:6px}
+.area .am{margin:8px 0 6px;font-weight:700;font-size:15.5px;line-height:1.4}.area>p{margin:4px 0;font-size:14.5px}.area>p span{font-weight:700;color:var(--soft)}.area .sig{font-size:12.5px;color:var(--mute)}
+.area .psy{margin:10px 0}.area .ev{margin-top:10px}
+.lv.Info{background:#f3ecf8;color:#7b3fa0}.lw.Info{color:#7b3fa0}
+.tk2{display:block;font-size:13px;color:var(--soft);margin-top:4px;line-height:1.4}
+.std{padding:14px 0;border-bottom:1px solid #f2ecf5}.std .th{display:flex;align-items:center;gap:8px}.std .th .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;background:linear-gradient(135deg,#7b3fa0,#d1477a)}
+.std .th .lbl{color:var(--mute)}.std h4{margin:6px 0 4px;font-size:16px}.std p{font-size:14.5px}.std .more{display:inline-block;margin-top:8px;font-size:13px;font-weight:650;color:#7b3fa0;text-decoration:none}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -2816,7 +2847,7 @@ function only(p){parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);
 parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',function(){if(p.classList.contains('open'))set(p,false);else only(p);});});
 function open(id){var p=document.querySelector(id);if(p)only(p);}
 chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();open(c.getAttribute('href'));});});
-[].slice.call(document.querySelectorAll('.mr,.it2,a.pat,.foot2 a')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
+[].slice.call(document.querySelectorAll('.mr,.it2,a.pat,a.more,.foot2 a')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
 var fold=[].slice.call(document.querySelectorAll('[data-fold]'));
 function label(){var any=parts.some(function(p){return p.classList.contains('open');});fold.forEach(function(b){b.hidden=!any;});}
 fold.forEach(function(b){b.textContent='Close all ▲';b.addEventListener('click',function(){parts.forEach(function(p){set(p,false);});label();go(document.getElementById('top'));});});
@@ -3036,22 +3067,34 @@ def _thumbs(cid, num, title):
             '<p class="fbok" hidden>Thanks: glad it landed.</p></div>' % (_e(num), _e(title)))
 
 
-def _psyches(cid, pa, pb, names, line):
-    """One chapter's part of your two Psyches, side by side, and Muse's line on what it means here."""
-    traits, letters, extra = PSYCHES_BY.get(cid, ([], [], None))
+def _area_psy(aid, pa, pb, names, line):
+    """What your two Psyches show for one area, beside Muse's line on what it means for it (README "Psyche Together,
+    release 39"): each trait sits in the area it explains, never in a panel of its own."""
     fa, fb = pa.get('bigFive') or {}, pb.get('bigFive') or {}
-    body = ''.join(_dual(TRAIT_LABEL[k], fa[k], fb[k]) for k in traits if isinstance(fa.get(k), int) and isinstance(fb.get(k), int))
-    ta, tb = str(pa.get('mbti') or ''), str(pb.get('mbti') or '')
-    for i in letters:
-        body += _axis(i, pa, pb, names)
-    if extra == 'loves':
-        g = lambda p_, k: ', '.join(p_.get(k) or []) or '–'
-        body += ('<div class="pair2"><div><b class="a">%s</b><span>Shows care by: %s</span><span>Feels cared for by: %s</span></div><div><b class="b">%s</b><span>Shows care by: %s</span><span>Feels cared for by: %s</span></div></div>'
-                 % (_e(names[0]), _e(g(pa, 'caresBy')), _e(g(pa, 'feelsCaredForBy')), _e(names[1]), _e(g(pb, 'caresBy')), _e(g(pb, 'feelsCaredForBy'))))
-    if extra == 'attachment' and (pa.get('attachment') or pb.get('attachment')):
-        body += '<div class="pair2"><div><b class="a">%s</b><span>%s</span></div><div><b class="b">%s</b><span>%s</span></div></div>' % (
-            _e(names[0]), _e(pa.get('attachment') or '–'), _e(names[1]), _e(pb.get('attachment') or '–'))
-    if extra == 'conflict' and (pa.get('conflict') or pb.get('conflict')):
+    dual = lambda k: _dual(TRAIT_LABEL[k], fa[k], fb[k]) if isinstance(fa.get(k), int) and isinstance(fb.get(k), int) else ''
+    pair = lambda x, y: '<div class="pair2"><div><b class="a">%s</b>%s</div><div><b class="b">%s</b>%s</div></div>' % (_e(names[0]), x, _e(names[1]), y)
+    body = ''
+    if aid == 'loves':
+        g = lambda p_, k: _e(', '.join(p_.get(k) or []) or '–')
+        if pa.get('caresBy') or pb.get('caresBy'):
+            body = pair('<span>Shows care by: %s</span><span>Feels cared for by: %s</span>' % (g(pa, 'caresBy'), g(pa, 'feelsCaredForBy')),
+                        '<span>Shows care by: %s</span><span>Feels cared for by: %s</span>' % (g(pb, 'caresBy'), g(pb, 'feelsCaredForBy')))
+    elif aid == 'connection':
+        body = dual('extraversion')
+    elif aid == 'needs':
+        body = dual('conscientiousness')
+    elif aid == 'life':
+        body = _axis(0, pa, pb, names) + _axis(1, pa, pb, names)
+    elif aid == 'growth':
+        body = dual('openness')
+    elif aid == 'security':
+        body = dual('neuroticism')
+    elif aid == 'attachment':
+        if pa.get('attachment') or pb.get('attachment'):
+            body = pair('<span>%s</span>' % _e(pa.get('attachment') or '–'), '<span>%s</span>' % _e(pb.get('attachment') or '–'))
+    elif aid == 'disagreements':
+        body = dual('agreeableness')
+    elif aid == 'cycle':
         def cut(t):         # whole sentences up to about 200 characters, never cut mid-sentence
             out_ = ''
             for sn in re.split(r'(?<=[.!?])\s+', str(t).strip()):
@@ -3059,21 +3102,30 @@ def _psyches(cid, pa, pb, names, line):
                     break
                 out_ = (out_ + ' ' + sn).strip()
             return out_
-        body += '<div class="pair2"><div><b class="a">%s</b><span>%s</span></div><div><b class="b">%s</b><span>%s</span></div></div>' % (
-            _e(names[0]), _e(cut(pa.get('conflict') or '–')), _e(names[1]), _e(cut(pb.get('conflict') or '–')))
-    if extra == 'motives' and pa.get('motives') and pb.get('motives'):
+        body = _axis(2, pa, pb, names) + _axis(3, pa, pb, names)
+        if pa.get('conflict') or pb.get('conflict'):
+            body += pair('<span>%s</span>' % _e(cut(pa.get('conflict') or '–')), '<span>%s</span>' % _e(cut(pb.get('conflict') or '–')))
+    elif aid == 'values' and pa.get('motives') and pb.get('motives'):
         both = sorted(((min(pa['motives'].get(k, 0), pb['motives'].get(k, 0)), lb) for k, lb in MOTIVE_LABEL), reverse=True)[:3]
         apart = sorted(((abs((pa['motives'].get(k) or 0) - (pb['motives'].get(k) or 0)), k, lb) for k, lb in MOTIVE_LABEL), reverse=True)[:2]
         apart = [(d, k, lb) for d, k, lb in apart if d >= 10]
-        body = '<p class="lbl" style="margin-top:4px">Your ten motivations</p>' + _radar(pa['motives'], pb['motives']) + (
-            '<div class="pair2"><div><b>What drives you both</b><span>%s</span></div><div><b>Where you pull apart most</b><span>%s</span></div></div>'
-            % (_e(', '.join(lb for _, lb in both)),
-               _e('; '.join('%s (%s %d · %s %d)' % (lb, names[0], pa['motives'].get(k) or 0, names[1], pb['motives'].get(k) or 0) for _, k, lb in apart) or 'Nowhere by much'))) + body
-    if not body:
+        body = ('<p class="lbl" style="margin-top:4px">Your ten motivations</p>' + _radar(pa['motives'], pb['motives'])
+                + '<div class="pair2"><div><b>What drives you both</b><span>%s</span></div><div><b>Where you pull apart most</b><span>%s</span></div></div>'
+                % (_e(', '.join(lb for _, lb in both)),
+                   _e('; '.join('%s (%s %d · %s %d)' % (lb, names[0], pa['motives'].get(k) or 0, names[1], pb['motives'].get(k) or 0) for _, k, lb in apart) or 'Nowhere by much')))
+    if not body and not line:
         return ''
-    key = '<div class="pkey"><span><i class="a"></i>%s%s</span><span><i class="b"></i>%s%s</span></div>' % (
-        _e(names[0]), (' · ' + _e(ta)) if ta else '', _e(names[1]), (' · ' + _e(tb)) if tb else '')
-    return ('<div class="psy"><span class="lbl">In your Psyches</span>%s%s%s</div>' % (key, body, ('<p class="pline">%s</p>' % _e(line)) if line else ''))
+    ta, tb = str(pa.get('mbti') or ''), str(pb.get('mbti') or '')
+    key = ('<div class="pkey"><span><i class="a"></i>%s%s</span><span><i class="b"></i>%s%s</span></div>' % (
+        _e(names[0]), (' · ' + _e(ta)) if ta else '', _e(names[1]), (' · ' + _e(tb)) if tb else '')) if body else ''
+    return '<div class="psy"><span class="lbl">In your Psyches</span>%s%s%s</div>' % (key, body, ('<p class="pline">%s</p>' % _e(line)) if line else '')
+
+
+def _loves_match(pa, pb):
+    """How many of you are cared for the way the other shows care: 2, 1, 0, or None without both cards' love languages."""
+    if not (pa.get('caresBy') and pb.get('caresBy') and pa.get('feelsCaredForBy') and pb.get('feelsCaredForBy')):
+        return None
+    return int(bool(set(pb['caresBy']) & set(pa['feelsCaredForBy']))) + int(bool(set(pa['caresBy']) & set(pb['feelsCaredForBy'])))
 
 
 def _tint(hexc):
@@ -3176,84 +3228,132 @@ def page(box, s):
              '<div class="wk"><small>The next four weeks</small><h4>%s</h4><ol>%s</ol></div>'
              % (_e(nt.get('summary')), stats, rows, _e(nt.get('held')), _e(nx.get('title')), ''.join('<li>%s</li>' % _e(x) for x in nx.get('steps') or [])),
              'since', 'Checked in again · ' + when_, k_ == 0, COLOURS['since'])
-    # At a glance (README "Psyche Together, release 32"): laid out as the Psyche Report's overview, findings first and
-    # in words: the line; an executive summary; what stands out, numbered as its signature patterns; where you stand,
-    # a quiet line per chapter; then the big decisions and how far to trust it. No symbols to decode.
-    kinds = {'strength': ('Your strength', '#2f7d5b'), 'edge': ('Where to grow', '#a3324f'), 'surprise': ('What may surprise you', '#9a5b12')}
-    truths_by = {}
-    for x in r.get('truths') or []:
-        if isinstance(x, dict):
-            truths_by.setdefault(x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close'), []).append(x)
-    SHORT = {'appreciation': 'Appreciation', 'connection': 'Connection', 'desire': 'Closeness', 'security': 'Security', 'disagreements': 'Repair',
-             'needs': 'Needs and fairness', 'life': 'Life fit', 'future': 'Future', 'growth': 'Growth'}
+    # At a glance (README "Psyche Together, release 39"): the line; an executive summary; three things that stand out
+    # about you both, in full, each pointing to the chapter with its details; and where you stand, one row per chapter
+    # listing its areas, in the same names and order as the chapter's own cards.
+    kinds = {'strength': 'Your biggest strength as a couple', 'edge': 'Where you can grow together', 'surprise': 'What may surprise you both'}
     title_of = {c[0]: c[2] for c in CHAPTERS}
-    first_sentence = lambda t: (re.split(r'(?<=[.!?])\s+', str(t or '').strip()) or [''])[0]
-    stands = ''.join('<a class="pat" href="#%s"><span class="n">%d</span><div><b>%s</b><span class="soft">%s · in %s</span><span class="pl">%s</span></div></a>'
-                     % (home, i + 1, _e(x.get('title')), _e(kinds[x['kind']][0]), _e(title_of.get(home, '')), _e(first_sentence(x.get('detail'))))
-                     for i, (home, x) in enumerate((x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close'), x)
-                                                   for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds))
+    pcards = box.get('psyches') or {'a': (SEEN.get('cards') or {}).get('a') or {}, 'b': (SEEN.get('cards') or {}).get('b') or {}}
+    pa_, pb_ = pcards.get('a') or {}, pcards.get('b') or {}
+    stands = ''
+    for i, x in enumerate(x for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds):
+        home = x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close')
+        stands += ('<div class="std"><div class="th"><span class="n">%d</span><span class="lbl">%s</span></div><h4>%s</h4>%s%s<a class="more" href="#%s">More in %s ›</a></div>'
+                   % (i + 1, _e(kinds[x['kind']]), _e(x.get('title')), _paras(x.get('detail')), _pills(x.get('evidence')), home, _e(title_of.get(home, ''))))
+        keep(x.get('evidence'), kinds[x['kind']])
     word = lambda lv: '<span class="lw %s">%s</span>' % (_e(lv.replace(' ', '-')), _e(lv))
-    word2 = lambda n_, cls: '<span class="lw %s">%d</span>' % (cls, n_)
     dec = view.get('decisions') or []
     al_, tk_ = sum(1 for x in dec if x.get('result') == 'Aligned'), sum(1 for x in dec if x.get('result') != 'Aligned')
+
+    def badge(cid, aid, pill=False):
+        """An area's state in a few words: its check-in level, a count, a match, or the read's own short status."""
+        c_ = D(ch.get(cid))
+        if aid in (view.get('pillars') or {}):
+            lv = view['pillars'][aid]
+            return _lv(lv) if pill else word(lv)
+        txt, cls = '', 'Info'
+        if aid == 'loves':
+            m_ = _loves_match(pa_, pb_)
+            txt, cls = {2: ('both matched', 'Aligned'), 1: ('one matched', 'Steady'), 0: ('different', 'Talk-about')}.get(m_, ('', ''))
+        elif aid == 'interests' and D(c_.get('enjoy')).get('shared'):
+            txt = '%d shared' % len(D(c_.get('enjoy'))['shared'])
+        elif aid == 'values' and D(c_.get('alike')).get('shared'):
+            txt = '%d shared' % len(D(c_.get('alike'))['shared'])
+        elif aid == 'decisions' and dec:
+            if pill:
+                return ''.join('<span class="lv %s">%s</span>' % (k_, t_) for k_, t_ in (('Aligned', '%d aligned' % al_ if al_ else ''), ('Talk-about', '%d to talk about' % tk_ if tk_ else '')) if t_)
+            return ' · '.join(y for y in ['<span class="lw Aligned">%d aligned</span>' % al_ if al_ else '', '<span class="lw Talk-about">%d to talk about</span>' % tk_ if tk_ else ''] if y)
+        elif aid in STATUS_AREAS:
+            txt = D(D(c_.get('areas')).get(aid)).get('status') or ''
+        if not txt:
+            return ''
+        return ('<span class="lv %s">%s</span>' if pill else '<span class="lw %s">%s</span>') % (cls, _e(txt))
     rows = ''
     for cid, num, title, pids, refs in CHAPTERS:
-        areas = ' · '.join('%s %s' % (_e(SHORT.get(p_, p_)), word(view['pillars'][p_])) for p_ in pids if p_ in (view.get('pillars') or {}))
-        if areas and cid == 'future' and dec:
-            areas += '</span><span class="areas2">Big decisions %s' % ' · '.join(y for y in ['%s aligned' % word2(al_, 'Aligned') if al_ else '', '%s to talk about' % word2(tk_, 'Talk-about') if tk_ else ''] if y)
+        areas = ' · '.join('%s %s' % (_e(nm), b_) for aid, nm in areas_of(cid, view) for b_ in [badge(cid, aid)] if b_)
+        take_ = D(ch.get(cid)).get('takeaway')
         if areas:
-            rows += '<a class="it2" href="#%s"><span class="n2">%s</span><span><b>%s</b><span class="areas2">%s</span></span><i>›</i></a>' % (cid, num, _e(title), areas)
+            rows += ('<a class="it2" href="#%s"><span class="n2">%s</span><span><b>%s</b><span class="areas2">%s</span>%s</span><i>›</i></a>'
+                     % (cid, num, _e(title), areas, ('<span class="tk2">%s</span>' % _e(take_)) if take_ else ''))
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
     summary_ = ''
     if ovv:
         summary_ = ('<p class="sat">How satisfied you both are: %s · How well you read each other: %s</p>%s'
                     % (word(ovv['level']), word(ovv['reading']), ('<p>%s</p>' % _e(ovr.get('detail'))) if ovr.get('detail') else ''))
     part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You both, in one line</small><b>%s</b></div>%s%s%s'
-         % (_e(r.get('summary')), ('<h3>Executive summary</h3>' + summary_) if summary_ else '', ('<h3>What stands out</h3>' + stands) if stands else '',
-            ('<h3>Where you stand</h3><div class="map">%s</div>' % rows) if rows else ''),
+         % (_e(r.get('summary')), ('<h3>Executive summary</h3>' + summary_) if summary_ else '',
+            ('<h3>Where you stand</h3><div class="map">%s</div>' % rows) if rows else '',
+            ('<h3>Three things that stand out about you both</h3>' + stands) if stands else ''),
          '', 'The whole read on one screen', True)
-    # Chapters (README "Psyche Together, release 28"): the takeaway on top, then three parts at most: where you are (the
-    # pillars and your two Psyches, one card), what's going on (the story, opened by the chapter's truth, its moments and
-    # its one picture) and what to try (together, and what's only yours); the research folded at the end.
+    # Chapters (README "Psyche Together, release 39"): the takeaway; one card per area, as named on the glance, each
+    # with what it means, what you said, what your messages show, what your Psyches show and the dated moments; then
+    # why it happens, what to try, and the research folded.
+    chips = lambda xs: ''.join('<span>%s</span>' % _e(x) for x in xs or [])
+    own = lambda al, k: [x for x in al.get(k) or [] if str(x).strip().lower() not in {str(y).strip().lower() for y in al.get('shared') or []}]
+    cols = lambda al: (('<div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
+                        % (_e(names[0]), chips(own(al, 'a')), chips(al.get('shared')), _e(names[1]), chips(own(al, 'b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
+                       if al.get('shared') else '')
     for cid, num, title, pids, refs in CHAPTERS:
         c = D(ch.get(cid))
+        ar = D(c.get('areas'))
         take = c.get('takeaway') or ' '.join(D(D(r.get('pillars')).get(p)).get('headline') or '' for p in pids if p in (view.get('pillars') or {}))
         inner = '<div class="take"><span class="lbl">The takeaway</span><p>%s</p></div>' % _e(take)
-        # 1. Where you are
-        where = ''
-        for pid in [p for p in pids if p in (view.get('pillars') or {})]:
-            lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
-            arrow, said = SIGNAL.get(x.get('signal'), ('', ''))
-            where += ('<div class="prow"><div class="pt"><b>%s</b>%s</div><p class="phl">%s</p><p><span>You see it:</span> %s</p>%s%s</div>'
-                      % (_e(PILLARS.get(pid, pid)), _lv(lv), _e(x.get('headline')), _e(x.get('seeIt')),
-                         ('<p><span>Your messages:</span> %s</p>' % _e(x.get('messages'))) if x.get('messages') else '',
-                         ('<p class="sig">%s</p>' % _e(said)) if arrow else ''))
-        pcards = box.get('psyches') or {'a': (SEEN.get('cards') or {}).get('a') or {}, 'b': (SEEN.get('cards') or {}).get('b') or {}}
-        where += _psyches(cid, pcards.get('a') or {}, pcards.get('b') or {}, names, c.get('traits'))
-        inner += ('<h3>Where you are</h3>' + where) if where else ''
-        # 2. What's going on: the truth opens it, then the story, its moments and the chapter's one picture
-        going = ''
-        order_ = [x.get('kind') for x in r.get('truths') or [] if isinstance(x, dict)]
-        for t in truths_by.get(cid, []):
-            k_ = kinds.get(t.get('kind'), ('', '#7b3fa0'))
-            n_ = (order_.index(t.get('kind')) + 1) if t.get('kind') in order_ else ''
-            going += ('<div class="truth" style="--k:%s"><div class="th"><span class="n">%s</span><span class="lbl">%s</span></div><h4>%s</h4>%s%s</div>'
-                      % (k_[1], n_, _e(k_[0]), _e(t.get('title')), _paras(t.get('detail')), _pills(t.get('evidence'))))
-            keep(t.get('evidence'), k_[0])
-        going += _paras(c.get('detail')) + _pills(c.get('evidence'))
+        traits_left = c.get('traits') if not ar else None          # an older read: its one Psyches line goes with the first picture
+        cards_ = ''
+        for aid, nm in areas_of(cid, view):
+            x = D(ar.get(aid))
+            body = ('<p class="am">%s</p>' % _e(x.get('meaning'))) if x.get('meaning') else ''
+            if aid in (view.get('pillars') or {}):
+                pv = D(D(r.get('pillars')).get(aid))
+                arrow, said = SIGNAL.get(pv.get('signal'), ('', ''))
+                if not x.get('meaning') and pv.get('headline'):
+                    body += '<p class="am">%s</p>' % _e(pv.get('headline'))
+                body += ('<p><span>You said:</span> %s</p>' % _e(pv.get('seeIt'))) if pv.get('seeIt') else ''
+                body += ('<p><span>Your messages:</span> %s</p>' % _e(pv.get('messages'))) if pv.get('messages') else ''
+                body += ('<p class="sig">%s</p>' % _e(said)) if arrow else ''
+            elif x.get('messages'):
+                body += '<p><span>Your messages:</span> %s</p>' % _e(x.get('messages'))
+            line_ = x.get('psyches')
+            if not line_ and traits_left and aid in PSY_AREAS:
+                line_, traits_left = traits_left, None
+            body += _area_psy(aid, pa_, pb_, names, line_)
+            if aid == 'loves':
+                body += two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), 'What makes %s feel cared for' % names[0], 'What makes %s feel cared for' % names[1]) if D(c.get('care')).get('a') else ''
+            elif aid == 'connection' and c.get('bids'):
+                body += '<div class="callout key2"><span class="lbl">How your small reaches land</span>%s</div>' % _e(c.get('bids'))
+            elif aid == 'life':
+                body += _rhythm(sig, who).replace('<h3>Your day, side by side</h3>', '<p class="lbl" style="margin-top:14px">Your day, side by side</p>')
+            elif aid == 'interests':
+                body += cols(D(c.get('enjoy')))
+            elif aid == 'values':
+                body += ('<p class="lbl" style="margin-top:14px">What you both hold</p>' + cols(D(c.get('alike')))) if D(c.get('alike')).get('shared') else ''
+            elif aid == 'decisions':
+                lines = {y.get('topic'): y.get('line') for y in c.get('decisions') or [] if isinstance(y, dict)}
+                body += ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p><p>%s</p></div>'
+                                % (_e(y['label']), _lv(y['result']), _e(names[0]), _e(y.get('a') or '-'), _e(names[1]), _e(y.get('b') or '-'), _e(lines.get(y['topic'], '')))
+                                for y in dec)
+            elif aid == 'growth' and D(c.get('growth')).get('a'):
+                body += two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
+            elif aid == 'security':
+                body += signs2(c.get('signs'), 'When %s is feeling unsure' % names[0], 'When %s is feeling unsure' % names[1])
+            elif aid == 'attachment' and c.get('a'):
+                body += two(c.get('a'), c.get('b'), 'What reassures %s' % names[0], 'What reassures %s' % names[1])
+            elif aid == 'cycle':
+                cy = D(c.get('cycle'))
+                body += _cycle(cy, names) if cy.get('steps') else ''
+                body += signs2(c.get('signs'), 'Early signs, for %s' % names[0], 'Early signs, for %s' % names[1])
+                body += two(cy.get('a'), cy.get('b'), 'Under it, for %s' % names[0], 'Under it, for %s' % names[1]) if cy.get('a') else ''
+            body += _pills(x.get('evidence'))
+            keep(x.get('evidence'), '%s · %s' % (title, nm))
+            if body.strip():
+                cards_ += '<div class="area" id="%s-%s"><div class="at"><b>%s</b>%s</div>%s</div>' % (cid, aid, _e(nm), badge(cid, aid, True), body)
+        inner += cards_
+        why = _paras(c.get('detail')) + _pills(c.get('evidence'))
         keep(c.get('evidence'), title)
+        inner += ('<h3>Why it happens</h3>' + why) if why.strip() else ''
         todo = ''
-        if cid == 'close':
-            going += ('<div class="callout key2"><span class="lbl">Reaching for each other</span>%s</div>' % _e(c.get('bids')) if c.get('bids') else '')
-            going += two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), 'What makes %s feel cared for' % names[0], 'What makes %s feel cared for' % names[1])
-        if cid == 'secure':
-            going += signs2(c.get('signs'), 'When %s is feeling unsure' % names[0], 'When %s is feeling unsure' % names[1])
-            going += two(c.get('a'), c.get('b'), 'What reassures %s' % names[0], 'What reassures %s' % names[1])
         if cid == 'disagree':
             cy, dr = D(c.get('cycle')), D(c.get('dream'))
-            going += '<p class="lbl" style="margin-top:14px">Your cycle</p>' + _cycle(cy, names)
-            going += signs2(c.get('signs'), 'Early signs, for %s' % names[0], 'Early signs, for %s' % names[1])
-            going += two(cy.get('a'), cy.get('b'), 'Under it, for %s' % names[0], 'Under it, for %s' % names[1])
             mv = D(c.get('moves'))
             if mv.get('a'):
                 todo += '<p class="lbl" style="margin-top:6px">When you see the signs</p>' + two(mv.get('a'), mv.get('b'), 'Your move, %s' % names[0], 'Your move, %s' % names[1])
@@ -3262,34 +3362,15 @@ def page(box, s):
             q_ = c.get('askYourself') or dr.get('question')
             if q_:
                 todo += '<div class="callout key2"><span class="lbl">A question to ask yourself</span>%s</div>' % _e(q_)
-            diffs = ''.join('<li><b>%s</b> %s</li>' % (_e(x.get('title')), _e(x.get('howToLiveWithIt'))) for x in c.get('lasting') or [] if isinstance(x, dict))
-            diffs += ''.join('<li><b>%s</b> <span class="solv">to solve</span> %s</li>' % (_e(x.get('title')), _e(x.get('firstStep'))) for x in c.get('solvable') or [] if isinstance(x, dict))
+            diffs = ''.join('<li><b>%s</b> %s</li>' % (_e(y.get('title')), _e(y.get('howToLiveWithIt'))) for y in c.get('lasting') or [] if isinstance(y, dict))
+            diffs += ''.join('<li><b>%s</b> <span class="solv">to solve</span> %s</li>' % (_e(y.get('title')), _e(y.get('firstStep'))) for y in c.get('solvable') or [] if isinstance(y, dict))
             todo += ('<div class="callout ask"><span class="lbl">Differences to live with, and one to solve</span><ul class="diffs">%s</ul></div>' % diffs) if diffs else ''
-        chips = lambda xs: ''.join('<span>%s</span>' % _e(x) for x in xs or [])
-        own = lambda al, k: [x for x in al.get(k) or [] if str(x).strip().lower() not in {str(y).strip().lower() for y in al.get('shared') or []}]
-        cols = lambda label, al: (('<p class="lbl" style="margin-top:14px">%s</p><div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
-                                   % (_e(label), _e(names[0]), chips(own(al, 'a')), chips(al.get('shared')), _e(names[1]), chips(own(al, 'b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
-                                  if al.get('shared') else '')
-        if cid == 'life':
-            going += _rhythm(sig, who).replace('<h3>Your day, side by side</h3>', '<p class="lbl" style="margin-top:14px">Your day, side by side</p>')
-            going += cols('What you both enjoy', D(c.get('enjoy')))
-            if c.get('together'):
-                todo += '<div class="callout ask"><span class="lbl">New things to do together</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
-        if cid == 'future':
-            going += cols('What you both hold', D(c.get('alike')))
-            lines = {x.get('topic'): x.get('line') for x in c.get('decisions') or [] if isinstance(x, dict)}
-            if view.get('decisions'):
-                going += '<p class="lbl" style="margin-top:14px">The big decisions, side by side</p>' + ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p><p>%s</p></div>'
-                                                                       % (_e(x['label']), _lv(x['result']), _e(names[0]), _e(x.get('a') or '-'), _e(names[1]), _e(x.get('b') or '-'), _e(lines.get(x['topic'], '')))
-                                                                       for x in view.get('decisions') or [])
-            going += two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
-            if c.get('together') and not D(ch.get('life')).get('together'):     # an older read kept them here
-                todo += '<div class="callout ask"><span class="lbl">New things to do together</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
-        inner += ('<h3>What\'s going on</h3>' + going) if going.strip() else ''
-        # 3. What to try
+        together_ = c.get('together') if cid == 'life' else (c.get('together') if cid == 'future' and not D(ch.get('life')).get('together') else None)
+        if together_:
+            todo += '<div class="callout ask"><span class="lbl">New things to do together</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(y) for y in together_)
         if c.get('askEachOther') or c.get('tryThis'):
             todo = ('<div class="callout ask"><span class="lbl">Try together</span>%s%s</div>'
-                    % (''.join('<p class="q">%s</p>' % _e(x) for x in c.get('askEachOther') or []), ('<p><b>This week:</b> %s</p>' % _e(c.get('tryThis'))) if c.get('tryThis') else '')) + todo
+                    % (''.join('<p class="q">%s</p>' % _e(y) for y in c.get('askEachOther') or []), ('<p><b>This week:</b> %s</p>' % _e(c.get('tryThis'))) if c.get('tryThis') else '')) + todo
         todo += private(mine_by.get(cid, []))
         inner += ('<h3>What to try</h3>' + todo) if todo else ''
         inner += _science(refs, folded=True)
