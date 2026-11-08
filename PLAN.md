@@ -100,3 +100,18 @@ The dispute happens here, until the user says it looks right, then `confirm_prof
 4. **Muse Sync.** Done. No score, as on psycheai.io: PsycheAI's Sync is read, not rated.
 5. **Psyche Pair Plus** with Stripe. Done.
 6. **Upload users joining Psyche Pair,** and deeper reads updating the matching profile. Done (`lib/join.js`, and "Use for Psyche Pair" on psycheai.io).
+
+
+## Psyche Together
+
+Agreed 8 November 2026 (plan, fifth draft). Standalone skill in together/, off unless PSYCHE_TOGETHER=1. README "Psyche Together".
+
+- [x] Server mailbox (lib/together.js): locked boxes by the code's hash, hidden tools, end and forget.
+- [x] Its own skill, served from /together and signed apart (tools/sign-together.mjs).
+- [x] The check-in: adults, stage, nine core questions, private safety question, deeper questions from the Psyche, big decisions by stage.
+- [x] The couple view, the joint read and each person's For you, with their checks; the page; End.
+- [ ] Phase 0: install fresh several times to see whether Muse's safety check passes it; counsellor review of the questions, safety wording and resources.
+- [ ] Phase 1: payment on psycheai.io/together, a one-time code in the prompt, refund if the partner never joins.
+- [ ] Phase 4: message signals (turning towards, repair, being there when it counts, who plans) and the three-view gaps.
+- [ ] The offer in PsycheAI: only when relevant, said to be paid, with price and refund terms before the link; CLAUDE.md's "nothing sold inside the host" narrowed for it.
+- [ ] The four-week re-check and the six-month redo.

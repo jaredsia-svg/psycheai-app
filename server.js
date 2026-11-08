@@ -425,6 +425,9 @@ async function route(req, res) {
         'Content-Disposition': 'inline; filename="Psyche Report.pdf"', 'X-Robots-Tag': 'noindex' });
       return res.end(pdf);
     }
+    // Psyche Together's own skill (lib/togetherskill.js): its files and signed manifest, off unless PSYCHE_TOGETHER=1.
+    const tg = require('./lib/togetherskill').route(url.pathname, req.method);
+    if (tg) return send(res, tg.status, Buffer.isBuffer(tg.body) ? tg.body.toString('utf8') : tg.body, (tg.type || 'application/json').split(';')[0]);
     // PsycheAI as a Muse skill (lib/skill.js): its files, and its account.
     const skillPath = /^\/skill\/(SKILL\.md|bin\/psyche\.py|guide\.json)$/.exec(url.pathname);
     if (skillPath && req.method === 'GET') {
