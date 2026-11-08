@@ -3767,6 +3767,11 @@ elif a[0] == 'thread':
     const acc = await (await fetch(base + '/skill/account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json();
     fsx.writeFileSync(pathx.join(root, 'skills', 'psycheai', '.account.json'), JSON.stringify(acc));
     fsx.writeFileSync(pathx.join(root, 'skills', 'psycheai', 'report.json'), JSON.stringify(rep));
+    if (who === 'a') {   // Mei's Psyche Card picture, as the PsycheAI skill saves it (a 2 x 2 PNG stands in)
+      fsx.mkdirSync(pathx.join(root, 'skills', 'psycheai', 'out'), { recursive: true });
+      fsx.writeFileSync(pathx.join(root, 'skills', 'psycheai', 'out', 'Psyche-Card-Mei-Tan-08112026.png'),
+        Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mP8z8DwnwEIGBkZGRgAAAP/AQEAX0+YAAAAAElFTkSuQmCC', 'base64'));
+    }
     home[who] = { root, dir, keep: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'together-home-')) };
     const env = { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: home[who].keep, PSYCHEAI_TRANSPORT: 'python', NO_PROXY: '*', no_proxy: '*',
       PSYCHEAI_IGM_CLI: who === 'a' ? fakeCli : '/nonexistent/igm' };
@@ -3898,7 +3903,7 @@ elif a[0] == 'thread':
   check('Psyche Together needs a Psyche first, and says how to make one',
     tg.noPsyche.needsPsyche === true && /Install psycheai\.io\/skill and generate my Psyche/.test(tg.noPsyche.say), JSON.stringify(tg.noPsyche));
   check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their full report and their conversation together go to their partner, locked, and nothing from other chats',
-    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report goes to your partner's Muse, locked/.test(tg.start.consent || '') && /The one who starts it adds your conversation together/.test(tg.start.consent || '') && /Nothing from chats with anyone else is read/.test(tg.start.consent || '') &&
+    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report and your Psyche Card picture go to your partner's Muse, locked/.test(tg.start.consent || '') && /The one who starts it adds your conversation together/.test(tg.start.consent || '') && /Nothing from chats with anyone else is read/.test(tg.start.consent || '') &&
       /^Mei invited you to Psyche Together/.test((tg.staged.invite || {}).invite || '') && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || '') &&
       /Highly recommended while you wait/.test(tg.picked.whatsapp || '') && JSON.stringify(tg.picked.buttons) === '["Add our WhatsApp chat","Has my partner joined?"]' &&
       /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || ''),
@@ -3969,9 +3974,13 @@ elif a[0] == 'thread':
       /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map"/.test(htmlA) && /class="mch"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA) && /id="moments"/.test(htmlA) &&
       /Your busiest day/.test(htmlA) && htmlA.indexOf('id="disagree"') < htmlA.indexOf('id="moments"') && htmlA.indexOf('id="moments"') < htmlA.indexOf('id="life"') && /<span class="num">06<\/span><span class="ttl">Your 28-day practice/.test(htmlA),
     JSON.stringify([tg.foryouA.gentle, tg.sentB.gentle]));
+  check('the top of the page shows both Psyche Cards leaning in with a heart between them, each person\'s own card sent once, locked, in its own box; one without a card picture shows their letter instead',
+    /<header class="banner love" id="top">/.test(htmlA) && /class="heart"/.test(htmlA) && /<button type="button" class="cardp l" data-view aria-label="Open Mei's Psyche Card"><img alt="Mei's Psyche Card" src="data:image\/(jpeg|png);base64,/.test(htmlB) &&
+      /<div class="cardp r nopic"><span>A<\/span><\/div>/.test(htmlB) && /class="cardp l" data-view/.test(htmlA) && /most like Mulan/.test(htmlB) && /class="viewer"/.test(htmlA) &&
+      JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'state.json'), 'utf8')).picSent === true, htmlB.slice(htmlB.indexOf('<header'), htmlB.indexOf('<header') + 400));
   const mapCards = [...htmlA.matchAll(/<a class="mch" href="#(\w+)" style="--c:(#[0-9a-f]{6})/g)].map(m => [m[1], m[2]]);
   check('the page is drawn as the Psyche Report is (banner with the mark, sticky nav, sections that open and close, with the glance and For you open), and each chapter keeps one colour: its card on the map links to its own section, in the same colour as that section and its nav chip',
-    /<header class="banner" id="top"><svg class="mark"/.test(htmlA) && /<nav aria-label="Sections">/.test(htmlA) && /data-fold/.test(htmlA) &&
+    /<header class="banner love" id="top"><svg class="mark"/.test(htmlA) && /<nav aria-label="Sections">/.test(htmlA) && /data-fold/.test(htmlA) &&
       /class="part  open" id="glance"|class="part open" id="glance"/.test(htmlA) && /class="part mine open" id="foryou"/.test(htmlA) && /class="part chapter" id="close"/.test(htmlA) &&
       mapCards.length === 5 && mapCards.every(([id, c]) => htmlA.includes('id="' + id + '" style="--c:' + c + '"') && htmlA.includes('<a href="#' + id + '" style="--c:' + c + '">')) &&
       new Set(mapCards.map(m => m[1])).size === 5, JSON.stringify(mapCards));
@@ -3979,7 +3988,7 @@ elif a[0] == 'thread':
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
       stateA.answers.safety.label === 'No', '');
   check('PsycheAI keeps only boxes it can\'t open: no name, answer, code or Psyche in what it keeps for the couple',
-    kept.length > 50 && boxes.length === 3 && boxes.every(x => Object.keys(x).sort().join() === 'c,n,t,v' && x.c.length > 40) &&
+    kept.length > 50 && boxes.length === 4 && boxes.every(x => Object.keys(x).sort().join() === 'c,n,t,v' && x.c.length > 40) &&
       !/Mei|Ana|Mulan|Often|Married|Mostly|Loyalty|safety|achievement/.test(kept) && !kept.includes(theCode), kept.slice(0, 200));
   check('Psyche Together stands apart from the PsycheAI skill: its own files, served and signed under its own name, its tools hidden from the host, nothing of it in PsycheAI\'s script or SKILL.md; its SKILL.md keeps its answers, partner and link out of memory notes',
     !/Psyche Together|together_|together\.py|psyche-together/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) && !/Psyche Together/.test(await (await fetch(base + '/skill/SKILL.md')).text()) &&

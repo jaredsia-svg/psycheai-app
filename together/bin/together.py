@@ -25,6 +25,8 @@ of them is answered and written here and locked before it's sent: the server kee
 """
 import base64
 import binascii
+import glob
+import io
 import hashlib
 import hmac
 import html
@@ -45,7 +47,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 19
+RELEASE = 20
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1252,7 +1254,7 @@ def needs_psyche():
 
 
 CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, and your partner never sees how you answered: the read shows '
-           'the two of you together. For a read this deep, your full Psyche report goes to your partner\'s Muse, locked. The one who starts it adds '
+           'the two of you together. For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked. The one who starts it adds '
            'your conversation together (your Instagram chat, and your WhatsApp chat if they share it): what it shows, and a dated sample of it, go '
            'with it, locked, for your read. Nothing from chats with anyone else is read, and PsycheAI can\'t read any of it.')
 
@@ -1272,9 +1274,42 @@ def start():
     return dict(next_step(), consent=CONSENT)
 
 
+def card_pic():
+    """Their own Psyche Card, as the PsycheAI skill saved it, made small for the page's header (README "Psyche
+    Together, release 20"): a JPEG 360 wide at most, with Pillow; without it, the PNG only if it's small. Else None."""
+    found = sorted(glob.glob(os.path.join(PSYCHE_DIR, 'out', 'Psyche-Card-*.png')) + glob.glob(os.path.join(KEEP, 'Psyche-Card-*.png')),
+                   key=lambda f: os.path.getmtime(f))
+    if not found:
+        return None
+    try:
+        with open(found[-1], 'rb') as f:
+            raw = f.read()
+    except OSError:
+        return None
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(raw)).convert('RGBA')
+        back = Image.new('RGB', im.size, (255, 255, 255))
+        back.paste(im, mask=im.split()[-1])
+        back.thumbnail((360, 640))
+        buf = io.BytesIO()
+        back.save(buf, 'JPEG', quality=80, optimize=True)
+        return 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return ('data:image/png;base64,' + base64.b64encode(raw).decode()) if len(raw) <= 90000 else None
+
+
 def put_profile(s, answered):
     k = keys()
-    return tool('together_put', {'e2e': {'profile': seal(shared_profile(s, answered), key_for('together-box', k['code']))}})
+    e2e = {'profile': seal(shared_profile(s, answered), key_for('together-box', k['code']))}
+    pic = None if s.get('picSent') else card_pic()
+    if pic:
+        e2e['pic'] = seal({'img': pic}, key_for('together-box', k['code']))
+    got = tool('together_put', {'e2e': e2e})
+    if pic and not got.get('error'):
+        s['picSent'] = True
+        save_state(s)
+    return got
 
 
 def after_stage(s):
@@ -1325,7 +1360,13 @@ def couple():
     e = got.get('e2e') or {}
     key = key_for('together-box', k['code'])
     profiles = {r: unseal((e.get('profiles') or {}).get(r), key) for r in ('a', 'b')}
+    pics = {r: (unseal((e.get('pics') or {}).get(r), key) or {}).get('img') for r in ('a', 'b')}
+    SEEN.update(pics={r: p for r, p in pics.items() if isinstance(p, str) and p.startswith('data:image/')},
+                cards={r: (profiles.get(r) or {}).get('psyche') or {} for r in ('a', 'b')})
     return k, got, profiles, unseal(e.get('read'), key)
+
+
+SEEN = {}       # the couple's card pictures and cards, as couple() last opened them, for the page's header
 
 
 def mine_theirs(s, profiles):
@@ -2039,6 +2080,31 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.6;-webki
 .banner .lede{margin:8px 0 0;font-size:14.5px;line-height:1.5;opacity:.92;max-width:34em}
 .banner .sub{margin-top:8px;font-size:12.5px;opacity:.75}
 @media (max-width:480px){.banner .mark{top:-3.6rem;right:-3.4rem;width:165px;opacity:.14}.banner h1{font-size:26px}.facts{font-size:10px;letter-spacing:.06em}}
+.banner.love{text-align:center;padding:24px 16px 26px;background:radial-gradient(90% 60% at 50% 38%,rgba(255,170,195,.55) 0%,rgba(255,170,195,0) 70%),linear-gradient(165deg,#2c0b33 0%,#6b1a55 40%,#b8305f 75%,#e0607a 100%)}
+.banner.love:before{right:auto;left:50%;top:auto;bottom:-120px;margin-left:-160px;width:320px;height:240px;background:radial-gradient(circle,rgba(255,214,226,.35),rgba(255,214,226,0) 70%)}
+.banner.love .mark{opacity:.1}
+.fh{position:absolute;width:14px;height:14px;fill:#ffd1de;opacity:.0;animation:rise 9s ease-in infinite}
+.fh.h1{left:8%;bottom:-10px;animation-delay:0s}.fh.h2{left:22%;bottom:-10px;width:10px;animation-delay:3s}.fh.h3{left:78%;bottom:-10px;animation-delay:1.5s}
+.fh.h4{left:90%;bottom:-10px;width:11px;animation-delay:5s}.fh.h5{left:62%;bottom:-10px;width:9px;animation-delay:6.5s}.fh.h6{left:36%;bottom:-10px;width:12px;animation-delay:7.5s}
+@keyframes rise{0%{transform:translateY(0) scale(.8);opacity:0}15%{opacity:.55}100%{transform:translateY(-330px) scale(1.1);opacity:0}}
+.couple{position:relative;display:flex;justify-content:center;align-items:flex-start;gap:0;margin:18px 0 6px}
+.lover{display:flex;flex-direction:column;align-items:center;width:150px}
+.lover b{margin-top:12px;font-size:15px}.lover small{font-size:11.5px;opacity:.85}
+.cardp{all:unset;cursor:zoom-in;display:block;width:124px;aspect-ratio:9/16;border-radius:14px;overflow:hidden;border:3px solid rgba(255,255,255,.95);box-shadow:0 16px 34px rgba(30,0,30,.45),0 0 0 6px rgba(255,190,210,.18);transition:transform .25s ease;-webkit-tap-highlight-color:transparent}
+.cardp img{display:block;width:100%;height:100%;object-fit:cover}
+.cardp.l{transform:rotate(-7deg) translateX(14px)}.cardp.r{transform:rotate(7deg) translateX(-14px)}
+.cardp.l:hover{transform:rotate(-3deg) translateX(14px) scale(1.03)}.cardp.r:hover{transform:rotate(3deg) translateX(-14px) scale(1.03)}
+.cardp.nopic{display:flex;align-items:center;justify-content:center;cursor:default;background:linear-gradient(160deg,#8f4fc0,#c2366d)}.cardp.nopic span{font-size:46px;font-weight:800;color:#fff}
+.heart{position:absolute;left:50%;top:86px;z-index:2;width:58px;height:58px;margin-left:-29px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(120,10,60,.45),0 0 0 8px rgba(255,255,255,.22);animation:beat 1.8s ease-in-out infinite}
+.heart svg{width:30px;height:30px}
+@keyframes beat{0%,100%{transform:scale(1)}14%{transform:scale(1.14)}28%{transform:scale(1)}42%{transform:scale(1.1)}}
+.banner.love h1{margin:16px 0 2px;font-size:32px}.banner.love h1 i{font-family:Georgia,"Times New Roman",serif;font-weight:400;color:#ffd1de;padding:0 2px}
+.banner.love .lede{margin:8px auto 0}
+@media (prefers-reduced-motion:reduce){.fh,.heart{animation:none}.fh{display:none}}
+@media (min-width:640px){.lover{width:200px}.cardp{width:150px}.heart{top:104px}}
+.viewer{position:fixed;inset:0;z-index:20;background:rgba(30,6,30,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+.viewer[hidden]{display:none}.viewer img{max-width:100%;max-height:calc(100% - 60px);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.viewer span{margin-top:14px;padding:8px 16px;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font-size:14px;font-weight:600}
 nav{position:sticky;top:0;z-index:5;margin:0 -14px 14px;padding:10px 14px;background:rgba(250,247,251,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
 nav a{flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid #e2d8e9;background:#fff;color:var(--soft);font-size:13px;font-weight:650;text-decoration:none;white-space:nowrap}
@@ -2185,6 +2251,9 @@ function label(){var any=parts.some(function(p){return !p.classList.contains('op
 fold.forEach(function(b){b.addEventListener('click',function(){var any=parts.some(function(p){return !p.classList.contains('open');});parts.forEach(function(p){set(p,any);});label();if(!any)go(document.getElementById('top'));});});
 parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',label);});
 mark();label();
+var vw=document.getElementById('viewer');
+[].slice.call(document.querySelectorAll('[data-view]')).forEach(function(b){b.addEventListener('click',function(){if(!vw)return;vw.querySelector('img').src=b.querySelector('img').src;vw.hidden=false;});});
+if(vw){vw.addEventListener('click',function(){vw.hidden=true;});document.addEventListener('keydown',function(e){if(e.key==='Escape')vw.hidden=true;});}
 })();
 '''
 
@@ -2471,23 +2540,42 @@ def page(box, s):
          'They describe couples in general, never a verdict on you two. This is coaching, not counselling: if something here feels heavy, a couples counsellor is worth seeing together.</p>' % _paras(r.get('caveats')),
          '', 'Sources, method and limits')
     when = datetime.fromtimestamp(box.get('at') or time.time()).strftime('%-d %B %Y')
-    facts_ = ' · '.join(x for x in ['Psyche Together', view.get('stage') or '', '6 chapters'] if x)
-    banner = ('<header class="banner" id="top">%s<div class="pair"><span>%s</span><span>%s</span></div><div class="facts">%s</div><h1>%s &amp; %s</h1>'
-              '<p class="lede">How the two of you meet: how you each see it, what your conversation shows, why through both your Psyches, and what to try next.</p><div class="sub">%s</div></header>'
-              % (LOGO, _initial(names[0]), _initial(names[1]), _e(facts_), _e(names[0]), _e(names[1]), _e(when)))
+    # The header (README "Psyche Together, release 20"): both Psyche Cards leaning in, a heart between them.
+    pics, cards = SEEN.get('pics') or {}, SEEN.get('cards') or {}
+    since = (sig.get('fun') or {}).get('first')
+
+    def card(role, nm, side):
+        ch_ = (cards.get(role) or {}).get('character') or ''
+        img = (('<button type="button" class="cardp %s" data-view aria-label="Open %s\'s Psyche Card"><img alt="%s\'s Psyche Card" src="%s"></button>' % (side, _e(nm), _e(nm), pics[role]))
+               if pics.get(role) else '<div class="cardp %s nopic"><span>%s</span></div>' % (side, _initial(nm)))
+        return '<div class="lover">%s<b>%s</b>%s</div>' % (img, _e(nm), ('<small>most like %s</small>' % _e(ch_)) if ch_ else '')
+    hearts = ''.join('<svg class="fh h%d" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.6 1.1 4.6 2.6l1 1.4 1-1.4C14 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg>' % i for i in range(1, 7))
+    banner = ('<header class="banner love" id="top">%s%s<div class="facts">%s</div><div class="couple">%s<div class="heart"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1">'
+              '<stop offset="0" stop-color="#ff7aa2"/><stop offset="1" stop-color="#c2366d"/></linearGradient></defs><path fill="url(#hg)" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.6 1.1 4.6 2.6l1 1.4 1-1.4C14 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg></div>%s</div>'
+              '<h1>%s <i>&amp;</i> %s</h1><p class="lede">The two of you, read together: how you love, how you disagree and how you grow, from both your Psyches and your own words.</p><div class="sub">%s</div></header>'
+              % (LOGO, hearts, _e(' · '.join(x for x in ['Psyche Together', view.get('stage') or ''] if x)), card('a', names[0], 'l'), card('b', names[1], 'r'), _e(names[0]), _e(names[1]),
+                 _e(' · '.join(x for x in [('Talking since ' + since) if since else '', when] if x))))
+    viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>' if pics else ''
     bar = '<nav aria-label="Sections">%s<button type="button" data-fold>Open all ▼</button></nav>' % ''.join(nav)
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<title>Psyche Together · %s &amp; %s</title><style>%s</style></head><body><div class="wrap">%s%s%s<button type="button" class="foldall" data-fold>Open all ▼</button>'
-            '<footer><b>Psyche Together</b> by PsycheAI · psycheai.io<br>Made in your own Muse workspace. PsycheAI keeps no copy it can read.</footer></div><script>%s</script></body></html>'
-            % (_e(names[0]), _e(names[1]), CSS, banner, bar, ''.join(parts), JS))
+            '<footer><b>Psyche Together</b> by PsycheAI · psycheai.io<br>Made in your own Muse workspace. PsycheAI keeps no copy it can read.</footer></div>%s<script>%s</script></body></html>'
+            % (_e(names[0]), _e(names[1]), CSS, banner, bar, ''.join(parts), viewer, JS))
 
 
 def show(box=None):
     s = state()
-    if box is None:
-        k, got, profiles, box = couple()
-        if got.get('error'):
+    if s.get('role') and not s.get('picSent'):
+        pic = card_pic()      # a Psyche Together from before release 20: their card goes now, for both headers
+        if pic and not tool('together_put', {'e2e': {'pic': seal({'img': pic}, key_for('together-box', keys()['code']))}}).get('error'):
+            s['picSent'] = True
+            save_state(s)
+            SEEN.clear()
+    if box is None or 'pics' not in SEEN:
+        k, got, profiles, box_ = couple()
+        if got.get('error') and box is None:
             return got
+        box = box if box is not None else box_
         if not box:
             return {'waiting': True, 'say': 'Your read isn\'t written yet.'}
     s['shown'] = box.get('at')
