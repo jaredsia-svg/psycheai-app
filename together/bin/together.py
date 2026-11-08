@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 46
+RELEASE = 47
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -356,12 +356,14 @@ def stage_of(s):
 
 # README "Psyche Together, release 41": the questions follow the read's own order, chapter by chapter, so each one
 # is asked where its answer lands: overall first (the glance), then 01 to 05, the private question last.
-QUESTION_CHAPTERS = [('close', ['appreciation', 'know', 'connection', 'desire']), ('life', ['needs', 'life']),
+QUESTION_CHAPTERS = [('close', ['appreciation', 'connection', 'desire']), ('life', ['needs', 'life']),
                      ('future', ['future', 'decisions', 'growth']), ('secure', ['security']), ('disagree', ['disagreements'])]
 
 
 def chapter_of(it):
-    key = 'know' if it['kind'] == 'know' else 'decisions' if it['kind'] == 'decision' else it.get('pillar')
+    if it['kind'] == 'know':
+        return 'close'          # asked last, before the private one (release 47), and read in 01
+    key = 'decisions' if it['kind'] == 'decision' else it.get('pillar')
     return next((cid for cid, keys in QUESTION_CHAPTERS if key in keys), None)
 
 
@@ -373,9 +375,7 @@ def items(s):
     out += overall_items(stage)
     for cid, keys in QUESTION_CHAPTERS:
         for key in keys:
-            if key == 'know':                   # how well you know your partner (README "Psyche Together, release 40")
-                out += [{'id': k_['id'], 'kind': 'know', 'pillar': '', 'opener': '', 'text': k_['q'], 'options': list(k_['options'])} for k_ in q.get('know') or []]
-            elif key == 'decisions':
+            if key == 'decisions':
                 out += [{'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': DECISIONS[t][1],
                          'onlyIf': 'hope' if t in ('hope', 'children') and stage == 'Dating' else None} for t in BY_STAGE.get(stage) or []]
             elif key in core:
@@ -386,6 +386,8 @@ def items(s):
                 if key != 'desire' and isinstance(f, dict) and f.get('q') and f.get('options'):
                     out.append({'id': 'deep:' + key, 'kind': 'deeper', 'pillar': key, 'opener': '', 'text': f['q'], 'follows': 'core:' + key,
                                 'options': [o for o in f['options'] if o != OTHER] + [OTHER], 'own': True})
+    # how well you know your partner (README "Psyche Together, releases 40 and 47"): last, before the private one
+    out += [{'id': k_['id'], 'kind': 'know', 'pillar': '', 'opener': '', 'text': k_['q'], 'options': list(k_['options'])} for k_ in q.get('know') or []]
     out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
     return out
 

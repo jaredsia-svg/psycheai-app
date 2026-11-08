@@ -3995,11 +3995,11 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /What save-questions checks/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec),
     JSON.stringify([tg.join.short, tg.formB.widgetFile, tg.waitB.setCheck]));
   const orderA = tg.askedA.map(x => x.id);
-  const chapterOf = id => /^overall:/.test(id) ? 0 : /^(core|deep):(appreciation|connection|desire)$|^know:/.test(id) ? 1 : /^(core|deep):(needs|life)$/.test(id) ? 2 : /^(core|deep):(future|growth)$|^decide:/.test(id) ? 3 : /^(core|deep):security$/.test(id) ? 4 : /^(core|deep):disagreements$/.test(id) ? 5 : 6;
+  const chapterOf = id => /^overall:/.test(id) ? 0 : /^(core|deep):(appreciation|connection|desire)$/.test(id) ? 1 : /^(core|deep):(needs|life)$/.test(id) ? 2 : /^(core|deep):(future|growth)$|^decide:/.test(id) ? 3 : /^(core|deep):security$/.test(id) ? 4 : /^(core|deep):disagreements$/.test(id) ? 5 : /^know:/.test(id) ? 6 : 7;
   check('two questions about your partner, from their own report and never confirmed (README "Psyche Together, releases 40 and 41"); the questions in the read\'s order, overall first, then 01 to 05, the private one last, each marked with its chapter; two follow-ups at most; save-questions refuses a question without its answer; the couple total and the right answers are shared, each one\'s own count only on their own copy and never to the writer, never on the gentle path',
     tg.noKnowQ.saved === false && tg.noKnowQ.problems.some(p => /^know: exactly two questions about Mei/.test(p)) &&
       tg.askedA.some(x => x.id === 'know:1' && x.kind === 'know' && x.buttons.length === 3) && !orderA.some(id => /^me:/.test(id)) &&
-      orderA[0] === 'overall:you' && orderA[orderA.length - 1] === 'safety' && orderA.every((id, n) => n === 0 || chapterOf(orderA[n - 1]) <= chapterOf(id)) &&
+      orderA[0] === 'overall:you' && orderA[orderA.length - 1] === 'safety' && orderA[orderA.length - 2] === 'know:2' && orderA[orderA.length - 3] === 'know:1' && orderA.every((id, n) => n === 0 || chapterOf(orderA[n - 1]) <= chapterOf(id)) &&
       orderA.indexOf('core:future') < orderA.indexOf('decide:money') && orderA.filter(id => /^deep:/.test(id)).length <= 2 &&
       /<span class="chip">01 Care &amp; Connection · How well you know Ana<\/span>/.test(String(tg.formA.widget || '')) && /<span class="chip">05 Conflict &amp; Repair · /.test(String(tg.formA.widget || '')) && /"followMax": 2/.test(String(tg.formA.widget || '')) &&
       view.know && view.know.items.length === 4 && view.know.of === 2 && !('knowBy' in view) && view.know.items.some(x => x.about === 'Mei' && x.answer === 'A quiet book') &&
