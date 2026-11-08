@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 22
+RELEASE = 23
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1171,43 +1171,176 @@ def chat_signals(msgs):
                     'streak': best, 'daysTalking': len(days)}}
 
 
-def clean_line(text):
-    """One message for the sample: links, emails, handles and numbers out; a long one as its opening and its end."""
+# Common first names, as the PsycheAI skill keeps them (its COMMON_NAMES): taken out of the sample wherever they turn
+# up, as [name], so someone else in the two of them's lives isn't named to the read. The two of them are kept.
+COMMON_NAMES = frozenset("""
+    aaron abby abigail adam adeline adrian agnes ahmad aidan aiden aisha alan albert alex alexa
+    alexander alexandra alexis alfred ali alice alicia alison allison alyssa amanda amelia
+    amir amy andre andrea andrew andy angela angelina angie anita ann anna annabelle anne annie
+    anthony antonio arjun arnold arthur ashley audrey ava avery bailey barbara beatrice becky
+    belinda ben benedict benjamin bernard beth bethany betty beverly bianca bobby bonnie brad
+    bradley brandon brenda brendan brian bridget brittany bruce bryan bryce caleb calvin cameron
+    camila candice carl carla carlos carmen caroline carolyn casey cassandra catherine cecilia
+    celeste celine chad charlene charles charlie charlotte charmaine cheryl chloe chris christina
+    christine christopher cindy claire clara clarence claudia clement colin connie connor conor
+    constance corey craig cynthia daisuke damian damien dan daniel danielle danny darren darryl
+    david debbie deborah declan denise dennis derek desiree desmond diana diane dominic donald donna
+    doris dorothy douglas dylan edmund edward edwin eileen elaine eleanor elena eli elijah elisa
+    elise eliza elizabeth ella ellen ellie eloise elsie emily emma eric erica erin esther ethan
+    eugene evelyn fabian farah fatimah felicia felix fernando fiona francesca francis gabriel
+    gabriella gareth gavin genevieve geoffrey george gerald geraldine germaine gillian gina gloria
+    gordon graham greg gregory gwen gwendolyn hailey haley hannah harold harriet harrison harry
+    heidi helen henry herbert howard hugo huimin ian ingrid irene isaac isabel isabella isabelle
+    isaiah jacob jacqueline jake james jamie jane janet janice jared jason jasper jeff jeffrey jen
+    jenna jennifer jenny jeremy jerome jess jesse jessica jessie jiahui jill jim joanna joanne
+    jocelyn joe joel joey john johnny jolene jolin jon jonathan joseph josh joshua joyce juan judith
+    judy julia julian juliana julie justin karen karthik kate katherine kathleen kathryn kathy katie
+    kayla keith kelly ken kenneth kenny kevin kim kimberly kirsten kristen kyle lachlan laura lauren
+    lawrence leah leon leonard leslie lewis liam lillian linda lindsay lionel lisa liz lizzie logan
+    lorraine louis louisa louise lucas lucy luis luke lydia lynn madeleine maggie mandy marcus
+    margaret maria marian marianne marie marilyn martha martin marvin mary matilda matt matthew
+    maureen maxwell meg megan melanie melissa melvin michael michaela michelle mikayla mike mildred
+    mohamed mohammad mohammed monica muhammad nadia naomi natalie natasha nate nathan nathaniel neil
+    nicholas nicole nigel noah norman nurul oliver olivia oscar owen pamela patricia patrick paul
+    paula pauline pete peter phil philip phoebe phyllis pooja preeti priscilla priya rachel rahul
+    ralph randy raphael rebecca regina reuben rhys ricardo richard rick ricky rita robert roberto
+    rodney roger ronald rosalind rosemary russell ruth ryan sabrina sally sam samantha samuel sandra
+    sara sarah scott sean sebastian selina serena seth shane shannon sharon sheila shermaine shirley
+    siti sophia sophie stanley stella stephanie stephen steve steven suresh susan sylvia tamara
+    tanya terence teresa theodore theresa thomas tiffany tim timothy tina tobias todd tom tony tracy
+    trevor tyler valerie vanessa veronica victor vincent vivian wallace walter weiming wendy wesley
+    william winnie winston xavier xinyi yvonne zach zachary zack zoe
+""".split())
+NAME_RX = re.compile(r"\b[A-Za-z][a-z]{2,}\b")
+# What the sample keeps (README "Psyche Together, release 23"), as the PsycheAI skill chooses a chat's lines
+# (its choose_messages): a burst is one line, filler and link-only lines are out, a short one stays only if it
+# opens a conversation, apologises, names a feeling or asks; ten equal stretches of time share the room by the
+# square root of their size, so quiet years aren't starved; long, ordinary and short lines 50/40/10 within each.
+BURST = 120
+SHORT = 30
+LONG = 120
+FILLER = re.compile(r'^((ha)+h?|(he)+|lo+l+|lmao|ok|okay|okie|k|kk|omw|yes|yeah|ya|yup|no|nope|sure|hm+|cool|nice|thanks|thx|ty|icic|alr|wah|wahlau|walao|eh|wth|wtf+|omg+|link)$')
+FEELING = re.compile(r'\b(love|loved|miss(?:ed)? you|hate|angry|mad at|upset|sad|hurt|worried|worry|anxious|scared|afraid|stressed|lonely|proud|grateful|thankful|disappoint\w*|frustrat\w*|annoy\w*|jealous|cry|crying|cried|happy|excited|feel|feeling|felt|sick of|tired of|overwhelm\w*|argu\w*|fight|fought|sian|emo)\b', re.I)
+FORWARD = re.compile(r'^(?:forwarded(?: many times)?\b|fwd?:)', re.I)
+LINKED = re.compile(r'\b(?:https?://|www\.)\S+', re.I)
+
+
+def _share(weights, total, caps):
+    """total places shared by weight, none over its cap; what a capped one can't take goes on to the rest."""
+    out, left = [0] * len(weights), total
+    live = [k for k, c in enumerate(caps) if c > 0 and weights[k] > 0]
+    while left > 0 and live:
+        w = sum(weights[k] for k in live)
+        given = 0
+        for k in live:
+            take = min(int(left * weights[k] / w), caps[k] - out[k])
+            out[k] += take
+            given += take
+        if given == 0:
+            for k in sorted(live, key=lambda k: -weights[k]):
+                if left - given <= 0:
+                    break
+                if out[k] < caps[k]:
+                    out[k] += 1
+                    given += 1
+            if given == 0:
+                break
+        left -= given
+        live = [k for k in live if out[k] < caps[k]]
+    return out
+
+
+def clean_line(text, keep=()):
+    """One message for the sample: links, emails, handles and numbers out, other people's first names out; a long one
+    as its opening and its end."""
     t = re.sub(r'\s+', ' ', str(text or '')).strip()
     for rx, sub in SCRUB:
         t = rx.sub(sub, t)
+    keep = {k.lower() for k in keep if k}
+    t = NAME_RX.sub(lambda m: '[name]' if m.group(0).lower() in COMMON_NAMES and m.group(0).lower() not in keep and m.group(0)[0].isupper() else m.group(0), t)
     return t if len(t) <= TEXT_CHARS else t[:330].rstrip() + ' … ' + t[-(TEXT_CHARS - 334):].lstrip()
 
 
-def chat_sample(msgs, me_name, them_name, budget=None):
-    """What the read sees of their conversation, up to CHAT_BUDGET characters: all of it when it fits; otherwise
-    every month represented (an even spread first), then what matters most (questions, thanks, sorry, longer
-    messages) until the budget is used, in time order. Each line its date, time, who, and the message."""
+def chat_sample(msgs, me_name, them_name, budget=None, keep=()):
+    """What the read sees of their conversation, up to CHAT_BUDGET characters (and CHAT_BYTES), both voices, in time
+    order: each line its date, time, who, and the message."""
+    import zlib
     budget = budget or CHAT_BUDGET
     if not msgs:
         return []
-    lines = ['%s %s: %s' % (t.strftime('%Y-%m-%d %H:%M'), me_name if who == 'me' else them_name, clean_line(text)) for t, who, text in msgs]
-    chars = [len(x) + 1 for x in lines]
-    wide = sum(len(x.encode('utf-8')) + 1 for x in lines) / max(1, sum(chars))     # bytes a character, for this conversation
-    budget = min(budget, int(CHAT_BYTES / max(1.0, wide)))
-    size = chars
-    if sum(size) <= budget:
-        return lines
-    keep, used = set(), 0
-    avg = sum(size) / len(size)
-    step = max(1, int(len(msgs) / max(1, (budget / 2) / avg)))
-    for i in range(0, len(msgs), step):
-        if used + size[i] > budget / 2:
-            break
-        keep.add(i)
-        used += size[i]
-    weight = lambda i: (('?' in msgs[i][2]) + bool(THANKS.search(msgs[i][2])) * 2 + bool(SORRY.search(msgs[i][2])) * 2 + bool(WARM.search(msgs[i][2])) + min(len(msgs[i][2]), 300) / 150)
-    for i in sorted(range(len(msgs)), key=lambda i: (-weight(i), i)):
-        if i in keep or used + size[i] > budget:
+    keep = set(keep) | {me_name, them_name}
+    units, seen, prev = [], set(), None
+    for t, who, text in msgs:             # a burst from one side, within two minutes, is one line
+        raw = str(text or '').strip()
+        if not raw:
             continue
-        keep.add(i)
-        used += size[i]
-    return [lines[i] for i in sorted(keep)]
+        if units and prev and prev[1] == who and (t - prev[0]).total_seconds() <= BURST and len(units[-1]['raw']) + len(raw) + 3 <= TEXT_CHARS:
+            units[-1]['raw'] += ' / ' + raw
+        else:
+            units.append({'t': t, 'who': who, 'raw': raw, 'opener': prev is None or (t - prev[0]).total_seconds() >= GAP})
+        prev = (t, who)
+    kept = []
+    for u in units:
+        raw = u['raw']
+        if FORWARD.search(raw) or len(raw) > 1600:
+            continue
+        if LINKED.search(raw) and len(re.findall(r'\w{2,}', LINKED.sub(' ', raw))) < 4:
+            continue                       # a link with hardly a word of their own says nothing about them
+        key = re.sub(r'(.)\1+', r'\1', re.sub(r'[^\w]+', '', raw.lower()))
+        if (key and (u['who'], key) in seen) or (not key and len(raw) < 3):
+            continue
+        short = len(raw) < SHORT
+        if short and (FILLER.match(key or '') or not (u['opener'] or SORRY.search(raw) or FEELING.search(raw) or THANKS.search(raw) or WARM.search(raw) or '?' in raw)):
+            continue
+        seen.add((u['who'], key))
+        line = '%s %s: %s' % (u['t'].strftime('%Y-%m-%d %H:%M'), me_name if u['who'] == 'me' else them_name, clean_line(raw, keep))
+        kept.append(dict(u, line=line, cost=len(line) + 1, bytes=len(line.encode('utf-8')) + 1,
+                         score=(2 if u['opener'] else 0) + (2 if SORRY.search(raw) else 0) + (2 if FEELING.search(raw) or WARM.search(raw) else 0)
+                         + (1 if THANKS.search(raw) else 0) + (1 if '?' in raw else 0), hash=zlib.crc32(raw.encode())))
+    if not kept:
+        return []
+    wide = sum(u['bytes'] for u in kept) / max(1, sum(u['cost'] for u in kept))
+    budget = min(budget, int(CHAT_BYTES / max(1.0, wide)))
+    if sum(u['cost'] for u in kept) <= budget:
+        return [u['line'] for u in kept]
+    avg = sum(u['cost'] for u in kept) / len(kept)
+    want = min(len(kept), int(budget / avg * 1.1) + 1)
+    first, span = kept[0]['t'], (kept[-1]['t'] - kept[0]['t']).total_seconds()
+    n = 10 if span > 0 else 1
+    periods = [[] for _ in range(n)]
+    for u in kept:
+        periods[min(n - 1, int((u['t'] - first).total_seconds() * n / (span + 1))) if span > 0 else 0].append(u)
+    places = _share([round(len(p) ** 0.5 * 100) for p in periods], want, [len(p) for p in periods])
+    chosen = []
+    for period, room in zip(periods, places):
+        bands = [[u for u in period if len(u['raw']) >= LONG], [u for u in period if SHORT <= len(u['raw']) < LONG], [u for u in period if len(u['raw']) < SHORT]]
+        for band, k in zip(bands, _share([50, 40, 10], room, [len(b) for b in bands])):
+            band.sort(key=lambda u: (-u['score'], u['hash']))
+            chosen.extend(band[:k])
+    chosen.sort(key=lambda u: u['t'])
+    while len(chosen) > 1 and sum(u['cost'] for u in chosen) > budget:      # within the budget: thinned evenly through time
+        over = sum(u['cost'] for u in chosen) - budget
+        drop = max(1, min(len(chosen) - 1, int(over / (sum(u['cost'] for u in chosen) / len(chosen))) + 1))
+        gone = {int(k * len(chosen) / drop) for k in range(drop)}
+        chosen = [u for k, u in enumerate(chosen) if k not in gone]
+    return [u['line'] for u in chosen]
+
+
+def named_chat(chat, me_name, them_name):
+    """The conversation with each line labelled as the two Psyches name them (the thread may name the partner differently from their Psyche)."""
+    if not chat or not chat.get('sample'):
+        return chat
+    labels = chat.get('labels') or {}
+    swap = {k: v for k, v in ((labels.get('me'), me_name), (labels.get('them'), them_name)) if k and v and k != v}
+    if not swap:
+        return chat
+    def fix(line):
+        head, rest = line[:17], line[17:]
+        for old, new_ in swap.items():
+            if rest.startswith(old + ': '):
+                return head + new_ + rest[len(old):]
+        return line
+    return dict(chat, sample=[fix(x) for x in chat['sample']], labels={'me': me_name, 'them': them_name})
 
 
 def kept_messages():
@@ -1309,7 +1442,9 @@ def count_chat(s):
     me_first = _first((psyche() or {}).get('name')) or 'You'
     them_first = _first(partner) or 'Partner'
     counts = {k: s[c] for k, c in (('instagram', 'igCount'), ('whatsapp', 'waCount')) if s.get(c)}
-    s['chat'] = {'source': ' and '.join(sources), 'signals': chat_signals(msgs), 'sample': chat_sample(msgs, me_first, them_first), 'counts': counts} if msgs else None
+    keep = [w for n in (str((psyche() or {}).get('name') or ''), str(partner or '')) for w in n.split()]
+    s['chat'] = {'source': ' and '.join(sources), 'signals': chat_signals(msgs), 'sample': chat_sample(msgs, me_first, them_first, keep=keep), 'counts': counts,
+                 'labels': {'me': me_first, 'them': them_first}} if msgs else None
     save_state(s)
     return msgs
 
@@ -1337,7 +1472,8 @@ def flip_chat(chat):
     sig = dict(chat.get('signals') or {})
     if sig.get('you') is not None:
         sig['you'], sig['partner'] = sig.get('partner'), sig.get('you')
-    return {'source': chat.get('source'), 'signals': sig, 'sample': chat.get('sample')}
+    lb = chat.get('labels') or {}
+    return {'source': chat.get('source'), 'signals': sig, 'sample': chat.get('sample'), 'labels': {'me': lb.get('them'), 'them': lb.get('me')}}
 
 
 # What the research says, per pillar and per measure: fixed here, cited, and laid out by the page as written,
@@ -1574,7 +1710,8 @@ def questions_task():
     focus = {p: n for p, n in base_priority(s).items() if p in pillars}
     return task_file({'write': 'questions', 'you': psyche_profile(psyche() or {}), 'partner': theirs.get('psyche'), 'stage': stage,
                       'yourReport': (psyche() or {}).get('report'), 'partnerReport': theirs.get('report'),
-                      'yourChat': s.get('chat') if s.get('role') == 'a' else flip_chat(theirs.get('chat')),
+                      'yourChat': named_chat(s.get('chat') if s.get('role') == 'a' else flip_chat(theirs.get('chat')),
+                                             (psyche_profile(psyche() or {}).get('name')), (theirs.get('psyche') or {}).get('name')),
                       'pillars': pillars, 'focus': focus, 'saveTo': 'work/together-questions.json'})
 
 
@@ -1682,7 +1819,9 @@ def write_task(profiles=None):
     people = []
     for r in ('a', 'b'):
         pr = profiles[r]
-        people.append({'name': (pr.get('psyche') or {}).get('name'), 'card': pr.get('psyche') or {}, 'report': pr.get('report'), 'chat': pr.get('chat')})
+        other = profiles['b' if r == 'a' else 'a']
+        people.append({'name': (pr.get('psyche') or {}).get('name'), 'card': pr.get('psyche') or {}, 'report': pr.get('report'),
+                       'chat': named_chat(pr.get('chat'), (pr.get('psyche') or {}).get('name'), (other.get('psyche') or {}).get('name'))})
     return task_file({'write': 'read', 'coupleView': view, 'people': people, 'research': RESEARCH, 'saveTo': 'work/together-read.json'})
 
 
@@ -1990,6 +2129,8 @@ def rewrite():
     s = state()
     if not s.get('role') or not s.get('sent'):
         return {'error': 'Your read can be written again once you\'ve both answered and it\'s been written once.'}
+    if s.get('role') == 'a' and kept_messages()[0]:
+        count_chat(s)                     # the conversation chosen again, the latest way, from what's kept here
     got = put_profile(s, True)
     if got.get('error'):
         return got

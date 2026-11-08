@@ -4096,15 +4096,21 @@ elif a[0] == 'thread':
 import importlib.util, json, datetime
 spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 t0 = datetime.datetime(2023, 1, 1)
-msgs = [(t0 + datetime.timedelta(hours=7 * i), 'me' if i % 2 else 'them', ('thanks so much for today, ' if i % 9 == 0 else 'see you later, ') + 'x' * (i % 120)) for i in range(9000)]
+W = 'river cloud garden lantern pepper window harbour meadow violin kettle orbit marble'.split()
+msgs = [(t0 + datetime.timedelta(hours=7 * i), 'me' if i % 2 else 'them', ('thanks so much for today, ' if i % 9 == 0 else 'shall we try the %s place on %d? ' % (W[i % 12], i)) + ' '.join(W[(i * k) % 12] for k in range(i % 40))) for i in range(9000)]
+filler = [(t0 + datetime.timedelta(hours=7 * i + 3), 'me', x) for i, x in enumerate(['lol', 'eh', 'https://example.com/reel/1', 'hahaha', 'ok'])]
+noisy = m.chat_sample(sorted(msgs[:300] + filler), 'Mei', 'Ana')
+named = m.clean_line('I met Sophia and Mei at Parc', keep=['Mei'])
 out = m.chat_sample(msgs, 'Mei', 'Ana')
 small = m.chat_sample(msgs[:50], 'Mei', 'Ana')
 long = m.clean_line('word ' * 400)
-print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'months': len({x[:7] for x in out}), 'allMonths': len({(t0 + datetime.timedelta(hours=7 * i)).strftime('%Y-%m') for i in range(9000)}),
+print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years': len({x[:4] for x in out}), 'allYears': len({(t0 + datetime.timedelta(hours=7 * i)).strftime('%Y') for i in range(9000)}),
+                  'filler': [x for x in noisy if x.endswith((': lol', ': eh', ': [link]', ': hahaha', ': ok'))], 'named': named,
                   'small': len(small), 'long': len(long), 'sorted': out == sorted(out)}))
 `], { env: home.a.env })).stdout);
-  check('the read sees up to 120,000 characters of their conversation, at least what a Psyche Report reads of all of someone\'s messages: all of it when it fits, otherwise every month of it and what matters most, in time order, a long message as its opening and its end',
-    tg.big.chars <= 120000 && tg.big.chars > 110000 && tg.big.months === tg.big.allMonths && tg.big.small === 50 && tg.big.long <= 483 && tg.big.sorted, JSON.stringify(tg.big));
+  check('the read sees up to 120,000 characters of their conversation, at least what a Psyche Report reads of all of someone\'s messages: all of it when it fits, otherwise every year of it and what matters most, in time order, a long message as its opening and its end; filler and link-only lines out, a burst as one line, other people\'s first names out',
+    tg.big.chars <= 120000 && tg.big.chars > 100000 && tg.big.years === tg.big.allYears && tg.big.small === 50 && tg.big.long <= 483 && tg.big.sorted &&
+      tg.big.filler.length === 0 && tg.big.named === 'I met [name] and Mei at Parc', JSON.stringify(tg.big));
   check('either can end it: everything kept goes, for both, its blobs too, and the other sees only that it ended',
     tg.end.ended && store.kvAll('together').length === 0 && tg.blobsAfterEnd === 0 && /ended/.test(JSON.stringify(tg.afterEnd)), JSON.stringify(tg.afterEnd));
   if (was === undefined) delete process.env.PSYCHE_TOGETHER; else process.env.PSYCHE_TOGETHER = was;
