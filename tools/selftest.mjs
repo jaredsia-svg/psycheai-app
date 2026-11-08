@@ -3883,16 +3883,16 @@ elif a[0] == 'thread':
     pillars: Object.fromEntries(Object.keys(view.pillars).map(p => [p, { headline: 'About ' + p, seeIt: 'You both see ' + p + ' this way.', messages: 'In March 2025 you wrote about ' + p + ' often.',
       psyches: para(2, 'met ' + p + ' from your two Psyches'), signal: 'more' }])),
     chapters: {
-      close: { takeaway: 'You turn up for each other again and again: say the warm word out loud too.', detail: para(16, 'reached for each other'), bids: 'Most small reaches in the sample were met warmly, as in your May 2025 messages.', care: { a: 'Being told plainly.', b: 'Time together.' },
+      close: { traits: 'Mei gives care by doing and Ana wants it said: the same warmth, two languages.', takeaway: 'You turn up for each other again and again: say the warm word out loud too.', detail: para(16, 'reached for each other'), bids: 'Most small reaches in the sample were met warmly, as in your May 2025 messages.', care: { a: 'Being told plainly.', b: 'Time together.' },
                evidence: EV('closeness'), askEachOther: ['What made you feel close this week?', 'What would make tomorrow easier?'], tryThis: 'One warm reply a day.' },
-      disagree: { takeaway: 'Name the one point early, and the loop loosens.', detail: para(16, 'came back after a disagreement'), cycle: { steps: ['Mei raises it, point by point', 'Ana goes quiet to think', 'Mei pushes for an answer', 'Ana withdraws further'],
+      disagree: { traits: 'Mei thinks it through and Ana feels it through, so the same row runs on two clocks.', takeaway: 'Name the one point early, and the loop loosens.', detail: para(16, 'came back after a disagreement'), cycle: { steps: ['Mei raises it, point by point', 'Ana goes quiet to think', 'Mei pushes for an answer', 'Ana withdraws further'],
                a: 'Mei raises things; underneath, she wants to know she matters.', b: 'Ana goes quiet; underneath, she needs room to feel safe.', exit: 'Ask one question first, and stay.' },
                lasting: [{ title: 'Pace', detail: para(2, 'moved at different speeds'), howToLiveWithIt: 'Name the pace.' }, { title: 'Space', detail: para(2, 'needed different space'), howToLiveWithIt: 'Ask plainly.' }],
                solvable: [{ title: 'Plans', detail: para(2, 'missed a plan'), firstStep: 'A shared calendar.' }],
                dream: { tension: 'Weekends', a: 'Mei hopes for adventure.', b: 'Ana hopes for rest.', question: 'What would a perfect Sunday be?' }, evidence: EV('disagreeing') },
-      secure: { takeaway: 'You already come back: say it out loud after a hard day.', detail: para(10, 'kept your promises'), a: 'Mei needs plain reassurance.', b: 'Ana needs time to warm up.', evidence: EV('security'), askEachOther: ['When do you feel most sure of us?'], tryThis: 'Say it out loud.' },
-      life: { takeaway: 'Your evenings carry a lot: protect one that is only yours.', detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
-      future: { takeaway: 'You point the same way: decide the next step together.', detail: para(10, 'talked about next year'),
+      secure: { traits: 'You both lean secure, and the one who feels things more needs the plain word sooner.', takeaway: 'You already come back: say it out loud after a hard day.', detail: para(10, 'kept your promises'), a: 'Mei needs plain reassurance.', b: 'Ana needs time to warm up.', evidence: EV('security'), askEachOther: ['When do you feel most sure of us?'], tryThis: 'Say it out loud.' },
+      life: { traits: 'One of you plans the week and the other keeps it open: your rhythm shows where they meet.', takeaway: 'Your evenings carry a lot: protect one that is only yours.', detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
+      future: { traits: 'You rank care and freedom highest together, and your own loves widen each other.', takeaway: 'You point the same way: decide the next step together.', detail: para(10, 'talked about next year'),
                 alike: { shared: ['Loyalty to a close circle', 'Good food, shared'], a: ['Big questions'], b: ['Hosting'], line: 'You hold the same people close. Your own loves widen each other.' }, decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
                 together: ['A cooking class', 'A new trail', 'A shared project'], evidence: EV('future') } },
     overall: { title: 'How you feel about it all', detail: 'You are both more content than you each guess: ask each other plainly what would make this month better.' },
@@ -3914,6 +3914,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
 `], { env: home.a.env, input: JSON.stringify(read) }).toString());
     tg.dupProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, tryThis: good.chapters.close.detail.split('. ')[0] + '.' } } });
     tg.themProblems = await ck({ ...good, caveats: 'It cannot see the days the two of them never wrote down.' });
+    tg.traitsProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, traits: undefined } } });
     tg.alikeProblems = await ck({ ...good, chapters: { ...good.chapters, future: { ...good.chapters.future, alike: undefined } } });
   }
   tg.pageA = tg.saved;
@@ -4092,6 +4093,12 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);/.test(htmlA) && /\.part\{background:#fff;border:1px solid #e6dcec;border-radius:20px;/.test(htmlA) && /\.part\.open\{border-top:4px solid var\(--c\)\}/.test(htmlA) &&
       /\.lv\.Worth-attention,\.lv\.Worth-asking-each-other\{background:#fbe7e5;color:#b3261e\}/.test(htmlA) &&
       tg.dupProblems.some(p => /^said twice/.test(p)) && tg.themProblems.some(p => /the two of them/.test(p)), JSON.stringify([tg.dupProblems, tg.themProblems]).slice(0, 400));
+  check('your two Psyches are woven into the chapters as a Sync compares them (README "Psyche Together, release 26"): each chapter has its "In your Psyches" panel, drawn from both cards (Extraversion and how each shows and wants care in 01, attachment and Sensitivity in 02, Thinking or Feeling, Judging or Perceiving, Agreeableness and conflict styles in 03, Conscientiousness and Extraversion or Introversion in 04, the ten motivations overlaid and Openness in 05), with Muse\'s line on what it means; MBTI types under the cards; a read without the lines is sent back',
+    (htmlA.match(/<div class="psy">/g) || []).length === 5 && /<span>Extraversion<\/span>/.test(htmlA.slice(htmlA.indexOf('id="close"'), htmlA.indexOf('id="secure"'))) &&
+      /Shows care by: Acts of service/.test(htmlA) && /Leans anxious/.test(htmlA.slice(htmlA.indexOf('id="secure"'), htmlA.indexOf('id="disagree"'))) &&
+      /Thinking or Feeling/.test(htmlA.slice(htmlA.indexOf('id="disagree"'), htmlA.indexOf('id="moments"'))) && /<svg class="radar"/.test(htmlA.slice(htmlA.indexOf('id="future"'), htmlA.indexOf('id="plan"'))) &&
+      /What you both rank highest: <b>Care, Achievement/.test(htmlA) && /most like Mulan · INFJ/.test(htmlB) && /Mei gives care by doing and Ana wants it said/.test(htmlA) &&
+      tg.traitsProblems.some(p => /^chapters\.\w+\.traits/.test(p)), JSON.stringify(tg.traitsProblems).slice(0, 300));
   check('Shared meaning compares values, beliefs and interests (README "Psyche Together, release 25"): what you both hold in the middle, each one\'s own either side, a line on what it means, and the research behind it; a read without it is sent back',
     /<h3>What you share<\/h3><div class="alike"><div><small>Mei<\/small><span>Big questions<\/span><\/div><div class="both"><small>Both of you<\/small><span>Loyalty to a close circle<\/span>/.test(htmlA) &&
       /Values, decisions and growth/.test(htmlA) && /Sound Relationship House/.test(htmlA) && tg.alikeProblems.some(p => /^chapters\.future\.alike/.test(p)), JSON.stringify(tg.alikeProblems).slice(0, 300));

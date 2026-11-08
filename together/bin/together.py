@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 25
+RELEASE = 27
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1918,6 +1918,7 @@ def check_read(r, view, has_chat=False):
     ch = D(r.get('chapters'))
     for cid in CHAPTER_IDS:
         c = D(ch.get(cid))
+        need(0 < len(T(c.get('traits'))) <= 320, 'chapters.%s.traits: one or two sentences (at most 320 characters) on what your two Psyches, shown here side by side, mean for this part of you two' % cid)
         need(0 < len(T(c.get('takeaway'))) <= 240 and len(T(c.get('detail'))) >= (500 if cid in ('close', 'disagree') else 350) and ev(c.get('evidence')),
              'chapters.%s: a takeaway (at most 240 characters), a detail (at least %d characters) and dated evidence' % (cid, 500 if cid in ('close', 'disagree') else 350))
     c = D(ch.get('close'))
@@ -2022,7 +2023,8 @@ def save_read(path):
     if problems:
         return {'saved': False, 'problems': problems}
     chat_of = next((r_ for r_ in ('a', 'b') if profiles[r_].get('chat')), None)
-    box = {'read': r, 'view': view, 'at': int(time.time()), 'sources': read_sources(profiles, view)}
+    box = {'read': r, 'view': view, 'at': int(time.time()), 'sources': read_sources(profiles, view),
+           'psyches': {x: (profiles.get(x) or {}).get('psyche') or {} for x in ('a', 'b')}}
     if old:                   # written again (README "Psyche Together, release 22"): what moved since, and the four-week clock, stay
         box['at'] = max(box['at'], int(old.get('at') or 0) + 1)     # always later than the read it replaces, so each copy sees it's new
         box['firstAt'] = old.get('firstAt') or old.get('at')
@@ -2700,6 +2702,18 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}td,th{te
 .diffs{padding-left:18px}.diffs li{margin:6px 0;font-size:14.5px}.diffs b{display:block}.solv{display:inline-block;font-size:11px;font-weight:800;color:#b57418;background:#fdf1e2;border-radius:999px;padding:0 7px;margin-right:4px}
 details.sci{margin:14px 0 4px}details.sci summary{cursor:pointer;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c)}details.sci ul{margin:6px 0 0}
 .callout .q{margin:4px 0;font-weight:650}
+.psy{margin:12px 0;padding:12px 14px;border-radius:16px;background:#fff;border:1px solid #ece2f2;box-shadow:0 3px 12px rgba(70,20,100,.05)}.psy .lbl{color:var(--c)}
+.pkey{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;font-weight:700;margin:6px 0 8px}.pkey i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.pkey i.a,.dr i.a{background:#7b3fa0}.pkey i.b,.dr i.b{background:#d1477a}
+.dr{display:grid;grid-template-columns:118px 1fr 58px;gap:8px;align-items:center;font-size:13px;margin:6px 0}.dr>span{font-weight:650}.dr em{font-style:normal;text-align:right;font-size:12px}
+b.a{color:#7b3fa0}b.b{color:#d1477a}
+.tr{position:relative;height:20px}.tr:before{content:"";position:absolute;left:0;right:0;top:9px;height:2px;border-radius:2px;background:#eee6f2}
+.tr .gap{position:absolute;top:8px;height:4px;border-radius:4px;background:#e2cfe9}.tr i{position:absolute;top:3px;width:14px;height:14px;margin-left:-7px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.ml{display:grid;grid-template-columns:1fr auto auto 64px;gap:8px;align-items:center;font-size:13px;margin:6px 0}.ml>span{color:var(--soft);font-weight:650}.ml em{font-style:normal;font-size:11.5px;color:var(--mute);text-align:right}
+.pair2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}.pair2>div{padding:9px 10px;border-radius:12px;background:#faf6fc;display:flex;flex-direction:column;gap:3px;font-size:13px}
+@media(max-width:420px){.pair2{grid-template-columns:1fr}}
+.radar{display:block;width:100%;max-width:360px;margin:0 auto}.radar text{font-size:8.5px;fill:#5a4f66}
+.pline{margin:10px 0 0;font-size:14.5px;font-weight:600;color:#3b2a49}
 .alike{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:6px;margin:8px 0 10px;align-items:stretch}
 .alike>div{display:flex;flex-direction:column;gap:5px;padding:10px 8px;border-radius:14px;background:#faf6fc;border:1px solid #efe6f4}
 .alike>div.both{background:linear-gradient(160deg,#f3e9f8,#fdf0f6);border-color:#e3cdee}
@@ -2884,6 +2898,68 @@ def _rhythm(sig, who):
             % (_e(who[0]), _e(who[1]), _e(you.get('starts')), _e(who[0]), _e(them.get('starts')), _e(who[1]), rows))
 
 
+# Your two Psyches, woven into the chapters (README "Psyche Together, release 26"): what a Sync compares, each where it
+# explains something, drawn here from both cards so no number drifts, with Muse's line on what it means for you two.
+TRAIT_LABEL = {'openness': 'Openness', 'conscientiousness': 'Conscientiousness', 'extraversion': 'Extraversion', 'agreeableness': 'Agreeableness', 'neuroticism': 'Sensitivity'}
+MOTIVE_LABEL = [('self-direction', 'Self-direction'), ('stimulation', 'Stimulation'), ('hedonism', 'Enjoyment'), ('achievement', 'Achievement'), ('power', 'Power'),
+                ('security', 'Security'), ('conformity', 'Conformity'), ('tradition', 'Tradition'), ('benevolence', 'Care'), ('universalism', 'Universalism')]
+PSYCHES_BY = {'close': (['extraversion'], [], 'loves'), 'secure': (['neuroticism'], [], 'attachment'), 'disagree': (['agreeableness'], [2, 3], 'conflict'),
+              'life': (['conscientiousness'], [0, 1], None), 'future': (['openness'], [], 'motives')}
+MBTI_PAIRS = [('E', 'I', 'Extraversion', 'Introversion'), ('S', 'N', 'Sensing', 'Intuition'), ('T', 'F', 'Thinking', 'Feeling'), ('J', 'P', 'Judging', 'Perceiving')]
+
+
+def _dual(label, x, y):
+    lo, hi = min(x, y), max(x, y)
+    return ('<div class="dr"><span>%s</span><div class="tr"><div class="gap" style="left:%d%%;width:%d%%"></div><i class="a" style="left:%d%%"></i><i class="b" style="left:%d%%"></i></div>'
+            '<em><b class="a">%d</b> · <b class="b">%d</b></em></div>' % (_e(label), lo, hi - lo, x, y, x, y))
+
+
+def _radar(ma, mb):
+    import math
+    pts = lambda m: ' '.join('%.1f,%.1f' % (110 + 80 * (m.get(k) or 0) / 100 * math.sin(2 * math.pi * i / 10), 100 - 80 * (m.get(k) or 0) / 100 * math.cos(2 * math.pi * i / 10))
+                             for i, (k, _) in enumerate(MOTIVE_LABEL))
+    rings = ''.join('<circle cx="110" cy="100" r="%d" fill="none" stroke="#ece4f1"/>' % r_ for r_ in (20, 40, 60, 80))
+    labels = ''.join('<text x="%.1f" y="%.1f" text-anchor="middle">%s</text>' % (110 + 96 * math.sin(2 * math.pi * i / 10), 103 - 92 * math.cos(2 * math.pi * i / 10), _e(lb))
+                     for i, (_, lb) in enumerate(MOTIVE_LABEL))
+    return ('<svg class="radar" viewBox="-28 0 276 200" role="img" aria-label="Your ten motivations, both of you">%s'
+            '<polygon points="%s" fill="#7b3fa0" fill-opacity=".22" stroke="#7b3fa0" stroke-width="1.6"/><polygon points="%s" fill="#d1477a" fill-opacity=".2" stroke="#d1477a" stroke-width="1.6"/>%s</svg>'
+            % (rings, pts(ma), pts(mb), labels))
+
+
+def _psyches(cid, pa, pb, names, line):
+    """One chapter's part of your two Psyches, side by side, and Muse's line on what it means here."""
+    traits, letters, extra = PSYCHES_BY.get(cid, ([], [], None))
+    fa, fb = pa.get('bigFive') or {}, pb.get('bigFive') or {}
+    body = ''.join(_dual(TRAIT_LABEL[k], fa[k], fb[k]) for k in traits if isinstance(fa.get(k), int) and isinstance(fb.get(k), int))
+    ta, tb = str(pa.get('mbti') or ''), str(pb.get('mbti') or '')
+    for i in letters:
+        if len(ta) == 4 and len(tb) == 4:
+            hi, lo, nh, nl = MBTI_PAIRS[i]
+            lab = lambda ch: nh if ch == hi else nl
+            body += '<div class="ml"><span>%s</span><b class="a">%s</b><b class="b">%s</b><em>%s</em></div>' % (
+                _e(nh + ' or ' + nl), _e(lab(ta[i])), _e(lab(tb[i])), 'the same' if ta[i] == tb[i] else 'different')
+    if extra == 'loves':
+        g = lambda p_, k: ', '.join(p_.get(k) or []) or '–'
+        body += ('<div class="pair2"><div><b class="a">%s</b><span>Shows care by: %s</span><span>Feels cared for by: %s</span></div><div><b class="b">%s</b><span>Shows care by: %s</span><span>Feels cared for by: %s</span></div></div>'
+                 % (_e(names[0]), _e(g(pa, 'caresBy')), _e(g(pa, 'feelsCaredForBy')), _e(names[1]), _e(g(pb, 'caresBy')), _e(g(pb, 'feelsCaredForBy'))))
+    if extra == 'attachment' and (pa.get('attachment') or pb.get('attachment')):
+        body += '<div class="pair2"><div><b class="a">%s</b><span>%s</span></div><div><b class="b">%s</b><span>%s</span></div></div>' % (
+            _e(names[0]), _e(pa.get('attachment') or '–'), _e(names[1]), _e(pb.get('attachment') or '–'))
+    if extra == 'conflict' and (pa.get('conflict') or pb.get('conflict')):
+        cut = lambda t: (t[:150].rsplit(' ', 1)[0] + '…') if len(t) > 150 else t
+        body += '<div class="pair2"><div><b class="a">%s</b><span>%s</span></div><div><b class="b">%s</b><span>%s</span></div></div>' % (
+            _e(names[0]), _e(cut(pa.get('conflict') or '–')), _e(names[1]), _e(cut(pb.get('conflict') or '–')))
+    if extra == 'motives' and pa.get('motives') and pb.get('motives'):
+        both = sorted(((min(pa['motives'].get(k, 0), pb['motives'].get(k, 0)), lb) for k, lb in MOTIVE_LABEL), reverse=True)[:3]
+        body = '<p class="lbl" style="margin-top:4px">Your ten motivations</p>' + _radar(pa['motives'], pb['motives']) + (
+            '<p class="soft">What you both rank highest: <b>%s</b></p>' % _e(', '.join(lb for _, lb in both))) + body
+    if not body:
+        return ''
+    key = '<div class="pkey"><span><i class="a"></i>%s%s</span><span><i class="b"></i>%s%s</span></div>' % (
+        _e(names[0]), (' · ' + _e(ta)) if ta else '', _e(names[1]), (' · ' + _e(tb)) if tb else '')
+    return ('<div class="psy"><span class="lbl">In your Psyches</span>%s%s%s</div>' % (key, body, ('<p class="pline">%s</p>' % _e(line)) if line else ''))
+
+
 def _tint(hexc):
     h = hexc.lstrip('#')
     r_, g_, b_ = (int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -3028,6 +3104,8 @@ def page(box, s):
                       % (_e(PILLARS.get(pid, pid)), _lv(lv), _e(x.get('headline')), _e(x.get('seeIt')),
                          ('<p><span>Your messages:</span> %s</p>' % _e(x.get('messages'))) if x.get('messages') else '',
                          ('<p class="sig">%s %s</p>' % (arrow, _e(said))) if arrow else ''))
+        pcards = box.get('psyches') or {'a': (SEEN.get('cards') or {}).get('a') or {}, 'b': (SEEN.get('cards') or {}).get('b') or {}}
+        inner += _psyches(cid, pcards.get('a') or {}, pcards.get('b') or {}, names, c.get('traits'))
         inner += ('<h3>The story</h3>' + _paras(c.get('detail')) + _pills(c.get('evidence'))) if c.get('detail') else ''
         keep(c.get('evidence'), title)
         if cid == 'close':
@@ -3120,7 +3198,8 @@ def page(box, s):
         ch_ = (cards.get(role) or {}).get('character') or ''
         img = (('<button type="button" class="cardp %s" data-view aria-label="Open %s\'s Psyche Card"><img alt="%s\'s Psyche Card" src="%s"></button>' % (side, _e(nm), _e(nm), pics[role]))
                if pics.get(role) else '<div class="cardp %s nopic"><span>%s</span></div>' % (side, _initial(nm)))
-        return '<div class="lover">%s<b>%s</b>%s</div>' % (img, _e(nm), ('<small>most like %s</small>' % _e(ch_)) if ch_ else '')
+        ty = (cards.get(role) or {}).get('mbti') or ''
+        return '<div class="lover">%s<b>%s</b>%s</div>' % (img, _e(nm), ('<small>most like %s%s</small>' % (_e(ch_), (' · ' + _e(ty)) if ty else '')) if ch_ else '')
     hearts = ''.join('<svg class="fh h%d" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.6 1.1 4.6 2.6l1 1.4 1-1.4C14 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg>' % i for i in range(1, 7))
     banner = ('<header class="banner love" id="top">%s%s<div class="facts">%s</div><div class="couple">%s<div class="heart"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1">'
               '<stop offset="0" stop-color="#ff7aa2"/><stop offset="1" stop-color="#c2366d"/></linearGradient></defs><path fill="url(#hg)" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.6 1.1 4.6 2.6l1 1.4 1-1.4C14 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg></div>%s</div>'
