@@ -2773,6 +2773,23 @@ print(json.dumps([('data-copy="Add WhatsApp or Facebook"' in r), ('data-copy="Wr
         got.every(Boolean) &&
           /"Write my Sync with <name> again", tapped or pasted from a Sync's page, is the same for that Sync: get_syncs to find it by the friend's name, then get_sync with its sync and rewrite true\. "Add WhatsApp or Facebook", pasted from the report's page, is that button\./.test(instructions.MUSE_PROCEDURE), JSON.stringify(got));
     }
+    {
+      // README "A health check": whether this copy and PsycheAI work, without a new read, changing nothing of theirs.
+      const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys, os, tempfile, glob
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.BASE = 'http://127.0.0.1:9'
+d = tempfile.mkdtemp(); m.HERE, m.KEEP = d, d
+m.ACCOUNT, m.ACCOUNT_KEPT, m.REPORT, m.REPORT_KEPT, m.LAST = [os.path.join(d, x) for x in ('a.json', 'b.json', 'r.json', 's.json', 'l.json')]
+m.WAITS = ()
+before = set(glob.glob(os.path.join(tempfile.gettempdir(), 'psyche-check-*')))
+out = m.healthcheck()
+print(json.dumps([out, sorted(set(glob.glob(os.path.join(tempfile.gettempdir(), 'psyche-check-*'))) - before), sorted(os.listdir(d))]))`,
+        new URL('../skill/bin/psyche.py', import.meta.url).pathname], { env: { ...process.env, PSYCHEAI_TRANSPORT: 'python' } }).toString());
+      check('the health check says what works and what doesn\'t, in plain lines, and leaves nothing behind (its folder goes, and nothing is written where their files are); SKILL.md runs it on "PsycheAI health check"',
+        got[0].ok === false && got[0].lines.some(l => /^✗ PsycheAI could not be reached/.test(l)) && got[0].lines.some(l => /^✗ No PsycheAI account here yet/.test(l)) &&
+          /^Something needs a look/.test(got[0].say) && got[1].length === 0 && got[2].length === 0 &&
+          /When they ask for a health check \("PsycheAI health check"\), run `python3 bin\/psyche\.py healthcheck` and show its lines as one message, then its say/.test(skillMd), JSON.stringify(got).slice(0, 500));
+    }
     check('the two intermissions close when a part opens, when the other intermission opens, and on Collapse all (README "Intermissions close")',
       ((src) => /function only\(p\)\{shut\(\);/.test(src) && /function all\(\)\{shut\(\);/.test(src) &&
         /breaks=\[\]\.slice\.call\(document\.querySelectorAll\('details\.roast'\)\)/.test(src) && /addEventListener\('toggle',function\(\)\{if\(d\.open\)shut\(d\);\}\)/.test(src))(

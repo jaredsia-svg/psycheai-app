@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 181
+RELEASE = 183
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2667,6 +2667,82 @@ def ed25519_verify(public, message, sig):
 def signed_text(version, hashes, release=None):
     head = 'psycheai-skill\n' + ('release: %d\n' % release if release is not None else '') + 'version: %s\n' % version
     return (head + ''.join('%s %s\n' % (n, hashes[n]) for n in sorted(hashes))).encode()
+
+
+def healthcheck():
+    """python3 bin/psyche.py healthcheck (README "A health check"): whether this copy and PsycheAI are working, without a
+    new read. Each step redraws what's kept in a temporary folder that goes at the end: nothing of theirs is changed,
+    deleted or sent; it asks PsycheAI only for the update list and whether the account answers."""
+    lines, bad = [], []
+
+    def tick(good, text):
+        lines.append(('✓ ' if good else '✗ ') + text)
+        if not good:
+            bad.append(text)
+    tmp = tempfile.mkdtemp(prefix='psyche-check-')
+    try:
+        # 1. This copy against the signed release PsycheAI serves.
+        try:
+            man = json.loads(fetch_file('/skill/files').decode())
+            sig = man.get('signature2') or ''
+            signed = isinstance(man.get('release'), int) and ed25519_verify(SKILL_PUBLIC_KEY, signed_text(man.get('version'), man.get('hashes') or {}, man['release']),
+                                                                            base64.urlsafe_b64decode(sig + '=' * (-len(sig) % 4)))
+            same = True
+            for name, want in (man.get('hashes') or {}).items():
+                try:
+                    with open(os.path.join(HERE, name), 'rb') as f:
+                        same = same and hashlib.sha256(f.read()).hexdigest() == want
+                except OSError:
+                    same = False
+            tick(signed, 'PsycheAI\'s release %s is signed' % man.get('release'))
+            tick(same and man.get('release') == RELEASE, 'This copy is release %d%s' % (RELEASE, '' if same and man.get('release') == RELEASE
+                                                                                     else ', and release %s is out: say "Update PsycheAI"' % man.get('release')))
+        except (urllib.error.URLError, http.client.HTTPException, ConnectionError, ValueError, TypeError) as err:
+            tick(False, 'PsycheAI could not be reached (%s)' % type(err).__name__)
+        # 2. The account answers.
+        acc = read_first([ACCOUNT, ACCOUNT_KEPT])
+        if acc and acc.get('access_token'):
+            msg = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list', 'params': {}}
+            st, body = post('/mcp', msg, acc['access_token'])
+            if st == 401:
+                st, body = post('/mcp', msg, refresh(acc)['access_token'])
+            tick(st == 200 and 'result' in body, 'Your PsycheAI account answers')
+        else:
+            tick(False, 'No PsycheAI account here yet: say "PsycheAI status"')
+        # 3. What's kept here, drawn again in the temporary folder.
+        kept = read_first([REPORT, REPORT_KEPT]) or {}
+        last = read_first([LAST]) or {}
+        tick(isinstance(kept.get('report'), dict), 'Your Psyche is kept here' + (' (%s)' % str(kept.get('name')).split(' ')[0] if kept.get('name') else ''))
+        if isinstance(last.get('card'), dict):
+            try:
+                pic = draw_card(last['card'], os.path.join(tmp, 'card.png'))
+                tick(os.path.getsize(pic) > 20000, 'Your Psyche Card draws (%d KB)' % (os.path.getsize(pic) // 1024))
+            except (OSError, ValueError, ImportError, urllib.error.URLError, http.client.HTTPException) as err:
+                tick(False, 'Your Psyche Card could not be drawn (%s)' % str(err)[:80])
+        view = last.get('full') or last.get('view')
+        if view:
+            page = report_html(view, kept.get('name') or '', '', None, None, 'Psyche Report',
+                               (kept.get('report') or {}).get('bonus') if isinstance(kept.get('report'), dict) else None)
+            tick(bool(page) and 'How this was read' in page, 'Your Psyche Report lays out (%d KB)' % (len(page or '') // 1024))
+        elif kept.get('report'):
+            lines.append('· Your report was saved by an earlier install of this folder, so it isn\'t laid out again here')
+        act = digest_activity()
+        lines.append(('✓ ' if act else '· ') + ('Your daily rhythm is counted for a Sync' if act else 'No daily rhythm yet (it needs 30 timed lines in your read)'))
+        mine = sync_card(kept['report'], kept.get('name') or '') if isinstance(kept.get('report'), dict) else None
+        if mine:
+            demo = {'summary': 'A check.', 'align': [], 'differ': [], 'howToPartner': {'forA': ['a'], 'forB': ['b'], 'together': ['c']}, 'caveats': 'A check.'}
+            me = clean_card(mine)
+            page = sync_html(demo, me, dict(me, firstName='Check'))
+            tick(bool(page) and 'At a glance' in page, 'A Sync page lays out' + (' with the daily rhythm chart' if act and 'each active' in (page or '') else ''))
+        store = sync_store()
+        entries = [(k, v) for k, v in store.items() if isinstance(v, dict) and isinstance(v.get('report'), dict)]
+        if entries:
+            book = sync_book_html(entries)
+            tick(bool(book) and book.count('class="sbk"') == len(entries), 'My Syncs lays out (%d Sync%s)' % (len(entries), '' if len(entries) == 1 else 's'))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return {'ok': not bad, 'lines': lines,
+            'say': 'All working.' if not bad else 'Something needs a look: %s.' % bad[0]}
 
 
 NOT_SIGNED = "This update isn't signed by PsycheAI, so it wasn't installed. The version you have keeps working."
@@ -6039,6 +6115,9 @@ def main(argv):
         return
     if argv[0] == 'first-run':
         print(json.dumps(first_run(), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'healthcheck':
+        print(json.dumps(healthcheck(), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'verify':
         # Check it yourself (README "Check it yourself"): this copy's SHA-256 per file, to compare with the public
