@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 28
+RELEASE = 29
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -266,6 +266,8 @@ def psyche_profile(kept):
         'name': _first(kept.get('name')),
         'character': str((r.get('essence') or {}).get('character') or '')[:40] if isinstance(r.get('essence'), dict) else '',
         'mbti': str((r.get('mbti') or {}).get('type') or '')[:4] if isinstance(r.get('mbti'), dict) else '',
+        'letters': [{'letter': str(x.get('choice') or '')[:1].upper(), 'strength': str(x.get('strength') or '')[:12].lower()}
+                    for x in ((r.get('mbti') or {}).get('letters') or [] if isinstance(r.get('mbti'), dict) else []) if isinstance(x, dict) and x.get('choice')][:4],
         'headline': str(card.get('headline') or '')[:120],
         'bigFive': {k: _score((big.get(k) or {}).get('score')) if isinstance(big.get(k), dict) else None
                     for k in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']},
@@ -1861,10 +1863,10 @@ DATED = re.compile(r'\b(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sep
 # The read's five chapters, in order, numbered as the glance and the page show them (README "Psyche Together,
 # release 16"): (id, number, title, its pillars, its research lines).
 CHAPTERS = [('close', '01', 'Turning towards', ['appreciation', 'connection', 'desire'], ['appreciation', 'connection']),
-            ('secure', '02', 'A secure base', ['security'], ['security']),
-            ('disagree', '03', 'Conflict and repair', ['disagreements'], ['disagreements', 'perpetual', 'dreams']),
-            ('life', '04', 'Sharing a life', ['needs', 'life'], ['needs', 'life']),
-            ('future', '05', 'Shared meaning', ['future', 'growth'], ['values', 'future', 'growth'])]
+            ('life', '02', 'Sharing a life', ['needs', 'life'], ['needs', 'life']),
+            ('future', '03', 'Shared meaning', ['future', 'growth'], ['values', 'future', 'growth']),
+            ('secure', '04', 'A secure base', ['security'], ['security']),
+            ('disagree', '05', 'Conflict and repair', ['disagreements'], ['disagreements', 'perpetual', 'dreams'])]
 # README "Psyche Together, release 18": a plain title, and under it the research it comes from.
 SUBTITLES = {'close': 'Bids and responsiveness', 'secure': 'Attachment and commitment', 'disagree': 'Your cycle and the way out',
              'life': 'Fairness, coping together and rhythm', 'future': 'Values, decisions and growth', 'plan': 'Small steps from every chapter'}
@@ -2712,6 +2714,9 @@ details.sci{margin:14px 0 4px}details.sci summary{cursor:pointer;font-size:12px;
 b.a{color:#7b3fa0}b.b{color:#d1477a}
 .tr{position:relative;height:20px}.tr:before{content:"";position:absolute;left:0;right:0;top:9px;height:2px;border-radius:2px;background:#eee6f2}
 .tr .gap{position:absolute;top:8px;height:4px;border-radius:4px;background:#e2cfe9}.tr i{position:absolute;top:3px;width:14px;height:14px;margin-left:-7px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.mx{margin:8px 0}.mx .q{display:block;font-size:12.5px;font-weight:650;color:var(--soft);margin-bottom:2px}
+.axis{display:grid;grid-template-columns:18px 1fr 18px;gap:8px;align-items:center}.axis>b{font-size:15px;font-weight:800;color:var(--ink);text-align:center}
+.mx em{display:block;font-style:normal;font-size:11.5px;color:var(--mute);margin-top:1px}
 .ml{display:grid;grid-template-columns:1fr auto auto 64px;gap:8px;align-items:center;font-size:13px;margin:6px 0}.ml>span{color:var(--soft);font-weight:650}.ml em{font-style:normal;font-size:11.5px;color:var(--mute);text-align:right}
 .pair2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}.pair2>div{padding:9px 10px;border-radius:12px;background:#faf6fc;display:flex;flex-direction:column;gap:3px;font-size:13px}
 @media(max-width:420px){.pair2{grid-template-columns:1fr}}
@@ -2741,7 +2746,7 @@ var parts=[].slice.call(document.querySelectorAll('.part')),chips=[].slice.call(
 function navh(){if(bar)document.documentElement.style.setProperty('--navh',(bar.offsetHeight+10)+'px');}navh();window.addEventListener('resize',navh);
 function mark(){chips.forEach(function(c){var p=document.querySelector(c.getAttribute('href'));c.classList.toggle('on',!!(p&&p.classList.contains('open')));});}
 function set(p,open){p.classList.toggle('open',open);var b=p.querySelector('.hd');if(b)b.setAttribute('aria-expanded',open?'true':'false');mark();}
-function go(el){requestAnimationFrame(function(){try{el.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){el.scrollIntoView(true);}});}
+function go(el){requestAnimationFrame(function(){requestAnimationFrame(function(){try{el.scrollIntoView({block:'start',behavior:'instant'});}catch(e){el.scrollIntoView(true);}});});}
 // One section open at a time, as the Psyche Report: opening one closes the rest, the intermission too.
 function only(p){parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);go(p);}
 parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',function(){if(p.classList.contains('open'))set(p,false);else only(p);});});
@@ -2909,6 +2914,30 @@ MOTIVE_LABEL = [('self-direction', 'Self-direction'), ('stimulation', 'Stimulati
 PSYCHES_BY = {'close': (['extraversion'], [], 'loves'), 'secure': (['neuroticism'], [], 'attachment'), 'disagree': (['agreeableness'], [2, 3], 'conflict'),
               'life': (['conscientiousness'], [0, 1], None), 'future': (['openness'], [], 'motives')}
 MBTI_PAIRS = [('E', 'I', 'Extraversion', 'Introversion'), ('S', 'N', 'Sensing', 'Intuition'), ('T', 'F', 'Thinking', 'Feeling'), ('J', 'P', 'Judging', 'Perceiving')]
+MBTI_ASK = ['Where your energy comes from', 'What you notice first', 'How you decide', 'How you like plans']
+# A letter's place on its axis by how clear it is (the Psyche Report's slight, moderate, clear): slight sits near the middle.
+LEAN = {'slight': 14, 'moderate': 28, 'clear': 42, 'strong': 42}
+
+
+def _axis(i, pa, pb, names):
+    """One MBTI pair as an axis: each of you a dot, further out the clearer your letter."""
+    hi, lo, nh, nl = MBTI_PAIRS[i]
+    def place(p):
+        lt = next((x for x in p.get('letters') or [] if x.get('letter') in (hi, lo)), None)
+        ch = (lt or {}).get('letter') or (str(p.get('mbti') or '    ')[i:i + 1])
+        if ch not in (hi, lo):
+            return None, None, None
+        st = (lt or {}).get('strength') or ''
+        off = LEAN.get(st, 28)
+        return ch, st, 50 - off if ch == hi else 50 + off
+    ca, sa, xa = place(pa)
+    cb, sb, xb = place(pb)
+    if xa is None or xb is None:
+        return ''
+    lo_, hi_ = min(xa, xb), max(xa, xb)
+    say = lambda nm, ch, st: '%s %s%s' % (_e(nm), ch, (', ' + _e(st)) if st else '')
+    return ('<div class="mx"><span class="q">%s</span><div class="axis"><b title="%s">%s</b><div class="tr"><div class="gap" style="left:%d%%;width:%d%%"></div><i class="a" style="left:%d%%"></i><i class="b" style="left:%d%%"></i></div><b title="%s">%s</b></div>'
+            '<em>%s · %s</em></div>' % (_e(MBTI_ASK[i]), _e(nh), hi, lo_, hi_ - lo_, xa, xb, _e(nl), lo, say(names[0], ca, sa), say(names[1], cb, sb)))
 
 
 def _dual(label, x, y):
@@ -2936,11 +2965,7 @@ def _psyches(cid, pa, pb, names, line):
     body = ''.join(_dual(TRAIT_LABEL[k], fa[k], fb[k]) for k in traits if isinstance(fa.get(k), int) and isinstance(fb.get(k), int))
     ta, tb = str(pa.get('mbti') or ''), str(pb.get('mbti') or '')
     for i in letters:
-        if len(ta) == 4 and len(tb) == 4:
-            hi, lo, nh, nl = MBTI_PAIRS[i]
-            lab = lambda ch: nh if ch == hi else nl
-            body += '<div class="ml"><span>%s</span><b class="a">%s</b><b class="b">%s</b><em>%s</em></div>' % (
-                _e(nh + ' or ' + nl), _e(lab(ta[i])), _e(lab(tb[i])), 'the same' if ta[i] == tb[i] else 'different')
+        body += _axis(i, pa, pb, names)
     if extra == 'loves':
         g = lambda p_, k: ', '.join(p_.get(k) or []) or '–'
         body += ('<div class="pair2"><div><b class="a">%s</b><span>Shows care by: %s</span><span>Feels cared for by: %s</span></div><div><b class="b">%s</b><span>Shows care by: %s</span><span>Feels cared for by: %s</span></div></div>'
@@ -3168,7 +3193,7 @@ def page(box, s):
         inner += ('<h3>What to try</h3>' + todo) if todo else ''
         inner += _science(refs, folded=True)
         part(cid, num, title, inner, 'chapter', SUBTITLES.get(cid, ''))
-        if cid == 'disagree':
+        if cid == 'future':             # the breather comes between the everyday and the deeper chapters
             parts.append('@@INTERMISSION@@')
     # The intermission (README "Psyche Together, release 16"): a light breather after the heaviest chapter.
     fun = sig.get('fun') or {}
@@ -3192,7 +3217,7 @@ def page(box, s):
     part('moments', '✦', im.get('title') or 'Your story in moments', inner, 'intermission', 'A light break', False, COLOURS['moments'])
     inter, inter_nav = parts.pop(), nav.pop()
     parts[parts.index('@@INTERMISSION@@')] = inter
-    nav.insert(next((i for i, n in enumerate(nav) if '#life' in n), len(nav)), inter_nav)
+    nav.insert(next((i for i, n in enumerate(nav) if '#secure' in n), len(nav)), inter_nav)
     # One practice.
     pn = D(r.get('plan'))
     w1 = D(pn.get('week1'))
@@ -3215,7 +3240,9 @@ def page(box, s):
          '<div class="sayrow"><code>End Psyche Together</code><button type="button" data-copy="End Psyche Together">Copy</button></div></div>' % _paras(r.get('caveats')),
          '', 'Sources, method and limits')
     when = datetime.fromtimestamp(box.get('at') or time.time()).strftime('%-d %B %Y')
-    # The header (README "Psyche Together, release 20"): both Psyche Cards leaning in, a heart between them.
+    # The header (README "Psyche Together, release 20"): both Psyche Cards leaning in, a heart between them; whose copy
+    # this is, since each holds that person's private advice (README "Psyche Together, release 29").
+    mine_name = (names[0] if s.get('role') == 'a' else names[1] if s.get('role') == 'b' else '') or ''
     pics, cards = SEEN.get('pics') or {}, SEEN.get('cards') or {}
     since = (sig.get('fun') or {}).get('first')
 
@@ -3229,14 +3256,14 @@ def page(box, s):
     banner = ('<header class="banner love" id="top">%s%s<div class="facts">%s</div><div class="couple">%s<div class="heart"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1">'
               '<stop offset="0" stop-color="#ff7aa2"/><stop offset="1" stop-color="#c2366d"/></linearGradient></defs><path fill="url(#hg)" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.6 1.1 4.6 2.6l1 1.4 1-1.4C14 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg></div>%s</div>'
               '<h1>%s <i>&amp;</i> %s</h1><p class="lede">The two of you, read together: how you love, how you disagree and how you grow, from both your Psyches and your own words.</p><div class="sub">%s</div></header>'
-              % (LOGO, hearts, _e(' · '.join(x for x in ['Psyche Together', view.get('stage') or ''] if x)), card('a', names[0], 'l'), card('b', names[1], 'r'), _e(names[0]), _e(names[1]),
+              % (LOGO, hearts, _e(' · '.join(x for x in ['Psyche Together', view.get('stage') or '', ('%s\'s copy' % mine_name) if mine_name else ''] if x)), card('a', names[0], 'l'), card('b', names[1], 'r'), _e(names[0]), _e(names[1]),
                  _e(' · '.join(x for x in [('Talking since ' + since) if since else '', when] if x))))
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>' if pics else ''
     bar = '<nav aria-label="Sections">%s<button type="button" data-fold>Close all ▲</button></nav>' % ''.join(nav)
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
-            '<title>Psyche Together · %s &amp; %s</title><style>%s</style></head><body><div class="wrap">%s%s%s<button type="button" class="foldall" data-fold>Close all ▲</button>'
+            '<title>Psyche Together · %s &amp; %s%s</title><style>%s</style></head><body><div class="wrap">%s%s%s<button type="button" class="foldall" data-fold>Close all ▲</button>'
             '<footer><b>Psyche Together</b> by PsycheAI · psycheai.io<br>Made in your own Muse workspace. PsycheAI keeps no copy it can read.</footer></div>%s<script>%s</script></body></html>'
-            % (_e(names[0]), _e(names[1]), CSS, banner, bar, ''.join(parts), viewer, JS))
+            % (_e(names[0]), _e(names[1]), (' · %s&#x27;s copy' % _e(mine_name)) if mine_name else '', CSS, banner, bar, ''.join(parts), viewer, JS))
 
 
 def show(box=None):
@@ -3261,7 +3288,9 @@ def show(box=None):
     save_state(s)
     os.makedirs(OUT, exist_ok=True)
     names = (box.get('view') or {}).get('names') or ['', '']
-    path = os.path.join(OUT, 'Psyche-Together-%s-%s.html' % tuple(re.sub(r'[^A-Za-z0-9]+', '', n) or 'Partner' for n in names))
+    clean = lambda n: re.sub(r'[^A-Za-z0-9]+', '', n or '') or 'Partner'
+    mine_ = names[0] if s.get('role') == 'a' else names[1]
+    path = os.path.join(OUT, 'Psyche-Together-%s-%s-%ss-copy.html' % (clean(names[0]), clean(names[1]), clean(mine_)))
     with open(path, 'w', encoding='utf-8') as f:
         f.write(page(box, s))
     os.chmod(path, 0o600)
