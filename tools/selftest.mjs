@@ -3736,6 +3736,25 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     values: [{ value: 'Loyalty' }], attachment: { style, conflict },
     relationship: { loveLanguages: { giving: [{ language: giving }], receiving: [{ language: 'Words of affirmation' }] }, strengths: [{ title: 'Shows up' }], weaknesses: [{ title: weak, detail: '' }] },
     confidence: { basedOn: ['200 posts and stories', '900 own messages'] } } });
+  const fakeDir = fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tg-igm-'));
+  const fakeCli = pathx.join(fakeDir, 'igm');
+  fsx.writeFileSync(fakeCli, `#!/usr/bin/env python3
+import json, sys
+a = sys.argv[1:]
+if a[0] == 'accounts':
+    print(json.dumps({'accounts': [{'username': 'ana.lim', 'user_fbid': 'b1'}]}))
+elif a[0] == 'top-recipients':
+    print(json.dumps({'entities': {'thread': [{'thread_fbid': 'x9', 'users': [{'id': 'f2', 'full_name': 'Someone Else'}, {'id': 'z3', 'full_name': 'Group'}]},
+                                              {'thread_fbid': 't1', 'users': [{'id': 'm1', 'full_name': 'Mei Tan', 'username': 'mei.t'}]}]}}))
+elif a[0] == 'thread':
+    msgs = []
+    for i in range(80):
+        day = 1700000000 + i * 36000
+        msgs.append({'content': {'text_body': ['how was your day?', 'thank you for dinner', 'sorry I was short earlier', 'love you', 'see you at 7'][i % 5] + ' (%d)' % i},
+                     'message_sent_at': day * 1000, 'sender_fbid': 'm1' if i % 2 else 'b1'})
+    print(json.dumps({'messages': msgs, 'messages_page_info': {'has_next_page': False}}))
+`);
+  fsx.chmodSync(fakeCli, 0o755);
   const home = {}, run = {};
   for (const [who, rep] of [['a', report('Mei Tan', 'Leans secure', 'Argues past the point', 'Acts of service', 'Raises it point by point')],
                             ['b', report('Ana Lim', 'Leans anxious', 'Keeps problems to herself', 'Words of affirmation', 'Goes quiet first')]]) {
@@ -3749,7 +3768,8 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
     fsx.writeFileSync(pathx.join(root, 'skills', 'psycheai', '.account.json'), JSON.stringify(acc));
     fsx.writeFileSync(pathx.join(root, 'skills', 'psycheai', 'report.json'), JSON.stringify(rep));
     home[who] = { root, dir, keep: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'together-home-')) };
-    const env = { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: home[who].keep, PSYCHEAI_TRANSPORT: 'python', NO_PROXY: '*', no_proxy: '*' };
+    const env = { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: home[who].keep, PSYCHEAI_TRANSPORT: 'python', NO_PROXY: '*', no_proxy: '*',
+      PSYCHEAI_IGM_CLI: who === 'b' ? fakeCli : '/nonexistent/igm' };
     home[who].env = env;
     run[who] = async (...args) => JSON.parse((await execFile('python3', [pathx.join(dir, 'bin', 'together.py'), ...args], { cwd: dir, env, timeout: 60000 })).stdout);
   }
@@ -3797,21 +3817,30 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
     tg.askedA.push(q);
     q = await run.a('answer', q.id, q.id === 'safety' ? 'No' : q.buttons[0]);
   }
-  tg.write = q;
+  tg.askChat = q;
+  const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
+  fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday?', 'thanks for listening', 'sorry, long day', 'miss you'][i % 4]}`).join('\n'));
+  tg.write = await run.a('chat-file', wa);
   const stateA = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'state.json'), 'utf8'));
   const view = tg.write.coupleView || { pillars: {}, decisions: [] };
   const worth = Object.keys(view.pillars).filter(p => view.pillars[p] === 'Worth attention');
   const okPillar = Object.keys(view.pillars).filter(p => view.pillars[p] !== 'Worth attention');
-  const good = { summary: 'Two people who keep showing up for each other.',
-    strengths: [{ pillar: okPillar[0] || 'appreciation', title: 'You notice each other', detail: 'Care is shown and said.' }],
-    pillars: Object.fromEntries(Object.keys(view.pillars).map(p => [p, 'A line for ' + p + '.'])),
-    pattern: { title: 'The organiser and the listener', detail: 'One plans, one checks in.', breakTheLoop: 'Ask one question first.' },
+  const para = (n, what) => Array.from({ length: n }, (_, i) => `In March 2025 the two of you ${what}, and it shows how your Psyches meet here in a way that is specific to you (${i}).`).join(' ');
+  const good = { summary: 'Two people who keep showing up for each other, learning to say the hard things sooner.',
+    overview: { lede: para(6, 'planned a weekend away'), strengths: okPillar.slice(0, 2).concat(okPillar.length < 2 ? ['appreciation'] : []).slice(0, 2).map(p => ({ pillar: p, title: 'Strength in ' + p, detail: para(2, 'thanked each other'), evidence: ['your May 2025 messages after a long week'] })) },
+    pillars: Object.fromEntries(Object.keys(view.pillars).map(p => [p, { headline: 'About ' + p, detail: para(5, 'talked through ' + p), evidence: ['your September 2025 chat about ' + p], tryThis: 'One small thing for ' + p + '.' }])),
+    pattern: { title: 'The organiser and the listener', loop: para(4, 'went quiet after a plan changed'), a: 'Mei raises things point by point.', b: 'Ana goes quiet first.', breakTheLoop: 'Ask one question first.', evidence: ['your June 2025 messages about a cancelled dinner'] },
+    care: { detail: para(3, 'showed care by doing'), a: 'Being told plainly.', b: 'Time together.' },
+    messages: { summary: 'You write most evenings, and Ana starts a little more often.', lines: ['Most messages after 9pm.', 'Thanks both ways.', 'Sorry comes quickly, usually within an hour.'] },
     decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })),
     conversations: worth.slice(0, 2).map(p => ({ pillar: p, title: 'About ' + p, why: 'It matters to you both.', script: ['Pick a calm time.', 'Each says one thing.', 'Agree one step.'] })),
     weeks: { practice: { pillar: Object.keys(view.pillars)[0], title: 'Small daily turns', days: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }, steps: ['x', 'y', 'z'] },
     caveats: 'It can\'t see your days together.' };
+  if (!worth.length) good.conversations = [];
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify({ ...good, summary: 'You scored 80% and Ana rated it low.' }));
   tg.bad = await run.a('save', '@work/together-read.json');
+  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify({ ...good, overview: { lede: 'Short.', strengths: [] }, pillars: {} }));
+  tg.shallow = await run.a('save', '@work/together-read.json');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify(good));
   tg.saved = await run.a('save', '@work/together-read.json');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'disagreements', title: 'One question first', detail: 'You argue a case.', howToRaise: 'I want to hear you out first.' }], practice: 'Ask before you answer.' }));
@@ -3829,8 +3858,8 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   const theCode = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, '.keys.json'), 'utf8')).code;
   check('Psyche Together needs a Psyche first, and says how to make one',
     tg.noPsyche.needsPsyche === true && /Install psycheai\.io\/skill and generate my Psyche/.test(tg.noPsyche.say), JSON.stringify(tg.noPsyche));
-  check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their card summary goes to their partner, locked',
-    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /Card's summary/.test(tg.start.consent || '') &&
+  check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their full report and their conversation together go to their partner, locked, and nothing from other chats',
+    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report goes to your partner's Muse, locked/.test(tg.start.consent || '') && /Nothing from your chats with anyone else is shared/.test(tg.start.consent || '') &&
       /^Mei invited you to Psyche Together/.test((tg.staged.invite || {}).invite || '') && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || ''),
     JSON.stringify([tg.start, tg.staged]).slice(0, 400));
   check('the partner joins once, sees the consent line, and goes straight to their questions: no stage question, their partner named from the other Psyche, the stage from the one who started',
@@ -3856,12 +3885,19 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
       tg.askedA.find(x => x.id === 'core:needs').buttons.includes('Difficult') && /in this relationship for the long run/.test(tg.askedA.find(x => x.id === 'core:security').say) &&
       tg.askedA.filter(x => x.kind === 'decision').map(x => x.id).join() === 'decide:more_children,decide:money,decide:place,decide:parents' && !tg.askedA.some(x => x.id === 'stage'),
     JSON.stringify(tg.askedA.map(x => x.id)));
-  check('when both have answered, the read is written from the couple view and both Psyches only, never anyone\'s own answers; the result is data only',
+  const people = tg.write.people || [];
+  check('when both have answered, the read is written from both full Psyche reports and both sides\' conversation (Instagram on one, WhatsApp added on the other), and the couple view, never anyone\'s own answers; the result is data only',
     tg.write.write === 'read' && Object.values(view.pillars).every(v => ['Strong', 'Steady', 'Worth attention'].includes(v)) && worth.length > 0 &&
+      people.length === 2 && people.every(p => p.report && p.report.attachment && p.chat && p.chat.signals && p.chat.sample.length > 10) &&
+      people.map(p => p.chat.source).sort().join() === 'instagram,whatsapp' && people.find(p => p.chat.source === 'instagram').chat.signals.messages === 80 &&
       !/"core"|safety|deep:/.test(JSON.stringify(tg.write)) && view.decisions.length === 4 && !('spec' in tg.write) && tg.write.saveTo === 'work/together-read.json',
     JSON.stringify(view).slice(0, 400));
-  check('a read with a score, a percentage or what one of them answered is sent back, and nothing is saved',
-    tg.bad.saved === false && tg.bad.problems.some(p => /scored|%/.test(p)) && tg.bad.problems.some(p => /rated/.test(p)), JSON.stringify(tg.bad));
+  check('with no Instagram thread with the partner found, it asks once for the WhatsApp chat together, with a way to send without it; the export is read for the two of them only',
+    tg.askChat.askChat === true && /couldn't find your Instagram chat with Ana/.test(tg.askChat.say) && JSON.stringify(tg.askChat.buttons) === '["I\'ve shared it","Send without it"]' &&
+      people.find(p => p.chat.source === 'whatsapp').chat.signals.messages === 40, JSON.stringify(tg.askChat));
+  check('a read with a score, a percentage or what one of them answered is sent back, as is one short of a Psyche Report\'s depth; nothing is saved',
+    tg.bad.saved === false && tg.bad.problems.some(p => /scored|%/.test(p)) && tg.bad.problems.some(p => /rated/.test(p)) &&
+      tg.shallow.saved === false && tg.shallow.problems.some(p => /overview\.lede/.test(p)) && tg.shallow.problems.some(p => /9,000 characters/.test(p)), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
   check('the read saved, each writes their own For you; someone who said they feel unsafe gets a gentle one, with support first, no "how to raise it" and no conversation scripts on their copy',
     tg.saved.saved && tg.saved.write === 'foryou' && tg.saved.gentle === false && tg.statusB.write === 'foryou' && tg.statusB.gentle === true &&
       /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/Conversations to have/.test(htmlB) && /Conversations to have/.test(htmlA),
