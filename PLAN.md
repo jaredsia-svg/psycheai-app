@@ -111,7 +111,7 @@ Agreed 8 November 2026 (plan, fifth draft). Standalone skill in together/, off u
 - [x] The check-in: adults, stage, nine core questions, private safety question, deeper questions from the Psyche, big decisions by stage.
 - [x] The couple view, the joint read and each person's For you, with their checks; the page; End.
 - [ ] Phase 0: install fresh several times to see whether Muse's safety check passes it; counsellor review of the questions, safety wording and resources.
-- [ ] Phase 1: payment on psycheai.io/together, a one-time code in the prompt, refund if the partner never joins. Prepared: `access` in lib/together.js is the one gate (everyone today), and the skill passes its answer on as `needsAccess`.
+- [x] Phase 1: payment on the website (built 9 Nov 2026 as app.psycheai.io/together/buy, tied to the PsycheAI account rather than a code in the prompt: lib/togetherpay.js), credited only by a signed webhook, refunded if the partner never joins. Off until `PSYCHE_TOGETHER_PAID=1` and `STRIPE_PRICE_TOGETHER` are set. Not yet: a refund made in Stripe by hand doesn't take a credit back.
 - [x] Offered from PsycheAI's menus ("Psyche Together with my partner"), and a partner's invite kept while they make their Psyche.
 - [x] Phase 4: message signals (turning towards, repair, being there when it counts, who plans) and the three-view gaps.
 - [ ] The offer in PsycheAI: only when relevant, said to be paid, with price and refund terms before the link; CLAUDE.md's "nothing sold inside the host" narrowed for it.

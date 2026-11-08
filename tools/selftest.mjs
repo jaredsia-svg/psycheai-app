@@ -3500,7 +3500,7 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
           /Get Psyche Together/.test(buyPage) && /joining is free for them/.test(buyPage) && co.status === 303 &&
           sentT && sentT.body.get('mode') === 'payment' && sentT.body.get('line_items[0][price]') === 'price_t' && sentT.body.get('metadata[kind]') === 'together' && sentT.body.get('client_reference_id') === lin.id,
         JSON.stringify([gated, co.status]).slice(0, 300));
-      const paidEvent = (id, status = 'paid', type = 'checkout.session.completed') => JSON.stringify({ type, data: { object: { id, payment_status: status, client_reference_id: lin.id, metadata: { kind: 'together', userId: lin.id } } } });
+      const paidEvent = (id, status = 'paid', type = 'checkout.session.completed') => JSON.stringify({ type, data: { object: { id, payment_status: status, payment_intent: 'pi_' + id, client_reference_id: lin.id, metadata: { kind: 'together', userId: lin.id } } } });
       const unpaid = paidEvent('cs_t0', 'unpaid');
       await hook(unpaid, sign(unpaid));
       const forged = paidEvent('cs_t1');
@@ -3515,6 +3515,16 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       check('Psyche Together: only a signed webhook for a paid session credits one, once; it is used when a new one starts (a retry of the same link uses nothing), and the next needs another',
         refused === 400 && before === 0 && after === 1 && started.ok === true && retried.ok === true && pay.credits(lin.id) === 0 && Boolean(again.access) &&
           !/Plus/.test(JSON.stringify(store.getUser(lin.id).plus || {}).replace(/./g, '')), JSON.stringify([before, after, started, again]).slice(0, 300));
+      // The partner never joins: after 30 days the link goes and the purchase is refunded through Stripe.
+      await tgLib.end(skillUser());
+      const second = paidEvent('cs_t2'); await hook(second, sign(second));
+      const idC = 'a'.repeat(64);
+      await tgLib.link(skillUser(), { e2e: { id: idC } });
+      store.kvSet('together', idC, { ...store.kvGet('together', idC), at: Date.now() - 31 * 86400000 });
+      await tgLib.sweep();
+      const refundCall = stripeCalls.filter(c => c.path === '/v1/refunds').pop();
+      check('Psyche Together: if the partner never joins, the link goes after 30 days and its purchase is refunded through Stripe (PLAN.md)',
+        !store.kvGet('together', idC) && refundCall && refundCall.body.get('payment_intent') === 'pi_cs_t2', JSON.stringify(refundCall ? [...refundCall.body] : null));
       delete process.env.PSYCHE_TOGETHER_PAID; delete process.env.STRIPE_PRICE_TOGETHER;
       if (wasTg === undefined) delete process.env.PSYCHE_TOGETHER; else process.env.PSYCHE_TOGETHER = wasTg;
     }
