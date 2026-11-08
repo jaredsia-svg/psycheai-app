@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 44
+RELEASE = 45
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1955,6 +1955,10 @@ AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages')
 PSY_AREAS = ['loves', 'connection', 'needs', 'life', 'values', 'growth', 'security', 'attachment', 'disagreements', 'cycle']
 STATUS_AREAS = ['attachment', 'cycle']
 EVIDENCE_KINDS = ['messages', 'psyches', 'report', 'moment']
+# README "Psyche Together, release 45": love languages and attachment are read again from the couple's own conversation,
+# and that reading replaces each card's everywhere in the read, since a Psyche is read from everyone, not this partner.
+LOVE_LANGS = ['Words of affirmation', 'Quality time', 'Acts of service', 'Physical touch', 'Receiving gifts']
+LEANS = ['secure', 'anxious', 'avoidant', 'mixed']
 VERDICTS = {'matches': 'Matches how you see it', 'better': 'Better than you think', 'closer': 'Worth a closer look'}
 
 
@@ -2035,6 +2039,15 @@ def check_read(r, view, has_chat=False):
                 need(0 < len(T(x.get('status'))) <= 32, '%s.status: a few words, at most 32 characters' % at)
         need(not c.get('detail') and not c.get('askEachOther') and not c.get('tryThis'),
              'chapters.%s: no detail, askEachOther or tryThis now: what it means and the next steps live in each area' % cid)
+    rel = D(r.get('relational'))
+    if has_chat or rel:
+        for k in ('a', 'b'):
+            x = D(rel.get(k))
+            langs = lambda xs: 1 <= len(L(xs)) <= 2 and all(y in LOVE_LANGS for y in L(xs))
+            need(langs(x.get('showsCare')) and langs(x.get('feelsCared')) and x.get('lean') in LEANS and 0 < len(T(x.get('attachment'))) <= 80
+                 and 0 < len(T(x.get('basis'))) <= 300,
+                 'relational.%s: love languages and attachment read again from your conversation together: showsCare and feelsCared (one or two each, from %s), lean (%s), attachment (a few words, at most 80 characters) and basis (what in your messages shows it, at most 300 characters)'
+                 % (k, ', '.join(LOVE_LANGS), ', '.join(LEANS)))
     A_ = lambda cid, a: D(D(D(ch.get(cid)).get('areas')).get(a))
     two_ = lambda x: T(D(x).get('a')) and T(D(x).get('b'))
     signs_ = lambda x: all(2 <= len(L(D(x).get(k))) <= 3 and all(T(y) and len(T(y)) <= 90 for y in L(D(x).get(k))) for k in ('a', 'b'))
@@ -3212,10 +3225,9 @@ def _psy_panel(pa, pb, names):
     body = ''.join(_axis(i, pa, pb, names) for i in range(4))
     body += ''.join(_dual(TRAIT_LABEL[k], fa[k], fb[k]) for k in ('openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism')
                     if isinstance(fa.get(k), int) and isinstance(fb.get(k), int))
-    for aid, lbl in (('loves', 'Love languages'), ('attachment', 'Attachment'), ('cycle', 'In a disagreement'), ('values', '')):
+    again = ' · read again from your messages together' if pa.get('reRead') or pb.get('reRead') else ''
+    for aid, lbl in (('loves', 'Love languages' + again), ('attachment', 'Attachment' + again), ('values', '')):
         part_ = _area_psy(aid, pa, pb, names, '')
-        if aid == 'cycle':          # the decide and plans axes are already above: only the two conflict styles
-            part_ = re.sub(r'<div class="mx">.*?</em></div>', '', part_, flags=re.S)
         part_ = re.sub(r'<div class="pkey">.*?</div>', '', part_, count=1, flags=re.S).replace('<div class="psy"><span class="lbl">In your Psyches</span>', '', 1)
         part_ = part_[:-len('</div>')] if part_.endswith('</div>') else part_
         if part_.strip():
@@ -3342,6 +3354,16 @@ def page(box, s):
     title_of = {c[0]: c[2] for c in CHAPTERS}
     pcards = box.get('psyches') or {'a': (SEEN.get('cards') or {}).get('a') or {}, 'b': (SEEN.get('cards') or {}).get('b') or {}}
     pa_, pb_ = pcards.get('a') or {}, pcards.get('b') or {}
+    rel_ = D(r.get('relational'))
+    for k_ in ('a', 'b'):
+        x_ = D(rel_.get(k_))
+        if x_.get('showsCare') or x_.get('attachment'):
+            new_ = dict(pa_ if k_ == 'a' else pb_, caresBy=x_.get('showsCare') or [], feelsCaredForBy=x_.get('feelsCared') or [],
+                        attachment=x_.get('attachment') or '', lean=x_.get('lean'), reRead=True)
+            if k_ == 'a':
+                pa_ = new_
+            else:
+                pb_ = new_
     stands = ''
     for i, x in enumerate(x for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds):
         home = x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close')
@@ -3389,7 +3411,7 @@ def page(box, s):
                 return ''
             cls, txt = m_.group(1), html.unescape(m_.group(2))
             # Release 44: an area that isn't a check-in level is green when it's a great result, blue otherwise, never red.
-            secure_ = lambda p_: bool(re.search(r'\bsecure', str(p_.get('attachment') or ''), re.I)) and not re.search(r'insecure', str(p_.get('attachment') or ''), re.I)
+            secure_ = lambda p_: (p_.get('lean') == 'secure') if p_.get('lean') else (bool(re.search(r'\bsecure', str(p_.get('attachment') or ''), re.I)) and not re.search(r'insecure', str(p_.get('attachment') or ''), re.I))
             great = {'loves': cls == 'Aligned', 'know': cls == 'Aligned',
                      'interests': len(D(D(D(D(ch.get(cid)).get('areas')).get(aid)).get('columns')).get('shared') or D(D(ch.get(cid)).get('enjoy')).get('shared') or []) >= 3,
                      'values': len(D(D(D(D(ch.get(cid)).get('areas')).get(aid)).get('columns')).get('shared') or D(D(ch.get(cid)).get('alike')).get('shared') or []) >= 3,

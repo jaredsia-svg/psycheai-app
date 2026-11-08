@@ -3902,6 +3902,8 @@ elif a[0] == 'thread':
                     means: 'What ' + a + ' adds up to for you both, set against how you see it, in plain words for the two of you.',
                     next: [{ do: 'One small step for ' + a + ' this week.', because: 'the 42 messages and your Psyches above point to it' }], ...(PARTS[a] || {}) }]));
   const good = { summary: 'Two people who keep showing up for each other, learning to say the hard things sooner.',
+    relational: { a: { showsCare: ['Quality time'], feelsCared: ['Words of affirmation'], lean: 'secure', attachment: 'steady, says it plainly', basis: 'Mei starts 61 of the plans and thanks Ana 40 times' },
+                  b: { showsCare: ['Words of affirmation'], feelsCared: ['Quality time'], lean: 'secure', attachment: 'steady once settled', basis: 'Ana replies within minutes 80 times in 100' } },
     truths: ['strength', 'edge', 'surprise'].map((k, i) => ({ kind: k, title: 'The ' + k, detail: para(3, 'found your ' + k), chapter: ['close', 'disagree', 'secure'][i], evidence: EV(k) })),
     chapters: {
       close: { areas: AR('close'), takeaway: 'You turn up for each other again and again: say the warm word out loud too.' },
@@ -4144,9 +4146,19 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /id="future-values"[^]*?<div class="alike">/.test(htmlA.slice(htmlA.indexOf('id="future-values"'), htmlA.indexOf('id="future-future"'))) && !/class="foot2"/.test(htmlA) && !/<span class="tease">/.test(htmlA.slice(htmlA.indexOf('id="close"'), htmlA.indexOf('id="moments"')) + htmlA.slice(htmlA.indexOf('id="secure"'), htmlA.indexOf('id="plan"'))) && /<h3>You both, in numbers<\/h3>/.test(htmlA) && /You both, in one line/.test(htmlA) && /\.lw\.Steady\{color:#2b5d8f\}/.test(htmlA) && /<div class="facts">Psyche Together · Married · \d+% confidence · Mei&#x27;s copy<\/div>/.test(htmlA) && !/Read with \d+% confidence/.test(htmlA) && !/[↑↓]/.test(htmlA.slice(htmlA.indexOf('id="glance"'), htmlA.indexOf('id="close"'))),
     JSON.stringify(chapterParts));
   const glanceA = htmlA.slice(htmlA.indexOf('id="glance"'), htmlA.indexOf('id="close"'));
+  tg.relProblems = await (async () => { try { return JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+r = json.loads(sys.stdin.read()); print(json.dumps(m.check_read(r, json.loads(${JSON.stringify(JSON.stringify(view))}), True)))
+`], { env: home.a.env, input: JSON.stringify({ ...good, relational: { a: { showsCare: ['Hugs'] } } }) }).toString()); } catch (e) { return [String(e)]; } })();
+  check('love languages and attachment read again from your conversation together, replacing each card\'s everywhere (README "Psyche Together, release 45"): the panel says so, the love languages match and the attachment tile follow it, and a read without it is sent back; no conflict styles at a glance',
+    /Love languages · read again from your messages together/.test(glanceA) && /Attachment · read again from your messages together/.test(glanceA) && /steady, says it plainly/.test(glanceA) && !/Leans anxious/.test(glanceA) &&
+      /Shows care by: Quality time<\/span><span>Feels cared for by: Words of affirmation/.test(glanceA) && /<span class="tl Aligned"><small>Love languages<\/small><b>Both matched<\/b>/.test(htmlA) &&
+      /<span class="tl Aligned"><small>Attachment<\/small>/.test(htmlA) && !/In a disagreement/.test(glanceA) && tg.relProblems.some(p => /^relational\.a: love languages and attachment read again/.test(p)) && tg.relProblems.some(p => /^relational\.b:/.test(p)),
+    JSON.stringify(tg.relProblems).slice(0, 300));
   check('your two Psyches side by side once, at a glance, as a Sync compares them (README "Psyche Together, release 42"): the four MBTI axes, the Big Five, love languages, attachment, conflict styles and the ten motivations, folded; the chapters cite a trait in words, never another panel; MBTI types under the cards',
     (htmlA.match(/<div class="psy">/g) || []).length === 1 && /<details class="psyd"><summary>Your two Psyches, side by side/.test(glanceA) && /<span>Extraversion<\/span>/.test(glanceA) &&
-      /Shows care by: Acts of service/.test(glanceA) && /Leans anxious/.test(glanceA) && /How you decide<\/span><div class="axis"><b title="Thinking">T<\/b>/.test(glanceA) && /<svg class="radar"/.test(glanceA) &&
+      /How you decide<\/span><div class="axis"><b title="Thinking">T<\/b>/.test(glanceA) && /<svg class="radar"/.test(glanceA) &&
       /<b>What drives you both<\/b><span>Care, Achievement/.test(glanceA) && /Where you pull apart most/.test(glanceA) && /most like Mulan · INFJ/.test(htmlB) &&
       tg.traitsProblems.some(p => /^chapters\.life\.areas\.life\.evidence: one messages piece with a real count/.test(p)) && tg.traitsProblems.some(p => /^chapters\.life\.areas\.life\.evidence: one psyches piece/.test(p)) &&
       tg.traitsProblems.some(p => /^chapters\.life\.areas\.life: means \(one or two sentences, at most 320 characters\) and next/.test(p)), JSON.stringify(tg.traitsProblems).slice(0, 400));
