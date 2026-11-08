@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 29
+RELEASE = 30
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1869,7 +1869,7 @@ CHAPTERS = [('close', '01', 'Turning towards', ['appreciation', 'connection', 'd
             ('disagree', '05', 'Conflict and repair', ['disagreements'], ['disagreements', 'perpetual', 'dreams'])]
 # README "Psyche Together, release 18": a plain title, and under it the research it comes from.
 SUBTITLES = {'close': 'Bids and responsiveness', 'secure': 'Attachment and commitment', 'disagree': 'Your cycle and the way out',
-             'life': 'Fairness, coping together and rhythm', 'future': 'Values, decisions and growth', 'plan': 'Small steps from every chapter'}
+             'life': 'Fairness, rhythm and what you enjoy', 'future': 'Values, decisions and growth', 'plan': 'Small steps from every chapter'}
 PLAN_TITLE = 'Your 28-day practice'
 
 
@@ -1942,10 +1942,13 @@ def check_read(r, view, has_chat=False):
     al = D(fu.get('alike'))
     short_ = lambda xs, lo, hi: lo <= len(L(xs)) <= hi and all(T(x) and len(T(x)) <= 40 for x in L(xs))
     need(short_(al.get('shared'), 2, 5) and short_(al.get('a'), 1, 3) and short_(al.get('b'), 1, 3) and T(al.get('line')),
-         'chapters.future.alike: what you share in values, beliefs and interests (shared: 2 to 5, a and b: 1 to 3 each more one\'s own, each under 40 characters) and a line on what it means for you two')
-    need(T(D(fu.get('growth')).get('a')) and T(D(fu.get('growth')).get('b')) and len(L(fu.get('together'))) == 3
+         'chapters.future.alike: what you both hold in values and beliefs (shared: 2 to 5, a and b: 1 to 3 each more one\'s own, each under 40 characters) and a line on what it means for you two')
+    en = D(lf.get('enjoy'))
+    need(short_(en.get('shared'), 1, 5) and short_(en.get('a'), 1, 3) and short_(en.get('b'), 1, 3) and T(en.get('line')) and len(L(lf.get('together'))) == 3,
+         'chapters.life.enjoy: what you both enjoy, from your interests (shared: 1 to 5, a and b: 1 to 3 each, each under 40 characters) and a line; and life.together: three new things to do together')
+    need(T(D(fu.get('growth')).get('a')) and T(D(fu.get('growth')).get('b'))
          and (not topics or all(isinstance(x, dict) and x.get('topic') in topics and T(x.get('line')) for x in L(fu.get('decisions')))),
-         'chapters.future: a line per big decision (%s), growth a and b, three together ideas' % (', '.join(sorted(topics)) or 'none'))
+         'chapters.future: a line per big decision (%s), growth a and b' % (', '.join(sorted(topics)) or 'none'))
     im = D(r.get('intermission'))
     need(T(im.get('title')) and 3 <= len(L(im.get('lines'))) <= 5 and all(T(x) and len(T(x)) <= 220 for x in L(im.get('lines'))), 'intermission: a title and three to five short, light lines')
     pn = D(r.get('plan'))
@@ -3168,21 +3171,24 @@ def page(box, s):
             diffs = ''.join('<li><b>%s</b> %s</li>' % (_e(x.get('title')), _e(x.get('howToLiveWithIt'))) for x in c.get('lasting') or [] if isinstance(x, dict))
             diffs += ''.join('<li><b>%s</b> <span class="solv">to solve</span> %s</li>' % (_e(x.get('title')), _e(x.get('firstStep'))) for x in c.get('solvable') or [] if isinstance(x, dict))
             todo += ('<div class="callout ask"><span class="lbl">Differences to live with, and one to solve</span><ul class="diffs">%s</ul></div>' % diffs) if diffs else ''
+        chips = lambda xs: ''.join('<span>%s</span>' % _e(x) for x in xs or [])
+        cols = lambda label, al: (('<p class="lbl" style="margin-top:14px">%s</p><div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
+                                   % (_e(label), _e(names[0]), chips(al.get('a')), chips(al.get('shared')), _e(names[1]), chips(al.get('b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
+                                  if al.get('shared') else '')
         if cid == 'life':
             going += _rhythm(sig, who).replace('<h3>Your day, side by side</h3>', '<p class="lbl" style="margin-top:14px">Your day, side by side</p>')
+            going += cols('What you both enjoy', D(c.get('enjoy')))
+            if c.get('together'):
+                todo += '<div class="callout ask"><span class="lbl">New things to do together</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
         if cid == 'future':
-            al = D(c.get('alike'))
-            if al.get('shared'):
-                chips = lambda xs: ''.join('<span>%s</span>' % _e(x) for x in xs or [])
-                going += ('<p class="lbl" style="margin-top:14px">What you share</p><div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
-                          % (_e(names[0]), chips(al.get('a')), chips(al.get('shared')), _e(names[1]), chips(al.get('b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
+            going += cols('What you both hold', D(c.get('alike')))
             lines = {x.get('topic'): x.get('line') for x in c.get('decisions') or [] if isinstance(x, dict)}
             if view.get('decisions'):
                 going += '<p class="lbl" style="margin-top:14px">The big decisions, side by side</p>' + ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p><p>%s</p></div>'
                                                                        % (_e(x['label']), _lv(x['result']), _e(names[0]), _e(x.get('a') or '-'), _e(names[1]), _e(x.get('b') or '-'), _e(lines.get(x['topic'], '')))
                                                                        for x in view.get('decisions') or [])
             going += two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
-            if c.get('together'):
+            if c.get('together') and not D(ch.get('life')).get('together'):     # an older read kept them here
                 todo += '<div class="callout ask"><span class="lbl">New things to do together</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
         inner += ('<h3>What\'s going on</h3>' + going) if going.strip() else ''
         # 3. What to try

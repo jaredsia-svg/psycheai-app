@@ -3891,7 +3891,8 @@ elif a[0] == 'thread':
                solvable: [{ title: 'Plans', detail: para(2, 'missed a plan'), firstStep: 'A shared calendar.' }],
                dream: { tension: 'Weekends', a: 'Mei hopes for adventure.', b: 'Ana hopes for rest.', question: 'What would a perfect Sunday be?' }, evidence: EV('disagreeing') },
       secure: { traits: 'You both lean secure, and the one who feels things more needs the plain word sooner.', takeaway: 'You already come back: say it out loud after a hard day.', detail: para(10, 'kept your promises'), a: 'Mei needs plain reassurance.', b: 'Ana needs time to warm up.', evidence: EV('security'), askEachOther: ['When do you feel most sure of us?'], tryThis: 'Say it out loud.' },
-      life: { traits: 'One of you plans the week and the other keeps it open: your rhythm shows where they meet.', takeaway: 'Your evenings carry a lot: protect one that is only yours.', detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
+      life: { enjoy: { shared: ['Long dinners out'], a: ['Night runs'], b: ['Hosting'], line: 'You share a love of a long dinner; the rest you can lend each other.' },
+              together: ['A cooking class', 'A new trail', 'A shared project'], traits: 'One of you plans the week and the other keeps it open: your rhythm shows where they meet.', takeaway: 'Your evenings carry a lot: protect one that is only yours.', detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
       future: { traits: 'You rank care and freedom highest together, and your own loves widen each other.', takeaway: 'You point the same way: decide the next step together.', detail: para(10, 'talked about next year'),
                 alike: { shared: ['Loyalty to a close circle', 'Good food, shared'], a: ['Big questions'], b: ['Hosting'], line: 'You hold the same people close. Your own loves widen each other.' }, decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
                 together: ['A cooking class', 'A new trail', 'A shared project'], evidence: EV('future') } },
@@ -4098,7 +4099,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
     return [...sec.matchAll(/<h3>([^<]+)<\/h3>/g)].map(m => m[1]).join('|');
   });
   check('each chapter is its takeaway and three parts at most (README "Psyche Together, release 28"): Where you are, What\'s going on, What to try; at a glance holds the line, satisfaction and reading each other, the three truths each a line opening its chapter, the map, the big decisions and the confidence, on one screen',
-    chapterParts.every(x => x === 'Where you are|What&#x27;s going on|What to try' || x === "Where you are|What's going on|What to try") &&
+    chapterParts.every(x => /^Where you are\|What(&#x27;|')s going on(\|What to try)?$/.test(x)) &&
       /<a class="ttl3" href="#close" style="--k:#2f7d5b"><span>★ Strength<\/span>The strength<\/a>/.test(htmlA) && /class="fchip">Big decisions: /.test(htmlA) && /class="fchip">Read with \d+% confidence/.test(htmlA),
     JSON.stringify(chapterParts));
   check('your two Psyches are woven into the chapters as a Sync compares them (README "Psyche Together, release 26"): each chapter has its "In your Psyches" panel, drawn from both cards (Extraversion and how each shows and wants care in 01, attachment and Sensitivity in 02, Thinking or Feeling, Judging or Perceiving, Agreeableness and conflict styles in 03, Conscientiousness and Extraversion or Introversion in 04, the ten motivations overlaid and Openness in 05), with Muse\'s line on what it means; MBTI types under the cards; a read without the lines is sent back',
@@ -4108,8 +4109,8 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /What you both rank highest: <b>Care, Achievement/.test(htmlA) && /most like Mulan · INFJ/.test(htmlB) && /Mei gives care by doing and Ana wants it said/.test(htmlA) &&
       tg.traitsProblems.some(p => /^chapters\.\w+\.traits/.test(p)), JSON.stringify(tg.traitsProblems).slice(0, 300));
   check('Shared meaning compares values, beliefs and interests (README "Psyche Together, release 25"): what you both hold in the middle, each one\'s own either side, a line on what it means, and the research behind it; a read without it is sent back',
-    />What you share<\/p><div class="alike"><div><small>Mei<\/small><span>Big questions<\/span><\/div><div class="both"><small>Both of you<\/small><span>Loyalty to a close circle<\/span>/.test(htmlA) &&
-      /Values, decisions and growth/.test(htmlA) && /Sound Relationship House/.test(htmlA) && tg.alikeProblems.some(p => /^chapters\.future\.alike/.test(p)), JSON.stringify(tg.alikeProblems).slice(0, 300));
+    />What you both hold<\/p><div class="alike"><div><small>Mei<\/small><span>Big questions<\/span><\/div><div class="both"><small>Both of you<\/small><span>Loyalty to a close circle<\/span>/.test(htmlA) &&
+      /Values, decisions and growth/.test(htmlA) && />What you both enjoy<\/p><div class="alike">/.test(htmlA.slice(htmlA.indexOf('id="life"'), htmlA.indexOf('id="future"'))) && /New things to do together/.test(htmlA.slice(htmlA.indexOf('id="life"'), htmlA.indexOf('id="future"'))) && /Sound Relationship House/.test(htmlA) && tg.alikeProblems.some(p => /^chapters\.future\.alike/.test(p)), JSON.stringify(tg.alikeProblems).slice(0, 300));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
       stateA.answers.safety.label === 'No', '');
