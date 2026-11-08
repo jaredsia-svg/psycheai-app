@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 179
+RELEASE = 180
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1536,7 +1536,7 @@ def read_receipt(read):
     both = got.get('posts', 0) + got.get('stories', 0)
     counts = {'posts and stories': both, 'comments': got.get('comments', 0), 'threads': got.get('threads', 0)}
     plural = lambda n, word: '{:,} {}{}'.format(n, word, '' if n == 1 else 's')
-    parts = ['{:,} posts and stories'.format(both)] + ([plural(got['comments'], 'comment')] if got.get('comments') else []) \
+    parts = ['1 post or story' if both == 1 else '{:,} posts and stories'.format(both)] + ([plural(got['comments'], 'comment')] if got.get('comments') else []) \
         + ([plural(got['threads'], 'conversation')] if got.get('threads') else [])
     return counts, 'Read here in Muse: %s, names removed.' % (', '.join(parts[:-1]) + ' and ' + parts[-1] if len(parts) > 1 else parts[0])
 
@@ -1582,7 +1582,8 @@ def local_ready(r):
     if isinstance(last.get('read'), dict):
         out['read'], out['readLine'] = read_receipt(last['read'])
     if os.path.exists(DIGEST) and thin_cap()[0] is not None:
-        out['thinLine'] = THIN_LINE
+        added = any(os.path.exists(os.path.join(SOURCES, n)) for n in ('whatsapp.txt', 'facebook.txt'))
+        out['thinLine'] = THIN_LINE_ADDED if added else THIN_LINE
     if len(files) < 2:
         out['missing'] = [k for k in ('card', 'report') if k not in files]
     return out
@@ -5702,6 +5703,8 @@ OWN_LINE = re.compile(r'^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2})?\s*((?:\[[^\]]{1,1
 THIN_SAY = ("There isn't much of your own writing on Instagram to read yet, so your Psyche would be mostly a guess. "
             "Adding WhatsApp chats or Facebook makes it much sharper.")
 THIN_LINE = "Your read was on the thin side: adding WhatsApp chats or Facebook makes it sharper."
+# After a chat was added, the same note asks for more of what helps, not for what they just did (README "After a chat is added").
+THIN_LINE_ADDED = "Your read is still on the thin side: more WhatsApp chats (up to three) or your Facebook would make it sharper."
 ANYWAY_LINE = "On it. Writing your Psyche takes about 5 minutes. I'll show it here when it's ready."
 # Nothing at all came back (README "Nothing to read, said"): no Make it anyway, since there's nothing to write from.
 # The words never point at the buttons, so they read right even if a button doesn't show.
