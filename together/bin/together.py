@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 23
+RELEASE = 24
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -92,11 +92,11 @@ CORE = [
     ('growth', 'Does being with {p} help you grow into who you want to be?', [('Very much', 2), ('Somewhat', 1), ('Not really', 0)]),
     ('disagreements', 'After a disagreement, how do you two usually end up?',
      [('Closer', 2), ('Back to normal soon', 2), ('It lingers', 0), ('It never quite ends', 0)]),
-    ('future', 'Do you two want the same things for the next 5 to 10 years?',
+    ('future', 'Do you two want the same things, and picture the same life, 5, 10 and 15 years from now?',
      [('Yes, and we\'ve talked', 2), ('Probably, not talked', 1), ('Not sure', 0), ('No', 0)]),
     ('security', 'How sure are you that {p} is in this relationship for the long run?', [('Completely', 2), ('Mostly', 1), ('Not sure', 0)]),
-    ('desire', 'How happy are you with physical closeness and desire between you? You can skip this one.',
-     [('Very', 2), ('Mostly', 1), ('Something to talk about', 0), ('Skip', None)]),
+    ('desire', 'Do you feel a real, particular physical attraction to {p}, and are you happy with the closeness between you? You can skip this one.',
+     [('Yes, strongly', 2), ('Mostly', 1), ('Something to talk about', 0), ('Skip', None)]),
 ]
 # Worded for working together when they've separated; desire and growth aren't asked then.
 CORE_SEPARATED = {
@@ -1870,10 +1870,25 @@ SUBTITLES = {'close': 'Bids and responsiveness', 'secure': 'Attachment and commi
 PLAN_TITLE = 'Your 28-day practice'
 
 
+TRUTH_HOME = {'strength': 'close', 'edge': 'disagree', 'surprise': 'secure'}     # where a truth sits when an older read named none
+CHAPTER_IDS = [c[0] for c in CHAPTERS]
+THEM_TWO = re.compile(r'\bthe two of them\b', re.I)
+
+
+def _sentences(r):
+    out = {}
+    for at, t in _texts(r):
+        for x in re.split(r'(?<=[.!?])\s+', t):
+            k = re.sub(r'[^a-z0-9 ]', '', x.lower()).strip()
+            if len(k) >= 60:
+                out.setdefault(k, []).append(at)
+    return {k: v for k, v in out.items() if len(v) > 1}
+
+
 def check_read(r, view, has_chat=False):
-    """The read, integrated (README "Psyche Together, release 14"): a glance (summary, three truths, every pillar's
-    three views), five chapters each told once, one four-week plan, with dated evidence throughout and at least
-    16,000 characters; nothing that says who answered what."""
+    """The read, lean (README "Psyche Together, release 24"): a glance, five chapters each with its takeaway, its truth
+    when it holds one, its pillars, its story and its parts, said once; one plan; at least 11,000 characters; nothing
+    that says who answered what, nothing said twice, and always to "you two"."""
     problems = []
     if not isinstance(r, dict):
         return ['The read is not a JSON object.']
@@ -1883,51 +1898,62 @@ def check_read(r, view, has_chat=False):
     ev = lambda xs: len(L(xs)) >= 1 and all(isinstance(e, dict) and DATED.search(T(e.get('when'))) and T(e.get('what')) for e in L(xs))
     need = lambda ok, msg: ok or problems.append(msg)
     need(T(r.get('summary')) and len(T(r.get('summary')).split()) <= 30, 'summary: one specific line, under 30 words')
+    if view.get('overall'):
+        ov = D(r.get('overall'))
+        need(T(ov.get('title')) and 0 < len(T(ov.get('detail'))) <= 400, 'overall: a title and a detail of one or two sentences, at most 400 characters, for the couple, never whose')
     tr = L(r.get('truths'))
-    need([D(x).get('kind') for x in tr] == ['strength', 'edge', 'surprise'] and all(T(D(x).get('title')) and len(T(D(x).get('detail'))) >= 300 and ev(D(x).get('evidence')) for x in tr),
-         'truths: exactly three, strength, edge and surprise in that order, each a title, a detail of four or five sentences (at least 300 characters) and dated evidence')
+    need([D(x).get('kind') for x in tr] == ['strength', 'edge', 'surprise'] and all(T(D(x).get('title')) and 200 <= len(T(D(x).get('detail'))) <= 700
+                                                                                  and D(x).get('chapter') in CHAPTER_IDS and ev(D(x).get('evidence')) for x in tr),
+         'truths: exactly three, strength, edge and surprise in that order, each a title, a detail of 200 to 700 characters, its chapter (close, secure, disagree, life or future) and dated evidence')
     pl = D(r.get('pillars'))
     for p in view['pillars']:
         x = D(pl.get(p))
-        if not (T(x.get('headline')) and T(x.get('seeIt')) and len(T(x.get('psyches'))) >= 150 and x.get('signal') in ('more', 'less', 'same', 'none')):
-            problems.append('pillars.%s: headline, seeIt, psyches (two or three sentences naming both) and signal' % p)
+        if not (T(x.get('headline')) and T(x.get('seeIt')) and x.get('signal') in ('more', 'less', 'same', 'none')):
+            problems.append('pillars.%s: headline, seeIt and signal' % p)
         elif has_chat and not T(x.get('messages')):
             problems.append('pillars.%s.messages: what their conversation shows for it' % p)
     extra = [p for p in pl if p not in view['pillars']]
     need(not extra, 'pillars: %s aren\'t in the couple view; leave them out' % ', '.join(extra))
     ch = D(r.get('chapters'))
+    for cid in CHAPTER_IDS:
+        c = D(ch.get(cid))
+        need(0 < len(T(c.get('takeaway'))) <= 240 and len(T(c.get('detail'))) >= (500 if cid in ('close', 'disagree') else 350) and ev(c.get('evidence')),
+             'chapters.%s: a takeaway (at most 240 characters), a detail (at least %d characters) and dated evidence' % (cid, 500 if cid in ('close', 'disagree') else 350))
     c = D(ch.get('close'))
-    need(len(T(c.get('detail'))) >= 700 and T(c.get('bids')) and T(D(c.get('care')).get('a')) and T(D(c.get('care')).get('b')) and ev(c.get('evidence'))
-         and len(L(c.get('askEachOther'))) == 2 and T(c.get('tryThis')), 'chapters.close: detail (at least 700 characters), bids, care a and b, dated evidence, two askEachOther, tryThis')
+    need(T(c.get('bids')) and T(D(c.get('care')).get('a')) and T(D(c.get('care')).get('b')) and len(L(c.get('askEachOther'))) == 2 and T(c.get('tryThis')),
+         'chapters.close: bids, care a and b, two askEachOther, tryThis')
     d = D(ch.get('disagree'))
     cy = D(d.get('cycle'))
-    need(len(T(d.get('detail'))) >= 700 and len(L(cy.get('steps'))) == 4 and all(T(x) and len(T(x)) <= 110 for x in L(cy.get('steps'))) and T(cy.get('a')) and T(cy.get('b')) and T(cy.get('exit'))
-         and len(L(d.get('lasting'))) == 2 and len(L(d.get('solvable'))) == 1 and all(T(D(d.get('dream')).get(k)) for k in ('tension', 'a', 'b', 'question')) and ev(d.get('evidence')),
-         'chapters.disagree: detail (at least 700 characters), cycle (four short steps, a, b, exit), two lasting, one solvable, dream (tension, a, b, question), dated evidence')
+    need(len(L(cy.get('steps'))) == 4 and all(T(x) and len(T(x)) <= 110 for x in L(cy.get('steps'))) and T(cy.get('a')) and T(cy.get('b')) and T(cy.get('exit'))
+         and len(L(d.get('lasting'))) == 2 and all(T(D(x).get('title')) and T(D(x).get('howToLiveWithIt')) for x in L(d.get('lasting')))
+         and len(L(d.get('solvable'))) == 1 and all(T(D(x).get('title')) and T(D(x).get('firstStep')) for x in L(d.get('solvable')))
+         and T(D(d.get('dream')).get('tension')) and T(D(d.get('dream')).get('question')),
+         'chapters.disagree: cycle (four short steps, a, b, exit), two lasting (title, howToLiveWithIt), one solvable (title, firstStep), dream (tension, question)')
     sc = D(ch.get('secure'))
-    need(len(T(sc.get('detail'))) >= 500 and T(sc.get('a')) and T(sc.get('b')) and ev(sc.get('evidence')) and len(L(sc.get('askEachOther'))) == 1 and T(sc.get('tryThis')),
-         'chapters.secure: detail (at least 500 characters), a, b, dated evidence, one askEachOther, tryThis')
+    need(T(sc.get('a')) and T(sc.get('b')) and len(L(sc.get('askEachOther'))) == 1 and T(sc.get('tryThis')), 'chapters.secure: a, b, one askEachOther, tryThis')
     lf = D(ch.get('life'))
-    need(len(T(lf.get('detail'))) >= 500 and ev(lf.get('evidence')) and len(L(lf.get('askEachOther'))) == 1 and T(lf.get('tryThis')),
-         'chapters.life: detail (at least 500 characters), dated evidence, one askEachOther, tryThis')
+    need(len(L(lf.get('askEachOther'))) == 1 and T(lf.get('tryThis')), 'chapters.life: one askEachOther, tryThis')
     fu = D(ch.get('future'))
     topics = {x['topic'] for x in view['decisions']}
-    need(len(T(fu.get('detail'))) >= 500 and T(D(fu.get('growth')).get('a')) and T(D(fu.get('growth')).get('b')) and len(L(fu.get('together'))) == 3 and ev(fu.get('evidence'))
+    need(T(D(fu.get('growth')).get('a')) and T(D(fu.get('growth')).get('b')) and len(L(fu.get('together'))) == 3
          and (not topics or all(isinstance(x, dict) and x.get('topic') in topics and T(x.get('line')) for x in L(fu.get('decisions')))),
-         'chapters.future: detail (at least 500 characters), a line per big decision (%s), growth a and b, three together ideas, dated evidence' % (', '.join(sorted(topics)) or 'none'))
+         'chapters.future: a line per big decision (%s), growth a and b, three together ideas' % (', '.join(sorted(topics)) or 'none'))
     im = D(r.get('intermission'))
     need(T(im.get('title')) and 3 <= len(L(im.get('lines'))) <= 5 and all(T(x) and len(T(x)) <= 220 for x in L(im.get('lines'))), 'intermission: a title and three to five short, light lines')
-    if view.get('overall'):
-        ov = D(r.get('overall'))
-        need(T(ov.get('title')) and len(T(ov.get('detail'))) >= 300, 'overall: a title and a detail of three or four sentences (at least 300 characters) on how satisfied they both are and how well they read each other, for the couple, never whose')
     pn = D(r.get('plan'))
     w1 = D(pn.get('week1'))
     need(T(w1.get('title')) and len(L(w1.get('days'))) == 7 and len(L(pn.get('weeks'))) == 3
          and all(T(D(w).get('title')) and T(D(w).get('ask')) and T(D(w).get('doTogether')) and 3 <= len(L(D(D(w).get('conversation')).get('script'))) <= 5 for w in L(pn.get('weeks'))),
-         'plan: week1 (title, chapter, seven days) and three weeks, each a title, a conversation (title, why, a script of 3 to 5 steps), ask and doTogether')
+         'plan: week1 (title, seven days) and three weeks, each a title, a conversation (title, why, a script of 3 to 5 steps), ask and doTogether')
     need(T(r.get('caveats')), 'caveats: what this can\'t see, in a sentence or two')
     total = sum(len(t) for _, t in _texts(r))
-    need(total >= 16000, 'the read is %d characters: write it deeper than a Psyche Report, at least 16,000 characters across its sections' % total)
+    need(total >= 11000, 'the read is %d characters: at least 11,000 across its sections' % total)
+    twice = _sentences(r)
+    if twice:
+        k, at = next(iter(twice.items()))
+        problems.append('said twice (%s): "%s…" — say each thing once, in its one place' % (' and '.join(at[:2]), k[:60]))
+    them = [at for at, t in _texts(r) if THEM_TWO.search(t)]
+    need(not them, '%s says "the two of them": say it to them, "you two" or by name' % ', '.join(them[:3]))
     _plain(problems, r, 2400)
     return [x for x in problems if x][:20]
 
@@ -2528,14 +2554,14 @@ nav a i{font-style:normal;font-weight:800;color:var(--c)}
 nav a.on{background:var(--c);border-color:var(--c);color:#fff}nav a.on i{color:#fff}
 nav button,.foldall{all:unset;box-sizing:border-box;cursor:pointer;-webkit-tap-highlight-color:transparent}
 nav button{flex:none;margin-left:auto;padding:6px 12px;border-radius:999px;color:#7b3fa0;font-size:13px;font-weight:700;white-space:nowrap}
-.part{background:#fff;border:1px solid #e6dcec;border-top:4px solid var(--c);border-radius:20px;margin:0 0 14px;box-shadow:0 1px 2px rgba(36,26,46,.04),0 10px 30px rgba(36,26,46,.06);overflow:hidden;scroll-margin-top:var(--navh,62px)}
+.part{background:#fff;border:1px solid #e6dcec;border-radius:20px;margin:0 0 14px;box-shadow:0 1px 2px rgba(36,26,46,.04),0 10px 30px rgba(36,26,46,.06);overflow:hidden;scroll-margin-top:var(--navh,62px)}
 .part>.hd{all:unset;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:14px;width:100%;padding:16px 18px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .part>.hd:focus-visible{outline:2px solid var(--c);outline-offset:-2px;border-radius:18px}
 .num{grid-row:1/span 2;min-width:34px;font-size:30px;font-weight:800;line-height:1;letter-spacing:-.03em;background:linear-gradient(135deg,var(--c),#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
 .ttl{font-size:19px;font-weight:750;letter-spacing:-.01em;line-height:1.25}
 .tease{grid-column:2;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--c);opacity:.85}
 .chev{grid-row:1/span 2;grid-column:3;width:24px;height:24px;color:var(--mute);transition:transform .2s}
-.part.open .chev{transform:rotate(180deg)}
+.part.open .chev{transform:rotate(180deg)}.part.open{border-top:4px solid var(--c)}
 .body{padding:2px 18px 18px;border-top:1px solid #f1eaf5}
 .js .part:not(.open) .body{display:none}
 h3{margin:24px 0 10px;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:8px}
@@ -2553,12 +2579,12 @@ p{margin:0 0 10px}
 .tile:only-child{grid-column:1/-1}
 .lv.Strong,.lv.Aligned,.lv.Happier-than-you-each-think,.lv.About-right{background:#e3f4ec;color:var(--sage)}
 .lv.Steady,.lv.Not-decided-yet{background:#fdf1e2;color:var(--amber)}
-.lv.Worth-attention,.lv.Talk-about,.lv.Worth-asking-each-other{background:#f2e9f8;color:var(--plum)}
+.lv.Worth-attention,.lv.Worth-asking-each-other{background:#fbe7e5;color:#b3261e}.lv.Talk-about{background:#f2e9f8;color:var(--plum)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
 .stat{padding:14px;border-radius:16px;background:#fff;border:1px solid #ece2f2;box-shadow:0 4px 14px rgba(70,20,100,.06)}
 .stat .lbl{margin-bottom:8px}
 .sv{display:flex;align-items:flex-start;gap:7px;font-size:16.5px;font-weight:800;line-height:1.25}.sv:before{content:"";flex:none;width:10px;height:10px;margin-top:5px;border-radius:50%;background:currentColor}
-.sv.Strong,.sv.Happier-than-you-each-think,.sv.About-right{color:var(--sage)}.sv.Steady{color:var(--amber)}.sv.Worth-attention,.sv.Worth-asking-each-other{color:var(--plum)}
+.sv.Strong,.sv.Happier-than-you-each-think,.sv.About-right{color:var(--sage)}.sv.Steady{color:var(--amber)}.sv.Worth-attention,.sv.Worth-asking-each-other{color:#b3261e}
 .map{display:flex;flex-direction:column;gap:10px;margin:8px 0}
 .mch{display:block;text-decoration:none;color:var(--ink);border:1px solid #ece2f2;border-left:5px solid var(--c);border-radius:16px;padding:12px 12px 12px 14px;background:linear-gradient(90deg,var(--t),#fff 60%)}
 .mhd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -2645,6 +2671,30 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}td,th{te
 .mv b{font-size:14.5px}.mv span{font-size:12.5px;font-weight:750;white-space:nowrap}.mv span.up{color:var(--sage)}.mv span.down{color:var(--rose)}.mv span.same{color:var(--mute)}
 .mv p{grid-column:1/-1;margin:0;font-size:14px;color:var(--soft)}
 .support .body p{font-size:15px}
+.glance-hero{margin:10px 0 6px;padding:12px 14px}.glance-hero b{font-size:18px}
+.ovl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 4px}.ovl>span{flex-direction:column;align-items:flex-start!important;gap:4px!important;padding:8px 10px;border-radius:12px;background:#faf7fb;border:1px solid #efe6f4}.ovl .lv{white-space:normal;font-size:12px}.ovl>span{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ovl small{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.ovd{font-size:13.5px;color:var(--soft);margin:6px 0 4px}
+.map{display:flex;flex-direction:column;gap:6px;margin:12px 0 6px}
+.mr{display:grid;grid-template-columns:28px 1fr 12px;gap:10px;align-items:center;padding:9px 10px;border-radius:14px;background:#fff;border:1px solid #ece2f2;border-left:4px solid var(--c);text-decoration:none;color:var(--ink)}
+.mr .n{width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
+.mr b{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14.5px;line-height:1.2}.mr>i{font-style:normal;color:var(--c);font-size:18px}
+.dots{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px}
+.pd{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:650;color:var(--soft)}.pd:before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
+.pd em{font-style:normal;font-size:11px;color:var(--mute)}
+.pd.Strong{color:var(--sage)}.pd.Steady{color:#b57418}.pd.Worth-attention{color:#b3261e}
+.tb{font-size:11px;font-weight:800;color:#fff;background:var(--k);border-radius:999px;padding:1px 7px}
+.key{font-size:11.5px}.key .k{width:9px;height:9px;border-radius:50%}.k.Strong{background:var(--sage)}.k.Steady{background:#b57418}.k.Worth-attention{background:#b3261e}
+.take{margin:12px 0;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#f3e9f8,#fdf0f6);border:1px solid #ead9f1}
+.take .lbl{color:var(--c)}.take p{margin:4px 0 0;font-size:16.5px;font-weight:700;line-height:1.4}
+.prow{margin:10px 0;padding:12px 14px;border-radius:14px;border:1px solid #efe6f4;background:#fdfbfe}
+.prow .pt{display:flex;justify-content:space-between;align-items:center;gap:8px}.prow .pt b{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--c)}
+.prow .phl{margin:6px 0;font-weight:700;font-size:15.5px}.prow p{margin:4px 0;font-size:14.5px}.prow p span{font-weight:700;color:var(--soft)}.prow .sig{font-size:12.5px;color:var(--mute)}
+.evs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}.evp{display:inline-block;padding:5px 10px;border-radius:999px;background:#f6f1f9;border:1px solid #ece2f2;font-size:12.5px;color:var(--soft);line-height:1.35}
+.evp b{color:var(--c);margin-right:6px;font-size:11.5px}
+.minebox{margin:12px 0;padding:12px 14px;border-radius:14px;background:#fbf6fe;border:1.5px dashed #cdb6dd}.minebox .lbl{color:#6a3590}.minebox h4{margin:4px 0}.minebox .raise{font-size:14px;color:var(--soft)}
+.diffs{padding-left:18px}.diffs li{margin:6px 0;font-size:14.5px}.diffs b{display:block}.solv{display:inline-block;font-size:11px;font-weight:800;color:#b57418;background:#fdf1e2;border-radius:999px;padding:0 7px;margin-right:4px}
+details.sci{margin:14px 0 4px}details.sci summary{cursor:pointer;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c)}details.sci ul{margin:6px 0 0}
+.callout .q{margin:4px 0;font-weight:650}
 footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line-height:1.6}
 .saycopy{margin-top:14px;padding:12px 14px;border-radius:14px;background:#f4edf8;border:1px solid var(--line)}.saycopy p{margin:0 0 8px;font-size:13.5px;color:var(--soft)}
 .sayrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sayrow code{flex:1 1 12em;min-width:0;padding:8px 10px;border-radius:8px;background:#fff;border:1px solid var(--line);font:600 14px/1.35 inherit;color:var(--ink);user-select:all;-webkit-user-select:all}
@@ -2664,13 +2714,17 @@ function navh(){if(bar)document.documentElement.style.setProperty('--navh',(bar.
 function mark(){chips.forEach(function(c){var p=document.querySelector(c.getAttribute('href'));c.classList.toggle('on',!!(p&&p.classList.contains('open')));});}
 function set(p,open){p.classList.toggle('open',open);var b=p.querySelector('.hd');if(b)b.setAttribute('aria-expanded',open?'true':'false');mark();}
 function go(el){requestAnimationFrame(function(){try{el.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){el.scrollIntoView(true);}});}
-parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',function(){set(p,!p.classList.contains('open'));});});
-function open(id){var p=document.querySelector(id);if(p){set(p,true);go(p);}}
+// One section open at a time, as the Psyche Report: opening one closes the rest, the intermission too.
+function only(p){parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);go(p);}
+parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',function(){if(p.classList.contains('open'))set(p,false);else only(p);});});
+function open(id){var p=document.querySelector(id);if(p)only(p);}
 chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();open(c.getAttribute('href'));});});
-[].slice.call(document.querySelectorAll('.mch')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
+[].slice.call(document.querySelectorAll('.mr')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
 var fold=[].slice.call(document.querySelectorAll('[data-fold]'));
-function label(){var any=parts.some(function(p){return !p.classList.contains('open');});fold.forEach(function(b){b.textContent=any?'Open all ▼':'Close all ▲';});}
-fold.forEach(function(b){b.addEventListener('click',function(){var any=parts.some(function(p){return !p.classList.contains('open');});parts.forEach(function(p){set(p,any);});label();if(!any)go(document.getElementById('top'));});});
+function label(){var any=parts.some(function(p){return p.classList.contains('open');});fold.forEach(function(b){b.hidden=!any;});}
+fold.forEach(function(b){b.textContent='Close all ▲';b.addEventListener('click',function(){parts.forEach(function(p){set(p,false);});label();go(document.getElementById('top'));});});
+[].slice.call(document.querySelectorAll('.mr')).forEach(function(a){a.addEventListener('click',label);});
+chips.forEach(function(c){c.addEventListener('click',label);});
 parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',label);});
 mark();label();
 [].slice.call(document.querySelectorAll('[data-copy]')).forEach(function(b){b.addEventListener('click',function(){var t=b.getAttribute('data-copy'),done=function(){b.textContent='Copied ✓';setTimeout(function(){b.textContent='Copy';},1800);};
@@ -2704,12 +2758,20 @@ def _sv(level):
     return '<span class="sv %s">%s</span>' % (_e(str(level).replace(' ', '-')), _e(level)) if level else ''
 
 
-def _science(keys):
-    """A chapter's research lines in one box."""
+def _science(keys, folded=False):
+    """A chapter's research lines in one box; folded at the end of a chapter, opened with a tap."""
     lines = [RESEARCH[k] for k in keys if k in RESEARCH]
+    if folded and lines:
+        return '<details class="sci"><summary>What the research says</summary><ul>%s</ul></details>' % ''.join('<li>%s</li>' % _e(x) for x in lines)
     if len(lines) < 2:
         return ''.join(_research(k) for k in keys)
     return '<div class="sci"><span class="lbl">What the research says</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in lines)
+
+
+def _pills(xs):
+    """Dated moments as small pills, where they belong (README "Psyche Together, release 24")."""
+    xs = [x for x in (xs or []) if isinstance(x, dict) and x.get('what')]
+    return ('<div class="evs">%s</div>' % ''.join('<span class="evp"><b>%s</b>%s</span>' % (_e(x.get('when')), _e(x.get('what'))) for x in xs)) if xs else ''
 
 
 def _initial(name):
@@ -2751,7 +2813,7 @@ def _talk_panel(box, names):
     table = '<table><tr><th></th><th>%s</th><th>%s</th></tr>%s</table>' % (_e(who[0]), _e(who[1]), ''.join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % tuple(_e(c) for c in r) for r in rows))
     match = ('<div class="big"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>%s' % (round(100 * sig['styleMatch']), _research('styleMatch'))
              if sig.get('styleMatch') is not None else '')
-    return ('<h3>How you talk to each other</h3>' + match + table
+    return ('<h3>You two, in numbers</h3>' + match + table
             + '<p class="soft">%s messages from %s to %s, about %s a month, %s.</p>' % (_e(sig.get('messages')), _e(sig.get('from')), _e(sig.get('to')), _e(sig.get('perMonth')), _e(sig.get('trend')))
             + _research('we'))
 
@@ -2881,12 +2943,16 @@ def page(box, s):
                                                          % (_initial(na), _e(la), _paras(a), _initial(nb), _e(lb), _paras(b)))
     if gentle:
         part('support', '♡', 'For you first', '<p>' + _e(SUPPORT) + '</p>', 'support mine', 'Only on your copy', True)
-    if fy:
-        items_ = ''.join('<div class="fy"><h4>%s</h4>%s%s</div>' % (_e(x.get('title')), _paras(x.get('detail')),
-                         ('<div class="callout key2"><span class="lbl">How to raise it</span>%s</div>' % _e(x.get('howToRaise'))) if x.get('howToRaise') and not gentle else '')
-                         for x in fy.get('focus') or [] if isinstance(x, dict))
-        part('foryou', '✦', 'For you', items_ + tryit(fy.get('practice'), 'This week') + ('<p class="soft">%s</p>' % _e(fy.get('note')) if fy.get('note') else '')
-             + '<span class="private">🔒 Only on your copy: %s never sees this</span>' % _e(names[1] if s.get('role') == 'a' else names[0]), 'mine', 'Private advice, just for you', True)
+    # For you (README "Psyche Together, release 24"): each piece in the chapter it's about, as a small private box.
+    other = names[1] if s.get('role') == 'a' else names[0]
+    mine_by = {}
+    for x in (fy or {}).get('focus') or []:
+        if isinstance(x, dict):
+            home = next((c[0] for c in CHAPTERS if x.get('pillar') in c[3]), 'close')
+            mine_by.setdefault(home, []).append(x)
+    private = lambda xs: ''.join('<div class="minebox"><span class="lbl">🔒 Just for you · %s never sees this</span><h4>%s</h4>%s%s</div>'
+                                 % (_e(other), _e(x.get('title')), _paras(x.get('detail')),
+                                    ('<p class="raise"><b>How to raise it:</b> %s</p>' % _e(x.get('howToRaise'))) if x.get('howToRaise') and not gentle else '') for x in xs)
     # What moved (README "Psyche Together, release 17"): each check-in again, newest first, above the read it updates.
     arrows = {'up': '↑ up', 'down': '↓ down', 'same': '= same'}
     for k_, rc in enumerate(reversed(rounds_in(box))):
@@ -2905,49 +2971,67 @@ def page(box, s):
              '<div class="wk"><small>The next four weeks</small><h4>%s</h4><ol>%s</ol></div>'
              % (_e(nt.get('summary')), stats, rows, _e(nt.get('held')), _e(nx.get('title')), ''.join('<li>%s</li>' % _e(x) for x in nx.get('steps') or [])),
              'since', 'Checked in again · ' + when_, k_ == 0, COLOURS['since'])
-    # At a glance: the overall pair, the map (one card per chapter, in its colour), then three truths.
+    # At a glance (README "Psyche Together, release 24"): on one screen. The line, the overall pair, and the map: a row per
+    # chapter, its pillars as coloured dots, and a badge where one of the three truths sits.
+    kinds = {'strength': ('★ Your strength', '#2f7d5b'), 'edge': ('↗ Your growth edge', '#c2366d'), 'surprise': ('✦ The surprise', '#c2571a')}
+    truths_by = {}
+    for x in r.get('truths') or []:
+        if isinstance(x, dict):
+            truths_by.setdefault(x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close'), []).append(x)
+    SHORT = {'appreciation': 'Appreciation', 'connection': 'Connection', 'desire': 'Closeness', 'security': 'Security', 'disagreements': 'Repair',
+             'needs': 'Needs and fairness', 'life': 'Life fit', 'future': 'Future', 'growth': 'Growth'}
     mp = ''
     for cid, num, title, pids, refs in CHAPTERS:
-        tl = ''
+        dots = ''
         for pid in [p for p in pids if p in (view.get('pillars') or {})]:
             lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
-            arrow, said = SIGNAL.get(x.get('signal'), ('', ''))
-            tl += '<span class="tile"><b>%s</b>%s%s</span>' % (_e(PILLARS.get(pid, pid)), _lv(lv), ('<span class="sg" title="%s">%s</span>' % (_e(said), arrow)) if arrow else '')
-        if tl:
-            c = COLOURS[cid]
-            mp += ('<a class="mch" href="#%s" style="--c:%s;--t:%s"><span class="mhd"><span class="n">%s</span><span><b>%s</b><small>%s</small></span><em>›</em></span><span class="tiles">%s</span></a>'
-                   % (cid, c, _tint(c), num, _e(title), _e(SUBTITLES.get(cid, '')), tl))
-    kinds = {'strength': ('Your strength', '#2f7d5b'), 'edge': ('Your growth edge', '#c2366d'), 'surprise': ('The surprise', '#c2571a')}
-    truths = ''.join('<div class="truth" style="--k:%s"><span class="lbl">%s</span><h4>%s</h4>%s%s</div>'
-                     % (kinds.get(x.get('kind'), ('', '#7b3fa0'))[1], _e(kinds.get(x.get('kind'), ('', ''))[0]), _e(x.get('title')), _paras(x.get('detail')),
-                        keep(x.get('evidence'), kinds.get(x.get('kind'), ('', ''))[0])) for x in r.get('truths') or [] if isinstance(x, dict))
+            dots += '<span class="pd %s" title="%s">%s<em>%s</em></span>' % (_e(lv.replace(' ', '-')), _e(lv), _e(SHORT.get(pid, pid)), _e(SIGNAL.get(x.get('signal'), ('', ''))[0]))
+        if dots:
+            badge = ''.join('<span class="tb" style="--k:%s">%s</span>' % (kinds[t['kind']][1], _e(kinds[t['kind']][0].split(' ', 1)[0])) for t in truths_by.get(cid, []) if t.get('kind') in kinds)
+            mp += ('<a class="mr" href="#%s" style="--c:%s"><span class="n">%s</span><span class="mt"><b>%s%s</b><span class="dots">%s</span></span><i>›</i></a>'
+                   % (cid, COLOURS[cid], num, _e(title), badge, dots))
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
     band = ''
     if ovv:
-        band = ('<div class="stats"><div class="stat"><span class="lbl">How satisfied you both are</span>%s</div><div class="stat"><span class="lbl">How well you read each other</span>%s</div></div>'
-                % (_sv(ovv['level']), _sv(ovv['reading'])))
-        if ovr.get('detail'):
-            band += '<h4>%s</h4>%s%s' % (_e(ovr.get('title')), _paras(ovr.get('detail')), _research('overall'))
-    key = ('<div class="key"><span><i style="background:#2f7d5b"></i>Strong: you both see it so</span><span><i style="background:#9a5b12"></i>Steady</span>'
-           '<span><i style="background:#6e3796"></i>Worth attention: either of you sees it so, never whose</span><span>↑ ↓ = your messages show more, less or the same</span></div>')
-    part('glance', '★', 'At a glance', '<div class="hero"><small>The two of you, in one line</small><b>%s</b></div>%s<h3>Your relationship map</h3><div class="map">%s</div>%s<h3>Three truths</h3>%s'
-         % (_e(r.get('summary')), band, mp, key, truths), '', 'The whole read on one screen', True)
-    # Chapters.
+        band = ('<div class="ovl"><span><small>Satisfaction</small>%s</span><span><small>Reading each other</small>%s</span></div>' % (_lv(ovv['level']), _lv(ovv['reading']))
+                + (('<p class="ovd">%s</p>' % _e(ovr.get('detail'))) if ovr.get('detail') else ''))
+    key = ('<div class="key"><span><i class="k Strong"></i>Strong</span><span><i class="k Steady"></i>Steady</span><span><i class="k Worth-attention"></i>Worth attention</span>'
+           '<span>★ ↗ ✦ where your strength, growth edge and surprise are</span><span>↑ ↓ = what your messages show</span></div>')
+    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You two, in one line</small><b>%s</b></div>%s<div class="map">%s</div>%s%s'
+         % (_e(r.get('summary')), band, mp, key, ('<details class="sci"><summary>What the research says</summary>%s</details>' % _e(RESEARCH['overall'])) if ovv else ''),
+         '', 'The whole read on one screen', True)
+    # Chapters (README "Psyche Together, release 24"): the takeaway; its truth; its pillars; the story with its moments;
+    # its own picture; what's private to you; one box to try together; the research, folded.
     for cid, num, title, pids, refs in CHAPTERS:
         c = D(ch.get(cid))
-        inner = _views(r, view, pids) + _science(refs) + ('<h3>The full picture</h3>' if c.get('detail') else '') + _paras(c.get('detail'))
+        take = c.get('takeaway') or ' '.join(D(D(r.get('pillars')).get(p)).get('headline') or '' for p in pids if p in (view.get('pillars') or {}))
+        inner = '<div class="take"><span class="lbl">The takeaway</span><p>%s</p></div>' % _e(take)
+        for t in truths_by.get(cid, []):
+            k_ = kinds.get(t.get('kind'), ('', '#7b3fa0'))
+            inner += '<div class="truth" style="--k:%s"><span class="lbl">%s</span><h4>%s</h4>%s%s</div>' % (k_[1], _e(k_[0]), _e(t.get('title')), _paras(t.get('detail')), _pills(t.get('evidence')))
+            keep(t.get('evidence'), k_[0])
+        for pid in [p for p in pids if p in (view.get('pillars') or {})]:
+            lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
+            arrow, said = SIGNAL.get(x.get('signal'), ('', ''))
+            inner += ('<div class="prow"><div class="pt"><b>%s</b>%s</div><p class="phl">%s</p><p><span>You see it:</span> %s</p>%s%s</div>'
+                      % (_e(PILLARS.get(pid, pid)), _lv(lv), _e(x.get('headline')), _e(x.get('seeIt')),
+                         ('<p><span>Your messages:</span> %s</p>' % _e(x.get('messages'))) if x.get('messages') else '',
+                         ('<p class="sig">%s %s</p>' % (arrow, _e(said))) if arrow else ''))
+        inner += ('<h3>The story</h3>' + _paras(c.get('detail')) + _pills(c.get('evidence'))) if c.get('detail') else ''
+        keep(c.get('evidence'), title)
         if cid == 'close':
-            inner += ('<div class="callout key2"><span class="lbl">Reaching for each other</span>%s</div>' % _e(c.get('bids')) if c.get('bids') else '') + _talk_panel(box, names)
-            inner += '<h3>What makes each of you feel cared for</h3>' + two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), names[0], names[1])
-        if cid == 'disagree':
-            cy = D(c.get('cycle'))
-            inner += '<h3>Your cycle</h3>' + _cycle(cy, names) + two(cy.get('a'), cy.get('b'), names[0], names[1]) + tryit(cy.get('exit'), 'The way out')
-            inner += '<h3>Differences to live with, and one to solve</h3>' + ''.join('<div class="item"><h4>%s</h4>%s%s</div>' % (_e(x.get('title')), _paras(x.get('detail')), tryit(x.get('howToLiveWithIt'), 'Living with it')) for x in c.get('lasting') or [] if isinstance(x, dict))
-            inner += ''.join('<div class="item"><h4>%s</h4>%s%s</div>' % (_e(x.get('title')), _paras(x.get('detail')), tryit(x.get('firstStep'), 'First step')) for x in c.get('solvable') or [] if isinstance(x, dict))
-            dr = D(c.get('dream'))
-            inner += '<h3>The dream under it</h3><p>%s</p>%s<div class="callout key2"><span class="lbl">The question that opens it</span>%s</div>' % (_e(dr.get('tension')), two(dr.get('a'), dr.get('b'), names[0], names[1]), _e(dr.get('question')))
+            inner += ('<div class="callout key2"><span class="lbl">Reaching for each other</span>%s</div>' % _e(c.get('bids')) if c.get('bids') else '')
+            inner += two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), 'What makes %s feel cared for' % names[0], 'What makes %s feel cared for' % names[1])
         if cid == 'secure':
-            inner += '<h3>What each of you needs to feel sure</h3>' + two(c.get('a'), c.get('b'), names[0], names[1])
+            inner += two(c.get('a'), c.get('b'), 'What %s needs to feel sure' % names[0], 'What %s needs to feel sure' % names[1])
+        if cid == 'disagree':
+            cy, dr = D(c.get('cycle')), D(c.get('dream'))
+            inner += '<h3>Your cycle</h3>' + _cycle(cy, names) + two(cy.get('a'), cy.get('b'), 'Under it, for %s' % names[0], 'Under it, for %s' % names[1])
+            inner += ('<div class="callout try"><span class="lbl">The way out</span>%s%s</div>'
+                      % (_e(cy.get('exit')), ('<p class="q"><b>The question that opens it:</b> %s</p>' % _e(dr.get('question'))) if dr.get('question') else ''))
+            diffs = ''.join('<li><b>%s</b> %s</li>' % (_e(x.get('title')), _e(x.get('howToLiveWithIt'))) for x in c.get('lasting') or [] if isinstance(x, dict))
+            diffs += ''.join('<li><b>%s</b> <span class="solv">to solve</span> %s</li>' % (_e(x.get('title')), _e(x.get('firstStep'))) for x in c.get('solvable') or [] if isinstance(x, dict))
+            inner += ('<h3>Differences to live with, and one to solve</h3><ul class="diffs">%s</ul>' % diffs) if diffs else ''
         if cid == 'life':
             inner += _rhythm(sig, who)
         if cid == 'future':
@@ -2956,10 +3040,14 @@ def page(box, s):
                 inner += '<h3>The big decisions, side by side</h3>' + ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p><p>%s</p></div>'
                                                                        % (_e(x['label']), _lv(x['result']), _e(names[0]), _e(x.get('a') or '-'), _e(names[1]), _e(x.get('b') or '-'), _e(lines.get(x['topic'], '')))
                                                                        for x in view.get('decisions') or [])
-            inner += '<h3>How you help each other grow</h3>' + two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s' % (names[0], names[1]), 'How %s helps %s' % (names[1], names[0]))
-            inner += '<h3>New things to try together</h3><ul>%s</ul>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
-        ev_ = keep(c.get('evidence'), title)
-        inner += ('<h3>When it showed</h3>' + ev_ if ev_ else '') + ask(c.get('askEachOther')) + tryit(c.get('tryThis'))
+            inner += two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
+            if c.get('together'):
+                inner += '<div class="callout ask"><span class="lbl">New things to try together</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
+        inner += private(mine_by.get(cid, []))
+        if c.get('askEachOther') or c.get('tryThis'):
+            inner += ('<div class="callout ask"><span class="lbl">Try together</span>%s%s</div>'
+                      % (''.join('<p class="q">%s</p>' % _e(x) for x in c.get('askEachOther') or []), ('<p><b>This week:</b> %s</p>' % _e(c.get('tryThis'))) if c.get('tryThis') else ''))
+        inner += _science(refs, folded=True)
         part(cid, num, title, inner, 'chapter', SUBTITLES.get(cid, ''))
         if cid == 'disagree':
             parts.append('@@INTERMISSION@@')
@@ -2979,9 +3067,9 @@ def page(box, s):
             facts.append((em[0], '%s\'s favourite emoji' % nm, ' '.join(em)))
     facts_html = ''.join('<div class="fact"><em>%s</em><small>%s</small><b>%s</b></div>' % (_e(i_), _e(a_), _e(b_)) for i_, a_, b_ in facts)
     line = ''.join('<li><b>%s</b><span>%s</span><em>%s</em></li>' % (_e(w), _e(t), _e(tag)) for w, t, tag in sorted(moments, key=lambda m: _when_key(m[0])))
-    inner = ('<span class="badge">Intermission</span><div class="lines" style="margin-top:12px">%s</div>%s%s%s'
+    inner = ('<span class="badge">Intermission</span><div class="lines" style="margin-top:12px">%s</div>%s%s%s%s'
              % (''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), ('<div class="funfacts">%s</div>' % facts_html) if facts_html else '',
-                _months_svg(sig.get('months') or []), ('<h3>Your story in moments</h3><ol class="timeline">%s</ol>' % line) if line else ''))
+                _months_svg(sig.get('months') or []), _talk_panel(box, names), ('<h3>Your story in moments</h3><ol class="timeline">%s</ol>' % line) if line else ''))
     part('moments', '✦', im.get('title') or 'Your story in moments', inner, 'intermission', 'A light break', False, COLOURS['moments'])
     inter, inter_nav = parts.pop(), nav.pop()
     parts[parts.index('@@INTERMISSION@@')] = inter
@@ -2995,7 +3083,10 @@ def page(box, s):
                        _e(w.get('ask')), _e(w.get('doTogether'))) for i, w in enumerate(pn.get('weeks') or []) if isinstance(w, dict))
     part('plan', '06', PLAN_TITLE, '<div class="weeks"><div class="wk"><i>W1</i><small>Week 1 · a little every day</small><h4>%s</h4><ol class="days">%s</ol></div>%s</div>%s'
          '<p class="soft">In four weeks, Psyche Together asks you both the same questions again, here in Muse, and shows what has moved at the top of this page.</p>'
-         % (_e(w1.get('title')), ''.join('<li><b>%d</b><span>%s</span></li>' % (i + 1, _e(x)) for i, x in enumerate(w1.get('days') or [])), weeks, _research('lovemaps')),
+         % (_e(w1.get('title')), ''.join('<li><b>%d</b><span>%s</span></li>' % (i + 1, _e(x)) for i, x in enumerate(w1.get('days') or [])), weeks
+            + (('<div class="minebox"><span class="lbl">🔒 Just for you · %s never sees this</span><p><b>This week, on your side:</b> %s</p>%s</div>'
+                % (_e(other), _e(fy.get('practice')), ('<p class="soft">%s</p>' % _e(fy.get('note'))) if fy.get('note') else '')) if fy and fy.get('practice') else ''),
+            _research('lovemaps')),
          'chapter', SUBTITLES['plan'])
     part('how', 'i', 'How this was read', _how(box) + '%s<p class="soft">From both your full Psyche reports, shared with your consent for this read; your conversation together, measured on the device of the one who added it; and the check-in you each did privately, the same core questions for both. '
          'The measures follow published research: how partners see the relationship (Joel et al., PNAS 2020), turning towards and repair (Gottman), responsiveness to good news (Gable et al., 2004), '
@@ -3021,9 +3112,9 @@ def page(box, s):
               % (LOGO, hearts, _e(' · '.join(x for x in ['Psyche Together', view.get('stage') or ''] if x)), card('a', names[0], 'l'), card('b', names[1], 'r'), _e(names[0]), _e(names[1]),
                  _e(' · '.join(x for x in [('Talking since ' + since) if since else '', when] if x))))
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>' if pics else ''
-    bar = '<nav aria-label="Sections">%s<button type="button" data-fold>Open all ▼</button></nav>' % ''.join(nav)
+    bar = '<nav aria-label="Sections">%s<button type="button" data-fold>Close all ▲</button></nav>' % ''.join(nav)
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
-            '<title>Psyche Together · %s &amp; %s</title><style>%s</style></head><body><div class="wrap">%s%s%s<button type="button" class="foldall" data-fold>Open all ▼</button>'
+            '<title>Psyche Together · %s &amp; %s</title><style>%s</style></head><body><div class="wrap">%s%s%s<button type="button" class="foldall" data-fold>Close all ▲</button>'
             '<footer><b>Psyche Together</b> by PsycheAI · psycheai.io<br>Made in your own Muse workspace. PsycheAI keeps no copy it can read.</footer></div>%s<script>%s</script></body></html>'
             % (_e(names[0]), _e(names[1]), CSS, banner, bar, ''.join(parts), viewer, JS))
 

@@ -3879,22 +3879,22 @@ elif a[0] == 'thread':
   const para = (n, what) => Array.from({ length: n }, (_, i) => `In March 2025 the two of you ${what}, and it shows how your Psyches meet here in a way that is specific to you (${i}).`).join(' ');
   const EV = w => [{ when: 'June 2025', what: 'your messages after a long week, about ' + w }];
   const good = { summary: 'Two people who keep showing up for each other, learning to say the hard things sooner.',
-    truths: ['strength', 'edge', 'surprise'].map(k => ({ kind: k, title: 'The ' + k, detail: para(7, 'found your ' + k), evidence: EV(k) })),
+    truths: ['strength', 'edge', 'surprise'].map((k, i) => ({ kind: k, title: 'The ' + k, detail: para(3, 'found your ' + k), chapter: ['close', 'disagree', 'secure'][i], evidence: EV(k) })),
     pillars: Object.fromEntries(Object.keys(view.pillars).map(p => [p, { headline: 'About ' + p, seeIt: 'You both see ' + p + ' this way.', messages: 'In March 2025 you wrote about ' + p + ' often.',
       psyches: para(2, 'met ' + p + ' from your two Psyches'), signal: 'more' }])),
     chapters: {
-      close: { detail: para(16, 'reached for each other'), bids: 'Most small reaches in the sample were met warmly, as in your May 2025 messages.', care: { a: 'Being told plainly.', b: 'Time together.' },
+      close: { takeaway: 'You turn up for each other again and again: say the warm word out loud too.', detail: para(16, 'reached for each other'), bids: 'Most small reaches in the sample were met warmly, as in your May 2025 messages.', care: { a: 'Being told plainly.', b: 'Time together.' },
                evidence: EV('closeness'), askEachOther: ['What made you feel close this week?', 'What would make tomorrow easier?'], tryThis: 'One warm reply a day.' },
-      disagree: { detail: para(16, 'came back after a disagreement'), cycle: { steps: ['Mei raises it, point by point', 'Ana goes quiet to think', 'Mei pushes for an answer', 'Ana withdraws further'],
+      disagree: { takeaway: 'Name the one point early, and the loop loosens.', detail: para(16, 'came back after a disagreement'), cycle: { steps: ['Mei raises it, point by point', 'Ana goes quiet to think', 'Mei pushes for an answer', 'Ana withdraws further'],
                a: 'Mei raises things; underneath, she wants to know she matters.', b: 'Ana goes quiet; underneath, she needs room to feel safe.', exit: 'Ask one question first, and stay.' },
                lasting: [{ title: 'Pace', detail: para(2, 'moved at different speeds'), howToLiveWithIt: 'Name the pace.' }, { title: 'Space', detail: para(2, 'needed different space'), howToLiveWithIt: 'Ask plainly.' }],
                solvable: [{ title: 'Plans', detail: para(2, 'missed a plan'), firstStep: 'A shared calendar.' }],
                dream: { tension: 'Weekends', a: 'Mei hopes for adventure.', b: 'Ana hopes for rest.', question: 'What would a perfect Sunday be?' }, evidence: EV('disagreeing') },
-      secure: { detail: para(10, 'kept your promises'), a: 'Mei needs plain reassurance.', b: 'Ana needs time to warm up.', evidence: EV('security'), askEachOther: ['When do you feel most sure of us?'], tryThis: 'Say it out loud.' },
-      life: { detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
-      future: { detail: para(10, 'talked about next year'), decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
+      secure: { takeaway: 'You already come back: say it out loud after a hard day.', detail: para(10, 'kept your promises'), a: 'Mei needs plain reassurance.', b: 'Ana needs time to warm up.', evidence: EV('security'), askEachOther: ['When do you feel most sure of us?'], tryThis: 'Say it out loud.' },
+      life: { takeaway: 'Your evenings carry a lot: protect one that is only yours.', detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
+      future: { takeaway: 'You point the same way: decide the next step together.', detail: para(10, 'talked about next year'), decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
                 together: ['A cooking class', 'A new trail', 'A shared project'], evidence: EV('future') } },
-    overall: { title: 'How you feel about it all', detail: para(3, 'looked at the whole of it together') },
+    overall: { title: 'How you feel about it all', detail: 'You are both more content than you each guess: ask each other plainly what would make this month better.' },
     intermission: { title: 'Your story in moments', lines: ['You both say goodnight twice.', 'Mei plans the trips; Ana finds the food.', 'Saturday is your day.'] },
     plan: { week1: { title: 'Small daily turns', chapter: 'close', days: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
             weeks: [0, 1, 2].map(i => ({ title: 'Week ' + (i + 2), conversation: { title: 'About ' + (worth[i] || 'us'), why: 'It matters to you both.', script: ['Pick a calm time.', 'Each says one thing.', 'Agree one step.'] }, ask: 'Ask ' + i, doTogether: 'Do ' + i })) },
@@ -3905,6 +3905,15 @@ elif a[0] == 'thread':
   tg.shallow = await run.a('save', '@work/together-read.json');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify(good));
   tg.saved = await run.a('save', '@work/together-read.json');
+  {
+    const ck = async read => JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.stringify(JSON.stringify(view))}), True)))
+`], { env: home.a.env, input: JSON.stringify(read) }).toString());
+    tg.dupProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, tryThis: good.chapters.close.detail.split('. ')[0] + '.' } } });
+    tg.themProblems = await ck({ ...good, caveats: 'It cannot see the days the two of them never wrote down.' });
+  }
   tg.pageA = tg.saved;
   tg.checkB2 = await run.b('check');
   // Written again from what's already here (README "Psyche Together, release 22").
@@ -4014,7 +4023,7 @@ elif a[0] == 'thread':
       /Overall, how satisfied are you with your relationship with Ana\?/.test(tg.askedA.find(x => x.id === 'overall:you').say) && /how satisfied do you think Ana is with it\?/.test(tg.askedA.find(x => x.id === 'overall:them').say) &&
       JSON.stringify(tg.askedA.find(x => x.id === 'overall:you').buttons) === '["Very satisfied","Satisfied","Somewhat","Not very"]' && W.items.some(x => x.id === 'overall:them') &&
       view.overall && ['Strong', 'Steady', 'Worth attention'].includes(view.overall.level) && ['Happier than you each think', 'About right', 'Worth asking each other'].includes(view.overall.reading) &&
-      Object.keys(view.overall).sort().join() === 'level,reading' && /How well you read each other/.test(htmlA) && /How you feel about it all/.test(htmlA) && /Joel et al\., PNAS 2020/.test(tg.write.research.overall || ''),
+      Object.keys(view.overall).sort().join() === 'level,reading' && /Reading each other/.test(htmlA) && /You are both more content than you each guess/.test(htmlA) && /Joel et al\., PNAS 2020/.test(tg.write.research.overall || ''),
     JSON.stringify(view.overall));
   check('four weeks on, the reminder asks once ("It has been 4 weeks…", Check in again / Not now), then waits a few days before asking again; the same questions come back in one widget without openers, follow-ups or decisions; the partner is told it\'s their turn; the last one in writes what moved, a line for each pillar that moved and none for the rest; it goes on top of both pages, and the other\'s reminder brings it',
     tg.checkA3.quiet === true && /^It has been 4 weeks since your Psyche Together/.test(tg.nudgeA.say || '') && JSON.stringify(tg.nudgeA.buttons) === '["Check in again","Not now"]' && tg.nudgeA2.quiet === true &&
@@ -4047,20 +4056,20 @@ elif a[0] == 'thread':
       tg.write.research && /Ireland et al\., Psychological Science 2011/.test(tg.write.research.styleMatch) && /86%/.test(tg.write.research.connection), JSON.stringify(sig).slice(0, 400));
   check('a read with a score, a percentage or what one of them answered is sent back, as is one short of a Psyche Report\'s depth; nothing is saved',
     tg.bad.saved === false && tg.bad.problems.some(p => /scored|%/.test(p)) && tg.bad.problems.some(p => /rated/.test(p)) &&
-      tg.shallow.saved === false && tg.shallow.problems.some(p => /^truths: exactly three/.test(p)) && tg.shallow.problems.some(p => /16,000 characters/.test(p)), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
+      tg.shallow.saved === false && tg.shallow.problems.some(p => /^truths: exactly three/.test(p)) && tg.shallow.problems.some(p => /^pillars\.\w+: headline, seeIt and signal/.test(p)), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
   check('someone who said they feel unsafe gets a gentle For you, with support first, no "how to raise it" and no conversation scripts in the plan on their copy; the page has the relationship map, the cycle and the story in moments',
     tg.saved.saved && tg.foryouA.gentle === false && tg.sentB.gentle === true &&
-      /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map"/.test(htmlA) && /class="mch"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA) && /id="moments"/.test(htmlA) &&
+      /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map"/.test(htmlA) && /class="mr"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA) && /id="moments"/.test(htmlA) &&
       /Your busiest day/.test(htmlA) && htmlA.indexOf('id="disagree"') < htmlA.indexOf('id="moments"') && htmlA.indexOf('id="moments"') < htmlA.indexOf('id="life"') && /<span class="num">06<\/span><span class="ttl">Your 28-day practice/.test(htmlA),
     JSON.stringify([tg.foryouA.gentle, tg.sentB.gentle]));
   check('the top of the page shows both Psyche Cards leaning in with a heart between them, each person\'s own card sent once, locked, in its own box; one without a card picture shows their letter instead',
     /<header class="banner love" id="top">/.test(htmlA) && /class="heart"/.test(htmlA) && /<button type="button" class="cardp l" data-view aria-label="Open Mei's Psyche Card"><img alt="Mei's Psyche Card" src="data:image\/(jpeg|png);base64,/.test(htmlB) &&
       /<div class="cardp r nopic"><span>A<\/span><\/div>/.test(htmlB) && /class="cardp l" data-view/.test(htmlA) && /most like Mulan/.test(htmlB) && /class="viewer"/.test(htmlA) &&
       JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'state.json'), 'utf8')).picSent === true, htmlB.slice(htmlB.indexOf('<header'), htmlB.indexOf('<header') + 400));
-  const mapCards = [...htmlA.matchAll(/<a class="mch" href="#(\w+)" style="--c:(#[0-9a-f]{6})/g)].map(m => [m[1], m[2]]);
+  const mapCards = [...htmlA.matchAll(/<a class="mr" href="#(\w+)" style="--c:(#[0-9a-f]{6})"/g)].map(m => [m[1], m[2]]);
   check('the page is drawn as the Psyche Report is (banner with the mark, sticky nav, sections that open and close, with the glance and For you open), and each chapter keeps one colour: its card on the map links to its own section, in the same colour as that section and its nav chip',
     /<header class="banner love" id="top"><svg class="mark"/.test(htmlA) && /<nav aria-label="Sections">/.test(htmlA) && /data-fold/.test(htmlA) &&
-      /class="part  open" id="glance"|class="part open" id="glance"/.test(htmlA) && /class="part mine open" id="foryou"/.test(htmlA) && /class="part chapter" id="close"/.test(htmlA) &&
+      /class="part  open" id="glance"|class="part open" id="glance"/.test(htmlA) && !/id="foryou"/.test(htmlA) && /class="part chapter" id="close"/.test(htmlA) &&
       mapCards.length === 5 && mapCards.every(([id, c]) => htmlA.includes('id="' + id + '" style="--c:' + c + '"') && htmlA.includes('<a href="#' + id + '" style="--c:' + c + '">')) &&
       new Set(mapCards.map(m => m[1])).size === 5, JSON.stringify(mapCards));
   check('"Write our read again" writes a fresh read from what is already here (both reports, both answers, the conversation), with nothing deleted or answered again; the partner\'s reminder brings the new page, saying so',
@@ -4074,6 +4083,13 @@ elif a[0] == 'thread':
   check('the page\'s buttons never offer to end it (Ask about our read, Our 28-day practice, Write our read again, Done); the page says how, with "End Psyche Together" to copy',
     JSON.stringify(tg.saved.buttons) === '["Ask about our read","Our 28-day practice","Write our read again","Done"]' && /<code>End Psyche Together<\/code><button type="button" data-copy="End Psyche Together">Copy<\/button>/.test(htmlA) &&
       /End is never offered as a button/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')), JSON.stringify(tg.saved.buttons));
+  check('the read is lean (README "Psyche Together, release 24"): each chapter opens with its takeaway, holds its truth when one belongs there (the map marks it), its pillars as compact rows, the story with dated moments as pills, and private advice as a 🔒 box where it belongs; no For you section of its own and no separate truths; one section open at a time, as the Psyche Report; a closed section has no coloured top edge; Worth attention in dark red; a sentence said twice, or "the two of them", is sent back',
+    (htmlA.match(/<div class="take">/g) || []).length === 5 && /class="truth" style="--k:#2f7d5b"><span class="lbl">★ Your strength/.test(htmlA.slice(htmlA.indexOf('id="close"'), htmlA.indexOf('id="secure"'))) &&
+      /class="tb"/.test(htmlA) && /class="prow"/.test(htmlA) && /class="evp"/.test(htmlA) && !/When it showed/.test(htmlA) && !/Three truths/.test(htmlA) &&
+      /class="minebox"><span class="lbl">🔒 Just for you · Ana never sees this/.test(htmlA) && /One question first/.test(htmlA.slice(htmlA.indexOf('id="disagree"'), htmlA.indexOf('id="moments"'))) &&
+      /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);/.test(htmlA) && /\.part\{background:#fff;border:1px solid #e6dcec;border-radius:20px;/.test(htmlA) && /\.part\.open\{border-top:4px solid var\(--c\)\}/.test(htmlA) &&
+      /\.lv\.Worth-attention,\.lv\.Worth-asking-each-other\{background:#fbe7e5;color:#b3261e\}/.test(htmlA) &&
+      tg.dupProblems.some(p => /^said twice/.test(p)) && tg.themProblems.some(p => /the two of them/.test(p)), JSON.stringify([tg.dupProblems, tg.themProblems]).slice(0, 400));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
       stateA.answers.safety.label === 'No', '');
