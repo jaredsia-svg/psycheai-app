@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 24
+RELEASE = 25
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1493,6 +1493,7 @@ RESEARCH = {
     'perpetual': 'Most recurring disagreements come from lasting differences in personality and needs: the goal is a way of living with them, not a winner (Gottman).',
     'dreams': 'Behind a disagreement that keeps coming back there is often a hope or need that hasn\'t been said; naming it is what loosens it (Gottman, dreams within conflict).',
     'overall': 'How satisfied someone believes their partner is was among the five strongest predictors of relationship quality across 11,196 couples (Joel et al., PNAS 2020): reading each other well matters as much as how each one feels.',
+    'values': 'Shared meaning, the values, rituals and goals a couple builds together, is the top floor of Gottman\'s Sound Relationship House; being alike matters less than what you make of it together (Joel et al., 2020).',
     'lovemaps': 'Knowing each other\'s inner world, worries, hopes and everyday life, is the foundation the rest of a relationship is built on (Gottman, love maps).',
 }
 
@@ -1863,10 +1864,10 @@ CHAPTERS = [('close', '01', 'Turning towards', ['appreciation', 'connection', 'd
             ('secure', '02', 'A secure base', ['security'], ['security']),
             ('disagree', '03', 'Conflict and repair', ['disagreements'], ['disagreements', 'perpetual', 'dreams']),
             ('life', '04', 'Sharing a life', ['needs', 'life'], ['needs', 'life']),
-            ('future', '05', 'Shared meaning', ['future', 'growth'], ['future', 'growth'])]
+            ('future', '05', 'Shared meaning', ['future', 'growth'], ['values', 'future', 'growth'])]
 # README "Psyche Together, release 18": a plain title, and under it the research it comes from.
 SUBTITLES = {'close': 'Bids and responsiveness', 'secure': 'Attachment and commitment', 'disagree': 'Your cycle and the way out',
-             'life': 'Fairness, coping together and rhythm', 'future': 'Dreams, decisions and growth', 'plan': 'Small steps from every chapter'}
+             'life': 'Fairness, coping together and rhythm', 'future': 'Values, decisions and growth', 'plan': 'Small steps from every chapter'}
 PLAN_TITLE = 'Your 28-day practice'
 
 
@@ -1935,6 +1936,10 @@ def check_read(r, view, has_chat=False):
     need(len(L(lf.get('askEachOther'))) == 1 and T(lf.get('tryThis')), 'chapters.life: one askEachOther, tryThis')
     fu = D(ch.get('future'))
     topics = {x['topic'] for x in view['decisions']}
+    al = D(fu.get('alike'))
+    short_ = lambda xs, lo, hi: lo <= len(L(xs)) <= hi and all(T(x) and len(T(x)) <= 40 for x in L(xs))
+    need(short_(al.get('shared'), 2, 5) and short_(al.get('a'), 1, 3) and short_(al.get('b'), 1, 3) and T(al.get('line')),
+         'chapters.future.alike: what you share in values, beliefs and interests (shared: 2 to 5, a and b: 1 to 3 each more one\'s own, each under 40 characters) and a line on what it means for you two')
     need(T(D(fu.get('growth')).get('a')) and T(D(fu.get('growth')).get('b')) and len(L(fu.get('together'))) == 3
          and (not topics or all(isinstance(x, dict) and x.get('topic') in topics and T(x.get('line')) for x in L(fu.get('decisions')))),
          'chapters.future: a line per big decision (%s), growth a and b, three together ideas' % (', '.join(sorted(topics)) or 'none'))
@@ -2695,6 +2700,12 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}td,th{te
 .diffs{padding-left:18px}.diffs li{margin:6px 0;font-size:14.5px}.diffs b{display:block}.solv{display:inline-block;font-size:11px;font-weight:800;color:#b57418;background:#fdf1e2;border-radius:999px;padding:0 7px;margin-right:4px}
 details.sci{margin:14px 0 4px}details.sci summary{cursor:pointer;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c)}details.sci ul{margin:6px 0 0}
 .callout .q{margin:4px 0;font-weight:650}
+.alike{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:6px;margin:8px 0 10px;align-items:stretch}
+.alike>div{display:flex;flex-direction:column;gap:5px;padding:10px 8px;border-radius:14px;background:#faf6fc;border:1px solid #efe6f4}
+.alike>div.both{background:linear-gradient(160deg,#f3e9f8,#fdf0f6);border-color:#e3cdee}
+.alike small{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--c);text-align:center}
+.alike span{font-size:12.5px;line-height:1.3;padding:5px 7px;border-radius:10px;background:#fff;border:1px solid #eee3f3;text-align:center}
+.alike .both span{font-weight:700}
 footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line-height:1.6}
 .saycopy{margin-top:14px;padding:12px 14px;border-radius:14px;background:#f4edf8;border:1px solid var(--line)}.saycopy p{margin:0 0 8px;font-size:13.5px;color:var(--soft)}
 .sayrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sayrow code{flex:1 1 12em;min-width:0;padding:8px 10px;border-radius:8px;background:#fff;border:1px solid var(--line);font:600 14px/1.35 inherit;color:var(--ink);user-select:all;-webkit-user-select:all}
@@ -3035,6 +3046,11 @@ def page(box, s):
         if cid == 'life':
             inner += _rhythm(sig, who)
         if cid == 'future':
+            al = D(c.get('alike'))
+            if al.get('shared'):
+                chips = lambda xs: ''.join('<span>%s</span>' % _e(x) for x in xs or [])
+                inner += ('<h3>What you share</h3><div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
+                          % (_e(names[0]), chips(al.get('a')), chips(al.get('shared')), _e(names[1]), chips(al.get('b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
             lines = {x.get('topic'): x.get('line') for x in c.get('decisions') or [] if isinstance(x, dict)}
             if view.get('decisions'):
                 inner += '<h3>The big decisions, side by side</h3>' + ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p><p>%s</p></div>'

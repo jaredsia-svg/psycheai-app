@@ -3892,7 +3892,8 @@ elif a[0] == 'thread':
                dream: { tension: 'Weekends', a: 'Mei hopes for adventure.', b: 'Ana hopes for rest.', question: 'What would a perfect Sunday be?' }, evidence: EV('disagreeing') },
       secure: { takeaway: 'You already come back: say it out loud after a hard day.', detail: para(10, 'kept your promises'), a: 'Mei needs plain reassurance.', b: 'Ana needs time to warm up.', evidence: EV('security'), askEachOther: ['When do you feel most sure of us?'], tryThis: 'Say it out loud.' },
       life: { takeaway: 'Your evenings carry a lot: protect one that is only yours.', detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
-      future: { takeaway: 'You point the same way: decide the next step together.', detail: para(10, 'talked about next year'), decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
+      future: { takeaway: 'You point the same way: decide the next step together.', detail: para(10, 'talked about next year'),
+                alike: { shared: ['Loyalty to a close circle', 'Good food, shared'], a: ['Big questions'], b: ['Hosting'], line: 'You hold the same people close. Your own loves widen each other.' }, decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
                 together: ['A cooking class', 'A new trail', 'A shared project'], evidence: EV('future') } },
     overall: { title: 'How you feel about it all', detail: 'You are both more content than you each guess: ask each other plainly what would make this month better.' },
     intermission: { title: 'Your story in moments', lines: ['You both say goodnight twice.', 'Mei plans the trips; Ana finds the food.', 'Saturday is your day.'] },
@@ -3913,6 +3914,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
 `], { env: home.a.env, input: JSON.stringify(read) }).toString());
     tg.dupProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, tryThis: good.chapters.close.detail.split('. ')[0] + '.' } } });
     tg.themProblems = await ck({ ...good, caveats: 'It cannot see the days the two of them never wrote down.' });
+    tg.alikeProblems = await ck({ ...good, chapters: { ...good.chapters, future: { ...good.chapters.future, alike: undefined } } });
   }
   tg.pageA = tg.saved;
   tg.checkB2 = await run.b('check');
@@ -4090,6 +4092,9 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);/.test(htmlA) && /\.part\{background:#fff;border:1px solid #e6dcec;border-radius:20px;/.test(htmlA) && /\.part\.open\{border-top:4px solid var\(--c\)\}/.test(htmlA) &&
       /\.lv\.Worth-attention,\.lv\.Worth-asking-each-other\{background:#fbe7e5;color:#b3261e\}/.test(htmlA) &&
       tg.dupProblems.some(p => /^said twice/.test(p)) && tg.themProblems.some(p => /the two of them/.test(p)), JSON.stringify([tg.dupProblems, tg.themProblems]).slice(0, 400));
+  check('Shared meaning compares values, beliefs and interests (README "Psyche Together, release 25"): what you both hold in the middle, each one\'s own either side, a line on what it means, and the research behind it; a read without it is sent back',
+    /<h3>What you share<\/h3><div class="alike"><div><small>Mei<\/small><span>Big questions<\/span><\/div><div class="both"><small>Both of you<\/small><span>Loyalty to a close circle<\/span>/.test(htmlA) &&
+      /Values, decisions and growth/.test(htmlA) && /Sound Relationship House/.test(htmlA) && tg.alikeProblems.some(p => /^chapters\.future\.alike/.test(p)), JSON.stringify(tg.alikeProblems).slice(0, 300));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
       stateA.answers.safety.label === 'No', '');
