@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 31
+RELEASE = 32
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2758,6 +2758,26 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .cb{display:grid;grid-template-columns:auto 1fr 44px;gap:7px 10px;align-items:center;font-size:13px}.cb>span{font-weight:650}.cb>div{height:8px;border-radius:5px;background:#f1eaf5;overflow:hidden}.cb>div i{display:block;height:100%}.cb>b{text-align:right;font-size:12.5px}
 .srcs{padding-left:18px;font-size:14px}.srcs li{margin:6px 0}
 .foldall{display:block;margin:6px auto 0;padding:8px 16px;border-radius:999px;color:#7b3fa0;font-size:13px;font-weight:700}
+/* Calm, as the Psyche Report (README "Psyche Together, release 32"): one soft box style, colour only in small labels */
+.lv{font-weight:650}.lv:before{display:none}
+.lv.Strong,.lv.Aligned,.lv.Happier-than-you-each-think,.lv.About-right{background:#eef6f1;color:#2f6f53}
+.lv.Steady,.lv.Not-decided-yet{background:#f3f0f5;color:#5a4f66}
+.lv.Worth-attention,.lv.Worth-asking-each-other,.lv.Talk-about{background:#fbeeed;color:#a8322a}
+.lw{font-weight:650}.lw.Strong,.lw.Happier-than-you-each-think,.lw.About-right{color:#2f6f53}.lw.Steady{color:#5a4f66}.lw.Worth-attention,.lw.Worth-asking-each-other{color:#a8322a}
+.callout,.callout.ask,.callout.try,.callout.key2,.truth,.take,.minebox,.psy,.two>div,.pair2>div{background:#faf7fb;border:1px solid #eee6f3;box-shadow:none}
+.callout .lbl,.callout.ask .lbl,.callout.try .lbl,.callout.key2 .lbl,.truth .lbl,.take .lbl,.psy .lbl{color:var(--c)}
+.callout.key2{font-weight:500}.truth{border-left:3px solid var(--c)}.minebox{border-style:dashed}
+.take{background:linear-gradient(135deg,#f6f0fa,#fcf5f8)}.take p{font-size:16px;font-weight:650}
+.prow{background:#fff;border:0;border-bottom:1px solid #f1ebf5;border-radius:0;padding:12px 0;margin:0}
+.evp{background:#fff}.two>div>b span{background:#7b3fa0}.two>div:last-child>b span{background:#a3487a}
+.pat{display:grid;grid-template-columns:34px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #f2ecf5;text-decoration:none;color:var(--ink)}
+.pat .n{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;background:linear-gradient(135deg,#7b3fa0,#d1477a)}
+.pat b{display:block;font-size:15.5px;line-height:1.3}.pat .soft{display:block;font-size:12.5px;margin-top:1px}.pat .pl{display:block;font-size:14px;color:var(--ink);margin-top:4px;line-height:1.45}
+.it2{display:grid;grid-template-columns:28px 1fr 12px;gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid #f2ecf5;text-decoration:none;color:var(--ink)}
+.it2 .n2{font-weight:800;font-size:15px;line-height:1.3;background:linear-gradient(135deg,#7b3fa0,#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.it2 b{display:block;font-size:15px}.areas2{display:block;font-size:13.5px;color:var(--soft);margin-top:2px}.it2>i{font-style:normal;color:var(--mute);font-size:18px}
+.sat{font-size:14px;color:var(--soft)}.foot2{margin:12px 0 2px;font-size:13px;color:var(--soft)}.foot2 a{color:#7b3fa0;text-decoration:none;font-weight:650}
+.glance-hero b{font-size:19px}
 @media print{nav,.foldall{display:none}.js .part:not(.open) .body{display:block}}
 '''.replace('__FONT__', FONT)
 
@@ -2774,7 +2794,7 @@ function only(p){parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);
 parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',function(){if(p.classList.contains('open'))set(p,false);else only(p);});});
 function open(id){var p=document.querySelector(id);if(p)only(p);}
 chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();open(c.getAttribute('href'));});});
-[].slice.call(document.querySelectorAll('.mr,.ttl3,.fchip')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
+[].slice.call(document.querySelectorAll('.mr,.it2,a.pat,.foot2 a')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
 var fold=[].slice.call(document.querySelectorAll('[data-fold]'));
 function label(){var any=parts.some(function(p){return p.classList.contains('open');});fold.forEach(function(b){b.hidden=!any;});}
 fold.forEach(function(b){b.textContent='Close all ▲';b.addEventListener('click',function(){parts.forEach(function(p){set(p,false);});label();go(document.getElementById('top'));});});
@@ -3108,46 +3128,42 @@ def page(box, s):
              '<div class="wk"><small>The next four weeks</small><h4>%s</h4><ol>%s</ol></div>'
              % (_e(nt.get('summary')), stats, rows, _e(nt.get('held')), _e(nx.get('title')), ''.join('<li>%s</li>' % _e(x) for x in nx.get('steps') or [])),
              'since', 'Checked in again · ' + when_, k_ == 0, COLOURS['since'])
-    # At a glance (README "Psyche Together, release 24"): on one screen. The line, the overall pair, and the map: a row per
-    # chapter, its pillars as coloured dots, and a badge where one of the three truths sits.
-    kinds = {'strength': ('★ Your strength', '#2f7d5b'), 'edge': ('↗ Your growth edge', '#c2366d'), 'surprise': ('✦ The surprise', '#c2571a')}
+    # At a glance (README "Psyche Together, release 32"): laid out as the Psyche Report's overview, findings first and
+    # in words: the line; an executive summary; what stands out, numbered as its signature patterns; where you stand,
+    # a quiet line per chapter; then the big decisions and how far to trust it. No symbols to decode.
+    kinds = {'strength': ('Your strength', '#2f7d5b'), 'edge': ('Where to grow', '#a3324f'), 'surprise': ('What may surprise you', '#9a5b12')}
     truths_by = {}
     for x in r.get('truths') or []:
         if isinstance(x, dict):
             truths_by.setdefault(x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close'), []).append(x)
     SHORT = {'appreciation': 'Appreciation', 'connection': 'Connection', 'desire': 'Closeness', 'security': 'Security', 'disagreements': 'Repair',
              'needs': 'Needs and fairness', 'life': 'Life fit', 'future': 'Future', 'growth': 'Growth'}
-    mp = ''
+    title_of = {c[0]: c[2] for c in CHAPTERS}
+    first_sentence = lambda t: (re.split(r'(?<=[.!?])\s+', str(t or '').strip()) or [''])[0]
+    stands = ''.join('<a class="pat" href="#%s"><span class="n">%d</span><div><b>%s</b><span class="soft">%s · in %s</span><span class="pl">%s</span></div></a>'
+                     % (home, i + 1, _e(x.get('title')), _e(kinds[x['kind']][0]), _e(title_of.get(home, '')), _e(first_sentence(x.get('detail'))))
+                     for i, (home, x) in enumerate((x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close'), x)
+                                                   for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds))
+    word = lambda lv: '<span class="lw %s">%s</span>' % (_e(lv.replace(' ', '-')), _e(lv))
+    rows = ''
     for cid, num, title, pids, refs in CHAPTERS:
-        dots = ''
-        for pid in [p for p in pids if p in (view.get('pillars') or {})]:
-            lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
-            dots += '<span class="pd %s" title="%s">%s<em>%s</em></span>' % (_e(lv.replace(' ', '-')), _e(lv), _e(SHORT.get(pid, pid)), _e(SIGNAL.get(x.get('signal'), ('', ''))[0]))
-        if dots:
-            badge = ''        # the three truths have their own lines above the map
-            mp += ('<a class="mr" href="#%s" style="--c:%s"><span class="n">%s</span><span class="mt"><b>%s%s</b><span class="dots">%s</span></span><i>›</i></a>'
-                   % (cid, COLOURS[cid], num, _e(title), badge, dots))
+        areas = ' · '.join('%s %s' % (_e(SHORT.get(p_, p_)), word(view['pillars'][p_])) for p_ in pids if p_ in (view.get('pillars') or {}))
+        if areas:
+            rows += '<a class="it2" href="#%s"><span class="n2">%s</span><span><b>%s</b><span class="areas2">%s</span></span><i>›</i></a>' % (cid, num, _e(title), areas)
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
-    band = ''
+    summary_ = ''
     if ovv:
-        band = ('<div class="ovl"><span><small>Satisfaction</small>%s</span><span><small>Reading each other</small>%s</span></div>' % (_lv(ovv['level']), _lv(ovv['reading']))
-                + (('<p class="ovd">%s</p>' % _e(ovr.get('detail'))) if ovr.get('detail') else ''))
-    key = ('<div class="key"><span><i class="k Strong"></i>Strong</span><span><i class="k Steady"></i>Steady</span><span><i class="k Worth-attention"></i>Worth attention</span>'
-           '<span>↑ ↓ = your messages show more, less, the same</span></div>')
-    # The three truths in a line each, each opening its chapter; the big decisions and how far to trust the read.
-    short_k = {'strength': '★ Strength', 'edge': '↗ Growth edge', 'surprise': '✦ Surprise'}
-    tt = ''.join('<a class="ttl3" href="#%s" style="--k:%s"><span>%s</span>%s</a>' % (
-        x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close'), kinds[x['kind']][1], _e(short_k[x['kind']]), _e(x.get('title')))
-        for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds)
+        summary_ = ('<p class="sat">How satisfied you both are: %s · How well you read each other: %s</p>%s'
+                    % (word(ovv['level']), word(ovv['reading']), ('<p>%s</p>' % _e(ovr.get('detail'))) if ovr.get('detail') else ''))
     dec = view.get('decisions') or []
     al_, tk_ = sum(1 for x in dec if x.get('result') == 'Aligned'), sum(1 for x in dec if x.get('result') != 'Aligned')
     conf_ = ((box.get('sources') or {}).get('confidence') or {})
-    foot = ''.join(x for x in [
-        ('<a href="#future" class="fchip">Big decisions: %s</a>' % _e(' · '.join(y for y in ['%d aligned' % al_ if al_ else '', '%d to talk about' % tk_ if tk_ else ''] if y))) if dec else '',
-        ('<a href="#how" class="fchip">Read with %d%% confidence (%s)</a>' % (conf_['score'], _e(conf_.get('level')))) if conf_.get('score') is not None else ''] if x)
-    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You two, in one line</small><b>%s</b></div>%s%s<div class="map">%s</div>%s%s%s'
-         % (_e(r.get('summary')), band, ('<div class="tts">%s</div>' % tt) if tt else '', mp, ('<div class="fchips">%s</div>' % foot) if foot else '', key,
-            ('<details class="sci"><summary>What the research says</summary>%s</details>' % _e(RESEARCH['overall'])) if ovv else ''),
+    foot = ' · '.join(x for x in [
+        ('<a href="#future">Big decisions: %s</a>' % _e(', '.join(y for y in ['%d aligned' % al_ if al_ else '', '%d to talk about' % tk_ if tk_ else ''] if y))) if dec else '',
+        ('<a href="#how">Read with %d%% confidence (%s)</a>' % (conf_['score'], _e(conf_.get('level')))) if conf_.get('score') is not None else ''] if x)
+    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You two, in one line</small><b>%s</b></div>%s%s%s%s'
+         % (_e(r.get('summary')), ('<h3>Executive summary</h3>' + summary_) if summary_ else '', ('<h3>What stands out</h3>' + stands) if stands else '',
+            ('<h3>Where you stand</h3><div class="map">%s</div>' % rows) if rows else '', ('<p class="foot2">%s</p>' % foot) if foot else ''),
          '', 'The whole read on one screen', True)
     # Chapters (README "Psyche Together, release 28"): the takeaway on top, then three parts at most: where you are (the
     # pillars and your two Psyches, one card), what's going on (the story, opened by the chapter's truth, its moments and
@@ -3164,7 +3180,7 @@ def page(box, s):
             where += ('<div class="prow"><div class="pt"><b>%s</b>%s</div><p class="phl">%s</p><p><span>You see it:</span> %s</p>%s%s</div>'
                       % (_e(PILLARS.get(pid, pid)), _lv(lv), _e(x.get('headline')), _e(x.get('seeIt')),
                          ('<p><span>Your messages:</span> %s</p>' % _e(x.get('messages'))) if x.get('messages') else '',
-                         ('<p class="sig">%s %s</p>' % (arrow, _e(said))) if arrow else ''))
+                         ('<p class="sig">%s</p>' % _e(said)) if arrow else ''))
         pcards = box.get('psyches') or {'a': (SEEN.get('cards') or {}).get('a') or {}, 'b': (SEEN.get('cards') or {}).get('b') or {}}
         where += _psyches(cid, pcards.get('a') or {}, pcards.get('b') or {}, names, c.get('traits'))
         inner += ('<h3>Where you are</h3>' + where) if where else ''
