@@ -42,7 +42,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 5
+RELEASE = 7
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -476,37 +476,92 @@ def couple_view(a, b):
 
 
 # ---------------------------------------------------------------- the check-in widget
-# README "Psyche Together, release 5": the questions are ONE interactive widget in the chat, the kind Muse
-# already shows for "Correct something": tap through, say done, and Muse reads what was entered. Data only:
-# how to show it is in SKILL.md.
+# README "Psyche Together, release 6": the questions are ONE HTML widget the script builds (as the PsycheAI
+# skill built its report widget), so it looks the same everywhere: PsycheAI's colours on its own white, one
+# question at a time with Back, a tap moving on, follow-ups slotting in, and a review at the end. It keeps its
+# answers in real radio buttons and one hidden field (no storage: Muse's widgets refuse it), short enough that
+# every tap reaches it on a phone. A widget can't send, so "Submit my answers" is a button under it.
 
-def widget(s):
-    its, sure = items(s), certain(s)
+W_CSS = '''
+:root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--line:#ece4f1;--plum:#6e3796;--rose:#c2366d;--wash:#f6effb}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;color:var(--ink);-webkit-text-size-adjust:100%}
+.pt{background:#fff;border-radius:18px;overflow:hidden;border:1px solid var(--line);max-width:560px;margin:0 auto}
+.top{padding:14px 16px 12px;color:#fff;background:linear-gradient(135deg,#5b2a86,#7b3fa0 45%,#c2366d)}
+.top small{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.85}
+.top b{display:block;font-size:19px;margin-top:2px}
+.prog{height:5px;background:rgba(255,255,255,.3);border-radius:9px;margin-top:10px;overflow:hidden}.prog i{display:block;height:100%;width:0;background:#fff;transition:width .25s}
+.count{font-size:12px;opacity:.9;margin-top:5px}
+.card{padding:16px 16px 14px}.card[hidden]{display:none}
+.chip{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--plum);background:var(--wash);border-radius:999px;padding:4px 10px;margin-bottom:10px}
+.lock{color:var(--rose);background:#fcebf2}
+.opener{margin:0 0 8px;font-size:15px;line-height:1.5;color:var(--ink)}
+.question{margin:0 0 12px;font-size:18px;line-height:1.35;font-weight:750;color:var(--ink)}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opts label{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid var(--line);border-radius:14px;font-size:16px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff}
+.opts input{position:absolute;opacity:0;pointer-events:none}
+.opts label:before{content:"";flex:none;width:18px;height:18px;border-radius:50%;border:2px solid #cdb6dd;background:#fff}
+.opts input:checked+span{font-weight:700}
+.opts label.on{border-color:var(--plum);background:var(--wash)}.opts label.on:before{border-color:var(--plum);background:radial-gradient(circle,var(--plum) 45%,#fff 50%)}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+.nav button{all:unset;cursor:pointer;font-size:15px;font-weight:700;color:var(--plum);padding:8px 4px}
+.nav button[disabled]{opacity:.3;cursor:default}
+.nav button[hidden]{display:none}
+.done h3{margin:0 0 4px;font-size:19px}.done p{margin:0 0 10px;color:var(--soft);font-size:14.5px}
+.done ol{margin:0;padding-left:20px;max-height:240px;overflow:auto;font-size:14px}.done li{margin:4px 0}.done li b{display:block;font-weight:650}
+'''
+
+W_JS = r'''
+(function(){
+var D=JSON.parse(document.getElementById('pt-data').textContent),ans={},at=0,field=document.getElementById('pt-answers');
+function score(id){var it=D.items.filter(function(x){return x.id===id})[0];return it&&it.scores&&(id in ans)?it.scores[it.options.indexOf(ans[id])]:null;}
+function shown(){return D.items.filter(function(it){
+ if(it.follows&&D.certain.indexOf(it.pillar)<0&&!(it.follows in ans&&score(it.follows)===0))return false;
+ if(it.onlyIf&&ans['core:future']===D.talked)return false;return true;}).map(function(it){return it.id});}
+function card(id){return document.getElementById('c-'+id.replace(':','-'));}
+function show(){var ids=shown(),n=ids.filter(function(i){return i in ans}).length;
+ [].slice.call(document.querySelectorAll('.card')).forEach(function(c){c.hidden=true});
+ document.querySelector('.prog i').style.width=Math.round(100*n/ids.length)+'%';
+ document.querySelector('.count').textContent=Math.min(at+1,ids.length)+' of '+ids.length;
+ field.value=JSON.stringify(ans);
+ if(at>=ids.length){var d=document.getElementById('c-done');d.hidden=false;var ol=d.querySelector('ol');ol.innerHTML='';
+  ids.forEach(function(i){var it=D.items.filter(function(x){return x.id===i})[0];var li=document.createElement('li');var b=document.createElement('b');b.textContent=it.short;li.appendChild(b);li.appendChild(document.createTextNode(ans[i]||'—'));ol.appendChild(li);});
+  document.querySelector('.count').textContent='All '+ids.length+' answered';return;}
+ var c=card(ids[at]);c.hidden=false;c.querySelector('.back').disabled=at===0;c.querySelector('.next').hidden=!(ids[at] in ans);}
+document.addEventListener('change',function(e){var t=e.target;if(!t||t.type!=='radio')return;ans[t.name]=t.value;
+ [].slice.call(document.querySelectorAll('input[name="'+t.name+'"]')).forEach(function(x){x.parentNode.classList.toggle('on',x.checked)});
+ var ids=shown();Object.keys(ans).forEach(function(k){if(ids.indexOf(k)<0)delete ans[k];});
+ setTimeout(function(){at=Math.min(shown().indexOf(t.name)+1,shown().length);show();},220);});
+document.addEventListener('click',function(e){var b=e.target.closest?e.target.closest('button'):null;if(!b)return;
+ if(b.classList.contains('back')){at=Math.max(0,at-1);show();}
+ if(b.classList.contains('next')){at=Math.min(at+1,shown().length);show();}
+ if(b.classList.contains('edit')){at=0;show();}});
+show();})();
+'''
+
+
+def widget_html(s):
+    its = items(s)
     p = s.get('partner') or 'your partner'
-    out, follow = [], {it['follows']: it for it in its if it['kind'] == 'deeper'}
+    data = {'certain': certain(s), 'talked': 'Yes, and we\'ve talked',
+            'items': [{'id': it['id'], 'pillar': it['pillar'], 'options': it['options'], 'scores': it.get('scores'), 'follows': it.get('follows'),
+                       'onlyIf': it.get('onlyIf'), 'short': it['text'].replace('{p}', p)} for it in its]}
+    cards = []
     for it in its:
-        if it['kind'] == 'deeper':
-            if it['pillar'] in sure:
-                out.append({'id': it['id'], 'question': it['text'].replace('{p}', p), 'options': it['options']})
-            continue
-        row = {'id': it['id'], 'question': it['text'].replace('{p}', p), 'options': list(it['options'])}
-        if it.get('pillar') in PILLARS:
-            row['label'] = PILLARS[it['pillar']]
-        if it.get('opener'):
-            row['opener'] = it['opener']
-        if it.get('private'):
-            row['private'] = 'Private: never shared, and only shapes your own advice.'
-        if it['kind'] == 'decision':
-            row['label'] = 'The big decisions'
-        f = follow.get(it['id'])
-        if f and it['pillar'] not in sure:
-            row['followUp'] = {'id': f['id'], 'question': f['text'].replace('{p}', p), 'options': f['options'],
-                               'opensUnder': [o for o, sc in zip(it['options'], it['scores']) if sc == 0]}
-        if it.get('onlyIf'):
-            row['onlyIf'] = 'Leave this out if they tapped "Yes, and we\'ve talked" for the next 5 to 10 years.'
-        out.append(row)
-    return {'title': 'You & %s' % p, 'intro': 'Your questions, from both your Psyches. Only you see your answers.', 'items': out,
-            'end': 'Tap your answers, then tell me when you\'re done.'}
+        chip = ('<span class="chip lock">Private · never shared</span>' if it.get('private') else
+                '<span class="chip">%s</span>' % _e('Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision' else PILLARS.get(it['pillar'], '')))
+        opts = ''.join('<label><input type="radio" name="%s" value="%s"><span>%s</span></label>' % (_e(it['id']), _e(o), _e(o)) for o in it['options'])
+        cards.append('<section class="card" id="c-%s" hidden>%s%s<p class="question">%s</p><div class="opts">%s</div>'
+                     '<div class="nav"><button type="button" class="back">‹ Back</button><button type="button" class="next" hidden>Next ›</button></div></section>'
+                     % (it['id'].replace(':', '-'), chip, ('<p class="opener">%s</p>' % _e(it['opener'])) if it.get('opener') else '',
+                        _e(it['text'].replace('{p}', p)), opts))
+    return ('<div class="pt"><style>%s</style><div class="top"><small>Psyche Together</small><b>You &amp; %s</b><div class="prog"><i></i></div>'
+            '<div class="count"></div></div><form id="pt-form" onsubmit="return false">%s'
+            '<section class="card done" id="c-done" hidden><h3>All done ✓</h3><p>Check your answers, then tap <b>Submit my answers</b> below.</p><ol></ol>'
+            '<div class="nav"><button type="button" class="edit">‹ Change an answer</button><span></span></div></section>'
+            '<input type="hidden" id="pt-answers" name="psyche-together-answers" value="{}"></form>'
+            '<script type="application/json" id="pt-data">%s</script><script>%s</script></div>'
+            % (W_CSS, _e(p), ''.join(cards), json.dumps(data).replace('</', '<\\/'), W_JS))
 
 
 def take_answers(raw):
@@ -759,7 +814,8 @@ def after_stage(s):
     got = put_profile(s, False)
     if got.get('error'):
         return got
-    return {'invite': invite(), 'say': 'Your Psyche is ready for the two of you. Once your partner joins, you\'ll each get your own questions, written from both your Psyches.'}
+    return {'invite': invite(), 'say': 'Your Psyche is ready for the two of you. Once your partner joins, you\'ll each get your own questions, written from both your Psyches.',
+            'buttons': ['Has my partner joined?'], 'asButtons': True, 'setCheck': True}
 
 
 def join(link):
@@ -878,7 +934,7 @@ def save_questions(path):
         os.remove(str(path).lstrip('@'))
     except OSError:
         pass
-    return {'widget': widget(s), 'questions': len(shown(s, items(s), {}))}
+    return {'widget': widget_html(s), 'say': 'Your questions, written from both your Psyches.', 'buttons': ['Submit my answers'], 'asButtons': True}
 
 
 def form():
@@ -912,7 +968,7 @@ def send():
         return got
     if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
         return dict(write_task(profiles), sent=True)
-    return {'sent': True, 'waiting': True,
+    return {'sent': True, 'waiting': True, 'setCheck': True, 'buttons': ['Is our read ready?'], 'asButtons': True,
             'say': 'Your answers are locked and sent. When %s has done theirs, your read is written: you\'ll both get the same one.' % (s.get('partner') or 'your partner')}
 
 
@@ -1107,18 +1163,41 @@ def status():
                 return got
             mine, theirs = mine_theirs(s, profiles)
             if not theirs.get('psyche'):
-                return {'waiting': True, 'say': 'Waiting for your partner to join.', 'invite': invite()}
+                return {'waiting': True, 'say': 'Your partner hasn\'t joined yet.', 'invite': invite(), 'buttons': ['Has my partner joined?'], 'asButtons': True}
             return questions_task()
-        return {'widget': widget(s), 'answered': len(s.get('answers') or {})}
+        return {'widget': widget_html(s), 'say': 'Your questions, written from both your Psyches.', 'buttons': ['Submit my answers'], 'asButtons': True}
     k, got, profiles, box = couple()
     if got.get('error'):
         return got
     if not box:
         return write_task(profiles) if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')) else {
-            'waiting': True, 'say': 'Waiting for %s to finish theirs.' % (s.get('partner') or 'your partner')}
+            'waiting': True, 'say': '%s hasn\'t finished theirs yet.' % (s.get('partner') or 'Your partner'), 'buttons': ['Is our read ready?'], 'asButtons': True}
     if not s.get('forYou'):
         return foryou_task(box)
     return show(box)
+
+
+def check():
+    """For the "Psyche Together check" reminder: quiet until something is waiting for them, then one line and a
+    button; `done` once their read is shown or it has ended, so the reminder can go."""
+    s = state()
+    if not s.get('role'):
+        return {'done': True, 'quiet': True}
+    k, got, profiles, box = couple()
+    if got.get('ended') or (got.get('error') and not profiles):
+        return {'done': True, 'quiet': True}
+    mine, theirs = mine_theirs(s, profiles)
+    name = (theirs.get('psyche') or {}).get('name') or 'Your partner'
+    if not s.get('questions'):
+        return {'quiet': True} if not theirs.get('psyche') else {'say': '%s has joined Psyche Together. Your questions are ready.' % name,
+                                                                 'buttons': ['Show my questions'], 'asButtons': True}
+    if not s.get('sent'):
+        return {'quiet': True}
+    if box and s.get('forYou'):
+        return {'done': True, 'quiet': True}
+    if box or all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
+        return {'say': '%s has finished. Your Psyche Together is ready.' % name, 'buttons': ['Show our Psyche Together'], 'asButtons': True}
+    return {'quiet': True}
 
 
 FORM_CSS = '''
@@ -1445,7 +1524,10 @@ def main(argv):
     elif cmd == 'answers':
         out = take_answers(' '.join(rest))
     elif cmd == 'widget':
-        out = {'widget': widget(state())}
+        s = state()
+        out = {'widget': widget_html(s), 'say': 'Your questions, written from both your Psyches.', 'buttons': ['Submit my answers'], 'asButtons': True}
+    elif cmd == 'check':
+        out = check()
     elif cmd == 'code':
         out = read_code(' '.join(rest))
     elif cmd == 'send':

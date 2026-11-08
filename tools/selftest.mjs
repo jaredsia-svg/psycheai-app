@@ -3767,14 +3767,18 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   tg.badQ = await run.b('save-questions', '@work/together-questions.json');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, true)));
   tg.formB = await run.b('save-questions', '@work/together-questions.json');
-  const W = tg.formB.widget || { items: [] };
+  const Whtml = String(tg.formB.widget || '');
+  const W = JSON.parse((/<script type="application\/json" id="pt-data">([\s\S]*?)<\/script>/.exec(Whtml) || [0, '{"items":[],"certain":[]}'])[1]);
   // Ana answers in the widget, as Muse reads it back: low on the pillar questions, the follow-ups that open, "Yes" to the safety question.
   const picked = {};
   for (const it of W.items) {
-    const pick = it.id === 'safety' ? 'Yes' : /^core:/.test(it.id) ? it.options[Math.min(2, it.options.length - 1)] : it.options[0];
-    picked[it.id] = pick;
-    if (it.followUp && it.followUp.opensUnder.includes(pick)) picked[it.followUp.id] = it.followUp.options[0];
+    if (it.follows) {
+      const low = picked[it.follows] !== undefined && W.items.find(x => x.id === it.follows).scores[W.items.find(x => x.id === it.follows).options.indexOf(picked[it.follows])] === 0;
+      if (!W.certain.includes(it.pillar) && !low) continue;
+    }
+    picked[it.id] = it.id === 'safety' ? 'Yes' : /^core:/.test(it.id) ? it.options[Math.min(2, it.options.length - 1)] : it.options[0];
   }
+  tg.checkA1 = await run.a('check');
   const code = JSON.parse((await execFile('python3', ['-c', `import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location('t', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'together.py')], { env: home.b.env })).stdout);
@@ -3785,6 +3789,7 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   tg.statusA = await run.a('status');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.statusA, true)));
   tg.formA = await run.a('save-questions', '@work/together-questions.json');
+  tg.checkA2 = await run.a('check');
   // Mei answers in the chat instead, the best button each time.
   tg.askedA = [];
   let q = await run.a('next');
@@ -3811,6 +3816,8 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   tg.saved = await run.a('save', '@work/together-read.json');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'disagreements', title: 'One question first', detail: 'You argue a case.', howToRaise: 'I want to hear you out first.' }], practice: 'Ask before you answer.' }));
   tg.pageA = await run.a('save-foryou', '@work/together-foryou.json');
+  tg.checkB2 = await run.b('check');
+  tg.checkA3 = await run.a('check');
   tg.statusB = await run.b('status');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'needs', title: 'Your needs', detail: 'They count too.', howToRaise: 'Can we talk?' }], practice: 'An evening for you.' }));
   tg.gentleRefused = await run.b('save-foryou', '@work/together-foryou.json');
@@ -3829,12 +3836,17 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   check('the partner joins once, sees the consent line, and goes straight to their questions: no stage question, their partner named from the other Psyche, the stage from the one who started',
     tg.join.joined && tg.join.write === 'questions' && tg.join.partner.name === 'Mei' && tg.join.stage === 'Married' && tg.join.pillars.length === 8 &&
       /already/.test(tg.joinAgain.error || '') && tg.statusA.write === 'questions' && tg.statusA.partner.name === 'Ana', JSON.stringify(tg.join).slice(0, 300));
-  check('Muse\'s openers must name the partner in at least half, and each pillar needs an opener and a follow-up of 3 to 5 options; then the questions come back as ONE widget for the chat: each pillar\'s label, opener, fixed question and options, the private question marked, follow-ups opening under a low answer or, where their Psyche makes one certain, an item of its own',
-    tg.badQ.saved === false && tg.badQ.problems.some(p => /name Mei/.test(p)) && W.items.length >= 10 && W.title === 'You & Mei' && /tell me when you're done/.test(W.end) &&
-      W.items[0].id === 'core:appreciation' && W.items[0].label === 'Feeling appreciated' && /^Mei and you meet appreciation/.test(W.items[0].opener) &&
-      W.items[0].question === 'How often do you feel appreciated by Mei?' && W.items.some(it => it.id === 'safety' && /never shared/.test(it.private)) &&
-      W.items.some(it => it.followUp && it.followUp.opensUnder.length > 0 && /^deep:/.test(it.followUp.id)) && W.items.some(it => /^deep:/.test(it.id)) &&
-      !JSON.stringify(W).includes('Ana Lim'), JSON.stringify(W).slice(0, 600));
+  check('Muse\'s openers must name the partner in at least half, and each pillar needs an opener and a follow-up; then the questions come back as ONE widget built here, on its own white, one question at a time with Back and a progress bar, the opener and the question in the same ink, the private question marked, real radio buttons and one answers field, no storage, and "Submit my answers" as a button under it',
+    tg.badQ.saved === false && tg.badQ.problems.some(p => /name Mei/.test(p)) && W.items.length >= 10 && /You &amp; Mei/.test(Whtml) &&
+      /html,body\{margin:0;padding:0;background:#fff\}/.test(Whtml) && /\.opener\{[^}]*color:var\(--ink\)/.test(Whtml) && /Mei and you meet appreciation/.test(Whtml) &&
+      /How often do you feel appreciated by Mei\?/.test(Whtml) && /Private · never shared/.test(Whtml) && /<input type="radio" name="core:appreciation" value="Often">/.test(Whtml) &&
+      /name="psyche-together-answers"/.test(Whtml) && /‹ Back/.test(Whtml) && !/localStorage|sessionStorage|BroadcastChannel/.test(Whtml) &&
+      JSON.stringify(tg.formB.buttons) === '["Submit my answers"]' && W.certain.length <= 4 && !Whtml.includes('Ana Lim'), Whtml.slice(0, 300));
+  check('a reminder\'s check is quiet until something is waiting, then one line and a button: the partner joined, or the read is ready; done once it has been shown',
+    /Ana has joined Psyche Together/.test(tg.checkA1.say || '') && JSON.stringify(tg.checkA1.buttons) === '["Show my questions"]' &&
+      tg.checkA2.quiet === true && /has finished\. Your Psyche Together is ready/.test(tg.checkB2.say || '') && tg.checkA3.done === true &&
+      tg.staged.setCheck === true && JSON.stringify(tg.staged.buttons) === '["Has my partner joined?"]' && JSON.stringify(tg.sentB.buttons) === '["Is our read ready?"]',
+    JSON.stringify([tg.checkA1, tg.checkA2, tg.checkB2, tg.checkA3]));
   check('what Muse reads back from the widget is saved at once: an option that isn\'t one is refused, and what\'s still to answer comes back as one question with buttons, until the answers are sent',
     tg.badAnswer.saved === false && /isn't one of its options/.test(JSON.stringify(tg.badAnswer.problems)) && tg.partial.missing === true && tg.partial.next.id === 'safety' &&
       tg.partial.next.private === true && tg.sentB.waiting === true && /another set of questions/.test(tg.wrongForm.error || ''), JSON.stringify([tg.partial, tg.sentB]).slice(0, 400));
