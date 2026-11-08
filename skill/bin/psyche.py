@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 180
+RELEASE = 181
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -269,6 +269,11 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webk
 .banner .row{position:relative}
 .banner h1{margin:10px 0 2px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
 .banner .sub{margin-top:8px;font-size:12.5px;opacity:.75}
+.saycopy{margin-top:14px;padding:12px 14px;border-radius:12px;background:#f4edf8;border:1px solid var(--line)}
+.saycopy p{margin:0 0 8px;font-size:13.5px;color:var(--soft)}
+.sayrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sayrow code{flex:1 1 12em;min-width:0;padding:8px 10px;border-radius:8px;background:#fff;border:1px solid var(--line);font:600 14px/1.35 inherit;color:var(--ink);user-select:all;-webkit-user-select:all;overflow-wrap:anywhere}
+.sayrow button{flex:none;padding:8px 14px;border-radius:999px;border:0;background:var(--accent);color:#fff;font:700 13.5px/1 inherit;cursor:pointer}
 .cardbtn{all:unset;flex:none;cursor:zoom-in;-webkit-tap-highlight-color:transparent}
 .viewer{position:fixed;inset:0;z-index:20;background:rgba(20,8,30,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));cursor:zoom-out}
 .viewer[hidden]{display:none}
@@ -426,6 +431,23 @@ footer b{color:var(--ink)}
 # title, or its chip in the bar, closes the others first, then opens it and brings its title
 # to the top of the screen, under the bar. Tapping an open one's title closes it. "Collapse
 # all" closes every section and goes back to the top. Printing opens everything.
+# A line to say in the PsycheAI chat, with a Copy button: a file can't send anything to the chat, so the page says what
+# to type and copies it (README "Say it in the chat").
+def say_copy(lead, phrase):
+    return ('<div class="saycopy"><p>' + _e(lead) + '</p><div class="sayrow"><code>' + _e(phrase) + '</code>'
+            '<button type="button" data-copy="' + _e(phrase) + '">Copy</button></div></div>')
+
+
+COPY_JS = """
+document.addEventListener('click',function(e){var b=e.target&&e.target.closest?e.target.closest('[data-copy]'):null;if(!b)return;
+var t=b.getAttribute('data-copy'),code=b.parentNode.querySelector('code');
+function done(ok){if(!ok&&code){var r=document.createRange();r.selectNodeContents(code);var s=window.getSelection();s.removeAllRanges();s.addRange(r);}
+b.textContent=ok?'Copied':'Selected: copy it';setTimeout(function(){b.textContent='Copy';},2200);}
+function fallback(){try{var a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';
+document.body.appendChild(a);a.select();var ok=document.execCommand('copy');document.body.removeChild(a);done(ok);}catch(x){done(false);}}
+if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){done(true);},fallback);}else{fallback();}});
+"""
+
 W_JS = '''
 (function(){
 var parts=[].slice.call(document.querySelectorAll('.part')),chips=[].slice.call(document.querySelectorAll('nav a')),bar=document.querySelector('nav');
@@ -812,6 +834,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
                      % (score, (' · ' + _e(c.get('level'))) if c.get('level') else '', score) if score is not None else '')
                   + ('<p>' + _e(m.get('rationale')) + '</p>' if m.get('rationale') else '')
                   + _ev(c.get('basedOn'))
+                  + say_copy('To add your WhatsApp chats or Facebook and write your Psyche again from more of you, say this in your PsycheAI chat:', 'Add WhatsApp or Facebook')
                   + '</div>')
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
@@ -833,7 +856,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
             if sample else 'This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.') + '</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + ''.join(v for v in after.values() if v)
-            + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + '</script></body></html>')
+            + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + COPY_JS + '</script></body></html>')
 
 
 # ---------- the Sync, as a page made here (README "The Sync is a page") ----------
@@ -1149,7 +1172,8 @@ def sync_sections(report, me, them, pics=None):
     conf = ''.join('<span>%s</span><div><i style="width:%d%%;background:%s"></i></div><b>%d%%</b>' % (_e(n), _num(c.get('confidence')), col, _num(c.get('confidence')))
                    for c, n, col in ((me, na, SYNC_A), (them, nb, SYNC_B)) if _num(c.get('confidence')) is not None)
     how = (('<p style="margin-top:6px">' + _e(report.get('caveats')) + '</p>' if report.get('caveats') else '')
-           + ('<p class="soft" style="margin-bottom:0">Confidence score. The lower of the two is as far as this Sync can be trusted.</p><div class="conf">' + conf + '</div>' if conf else ''))
+           + ('<p class="soft" style="margin-bottom:0">Confidence score. The lower of the two is as far as this Sync can be trusted.</p><div class="conf">' + conf + '</div>' if conf else '')
+           + say_copy('To refresh this Sync with your latest Psyche Card, say this in your PsycheAI chat:', 'Write my Sync with %s again' % _first(them)))
     sections = [('You two', '#7b3fa0', duo), ('At a glance', '#2d5fa8', glance),
                 ('Where you align', '#2f7d6b', _sync_points(report.get('align'), 'What you have in common, or what suits each other, sharpest first.')),
                 ('Where you differ', '#c2571a', _sync_points(report.get('differ'), 'Real differences, and how each can work for you.')),
@@ -1172,7 +1196,7 @@ def sync_html(report, me, them, pics=None, when=''):
     foot = '<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace.</footer>'
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<title>' + _e(title) + '</title><style>' + W_CSS + SYNC_CSS + '</style></head><body><div class="wrap">' + banner + '<div style="height:14px"></div>'
-            + body + foot + '</div>' + viewer + '<script>' + SYNC_JS + '</script></body></html>')
+            + body + foot + '</div>' + viewer + '<script>' + SYNC_JS + COPY_JS + '</script></body></html>')
 
 
 def sync_card_pics(me, them):
@@ -1344,7 +1368,7 @@ def sync_book_html(entries, own=None):
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<title>My Syncs</title><style>' + W_CSS + SYNC_CSS + BOOK_CSS + '</style></head><body><div class="wrap">' + banner + '<div style="height:14px"></div>' + find
             + ''.join(rows) + '<p class="none" id="none" hidden>No Sync with that name.</p><footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace, from the Syncs kept here.</footer></div>'
-            + mecard + viewer + '<script>' + BOOK_JS + SYNC_JS + '</script></body></html>')
+            + mecard + viewer + '<script>' + BOOK_JS + SYNC_JS + COPY_JS + '</script></body></html>')
 
 
 def write_versioned(folder, base, text):

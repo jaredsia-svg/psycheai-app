@@ -2757,6 +2757,22 @@ print(json.dumps([before, after, len(m.source_stamps())]))`, new URL('../skill/b
         !/"Keep them"\./.test(instructions.MUSE_PROCEDURE) &&
         /THIN_LINE_ADDED = "Your read is still on the thin side: more WhatsApp chats \(up to three\) or your Facebook would make it sharper\."/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
         /out\['thinLine'\] = THIN_LINE_ADDED if added else THIN_LINE/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')));
+    {
+      // README "Say it in the chat": a file can't send anything to the chat, so the report and a Sync say what to type, with a Copy button.
+      const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+fx = json.load(open(sys.argv[2]))[0]
+rep = {'summary': 'S.', 'align': [], 'differ': [], 'howToPartner': {'forA': ['a'], 'forB': ['b'], 'together': ['c']}, 'caveats': 'C.'}
+me, them = {'firstName': 'Mei', 'confidence': 70}, {'firstName': 'Ana <b>', 'confidence': 60}
+r, sy = m.report_html(fx['full'], 'Mei Tan'), m.sync_html(rep, me, them)
+bk = m.sync_book_html([('u_x', {'report': rep, 'cards': {'me': me, 'them': them}, 'at': 0})])
+print(json.dumps([('data-copy="Add WhatsApp or Facebook"' in r), ('data-copy="Write my Sync with Ana again"' in sy), ('<b> again' not in sy),
+                  all('navigator.clipboard' in h for h in (r, sy, bk or '')), ('Write my Sync with' in (bk or ''))]))`,
+        new URL('../skill/bin/psyche.py', import.meta.url).pathname, new URL('./fixtures/report-view.json', import.meta.url).pathname]).toString());
+      check('the report says how to add WhatsApp or Facebook and the Sync page and My Syncs how to refresh a Sync, each a line to say with a Copy button (a file can\'t send to the chat), the friend\'s name escaped; SKILL.md takes both phrases',
+        got.every(Boolean) &&
+          /"Write my Sync with <name> again", tapped or pasted from a Sync's page, is the same for that Sync: get_syncs to find it by the friend's name, then get_sync with its sync and rewrite true\. "Add WhatsApp or Facebook", pasted from the report's page, is that button\./.test(instructions.MUSE_PROCEDURE), JSON.stringify(got));
+    }
     check('the two intermissions close when a part opens, when the other intermission opens, and on Collapse all (README "Intermissions close")',
       ((src) => /function only\(p\)\{shut\(\);/.test(src) && /function all\(\)\{shut\(\);/.test(src) &&
         /breaks=\[\]\.slice\.call\(document\.querySelectorAll\('details\.roast'\)\)/.test(src) && /addEventListener\('toggle',function\(\)\{if\(d\.open\)shut\(d\);\}\)/.test(src))(
