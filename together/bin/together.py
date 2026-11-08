@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 37
+RELEASE = 38
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1868,14 +1868,14 @@ DATED = re.compile(r'\b(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sep
 
 # The read's five chapters, in order, numbered as the glance and the page show them (README "Psyche Together,
 # release 16"): (id, number, title, its pillars, its research lines).
-CHAPTERS = [('close', '01', 'Turning towards', ['appreciation', 'connection', 'desire'], ['appreciation', 'connection']),
-            ('life', '02', 'Sharing a life', ['needs', 'life'], ['needs', 'life']),
-            ('future', '03', 'Shared meaning', ['future', 'growth'], ['values', 'future', 'growth']),
-            ('secure', '04', 'A secure base', ['security'], ['security']),
-            ('disagree', '05', 'Conflict and repair', ['disagreements'], ['disagreements', 'perpetual', 'dreams'])]
+CHAPTERS = [('close', '01', 'Bids & Responsiveness', ['appreciation', 'connection', 'desire'], ['appreciation', 'connection']),
+            ('life', '02', 'Fairness, Rhythm & Interests', ['needs', 'life'], ['needs', 'life']),
+            ('future', '03', 'Values, Decisions & Growth', ['future', 'growth'], ['values', 'future', 'growth']),
+            ('secure', '04', 'Attachment & Commitment', ['security'], ['security']),
+            ('disagree', '05', 'Conflict & Repair', ['disagreements'], ['disagreements', 'perpetual', 'dreams'])]
 # README "Psyche Together, release 18": a plain title, and under it the research it comes from.
-SUBTITLES = {'close': 'Bids and responsiveness', 'secure': 'Attachment and commitment', 'disagree': 'Your cycle and the way out',
-             'life': 'Fairness, rhythm and what you enjoy', 'future': 'Values, decisions and growth', 'plan': 'Small steps from every chapter'}
+# Release 38: one title per chapter, saying what it covers; no subtitle under a chapter.
+SUBTITLES = {'plan': 'Small steps from every chapter'}
 PLAN_TITLE = 'Your 28-day practice'
 
 
@@ -1958,6 +1958,10 @@ def check_read(r, view, has_chat=False):
     en = D(lf.get('enjoy'))
     need(short_(en.get('shared'), 1, 5) and short_(en.get('a'), 1, 3) and short_(en.get('b'), 1, 3) and T(en.get('line')) and len(L(lf.get('together'))) == 3,
          'chapters.life.enjoy: what you both enjoy, from your interests (shared: 1 to 5, a and b: 1 to 3 each, each under 40 characters) and a line; and life.together: three new things to do together')
+    low_ = lambda xs: {T(x).lower() for x in L(xs) if T(x)}
+    for nm_, grp in (('future.alike', al), ('life.enjoy', en)):
+        dup_ = sorted((low_(grp.get('a')) | low_(grp.get('b'))) & low_(grp.get('shared')))
+        need(not dup_, 'chapters.%s: %s is in shared, so it goes only there; a and b hold what is only each one\'s own' % (nm_, ', '.join(dup_[:3])))
     need(T(D(fu.get('growth')).get('a')) and T(D(fu.get('growth')).get('b'))
          and (not topics or all(isinstance(x, dict) and x.get('topic') in topics and T(x.get('line')) for x in L(fu.get('decisions')))),
          'chapters.future: a line per big decision (%s), growth a and b' % (', '.join(sorted(topics)) or 'none'))
@@ -2626,7 +2630,7 @@ p{margin:0 0 10px}
 .stat{padding:14px;border-radius:16px;background:#fff;border:1px solid #ece2f2;box-shadow:0 4px 14px rgba(70,20,100,.06)}
 .stat .lbl{margin-bottom:8px}
 .sv{display:flex;align-items:flex-start;gap:7px;font-size:16.5px;font-weight:800;line-height:1.25}.sv:before{content:"";flex:none;width:10px;height:10px;margin-top:5px;border-radius:50%;background:currentColor}
-.sv.Strong,.sv.Happier-than-you-each-think,.sv.About-right{color:var(--sage)}.sv.Steady{color:var(--amber)}.sv.Worth-attention,.sv.Worth-asking-each-other{color:#b3261e}
+.sv.Strong,.sv.Happier-than-you-each-think,.sv.About-right{color:var(--sage)}.sv.Steady{color:#2b5d8f}.sv.Worth-attention,.sv.Worth-asking-each-other{color:#b3261e}
 .map{display:flex;flex-direction:column;gap:10px;margin:8px 0}
 .mch{display:block;text-decoration:none;color:var(--ink);border:1px solid #ece2f2;border-left:5px solid var(--c);border-radius:16px;padding:12px 12px 12px 14px;background:linear-gradient(90deg,var(--t),#fff 60%)}
 .mhd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -2723,9 +2727,9 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}td,th{te
 .dots{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px}
 .pd{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:650;color:var(--soft)}.pd:before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
 .pd em{font-style:normal;font-size:11px;color:var(--mute)}
-.pd.Strong{color:var(--sage)}.pd.Steady{color:#b57418}.pd.Worth-attention{color:#b3261e}
+.pd.Strong{color:var(--sage)}.pd.Steady{color:#2b5d8f}.pd.Worth-attention{color:#b3261e}
 .tb{font-size:11px;font-weight:800;color:#fff;background:var(--k);border-radius:999px;padding:1px 7px}
-.key{font-size:11.5px}.key .k{width:9px;height:9px;border-radius:50%}.k.Strong{background:var(--sage)}.k.Steady{background:#b57418}.k.Worth-attention{background:#b3261e}
+.key{font-size:11.5px}.key .k{width:9px;height:9px;border-radius:50%}.k.Strong{background:var(--sage)}.k.Steady{background:#2b5d8f}.k.Worth-attention{background:#b3261e}
 .take{margin:12px 0;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#f3e9f8,#fdf0f6);border:1px solid #ead9f1}
 .take .lbl{color:var(--c)}.take p{margin:4px 0 0;font-size:16.5px;font-weight:700;line-height:1.4}
 .prow{margin:10px 0;padding:12px 14px;border-radius:14px;border:1px solid #efe6f4;background:#fdfbfe}
@@ -2772,9 +2776,9 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 /* Calm, as the Psyche Report (README "Psyche Together, release 32"): one soft box style, colour only in small labels */
 .lv{font-weight:650}.lv:before{display:none}
 .lv.Strong,.lv.Aligned,.lv.Happier-than-you-each-think,.lv.About-right{background:#eef6f1;color:#2f6f53}
-.lv.Steady,.lv.Not-decided-yet{background:#f3f0f5;color:#5a4f66}
+.lv.Steady{background:#eaf1f9;color:#2b5d8f}.lv.Not-decided-yet{background:#f3f0f5;color:#5a4f66}
 .lv.Worth-attention,.lv.Worth-asking-each-other,.lv.Talk-about{background:#fbeeed;color:#a8322a}
-.lw{font-weight:650}.lw.Strong,.lw.Happier-than-you-each-think,.lw.About-right{color:#2f6f53}.lw.Steady{color:#5a4f66}.lw.Worth-attention,.lw.Worth-asking-each-other{color:#a8322a}
+.lw{font-weight:650}.lw.Strong,.lw.Happier-than-you-each-think,.lw.About-right{color:#2f6f53}.lw.Steady{color:#2b5d8f}.lw.Aligned{color:#2f6f53}.lw.Talk-about{color:#a8322a}.lw.Worth-attention,.lw.Worth-asking-each-other{color:#a8322a}
 .callout,.callout.ask,.callout.try,.callout.key2,.truth,.take,.minebox,.psy,.two>div,.pair2>div{background:#faf7fb;border:1px solid #eee6f3;box-shadow:none}
 .callout .lbl,.callout.ask .lbl,.callout.try .lbl,.callout.key2 .lbl,.truth .lbl,.take .lbl,.psy .lbl{color:var(--c)}
 .callout.key2{font-weight:500}.minebox{border-style:dashed}
@@ -2911,7 +2915,7 @@ def _talk_panel(box, names):
     table = '<table><tr><th></th><th>%s</th><th>%s</th></tr>%s</table>' % (_e(who[0]), _e(who[1]), ''.join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % tuple(_e(c) for c in r) for r in rows))
     match = ('<div class="big"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>%s' % (round(100 * sig['styleMatch']), _research('styleMatch'))
              if sig.get('styleMatch') is not None else '')
-    return ('<h3>You two, in numbers</h3>' + match + table
+    return ('<h3>You both, in numbers</h3>' + match + table
             + '<p class="soft">%s messages from %s to %s, about %s a month, %s.</p>' % (_e(sig.get('messages')), _e(sig.get('from')), _e(sig.get('to')), _e(sig.get('perMonth')), _e(sig.get('trend')))
             + _research('we'))
 
@@ -2967,8 +2971,8 @@ def _rhythm(sig, who):
     rows = ''.join('<div class="rb"><span>%s</span><div><i class="a" style="width:%s%%"></i><em>%s%%</em></div><div><i class="b" style="width:%s%%"></i><em>%s%%</em></div></div>'
                    % (lbl, you['day'].get(k, 0), you['day'].get(k, 0), them['day'].get(k, 0), them['day'].get(k, 0))
                    for k, lbl in (('morning', 'Morning'), ('afternoon', 'Afternoon'), ('evening', 'Evening'), ('late', 'Late night')))
-    return ('<h3>Your day, side by side</h3><div class="rhythm"><p class="soft">When each of you writes: <span class="ka"></span> %s · <span class="kb"></span> %s. Conversations started: %s by %s, %s by %s.</p>%s</div>'
-            % (_e(who[0]), _e(who[1]), _e(you.get('starts')), _e(who[0]), _e(them.get('starts')), _e(who[1]), rows))
+    return ('<h3>Your day, side by side</h3><div class="rhythm"><p class="soft">When each of you writes: <span class="ka"></span> %s · <span class="kb"></span> %s.</p>%s</div>'
+            % (_e(who[0]), _e(who[1]), rows))
 
 
 # Your two Psyches, woven into the chapters (README "Psyche Together, release 26"): what a Sync compares, each where it
@@ -3048,7 +3052,13 @@ def _psyches(cid, pa, pb, names, line):
         body += '<div class="pair2"><div><b class="a">%s</b><span>%s</span></div><div><b class="b">%s</b><span>%s</span></div></div>' % (
             _e(names[0]), _e(pa.get('attachment') or '–'), _e(names[1]), _e(pb.get('attachment') or '–'))
     if extra == 'conflict' and (pa.get('conflict') or pb.get('conflict')):
-        cut = lambda t: (t[:150].rsplit(' ', 1)[0] + '…') if len(t) > 150 else t
+        def cut(t):         # whole sentences up to about 200 characters, never cut mid-sentence
+            out_ = ''
+            for sn in re.split(r'(?<=[.!?])\s+', str(t).strip()):
+                if out_ and len(out_) + len(sn) > 200:
+                    break
+                out_ = (out_ + ' ' + sn).strip()
+            return out_
         body += '<div class="pair2"><div><b class="a">%s</b><span>%s</span></div><div><b class="b">%s</b><span>%s</span></div></div>' % (
             _e(names[0]), _e(cut(pa.get('conflict') or '–')), _e(names[1]), _e(cut(pb.get('conflict') or '–')))
     if extra == 'motives' and pa.get('motives') and pb.get('motives'):
@@ -3183,9 +3193,14 @@ def page(box, s):
                      for i, (home, x) in enumerate((x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close'), x)
                                                    for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds))
     word = lambda lv: '<span class="lw %s">%s</span>' % (_e(lv.replace(' ', '-')), _e(lv))
+    word2 = lambda n_, cls: '<span class="lw %s">%d</span>' % (cls, n_)
+    dec = view.get('decisions') or []
+    al_, tk_ = sum(1 for x in dec if x.get('result') == 'Aligned'), sum(1 for x in dec if x.get('result') != 'Aligned')
     rows = ''
     for cid, num, title, pids, refs in CHAPTERS:
         areas = ' · '.join('%s %s' % (_e(SHORT.get(p_, p_)), word(view['pillars'][p_])) for p_ in pids if p_ in (view.get('pillars') or {}))
+        if areas and cid == 'future' and dec:
+            areas += '</span><span class="areas2">Big decisions %s' % ' · '.join(y for y in ['%s aligned' % word2(al_, 'Aligned') if al_ else '', '%s to talk about' % word2(tk_, 'Talk-about') if tk_ else ''] if y)
         if areas:
             rows += '<a class="it2" href="#%s"><span class="n2">%s</span><span><b>%s</b><span class="areas2">%s</span></span><i>›</i></a>' % (cid, num, _e(title), areas)
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
@@ -3193,13 +3208,9 @@ def page(box, s):
     if ovv:
         summary_ = ('<p class="sat">How satisfied you both are: %s · How well you read each other: %s</p>%s'
                     % (word(ovv['level']), word(ovv['reading']), ('<p>%s</p>' % _e(ovr.get('detail'))) if ovr.get('detail') else ''))
-    dec = view.get('decisions') or []
-    al_, tk_ = sum(1 for x in dec if x.get('result') == 'Aligned'), sum(1 for x in dec if x.get('result') != 'Aligned')
-    conf_ = ((box.get('sources') or {}).get('confidence') or {})
-    foot = ('<a href="#future">Big decisions: %s</a>' % _e(', '.join(y for y in ['%d aligned' % al_ if al_ else '', '%d to talk about' % tk_ if tk_ else ''] if y))) if dec else ''
-    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You two, in one line</small><b>%s</b></div>%s%s%s%s'
+    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You both, in one line</small><b>%s</b></div>%s%s%s'
          % (_e(r.get('summary')), ('<h3>Executive summary</h3>' + summary_) if summary_ else '', ('<h3>What stands out</h3>' + stands) if stands else '',
-            ('<h3>Where you stand</h3><div class="map">%s</div>' % rows) if rows else '', ('<p class="foot2">%s</p>' % foot) if foot else ''),
+            ('<h3>Where you stand</h3><div class="map">%s</div>' % rows) if rows else ''),
          '', 'The whole read on one screen', True)
     # Chapters (README "Psyche Together, release 28"): the takeaway on top, then three parts at most: where you are (the
     # pillars and your two Psyches, one card), what's going on (the story, opened by the chapter's truth, its moments and
@@ -3255,8 +3266,9 @@ def page(box, s):
             diffs += ''.join('<li><b>%s</b> <span class="solv">to solve</span> %s</li>' % (_e(x.get('title')), _e(x.get('firstStep'))) for x in c.get('solvable') or [] if isinstance(x, dict))
             todo += ('<div class="callout ask"><span class="lbl">Differences to live with, and one to solve</span><ul class="diffs">%s</ul></div>' % diffs) if diffs else ''
         chips = lambda xs: ''.join('<span>%s</span>' % _e(x) for x in xs or [])
+        own = lambda al, k: [x for x in al.get(k) or [] if str(x).strip().lower() not in {str(y).strip().lower() for y in al.get('shared') or []}]
         cols = lambda label, al: (('<p class="lbl" style="margin-top:14px">%s</p><div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
-                                   % (_e(label), _e(names[0]), chips(al.get('a')), chips(al.get('shared')), _e(names[1]), chips(al.get('b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
+                                   % (_e(label), _e(names[0]), chips(own(al, 'a')), chips(al.get('shared')), _e(names[1]), chips(own(al, 'b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
                                   if al.get('shared') else '')
         if cid == 'life':
             going += _rhythm(sig, who).replace('<h3>Your day, side by side</h3>', '<p class="lbl" style="margin-top:14px">Your day, side by side</p>')
@@ -3324,7 +3336,7 @@ def page(box, s):
     part('how', 'i', 'How this was read', _how(box) + '%s<p class="soft">From both your full Psyche reports, shared with your consent for this read; your conversation together, measured on the device of the one who added it; and the check-in you each did privately, the same core questions for both. '
          'The measures follow published research: how partners see the relationship (Joel et al., PNAS 2020), turning towards and repair (Gottman), responsiveness to good news (Gable et al., 2004), '
          'language style matching (Ireland et al., 2011), "we" language (Seider et al., 2009), demand and withdraw (Christensen & Heavey), dyadic coping (Bodenmann), self-expansion (Aron) and the Michelangelo phenomenon (Drigotas et al., 1999). '
-         'They describe couples in general, never a verdict on you two. This is coaching, not counselling: if something here feels heavy, a couples counsellor is worth seeing together.</p>'
+         'They describe couples in general, never a verdict on either of you. This is coaching, not counselling: if something here feels heavy, a couples counsellor is worth seeing together.</p>'
          '<div class="saycopy"><p>To end Psyche Together and have PsycheAI delete everything it keeps for both of you, say this in your Psyche Together chat. Your own copy of this page stays on your device until you delete it.</p>'
          '<div class="sayrow"><code>End Psyche Together</code><button type="button" data-copy="End Psyche Together">Copy</button></div></div>' % _paras(r.get('caveats')),
          '', 'Sources, method and limits')
