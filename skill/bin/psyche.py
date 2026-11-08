@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 183
+RELEASE = 184
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5000,7 +5000,11 @@ def local_publish(args):
     # Nothing is sent, not even that a Psyche exists (README "Nothing about them leaves Muse"): What's next
     # and the ideas to ask come from here (AFTER_PUBLISH, ASK_IDEAS: lib/next.js and lib/mcp.js's, kept in step by the selftest).
     args['answer'] = answer
-    return {'ok': True, 'full': full, 'card': card, 'nextStep': json.loads(json.dumps(AFTER_PUBLISH)), 'askIdeas': ask_ideas(card.get('patterns'))}
+    nxt = json.loads(json.dumps(AFTER_PUBLISH))
+    if os.path.exists(os.path.join(KEEP, 'together-pending.json')):     # they asked for Psyche Together (to start one, or a partner's invite) before they had a Psyche
+        nxt['buttons'] = ['Continue Psyche Together'] + nxt['buttons']
+        nxt['continueTogether'] = True     # Muse carries on into it at once (lib/instructions.js TOGETHER)
+    return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ask_ideas(card.get('patterns'))}
 
 
 def with_pinned_guide(tool, args, out):
@@ -5555,7 +5559,7 @@ LABELS = frozenset([
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
-    'Explain why you said this', 'Correct something', 'More', 'Fresh Psyche', 'Add WhatsApp as data source', 'My data and privacy',
+    'Explain why you said this', 'Correct something', 'More', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$')]
 
@@ -5594,7 +5598,7 @@ def clean_result(value):
 
 # What's next after a Psyche, and the ideas to ask: the server's own (lib/next.js publish_psyche, lib/mcp.js
 # ASK_IDEAS and askIdeas), here so publishing asks nothing of it. The selftest holds them to the server's.
-AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Add WhatsApp or Facebook", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger", "Facebook posts only"], "more": {"buttons": ["Weekly check-ins on my plan", "Join the Psyche Pair waitlist", "My data and privacy"]}}
+AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Psyche Together with my partner", "Add WhatsApp or Facebook", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger", "Facebook posts only"], "more": {"buttons": ["Weekly check-ins on my plan", "Join the Psyche Pair waitlist", "My data and privacy"]}}
 ASK_IDEAS = [
 "Who am I when I'm not being useful, impressive or needed?",
 "What do I keep trying to prove, and to whom?",
