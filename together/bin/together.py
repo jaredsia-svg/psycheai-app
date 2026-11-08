@@ -6,14 +6,15 @@ workspace, and on PsycheAI's account, but it runs none of PsycheAI's code. Every
 of them is answered and written here and locked before it's sent: the server keeps boxes it can't open.
 
   python3 bin/together.py status              what's next for this person
-  python3 bin/together.py start               start a new Psyche Together (the one who invites)
+  python3 bin/together.py start               start a new Psyche Together (the one who invites): the stage, then the invite
   python3 bin/together.py join <link>         join with a partner's link
-  python3 bin/together.py next                the next check-in question
-  python3 bin/together.py answer <id> <label> answer it (or --text "<words>" --nearest "<label>")
-  python3 bin/together.py link                the invite for their partner
-  python3 bin/together.py send                lock and send their shared answers
-  python3 bin/together.py save @file          save the joint read Muse wrote
-  python3 bin/together.py save-foryou @file   save their own private "For you"
+  python3 bin/together.py questions           what Muse writes their questions from (both Psyches), once both have joined
+  python3 bin/together.py save-questions @f   save the openers and follow-ups Muse wrote; makes the questions page
+  python3 bin/together.py form                the questions page again
+  python3 bin/together.py code <PT-…>         the answer code from the page: their answers, then sent
+  python3 bin/together.py next | answer <id> <button>   the same questions in the chat, one at a time
+  python3 bin/together.py save @f             save the joint read Muse wrote
+  python3 bin/together.py save-foryou @f      save their own private "For you"
   python3 bin/together.py show                their page
   python3 bin/together.py end                 end it, for both
   python3 bin/together.py forget              delete everything of it in this workspace
@@ -41,7 +42,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 2
+RELEASE = 4
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -102,46 +103,6 @@ SKIP_SEPARATED = {'desire', 'growth'}
 SAFETY = ('safety', 'One private question, never shared with anyone: do you ever feel unsafe or afraid with {p}?',
           ['No', 'Sometimes', 'Yes', 'I\'d rather not say'])
 SAFETY_FLAGGED = {'Sometimes', 'Yes'}
-
-# Deeper questions, one per pillar at most and four in all, picked by need (a low answer, a pattern
-# in their Psyche known to strain that pillar, or a gap their Psyche couldn't see). Private: they
-# shape this person's own "For you" and never leave this workspace.
-DEEPER = {
-    'security': [
-        ('sec_quiet', 'anxious', 'When {p} goes quiet or seems distant, what happens for you?',
-         ['I worry it\'s about me', 'I check in with them', 'I give them space', 'I hardly notice']),
-        ('sec_space', 'avoidant', 'When {p} wants more closeness than you do, you…', ['Lean in', 'Need a little space first', 'Pull back']),
-        ('sec_happy', None, 'How happy do you think {p} is with the two of you?', ['Very', 'Mostly', 'Not sure', 'Not very']),
-    ],
-    'appreciation': [
-        ('apprec_news', None, 'When you share good news, {p} usually…',
-         ['Gets excited with me', 'Says something kind', 'Is distracted', 'Points out the catch']),
-    ],
-    'connection': [
-        ('conn_time', None, 'In a normal week, how much time do you two spend just with each other?',
-         ['Plenty', 'Enough', 'Not enough', 'Hardly any']),
-    ],
-    'disagreements': [
-        ('dis_keep', 'keepsin', 'Your Psyche found you tend to keep a problem to yourself until you\'ve sorted it. With {p}, does that happen?',
-         ['Often', 'Sometimes', 'Rarely']),
-        ('dis_loop', None, 'When you disagree, does one of you push to talk it out while the other goes quiet?',
-         ['Yes, I push', 'Yes, I go quiet', 'We take turns', 'Not really']),
-    ],
-    'needs': [
-        ('needs_least', None, 'Which need feels least met right now?', ['Time together', 'Time to myself', 'Help at home', 'Affection', 'Feeling heard']),
-    ],
-    'life': [
-        ('life_most', None, 'Which part of life together would you most like to change?', ['Money', 'Free time', 'Friends and family', 'Home habits', 'Nothing much']),
-    ],
-    'future': [
-        ('fut_talk', None, 'What\'s the biggest thing you two haven\'t talked through yet?',
-         ['Where to live', 'Money', 'Children', 'Marriage', 'Careers', 'Nothing big']),
-    ],
-    'growth': [
-        ('grow_support', None, 'What would you most like {p}\'s support with this year?', ['Work', 'Health', 'A project of my own', 'Family']),
-    ],
-}
-DEEPER_MAX = 4
 
 # The big decisions, stated only, never inferred: shown side by side, since they exist to be compared.
 DECISIONS = {
@@ -335,20 +296,17 @@ def pillar_reasons(sig, core):
     return out
 
 
-def deeper_for(sig, core):
-    """Up to four deeper questions, one per pillar, the most needed first."""
-    reasons = pillar_reasons(sig, core)
-    order = sorted(reasons, key=lambda pid: (-reasons[pid], PILLAR_ORDER.index(pid)))[:DEEPER_MAX]
-    picked = []
-    for pid in order:
-        bank = DEEPER.get(pid) or []
-        match = [q for q in bank if q[1] and sig.get(q[1])]
-        q = (match or [x for x in bank if not x[1]] or bank)[0]
-        picked.append((pid,) + q)
-    return picked
-
-
 # ---------------------------------------------------------------- the flow
+#
+# README "Psyche Together, release 3": both Psyches are exchanged first, then each person's Muse writes one
+# opener and one follow-up per pillar from the two of them, so the questions are about these two people, not
+# a questionnaire. The core question under each opener is fixed, with the same options for both, so the couple
+# view stays fair. A follow-up shows only where it helps: when the answer above it is low, or where this person's
+# Psyche points to strain there, four at most.
+
+FLOW = ['appreciation', 'connection', 'needs', 'life', 'growth', 'disagreements', 'future', 'security']
+FOLLOW_MAX = 4
+
 
 def core_for(stage):
     out = []
@@ -367,111 +325,125 @@ def decisions_for(stage, answers):
     return topics
 
 
-def steps(s):
-    """Every question this person is asked, in order, as (id, text, options, kind)."""
-    answers = s.get('answers') or {}
-    out = [('partner', 'What\'s your partner\'s first name? It stays here and is only used to word the questions.', None, 'name'),
-           ('stage', 'Which stage of a relationship are you two at right now?', STAGES, 'stage')]
-    stage = (answers.get('stage') or {}).get('label')
-    if not stage:
-        return out
-    for pid, text, opts in core_for(stage):
-        out.append(('core:' + pid, text, [o for o, _ in opts], 'core'))
-    out.append(('safety', SAFETY[1], SAFETY[2], 'safety'))
-    core = core_scores(s)
-    if all(('core:' + pid) in answers for pid, _, _ in core_for(stage)):
-        for pid, qid, _, text, opts in deeper_for(signals(psyche()), core):
-            out.append(('deep:' + qid, text, opts, 'deeper'))
-    for t in decisions_for(stage, answers):
-        out.append(('decide:' + t, DECISIONS[t][0], DECISIONS[t][1], 'decision'))
+def stage_of(s):
+    return s.get('stage') or (s.get('answers') or {}).get('stage', {}).get('label')
+
+
+def items(s):
+    """Every question this person is asked once their questions are written, in order. Each is a dict:
+    id, kind, pillar, opener, text, options, scores (core), follows (a follow-up's core id)."""
+    stage, q, out = stage_of(s), s.get('questions') or {}, []
+    core = {pid: (text, opts) for pid, text, opts in core_for(stage)}
+    for pid in FLOW:
+        if pid not in core:
+            continue
+        text, opts = core[pid]
+        out.append({'id': 'core:' + pid, 'kind': 'core', 'pillar': pid, 'opener': (q.get('openers') or {}).get(pid, ''),
+                    'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
+        f = (q.get('followUps') or {}).get(pid)
+        if isinstance(f, dict) and f.get('q') and f.get('options'):
+            out.append({'id': 'deep:' + pid, 'kind': 'deeper', 'pillar': pid, 'opener': '', 'text': f['q'], 'options': list(f['options']), 'follows': 'core:' + pid})
+    if 'desire' in core:
+        text, opts = core['desire']
+        out.append({'id': 'core:desire', 'kind': 'core', 'pillar': 'desire', 'opener': '', 'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
+    out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
+    for t in BY_STAGE.get(stage) or []:
+        out.append({'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': DECISIONS[t][1],
+                    'onlyIf': 'hope' if t in ('hope', 'children') and stage == 'Dating' else None})
     return out
 
 
-def core_scores(s):
-    answers, out = s.get('answers') or {}, {}
-    stage = (answers.get('stage') or {}).get('label')
-    for pid, _, opts in core_for(stage):
-        a = answers.get('core:' + pid)
-        if a:
-            out[pid] = dict(opts).get(a.get('label'))
+def base_priority(s):
+    """How much this person's own Psyche points to each pillar (a pattern 2, a gap 1), for the follow-ups."""
+    return pillar_reasons(signals(psyche()), {})
+
+
+def shown(s, its, answers):
+    """The ids shown so far, given the answers: a follow-up when its core answer is low or its pillar's priority
+    is 2 or more, four at most; the Dating decisions only when they haven't talked about the future."""
+    base, out, follows = base_priority(s), [], 0
+    scores = {it['id']: dict(zip(it['options'], it['scores'])) for it in its if it['kind'] == 'core'}
+    for it in its:
+        if it['kind'] == 'deeper':
+            core = answers.get(it['follows'])
+            low = core is not None and scores.get(it['follows'], {}).get(core.get('label')) == 0
+            if core is None or follows >= FOLLOW_MAX or not (low or base.get(it['pillar'], 0) >= 2):
+                continue
+            follows += 1
+        if it.get('onlyIf') and (answers.get('core:future') or {}).get('label') == 'Yes, and we\'ve talked':
+            continue
+        out.append(it['id'])
     return out
 
 
-def question(s, step):
-    qid, text, opts, kind = step
+def say_for(s, it):
     p = s.get('partner') or 'your partner'
-    out = {'id': qid, 'say': text.replace('{p}', p), 'kind': kind}
-    if opts:
-        extra = [SOMETHING_ELSE] if kind in ('core', 'deeper') and SOMETHING_ELSE not in opts else []
-        out.update(buttons=list(opts) + extra, asButtons=True)
-    if kind == 'safety':
-        out['private'] = True
-    done = sum(1 for x in steps(s) if x[0] in (s.get('answers') or {}) or (x[0] == 'partner' and s.get('partner')))
-    out['progress'] = '%d of about %d' % (done + 1, max(len(steps(s)), 16))
-    return out
+    text = it['text'].replace('{p}', p)
+    return (it['opener'] + '\n\n' + text) if it.get('opener') else text
 
 
 def next_step(s=None):
+    """The next question in the chat (when the form can't be used), or what comes before the questions."""
     s = s if s is not None else state()
     if not s.get('role'):
         return {'error': 'There\'s no Psyche Together here yet: start one ("Start Psyche Together") or join with a partner\'s link.'}
-    for st in steps(s):
-        if st[0] == 'partner':
-            if not s.get('partner'):
-                return question(s, st)
-            continue
-        if st[0] not in (s.get('answers') or {}):
-            return question(s, st)
-    return {'done': True}
+    if s.get('role') == 'a' and not stage_of(s):
+        return {'id': 'stage', 'say': 'Which stage of a relationship are you two at right now?', 'kind': 'stage', 'buttons': STAGES, 'asButtons': True}
+    if not s.get('questions'):
+        return {'notReady': True}
+    answers = s.get('answers') or {}
+    its = items(s)
+    ids = shown(s, its, answers)
+    todo = [it for it in its if it['id'] in ids and it['id'] not in answers]
+    if not todo:
+        return {'done': True}
+    it = todo[0]
+    out = {'id': it['id'], 'say': say_for(s, it), 'kind': it['kind'], 'buttons': list(it['options']), 'asButtons': True,
+           'progress': '%d of %d' % (len([i for i in ids if i in answers]) + 1, len(shown(s, its, dict(answers, **{x['id']: {'label': x['options'][0]} for x in its if x['kind'] == 'core' and x['id'] not in answers}))))}
+    if it.get('private'):
+        out['private'] = True
+    return out
 
 
 def answer(qid, label=None, text=None, nearest=None):
     s = state()
     if not s.get('role'):
         return {'error': 'There\'s no Psyche Together here yet.'}
-    st = next((x for x in steps(s) if x[0] == qid), None)
-    if not st:
-        return {'error': 'There\'s no question %s right now: run next.' % qid}
-    _, _, opts, kind = st
-    if kind == 'name':
-        name = clean_typed(text or label or '')
-        name = re.sub(r'[^\w\' -]', '', name).strip()[:30]
-        if not name or '[' in name:
-            return {'error': 'Give their first name, in a few letters.'}
-        s['partner'] = name
+    if qid == 'stage' and s.get('role') == 'a' and not stage_of(s):
+        if label not in STAGES:
+            return {'error': '"%s" isn\'t one of the stages: %s.' % (label, ', '.join(STAGES))}
+        s['stage'] = label
         save_state(s)
-        return next_step(s)
-    s.setdefault('answers', {})
-    if label == SOMETHING_ELSE or (text and kind in ('core', 'deeper')):
-        if not text:
-            return {'say': 'In a few words?', 'id': qid, 'typed': True}
-        near = nearest if nearest in (opts or []) else None
-        if kind == 'core' and not near:
-            return {'error': 'Give --nearest: the button closest to what they wrote, so the couple view stays comparable.'}
-        s['answers'][qid] = {'label': near, 'text': clean_typed(text, [s.get('partner') or ''])}
-    else:
-        if opts and label not in opts:
-            return {'error': '"%s" isn\'t one of the buttons: %s.' % (label, ', '.join(opts))}
-        s['answers'][qid] = {'label': label}
+        return after_stage(s)
+    it = next((x for x in items(s) if x['id'] == qid), None) if s.get('questions') else None
+    if not it:
+        return {'error': 'There\'s no question %s right now.' % qid}
+    if label not in it['options']:
+        return {'error': '"%s" isn\'t one of the buttons: %s.' % (label, ', '.join(it['options']))}
+    s.setdefault('answers', {})[qid] = {'label': label}
     save_state(s)
-    return next_step(s)
+    q = next_step(s)
+    return send() if q.get('done') else q
 
 
-def shared_profile(s):
-    """What leaves this workspace, locked: their Psyche at card level, the stage, the nine core answers as
-    good / middling / low, whether they'd like to talk about closeness, and the big decisions. Never the
-    deeper answers, typed words or the safety answer."""
-    answers = s.get('answers') or {}
+def shared_profile(s, answered=True):
+    """What leaves this workspace, locked: their Psyche at card level and the stage (from the start), then the
+    core answers as good / middling / low, whether they'd like to talk about closeness, and the big decisions.
+    Never the follow-up answers or the safety answer."""
     kept = psyche()
-    core = {k: v for k, v in core_scores(s).items() if k != 'desire' and v is not None}
-    desire = (answers.get('core:desire') or {}).get('label')
-    return {
-        'v': 1, 'psyche': psyche_profile(kept) if kept else {},
-        'stage': (answers.get('stage') or {}).get('label'),
-        'core': core,
-        'desireTalk': desire == 'Something to talk about',
-        'decisions': {k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')},
-    }
+    out = {'v': 3, 'psyche': psyche_profile(kept) if kept else {}, 'stage': stage_of(s) if s.get('role') == 'a' else None}
+    if not answered:
+        return out
+    answers = s.get('answers') or {}
+    stage = stage_of(s)
+    core = {}
+    for pid, _, opts in core_for(stage):
+        a = answers.get('core:' + pid)
+        if a and pid != 'desire' and dict(opts).get(a.get('label')) is not None:
+            core[pid] = dict(opts)[a['label']]
+    out.update(core=core, desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
+               decisions={k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')})
+    return out
 
 
 LEVELS = {2: 'Strong', 1: 'Steady', 0: 'Worth attention'}
@@ -497,6 +469,38 @@ def couple_view(a, b):
     return {'stage': a.get('stage') or b.get('stage'), 'stages': [a.get('stage'), b.get('stage')], 'pillars': pillars,
             'desireTalk': bool(a.get('desireTalk') and b.get('desireTalk')), 'decisions': decisions,
             'names': [(a.get('psyche') or {}).get('name') or 'Partner A', (b.get('psyche') or {}).get('name') or 'Partner B']}
+
+
+# ---------------------------------------------------------------- the answer code
+# The form page can't send anything to the chat, so it gives one short code to paste: the form's id, then one
+# character per question, its button's number, or "-" when it wasn't shown. Nothing in it but numbers.
+
+def form_id(s):
+    return hashlib.sha256(json.dumps(s.get('questions') or {}, sort_keys=True).encode()).hexdigest()[:4]
+
+
+def read_code(code):
+    s = state()
+    m = re.search(r'\bPT-([0-9a-f]{4})-([0-9-]+)\b', str(code or ''))
+    if not m:
+        return {'error': 'That isn\'t an answer code: it looks like PT-1a2b-0120…, from the end of the questions page.'}
+    if not s.get('questions') or m.group(1) != form_id(s):
+        return {'error': 'That code is from another set of questions: use the latest questions page.'}
+    its, digits = items(s), m.group(2)
+    if len(digits) != len(its):
+        return {'error': 'That code is cut short: copy it again from the end of the questions page.'}
+    answers = {}
+    for it, ch in zip(its, digits):
+        if ch != '-' and int(ch) < len(it['options']):
+            answers[it['id']] = {'label': it['options'][int(ch)]}
+    ids = shown(s, its, answers)
+    answers = {k: v for k, v in answers.items() if k in ids}
+    missing = [i for i in ids if i not in answers]
+    if missing:
+        return {'error': 'Some questions aren\'t answered yet (%d): finish them on the page and copy the code again.' % len(missing)}
+    s['answers'] = answers
+    save_state(s)
+    return send()
 
 
 # ---------------------------------------------------------------- locking (as the PsycheAI skill's Sync does)
@@ -655,6 +659,11 @@ def needs_psyche():
     return {'needsPsyche': True, 'say': 'Psyche Together builds on your Psyche, so make yours first. Say "Install psycheai.io/skill and generate my Psyche", then come back here.'}
 
 
+CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, and your partner never sees how you answered: the read shows '
+           'the two of you together. Your Psyche Card\'s summary (your character, type, patterns, how you show care and handle disagreements) '
+           'goes to your partner\'s Muse, locked, so both your questions are about the two of you. PsycheAI can\'t read any of it.')
+
+
 def start():
     if not psyche() or not account():
         return needs_psyche()
@@ -666,8 +675,21 @@ def start():
     if got.get('error'):
         return got
     save_keys({'code': code, 'role': 'a'})
-    save_state({'role': 'a', 'started': int(time.time()), 'answers': {}})
-    return dict(next_step(), first=True)
+    save_state({'role': 'a', 'v': 3, 'started': int(time.time()), 'answers': {}})
+    return dict(next_step(), consent=CONSENT)
+
+
+def put_profile(s, answered):
+    k = keys()
+    return tool('together_put', {'e2e': {'profile': seal(shared_profile(s, answered), key_for('together-box', k['code']))}})
+
+
+def after_stage(s):
+    """The stage is in: their card goes, locked, and the invite comes back."""
+    got = put_profile(s, False)
+    if got.get('error'):
+        return got
+    return {'invite': invite(), 'say': 'Your Psyche is ready for the two of you. Once your partner joins, you\'ll each get your own questions, written from both your Psyches.'}
 
 
 def join(link):
@@ -684,11 +706,12 @@ def join(link):
     if got.get('error'):
         return got
     save_keys({'code': code, 'role': 'b'})
-    save_state({'role': 'b', 'started': int(time.time()), 'answers': {}})
-    q = next_step()
-    return {'joined': True, 'consent': ('Psyche Together: each of you answers privately, in your own Muse. Your partner never sees how '
-                                         'you answered: the read shows the two of you together. Your answers are locked here before '
-                                         'anything is sent, so PsycheAI can\'t read them.'), 'next': q}
+    s = {'role': 'b', 'v': 3, 'started': int(time.time()), 'answers': {}}
+    save_state(s)
+    got = put_profile(s, False)
+    if got.get('error'):
+        return got
+    return dict(questions_task(), joined=True, consent=CONSENT)
 
 
 def invite():
@@ -698,8 +721,7 @@ def invite():
     me = psyche_profile(psyche() or {}).get('name') or 'Your partner'
     link = BASE + '/together#' + k['code']
     return {'url': link, 'invite': '%s invited you to Psyche Together, a private check-in for the two of you. Paste this into your Muse app: Install %s and join our Psyche Together.'
-            % (me, link.replace('https://', '')),
-            'say': 'Send this to %s: they paste it into their Muse.' % (s.get('partner') or 'your partner')}
+            % (me, link.replace('https://', '')), 'say': 'Send this to your partner: they paste it into their Muse.'}
 
 
 def couple():
@@ -716,38 +738,123 @@ def couple():
     return k, got, profiles, unseal(e.get('read'), key)
 
 
+def mine_theirs(s, profiles):
+    me, them = ('a', 'b') if s.get('role') == 'a' else ('b', 'a')
+    return profiles.get(me) or {}, profiles.get(them) or {}
+
+
+def questions_task():
+    """Data for Muse to write this person's openers and follow-ups (README "Psyche Together, release 3"): both
+    Psyches at card level, the stage, and where this person's own Psyche points. Data only: what to do with it is
+    in SKILL.md and guide.json."""
+    s = state()
+    k, got, profiles, box = couple()
+    if got.get('error'):
+        return got
+    mine, theirs = mine_theirs(s, profiles)
+    if not theirs.get('psyche'):
+        return {'waiting': True, 'say': 'Waiting for your partner to join.'}
+    s['partner'] = (theirs.get('psyche') or {}).get('name') or 'your partner'
+    s['stage'] = stage_of(s) or (profiles.get('a') or {}).get('stage')
+    save_state(s)
+    stage = s['stage']
+    pillars = [p for p in FLOW if p in dict((pid, 1) for pid, _, _ in core_for(stage))]
+    focus = {p: n for p, n in base_priority(s).items() if p in pillars}
+    return {'write': 'questions', 'you': psyche_profile(psyche() or {}), 'partner': theirs.get('psyche'), 'stage': stage,
+            'pillars': pillars, 'focus': focus, 'saveTo': 'work/together-questions.json'}
+
+
+def check_questions(q, partner, pillars):
+    problems = []
+    if not isinstance(q, dict):
+        return ['The questions are not a JSON object.']
+    op = q.get('openers') if isinstance(q.get('openers'), dict) else {}
+    fu = q.get('followUps') if isinstance(q.get('followUps'), dict) else {}
+    for p in pillars:
+        o = op.get(p)
+        if not isinstance(o, str) or not 20 <= len(o.strip()) <= 240:
+            problems.append('openers.%s: one or two sentences, 20 to 240 characters' % p)
+        f = fu.get(p)
+        if not (isinstance(f, dict) and isinstance(f.get('q'), str) and 10 <= len(f['q']) <= 180 and isinstance(f.get('options'), list)
+                and 3 <= len(f['options']) <= 5 and all(isinstance(x, str) and 1 <= len(x) <= 40 for x in f['options'])
+                and len(set(f['options'])) == len(f['options'])):
+            problems.append('followUps.%s: q (10 to 180 characters) and 3 to 5 different options, each under 40 characters' % p)
+    extra = [p for p in list(op) + list(fu) if p not in pillars]
+    if extra:
+        problems.append('%s aren\'t pillars for this stage: leave them out' % ', '.join(sorted(set(extra))))
+    named = sum(1 for p in pillars if partner and partner.lower() in str(op.get(p, '')).lower())
+    if partner and named < (len(pillars) + 1) // 2:
+        problems.append('openers: name %s in at least half of them, so each reads as about the two of you' % partner)
+    _plain(problems, {'openers': op, 'followUps': fu}, 240)
+    return problems[:16]
+
+
+def save_questions(path):
+    try:
+        with open(str(path).lstrip('@'), encoding='utf-8') as f:
+            q = json.load(f)
+    except (OSError, ValueError) as err:
+        return {'saved': False, 'problems': ['Couldn\'t read %s: %s' % (path, err)]}
+    s = state()
+    if not s.get('role') or s.get('questions'):
+        return {'saved': False, 'problems': ['There are no questions to write here now.']}
+    pillars = [p for p in FLOW if p in dict((pid, 1) for pid, _, _ in core_for(stage_of(s)))]
+    problems = check_questions(q, s.get('partner'), pillars)
+    if problems:
+        return {'saved': False, 'problems': problems}
+    s['questions'] = {'openers': {p: q['openers'][p].strip() for p in pillars}, 'followUps': {p: q['followUps'][p] for p in pillars}}
+    save_state(s)
+    try:
+        os.remove(str(path).lstrip('@'))
+    except OSError:
+        pass
+    return form()
+
+
+def form():
+    """The questions as one page: tap through, then copy one code back into the chat."""
+    s = state()
+    os.makedirs(OUT, exist_ok=True)
+    path = os.path.join(OUT, 'Psyche-Together-Questions.html')
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(form_page(s))
+    os.chmod(path, 0o600)
+    its = items(s)
+    return {'file': path, 'questions': len(shown(s, its, {})),
+            'say': 'Your questions are ready, written from both your Psyches. Tap through them on this page (about 3 minutes), then copy your answer code and paste it here.'}
+
+
 def send():
     s = state()
     if not s.get('role'):
         return {'error': 'There\'s no Psyche Together here.'}
-    q = next_step(s)
-    if not q.get('done'):
-        return {'error': 'The check-in isn\'t finished yet.', 'next': q}
-    k = keys()
-    got = tool('together_put', {'e2e': {'profile': seal(shared_profile(s), key_for('together-box', k['code']))}})
+    if s.get('v') == 3:
+        q = next_step(s)
+        if not q.get('done'):
+            return {'error': 'The check-in isn\'t finished yet.', 'next': q}
+    got = put_profile(s, True)
     if got.get('error'):
         return got
     s['sent'] = int(time.time())
     save_state(s)
-    sent = got.get('sent') or {}
-    if sent.get('a') and sent.get('b'):
-        return dict(write_task(), sent=True)
-    out = {'sent': True, 'waiting': True,
-           'say': 'Your answers are locked and sent. When %s has done theirs, your read is written: you\'ll both get the same one.' % (s.get('partner') or 'your partner')}
-    if s.get('role') == 'a':
-        out['invite'] = invite()
-    return out
-
-
-def write_task():
-    """What Muse needs to write the joint read: the guide, both Psyches at card level and the couple view.
-    Never either person's own answers."""
-    k, got, profiles, read = couple()
+    k, got, profiles, box = couple()
     if got.get('error'):
         return got
-    if not profiles.get('a') or not profiles.get('b'):
+    if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
+        return dict(write_task(profiles), sent=True)
+    return {'sent': True, 'waiting': True,
+            'say': 'Your answers are locked and sent. When %s has done theirs, your read is written: you\'ll both get the same one.' % (s.get('partner') or 'your partner')}
+
+
+def write_task(profiles=None):
+    """What Muse needs to write the joint read: both Psyches at card level and the couple view, never either
+    person's own answers. Data only."""
+    if profiles is None:
+        k, got, profiles, read = couple()
+        if got.get('error'):
+            return got
+    if not all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
         return {'waiting': True, 'say': 'Still waiting for your partner\'s answers.'}
-    guide = read_first([GUIDE]) or {}
     view = couple_view(profiles['a'], profiles['b'])
     return {'write': 'read', 'coupleView': view,
             'people': [profiles['a'].get('psyche') or {}, profiles['b'].get('psyche') or {}],
@@ -866,10 +973,10 @@ def foryou_task(box=None):
     guide = read_first([GUIDE]) or {}
     answers = s.get('answers') or {}
     mine = {}
-    for st in steps(s):
-        a = answers.get(st[0])
-        if a and st[3] in ('core', 'deeper'):
-            mine[st[1].replace('{p}', s.get('partner') or 'your partner')] = a.get('text') or a.get('label')
+    for it in items(s):
+        a = answers.get(it['id'])
+        if a and it['kind'] in ('core', 'deeper'):
+            mine[it['text'].replace('{p}', s.get('partner') or 'your partner')] = a.get('text') or a.get('label')
     flagged = (answers.get('safety') or {}).get('label') in SAFETY_FLAGGED
     return {'write': 'foryou',
             'yourAnswers': mine, 'coupleView': box.get('view'), 'yourPsyche': psyche_profile(psyche() or {}),
@@ -921,21 +1028,114 @@ def status():
     s = state()
     if not s.get('role'):
         return {'none': True, 'say': 'Psyche Together is a private check-in for you and your partner, built on both your Psyches.', 'buttons': ['Start Psyche Together'], 'asButtons': True}
-    q = next_step(s)
-    if not q.get('done'):
-        return {'checkin': True, 'next': q}
+    if s.get('role') == 'a' and not stage_of(s):
+        return next_step(s)
     if not s.get('sent'):
-        return {'send': True, 'say': 'Your check-in is done.'}
+        if not s.get('questions'):
+            k, got, profiles, box = couple()
+            if got.get('error'):
+                return got
+            mine, theirs = mine_theirs(s, profiles)
+            if not theirs.get('psyche'):
+                return {'waiting': True, 'say': 'Waiting for your partner to join.', 'invite': invite()}
+            return questions_task()
+        return dict(form(), next=next_step(s))
     k, got, profiles, box = couple()
     if got.get('error'):
         return got
     if not box:
-        return write_task() if profiles.get('a') and profiles.get('b') else dict(
-            {'waiting': True, 'say': 'Waiting for %s to finish theirs.' % (s.get('partner') or 'your partner')},
-            **({'invite': invite()} if s.get('role') == 'a' and not got.get('joined') else {}))
+        return write_task(profiles) if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')) else {
+            'waiting': True, 'say': 'Waiting for %s to finish theirs.' % (s.get('partner') or 'your partner')}
     if not s.get('forYou'):
         return foryou_task(box)
     return show(box)
+
+
+FORM_CSS = '''
+:root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--line:#ece4f1;--plum:#6e3796;--rose:#c2366d}
+*{box-sizing:border-box}html,body{margin:0;background:#fbf8fc;color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+.wrap{max-width:640px;margin:0 auto;padding:0 16px 120px}
+header{margin:0 -16px 14px;padding:24px 20px 18px;color:#fff;background:linear-gradient(135deg,#5b2a86,#7b3fa0 45%,#c2366d)}
+header small{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.85}header h1{margin:6px 0 4px;font-size:25px;line-height:1.2}header p{margin:0;opacity:.9;font-size:14.5px}
+.bar{position:sticky;top:0;z-index:5;background:#fbf8fcee;backdrop-filter:blur(6px);padding:10px 0 8px;margin-bottom:6px}
+.bar div{height:6px;border-radius:9px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7b3fa0,#c2366d);transition:width .3s}
+.bar span{display:block;font-size:12.5px;color:var(--soft);margin-top:5px}
+.q{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 16px 12px;margin:0 0 12px;box-shadow:0 1px 2px rgba(60,20,80,.04)}
+.q[hidden]{display:none}.q.done{border-color:#dcc6ea}
+.chip{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--plum);background:#f2e9f8;border-radius:999px;padding:3px 9px;margin-bottom:8px}
+.lock{color:var(--rose);background:#fcebf2}
+.opener{margin:0 0 6px;color:var(--soft);font-size:15px}.text{margin:0 0 10px;font-weight:650;font-size:16.5px}
+.opts{display:flex;flex-direction:column;gap:7px}
+.opts button{all:unset;cursor:pointer;padding:11px 14px;border-radius:12px;border:1.5px solid var(--line);font-size:15.5px;-webkit-tap-highlight-color:transparent}
+.opts button:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
+.opts button[aria-pressed="true"]{border-color:var(--plum);background:#f6effb;font-weight:650}
+.q.follow{margin-top:-6px;border-style:dashed;background:#fdfaff;border-top-left-radius:8px;border-top-right-radius:8px}
+.end{background:#fff;border:1.5px solid #dcc6ea;border-radius:18px;padding:18px;text-align:center}
+.end code{display:block;margin:12px 0;padding:12px;border-radius:12px;background:#f6effb;font:600 17px/1.3 ui-monospace,Menlo,monospace;letter-spacing:.04em;user-select:all;-webkit-user-select:all;overflow-wrap:anywhere}
+.end button{all:unset;cursor:pointer;display:inline-block;padding:13px 26px;border-radius:999px;color:#fff;font-weight:700;background:linear-gradient(135deg,#7b3fa0,#c2366d)}
+.end p{margin:6px 0;color:var(--soft);font-size:14px}.end[hidden]{display:none}
+'''
+
+FORM_JS = r'''
+(function(){
+var D=JSON.parse(document.getElementById('data').textContent),ans={};
+function score(id){var it=D.items.filter(function(x){return x.id===id})[0];if(!it||!it.scores||!(id in ans))return null;return it.scores[ans[id]];}
+function shown(){var out=[],f=0;D.items.forEach(function(it){
+ if(it.follows){var c=ans[it.follows];if(c===undefined||f>=D.max)return;var low=score(it.follows)===0;if(!(low||(D.base[it.pillar]||0)>=2))return;f++;}
+ if(it.onlyIf){var fu=D.items.filter(function(x){return x.id==='core:future'})[0];if(fu&&ans['core:future']===0)return;}
+ out.push(it.id);});return out;}
+function render(){var ids=shown(),n=0;D.items.forEach(function(it){var el=document.getElementById('q-'+it.id.replace(':','-'));if(!el)return;
+ var on=ids.indexOf(it.id)>=0;el.hidden=!on;if(on&&(it.id in ans))n++;el.classList.toggle('done',it.id in ans);});
+ var f=ids.filter(function(x){return x.indexOf('deep:')===0}).length,total=ids.length+Math.max(0,Math.min(D.max-f,D.items.filter(function(it){return it.follows&&!(it.follows in ans)&&(D.base[it.pillar]||0)>=2}).length));document.querySelector('.bar i').style.width=Math.round(100*n/Math.max(1,total))+'%';
+ document.querySelector('.bar span').textContent=n+' of '+total+' answered';
+ var end=document.querySelector('.end');end.hidden=n<total;
+ if(n>=total){var code='PT-'+D.form+'-'+D.items.map(function(it){return ids.indexOf(it.id)>=0&&(it.id in ans)?String(ans[it.id]):'-'}).join('');
+  end.querySelector('code').textContent=code;end.querySelector('button').setAttribute('data-code',code);}
+ try{localStorage.setItem('pt-'+D.form,JSON.stringify(ans))}catch(e){}}
+document.addEventListener('click',function(e){var b=e.target.closest?e.target.closest('[data-q]'):null;
+ if(b){var id=b.getAttribute('data-q');ans[id]=Number(b.getAttribute('data-i'));
+  [].slice.call(b.parentNode.children).forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});render();
+  var ids=shown(),next=ids.filter(function(x){return !(x in ans)})[0];var el=next&&document.getElementById('q-'+next.replace(':','-'));
+  if(el&&el.getBoundingClientRect().top>innerHeight*0.7)el.scrollIntoView({behavior:'smooth',block:'center'});return;}
+ var c=e.target.closest?e.target.closest('[data-code]'):null;if(!c)return;var t=c.getAttribute('data-code'),code=document.querySelector('.end code');
+ function done(ok){if(!ok){var r=document.createRange();r.selectNodeContents(code);var s=getSelection();s.removeAllRanges();s.addRange(r);}
+  c.textContent=ok?'Copied: paste it in your PsycheAI chat':'Selected: copy it';setTimeout(function(){c.textContent='Copy my answer code'},3000);}
+ function fallback(){try{var a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();var ok=document.execCommand('copy');document.body.removeChild(a);done(ok)}catch(x){done(false)}}
+ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){done(true)},fallback)}else fallback();});
+try{var kept=JSON.parse(localStorage.getItem('pt-'+D.form)||'{}');Object.keys(kept).forEach(function(id){ans[id]=kept[id];
+ var el=document.getElementById('q-'+id.replace(':','-'));if(el){var bs=el.querySelectorAll('[data-q="'+id+'"]');[].slice.call(bs).forEach(function(x,i){x.setAttribute('aria-pressed',i===kept[id]?'true':'false')})}})}catch(e){}
+render();})();
+'''
+
+
+def form_page(s):
+    its = items(s)
+    p = s.get('partner') or 'your partner'
+    data = {'form': form_id(s), 'max': FOLLOW_MAX, 'base': base_priority(s),
+            'items': [{'id': it['id'], 'pillar': it['pillar'], 'scores': it.get('scores'), 'follows': it.get('follows'), 'onlyIf': it.get('onlyIf')} for it in its]}
+    cards, open_card = [], None
+
+    def opts(it):
+        return '<div class="opts">' + ''.join('<button type="button" aria-pressed="false" data-q="%s" data-i="%d">%s</button>' % (_e(it['id']), i, _e(o))
+                                             for i, o in enumerate(it['options'])) + '</div>'
+    for it in its:
+        qid = it['id'].replace(':', '-')
+        text = _e(it['text'].replace('{p}', p))
+        if it['kind'] == 'deeper':
+            cards.append('<div class="q follow" id="q-%s" hidden><p class="text">%s</p>%s</div>' % (qid, text, opts(it)))
+            continue
+        chip = ('<span class="chip lock">Private · never shared</span>' if it.get('private') else
+                '<span class="chip">%s</span>' % _e(PILLARS.get(it['pillar'], 'The big decisions' if it['kind'] == 'decision' else '')) if (it['pillar'] or it['kind'] == 'decision') else '')
+        cards.append('<div class="q" id="q-%s">%s%s<p class="text">%s</p>%s</div>' % (
+            qid, chip, ('<p class="opener">%s</p>' % _e(it['opener'])) if it.get('opener') else '', text, opts(it)))
+    return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+            '<title>Psyche Together · your questions</title><style>%s</style></head><body><div class="wrap">'
+            '<header><small>Psyche Together</small><h1>You &amp; %s</h1><p>Your questions, from both your Psyches. Only you see your answers: the read shows the two of you together.</p></header>'
+            '<div class="bar"><div><i></i></div><span></span></div>%s'
+            '<div class="end" hidden><b>All done</b><p>Copy this code and paste it into your PsycheAI chat.</p><code></code>'
+            '<button type="button" data-code="">Copy my answer code</button><p>The code holds only which button you tapped for each question.</p></div>'
+            '</div><script type="application/json" id="data">%s</script><script>%s</script></body></html>'
+            % (FORM_CSS, _e(p), ''.join(cards), json.dumps(data).replace('</', '<\\/'), FORM_JS))
 
 
 # ---------------------------------------------------------------- the page
@@ -1166,6 +1366,14 @@ def main(argv):
             out = answer(rest[0], label, opt('--text'), opt('--nearest'))
     elif cmd == 'link':
         out = invite()
+    elif cmd == 'questions':
+        out = questions_task()
+    elif cmd == 'save-questions':
+        out = save_questions(rest[0] if rest else '')
+    elif cmd == 'form':
+        out = form()
+    elif cmd == 'code':
+        out = read_code(' '.join(rest))
     elif cmd == 'send':
         out = send()
     elif cmd == 'write':
