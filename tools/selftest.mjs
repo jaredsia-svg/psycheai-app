@@ -3141,10 +3141,12 @@ m.W_BUILD = {k: (lambda d, k=k: ('<p>' + k + '</p>', 'tease')) for k, _, _ in m.
 m._overview = lambda d, c=None: ('<p>overview</p>', 'tease'); m._who = lambda d, n='': ('<p>whoYouAre</p>', 'tease')
 html = m.report_html(view, 'Mei Tan', bonus={'harsh': 'Burn one.\\n\\nBurn two.', 'advice': 'Kind.'}, regret='Regret one.\\n\\nRegret two, and one thing to do this month.')
 marks = re.findall(r'data-section="([^"]+)"|<details class="roast( regret)?" id="(roast|regret)"', html)
-print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix' in html, 'parts': '6 parts' in html, 'closed': html.count('<details class="roast') == 2 and ' open' not in re.findall(r'<details[^>]*>', html)[0]}))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
+print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix' in html, 'parts': '6 parts' in html, 'closed': html.count('<details class="roast') == 2 and ' open' not in re.findall(r'<details[^>]*>', html)[0], 'together': 'Read the two of you together' in html and '<code>Psyche Together with my partner</code>' in html and html.rindex('data-section=') < html.index('Read the two of you together'), 'sampleTogether': 'Read the two of you together' in m.report_html(view, 'Emily Carter', sample={'note': 'A sample.'})}))`, new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
     check('two intermissions in the report file (README "Two intermissions"): the roast after What drives you and the regret after How you work, each closed until opened, no appendix, and the parts still counted as six',
       JSON.stringify(order.order) === JSON.stringify(['Overview', 'Who you are', 'What drives you', 'roast', 'How you connect', 'How you work', 'regret', 'Putting it together']) &&
       order.appendix === false && order.parts && order.closed, JSON.stringify(order));
+    check('the report file offers Psyche Together once the Psyche is done (README "Psyche Together, from the Psyche Report"): what it is, and the line to say to start one, after how it was read; never in a sample, and no price',
+      order.together === true && order.sampleTogether === false && !/US\$|price|\$\d/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8').match(/Read the two of you together[^\n]*\n[^\n]*\n[^\n]*/)[0]), JSON.stringify(order));
   }
   {
     const sampleHtml = require('node:fs').readFileSync(new URL('../assets/sample-report.html', import.meta.url), 'utf8');

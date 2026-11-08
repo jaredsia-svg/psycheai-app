@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 184
+RELEASE = 185
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -836,6 +836,13 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
                   + _ev(c.get('basedOn'))
                   + say_copy('To add your WhatsApp chats or Facebook and write your Psyche again from more of you, say this in your PsycheAI chat:', 'Add WhatsApp or Facebook')
                   + '</div>')
+    # Psyche Together, offered once the Psyche is done (README "Psyche Together, from the Psyche Report"): what it is, and
+    # the line to say to start one. Not in a sample, and nothing sold here: if it is paid, starting it says where.
+    together = '' if sample else ('<div class="method together" style="--c:#c2366d"><h3 style="margin-top:0">Read the two of you together</h3>'
+                                  '<p>Psyche Together puts your Psyche beside your partner\'s. Each of you answers about twenty private questions in your own Muse, '
+                                  'and you both get one read of the two of you: how you care and connect, live together, share meaning, feel secure and work through '
+                                  'disagreements, from both your Psyches and your conversation together, with next steps drawn from the evidence and four weeks of small things to do.</p>'
+                                  + say_copy('To start one with your partner, say this in your PsycheAI chat:', 'Psyche Together with my partner') + '</div>')
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
     facts = ' · '.join(x for x in ['%d parts' % i, ('%d pages' % pages) if pages else '', ('%d%% signal strength' % score) if score is not None else ''] if x)
@@ -855,7 +862,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     foot = ('<footer><b>PsycheAI</b> · psycheai.io<br>' + ('A sample report for a fictional reader. Yours is made in your own Muse workspace, and PsycheAI keeps no copy of it.'
             if sample else 'This file was made in your own Muse workspace. PsycheAI keeps no copy of your report.') + '</footer>')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
-            '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + ''.join(v for v in after.values() if v)
+            '<title>' + _e(doc_title or title) + '</title><style>' + W_CSS + '</style></head><body><div class="wrap">' + banner + bar + ''.join(parts) + method + together + ''.join(v for v in after.values() if v)
             + '<button type="button" class="foldall" data-fold>Collapse all ▲</button>' + foot + '</div>' + viewer + '<script>' + W_JS + COPY_JS + '</script></body></html>')
 
 
