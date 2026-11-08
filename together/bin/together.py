@@ -42,7 +42,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 15
+RELEASE = 16
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -815,6 +815,7 @@ I_YOU = set('i me my mine myself you your yours yourself'.split())
 POS = set('love glad happy great good nice thanks thank appreciate excited fun proud lovely sweet amazing awesome yay haha lol miss cute beautiful care hug'.split())
 NEG = set('sorry sad angry upset annoyed hate tired stressed worried hurt bad awful terrible ugh frustrated mad disappointed annoying'.split())
 BANDS = [('late', 0, 5), ('morning', 5, 12), ('afternoon', 12, 18), ('evening', 18, 24)]
+EMOJI = re.compile('[\U0001F300-\U0001FAFF\u2600-\u27BF\u2764]')
 WARM = re.compile(r'\b(love you|miss you|luv u|love u|<3)\b|❤|🥰|😘|💕', re.I)
 
 
@@ -992,9 +993,20 @@ def chat_signals(msgs):
         s_['day'] = {b[0]: round(100 * h / tot) for b, h in zip(BANDS, hours[who])}
     rates = {who: {k: sum(1 for x in words[who] if x in v) / max(1, len(words[who])) for k, v in LSM_SETS.items()} for who in words}
     lsm = [1 - abs(rates['me'][k] - rates['them'][k]) / (rates['me'][k] + rates['them'][k] + 0.0001) for k in LSM_SETS]
-    by_month = {}
-    for t, _, _ in msgs:
+    by_month, by_day, emoji = {}, {}, {'me': {}, 'them': {}}
+    for t, who, text in msgs:
         by_month[t.strftime('%Y-%m')] = by_month.get(t.strftime('%Y-%m'), 0) + 1
+        by_day[t.date()] = by_day.get(t.date(), 0) + 1
+        for e in EMOJI.findall(text):
+            emoji[who][e] = emoji[who].get(e, 0) + 1
+    days = sorted(by_day)
+    streak = best = 1 if days else 0
+    for x, y in zip(days, days[1:]):
+        streak = streak + 1 if (y - x).days == 1 else 1
+        best = max(best, streak)
+    busiest = max(by_day.items(), key=lambda kv: kv[1]) if by_day else None
+    side['me']['emoji'] = [e for e, _ in sorted(emoji['me'].items(), key=lambda kv: -kv[1])[:3]]
+    side['them']['emoji'] = [e for e, _ in sorted(emoji['them'].items(), key=lambda kv: -kv[1])[:3]]
     first, end = msgs[0][0], msgs[-1][0]
     months = max(1, (end.year - first.year) * 12 + end.month - first.month + 1)
     mid = first + (end - first) / 2
@@ -1002,7 +1014,9 @@ def chat_signals(msgs):
     return {'from': first.strftime('%Y-%m-%d'), 'to': end.strftime('%Y-%m-%d'), 'messages': len(msgs), 'perMonth': round(len(msgs) / months, 1),
             'trend': 'rising' if b > a * 1.25 else 'falling' if a > b * 1.25 else 'steady', 'you': side['me'], 'partner': side['them'],
             'styleMatch': round(sum(lsm) / len(lsm), 2) if words['me'] and words['them'] else None,
-            'months': [[k, by_month[k]] for k in sorted(by_month)][-24:]}
+            'months': [[k, by_month[k]] for k in sorted(by_month)][-24:],
+            'fun': {'first': first.strftime('%-d %B %Y'), 'busiestDay': [busiest[0].strftime('%-d %B %Y'), busiest[1]] if busiest else None,
+                    'streak': best, 'daysTalking': len(days)}}
 
 
 def chat_sample(msgs, me_name, them_name):
@@ -1389,11 +1403,13 @@ def _plain(problems, value, limit=900):
 DATED = re.compile(r'\b(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b', re.I)
 
 
-CHAPTERS = [('close', 'Feeling close', ['appreciation', 'connection', 'desire'], ['appreciation', 'connection']),
-            ('disagree', 'When you disagree', ['disagreements'], ['disagreements', 'perpetual', 'dreams']),
-            ('secure', 'Feeling secure', ['security'], ['security']),
-            ('life', 'Sharing a life', ['needs', 'life'], ['needs', 'life']),
-            ('future', 'Your future and growth', ['future', 'growth'], ['future', 'growth'])]
+# The read's five chapters, in order, numbered as the glance and the page show them (README "Psyche Together,
+# release 16"): (id, number, title, its pillars, its research lines).
+CHAPTERS = [('close', '01', 'Feeling close', ['appreciation', 'connection', 'desire'], ['appreciation', 'connection']),
+            ('secure', '02', 'Feeling safe with each other', ['security'], ['security']),
+            ('disagree', '03', 'When you disagree', ['disagreements'], ['disagreements', 'perpetual', 'dreams']),
+            ('life', '04', 'Sharing a life', ['needs', 'life'], ['needs', 'life']),
+            ('future', '05', 'Growing and building a future', ['future', 'growth'], ['future', 'growth'])]
 
 
 def check_read(r, view, has_chat=False):
@@ -1441,6 +1457,8 @@ def check_read(r, view, has_chat=False):
     need(len(T(fu.get('detail'))) >= 500 and T(D(fu.get('growth')).get('a')) and T(D(fu.get('growth')).get('b')) and len(L(fu.get('together'))) == 3 and ev(fu.get('evidence'))
          and (not topics or all(isinstance(x, dict) and x.get('topic') in topics and T(x.get('line')) for x in L(fu.get('decisions')))),
          'chapters.future: detail (at least 500 characters), a line per big decision (%s), growth a and b, three together ideas, dated evidence' % (', '.join(sorted(topics)) or 'none'))
+    im = D(r.get('intermission'))
+    need(T(im.get('title')) and 3 <= len(L(im.get('lines'))) <= 5 and all(T(x) and len(T(x)) <= 220 for x in L(im.get('lines'))), 'intermission: a title and three to five short, light lines')
     pn = D(r.get('plan'))
     w1 = D(pn.get('week1'))
     need(T(w1.get('title')) and len(L(w1.get('days'))) == 7 and len(L(pn.get('weeks'))) == 3
@@ -1717,7 +1735,7 @@ h2{margin:0 0 10px;font-size:19px}h3{margin:14px 0 4px;font-size:15.5px}p{margin
 .Strong,.Aligned{background:#e5f4ec;color:var(--sage)}.Steady,.Not-decided-yet{background:#fcf1e1;color:var(--amber)}.Worth-attention,.Talk-about{background:#f2e9f8;color:var(--plum)}
 .row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;border-top:1px solid var(--line);padding:9px 0}.row:first-of-type{border-top:0}
 .row b{font-size:15px}.row p{margin:2px 0 0;color:var(--soft);font-size:14px}
-.soft{color:var(--soft);font-size:13.5px}nav{position:sticky;top:0;z-index:3;display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;background:#fbf8fc;scrollbar-width:none}nav a{flex:none;font-size:12.5px;font-weight:700;color:var(--plum);background:#f2e9f8;border-radius:999px;padding:6px 11px;text-decoration:none}.lede{font-size:17px;font-weight:650}.sub{margin-top:18px}.item{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.pillar{border-top:1px solid var(--line);padding:12px 0 4px}.ph{display:flex;justify-content:space-between;align-items:center;gap:8px}.ph b{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.ev{margin:6px 0 10px;padding-left:18px;color:var(--soft);font-size:14px}.try{background:#f6effb;border-radius:12px;padding:9px 12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}@media(max-width:520px){.two{grid-template-columns:1fr}}.two>div{background:#faf6fc;border-radius:12px;padding:10px 12px}.sci{font-size:13px;color:var(--soft);border-left:3px solid #cdb6dd;padding:2px 0 2px 10px;margin:10px 0}.insight{font-weight:650}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}.gauge{display:flex;align-items:baseline;gap:8px;margin:8px 0}.gauge b{font-size:34px;color:var(--plum)}.gauge span{color:var(--soft);font-size:14px}.chart{margin:8px 0}.chart svg{width:100%;height:auto}.chart figcaption{font-size:12px;color:var(--soft)}.map{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}.tile{position:relative;display:block;text-decoration:none;color:var(--ink);border-radius:12px;padding:9px 9px 8px;min-height:62px}.tile b{display:block;font-size:12.5px;line-height:1.25;padding-right:14px;overflow-wrap:anywhere}.tile span{font-size:11px;font-weight:700}.tile i{position:absolute;right:8px;top:6px;font-style:normal;font-weight:800;font-size:15px}.tile.Strong{background:#e5f4ec}.tile.Strong span{color:var(--sage)}.tile.Steady{background:#fcf1e1}.tile.Steady span{color:var(--amber)}.tile.Worth-attention{background:#f2e9f8}.tile.Worth-attention span{color:var(--plum)}.truth{border-radius:14px;padding:12px 14px;margin:10px 0;background:#faf6fc}.truth small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--plum)}.truth.strength small{color:var(--sage)}.truth.edge small{color:var(--rose)}.truth h3{margin-top:4px}.views{border-top:1px solid var(--line);padding:12px 0 6px}.vh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.vh b{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.sig{font-size:12px;color:var(--soft)}.views dl{margin:6px 0 0}.views dt{font-size:12px;font-weight:800;color:var(--soft);margin-top:6px}.views dd{margin:2px 0 0}.cycle{display:grid;grid-template-columns:1fr 26px 1fr;grid-template-rows:auto 26px auto;gap:4px;align-items:center;margin:10px 0}.cs{background:#f6effb;border-radius:12px;padding:9px 10px;font-size:13.5px;min-height:64px}.ca{text-align:center;color:var(--plum);font-weight:800}.cc{grid-column:2;text-align:center;font-size:18px;color:var(--rose)}.ask{background:#fdf6ee;border-radius:12px;padding:9px 12px;margin:10px 0}.ask ul{margin:4px 0 0}.rhythm .rb{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:center;font-size:12.5px;margin:4px 0}.rb div{position:relative;height:16px;background:#f4eff7;border-radius:8px;overflow:hidden}.rb i{position:absolute;left:0;top:0;bottom:0;border-radius:8px}.rb i.a,.ka{background:#7b3fa0}.rb i.b,.kb{background:#c2366d}.rb em{position:relative;font-style:normal;font-size:11px;padding-left:5px;color:#fff;mix-blend-mode:difference}.ka,.kb{display:inline-block;width:9px;height:9px;border-radius:3px}.timeline{list-style:none;padding:0;margin:6px 0;border-left:2px solid #e4cff0}.timeline li{position:relative;padding:4px 0 10px 14px}.timeline li:before{content:"";position:absolute;left:-6px;top:9px;width:10px;height:10px;border-radius:50%;background:#7b3fa0}.timeline b{display:block;font-size:12.5px;color:var(--plum)}.timeline em{display:block;font-size:11.5px;color:var(--soft);font-style:normal}.week{background:#faf6fc;border-radius:14px;padding:10px 14px;margin:10px 0}.week small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--rose)}.week h3{margin-top:2px}table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}th{border-top:0;color:var(--soft);font-size:12.5px}footer{color:var(--soft);font-size:12.5px;text-align:center;margin-top:18px}
+.soft{color:var(--soft);font-size:13.5px}nav{position:sticky;top:0;z-index:3;display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;background:#fbf8fc;scrollbar-width:none}nav a{flex:none;font-size:12.5px;font-weight:700;color:var(--plum);background:#f2e9f8;border-radius:999px;padding:6px 11px;text-decoration:none}.lede{font-size:17px;font-weight:650}.sub{margin-top:18px}.item{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.pillar{border-top:1px solid var(--line);padding:12px 0 4px}.ph{display:flex;justify-content:space-between;align-items:center;gap:8px}.ph b{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.ev{margin:6px 0 10px;padding-left:18px;color:var(--soft);font-size:14px}.try{background:#f6effb;border-radius:12px;padding:9px 12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}@media(max-width:520px){.two{grid-template-columns:1fr}}.two>div{background:#faf6fc;border-radius:12px;padding:10px 12px}.sci{font-size:13px;color:var(--soft);border-left:3px solid #cdb6dd;padding:2px 0 2px 10px;margin:10px 0}.insight{font-weight:650}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}.gauge{display:flex;align-items:baseline;gap:8px;margin:8px 0}.gauge b{font-size:34px;color:var(--plum)}.gauge span{color:var(--soft);font-size:14px}.chart{margin:8px 0}.chart svg{width:100%;height:auto}.chart figcaption{font-size:12px;color:var(--soft)}.map2{display:flex;flex-direction:column;gap:8px;margin:10px 0}.mrow{display:grid;grid-template-columns:30px 1fr;gap:4px 8px;text-decoration:none;color:var(--ink);align-items:center}.mnum{grid-row:span 2;font-weight:800;color:var(--plum);font-size:17px}.mtitle{font-weight:700;font-size:14px}.mtiles{display:flex;flex-wrap:wrap;gap:6px}.mtiles .tile{flex:1 1 30%;min-height:52px}.chapter h2{font-size:21px}.intermission{background:linear-gradient(135deg,#fff7ec,#fdeff6);border-color:#f5d9e6}.intermission small{font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:var(--rose)}.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}.fact{background:#fff;border-radius:12px;padding:9px 11px}.fact small{display:block;font-size:11.5px;color:var(--soft);font-weight:600;letter-spacing:0;text-transform:none}.fact b{font-size:15px}.map{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}.tile{position:relative;display:block;text-decoration:none;color:var(--ink);border-radius:12px;padding:9px 9px 8px;min-height:62px}.tile b{display:block;font-size:12.5px;line-height:1.25;padding-right:14px;overflow-wrap:anywhere}.tile span{font-size:11px;font-weight:700}.tile i{position:absolute;right:8px;top:6px;font-style:normal;font-weight:800;font-size:15px}.tile.Strong{background:#e5f4ec}.tile.Strong span{color:var(--sage)}.tile.Steady{background:#fcf1e1}.tile.Steady span{color:var(--amber)}.tile.Worth-attention{background:#f2e9f8}.tile.Worth-attention span{color:var(--plum)}.truth{border-radius:14px;padding:12px 14px;margin:10px 0;background:#faf6fc}.truth small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--plum)}.truth.strength small{color:var(--sage)}.truth.edge small{color:var(--rose)}.truth h3{margin-top:4px}.views{border-top:1px solid var(--line);padding:12px 0 6px}.vh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.vh b{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.sig{font-size:12px;color:var(--soft)}.views dl{margin:6px 0 0}.views dt{font-size:12px;font-weight:800;color:var(--soft);margin-top:6px}.views dd{margin:2px 0 0}.cycle{display:grid;grid-template-columns:1fr 26px 1fr;grid-template-rows:auto 26px auto;gap:4px;align-items:center;margin:10px 0}.cs{background:#f6effb;border-radius:12px;padding:9px 10px;font-size:13.5px;min-height:64px}.ca{text-align:center;color:var(--plum);font-weight:800}.cc{grid-column:2;text-align:center;font-size:18px;color:var(--rose)}.ask{background:#fdf6ee;border-radius:12px;padding:9px 12px;margin:10px 0}.ask ul{margin:4px 0 0}.rhythm .rb{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:center;font-size:12.5px;margin:4px 0}.rb div{position:relative;height:16px;background:#f4eff7;border-radius:8px;overflow:hidden}.rb i{position:absolute;left:0;top:0;bottom:0;border-radius:8px}.rb i.a,.ka{background:#7b3fa0}.rb i.b,.kb{background:#c2366d}.rb em{position:relative;font-style:normal;font-size:11px;padding-left:5px;color:#fff;mix-blend-mode:difference}.ka,.kb{display:inline-block;width:9px;height:9px;border-radius:3px}.timeline{list-style:none;padding:0;margin:6px 0;border-left:2px solid #e4cff0}.timeline li{position:relative;padding:4px 0 10px 14px}.timeline li:before{content:"";position:absolute;left:-6px;top:9px;width:10px;height:10px;border-radius:50%;background:#7b3fa0}.timeline b{display:block;font-size:12.5px;color:var(--plum)}.timeline em{display:block;font-size:11.5px;color:var(--soft);font-style:normal}.week{background:#faf6fc;border-radius:14px;padding:10px 14px;margin:10px 0}.week small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--rose)}.week h3{margin-top:2px}table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}th{border-top:0;color:var(--soft);font-size:12.5px}footer{color:var(--soft);font-size:12.5px;text-align:center;margin-top:18px}
 '''
 
 
@@ -1835,7 +1853,7 @@ def page(box, s):
     parts, nav, moments = [], [], []
 
     def part(pid, title, inner, cls=''):
-        nav.append('<a href="#%s">%s</a>' % (pid, _e(title)))
+        nav.append('<a href="#%s">%s</a>' % (pid, _e(title.replace('  ', ' '))))
         parts.append('<section id="%s" class="%s"><h2>%s</h2>%s</section>' % (pid, cls, _e(title), inner))
 
     def keep(xs, tag):
@@ -1853,20 +1871,24 @@ def page(box, s):
                          ('<p class="soft"><b>How to raise it:</b> %s</p>' % _e(x.get('howToRaise'))) if x.get('howToRaise') and not gentle else '')
                          for x in fy.get('focus') or [] if isinstance(x, dict))
         part('foryou', 'For you', items_ + ('<p><b>This week:</b> %s</p>' % _e(fy.get('practice'))) + ('<p class="soft">%s</p>' % _e(fy.get('note')) if fy.get('note') else ''), 'mine')
-    # At a glance: the relationship map and three truths.
-    tiles = ''
-    for pid in [p for p in PILLAR_ORDER if p in (view.get('pillars') or {})]:
-        lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
-        arrow = SIGNAL.get(x.get('signal'), ('', ''))[0]
-        chap = next((c[0] for c in CHAPTERS if pid in c[2]), '')
-        tiles += '<a class="tile %s" href="#%s"><b>%s</b><span>%s</span>%s</a>' % (_e(lv.replace(' ', '-')), chap, _e(PILLARS.get(pid, pid)), _e(lv), ('<i>%s</i>' % arrow) if arrow else '')
+    # At a glance: the relationship map, one numbered row per chapter, as the chapters below; then three truths.
+    rows_ = ''
+    for cid, num, title, pids, refs in CHAPTERS:
+        tl = ''
+        for pid in [p for p in pids if p in (view.get('pillars') or {})]:
+            lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
+            arrow = SIGNAL.get(x.get('signal'), ('', ''))[0]
+            tl += '<span class="tile %s"><b>%s</b><span>%s</span>%s</span>' % (_e(lv.replace(' ', '-')), _e(PILLARS.get(pid, pid)), _e(lv), ('<i>%s</i>' % arrow) if arrow else '')
+        if tl:
+            rows_ += '<a class="mrow" href="#%s"><span class="mnum">%s</span><span class="mtitle">%s</span><span class="mtiles">%s</span></a>' % (cid, num, _e(title), tl)
+    tiles = rows_
     kinds = {'strength': 'Your strength', 'edge': 'Your growth edge', 'surprise': 'The surprise'}
     truths = ''.join('<div class="truth %s"><small>%s</small><h3>%s</h3>%s%s</div>' % (_e(x.get('kind')), _e(kinds.get(x.get('kind'), '')), _e(x.get('title')), _paras(x.get('detail')), keep(x.get('evidence'), kinds.get(x.get('kind'), '')))
                      for x in r.get('truths') or [] if isinstance(x, dict))
-    part('glance', 'At a glance', '<p class="lede">%s</p><div class="map">%s</div><p class="soft">Each tile is how you both see it: green Strong, amber Steady, purple worth attention (when either of you sees it so, never saying whose). ↑ your messages show more than you see; ↓ less; = they match.</p>%s'
+    part('glance', 'At a glance', '<p class="lede">%s</p><div class="map2">%s</div><p class="soft">Each tile is how you both see it: green Strong, amber Steady, purple worth attention (when either of you sees it so, never saying whose). ↑ your messages show more than you see; ↓ less; = they match.</p>%s'
          % (_e(r.get('summary')), tiles, truths))
     # Chapters.
-    for cid, title, pids, refs in CHAPTERS:
+    for cid, num, title, pids, refs in CHAPTERS:
         c = D(ch.get(cid))
         inner = _views(r, view, pids) + ''.join(_research(k) for k in refs) + _paras(c.get('detail'))
         if cid == 'close':
@@ -1891,11 +1913,31 @@ def page(box, s):
             inner += two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
             inner += '<h3 class="sub">New things to try together</h3><ul>%s</ul>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
         inner += keep(c.get('evidence'), title) + ask(c.get('askEachOther')) + tryit(c.get('tryThis'))
-        part(cid, title, inner)
-    # Their story in moments: every dated moment above, once, in time order.
-    if moments:
-        line = ''.join('<li><b>%s</b><span>%s</span><em>%s</em></li>' % (_e(w), _e(t), _e(tag)) for w, t, tag in sorted(moments, key=lambda m: _when_key(m[0])))
-        part('moments', 'Your story in moments', '<ol class="timeline">%s</ol>' % line)
+        part(cid, num + '  ' + title, inner, 'chapter')
+        if cid == 'disagree':
+            parts.append('@@INTERMISSION@@')
+    # The intermission (README "Psyche Together, release 16"): a light breather after the heaviest chapter, as the
+    # Psyche Report has its roast: the playful facts of their conversation, a few light lines, and every dated moment once.
+    fun = sig.get('fun') or {}
+    im = D(r.get('intermission'))
+    facts = []
+    if fun.get('first'):
+        facts.append(('Your first message here', fun['first']))
+    if fun.get('busiestDay'):
+        facts.append(('Your busiest day', '%s, %s messages' % (fun['busiestDay'][0], fun['busiestDay'][1])))
+    if fun.get('streak'):
+        facts.append(('Your longest run of days in a row', '%s days' % fun['streak']))
+    for side_, nm in (('you', who[0]), ('partner', who[1])):
+        em = ((sig.get(side_) or {}).get('emoji') or [])
+        if em:
+            facts.append(('%s\'s favourite emoji' % nm, ' '.join(em)))
+    facts_html = ''.join('<div class="fact"><small>%s</small><b>%s</b></div>' % (_e(a_), _e(b_)) for a_, b_ in facts)
+    line = ''.join('<li><b>%s</b><span>%s</span><em>%s</em></li>' % (_e(w), _e(t), _e(tag)) for w, t, tag in sorted(moments, key=lambda m: _when_key(m[0])))
+    inter = ('<section id="moments" class="intermission"><small>Intermission</small><h2>%s</h2>%s<div class="facts">%s</div>%s%s%s</section>'
+             % (_e(im.get('title') or 'Your story in moments'), ''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), facts_html,
+                _months_svg(sig.get('months') or []), ('<ol class="timeline">%s</ol>' % line) if line else '', ''))
+    nav.insert(next((i for i, n in enumerate(nav) if '#life' in n), len(nav)), '<a href="#moments">✦ Moments</a>')
+    parts[parts.index('@@INTERMISSION@@')] = inter
     # One plan.
     pn = D(r.get('plan'))
     w1 = D(pn.get('week1'))
@@ -1903,7 +1945,7 @@ def page(box, s):
                     % (i + 2, _e(w.get('title')), ('' if gentle else '<p><b>A conversation:</b> %s. %s</p><ol>%s</ol>' % (_e(D(w.get('conversation')).get('title')), _e(D(w.get('conversation')).get('why')),
                                                                                                          ''.join('<li>%s</li>' % _e(x) for x in D(w.get('conversation')).get('script') or []))),
                        _e(w.get('ask')), _e(w.get('doTogether'))) for i, w in enumerate(pn.get('weeks') or []) if isinstance(w, dict))
-    part('plan', 'Your four weeks', '<div class="week"><small>Week 1, a little every day</small><h3>%s</h3><ol>%s</ol></div>%s%s<p class="soft">At four weeks, the questions again, to see what moved.</p>'
+    part('plan', '06  Your four weeks', '<div class="week"><small>Week 1, a little every day</small><h3>%s</h3><ol>%s</ol></div>%s%s<p class="soft">At four weeks, the questions again, to see what moved.</p>'
          % (_e(w1.get('title')), ''.join('<li>%s</li>' % _e(x) for x in w1.get('days') or []), weeks, _research('lovemaps')))
     part('how', 'How this was read', '%s<p class="soft">From both your full Psyche reports, shared with your consent for this read; your conversation together, measured on the device of the one who added it; and the check-in you each did privately, the same core questions for both. '
          'The measures follow published research: how partners see the relationship (Joel et al., PNAS 2020), turning towards and repair (Gottman), responsiveness to good news (Gable et al., 2004), '

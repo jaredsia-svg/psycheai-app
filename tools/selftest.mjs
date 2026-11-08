@@ -3849,6 +3849,7 @@ elif a[0] == 'thread':
       life: { detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
       future: { detail: para(10, 'talked about next year'), decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
                 together: ['A cooking class', 'A new trail', 'A shared project'], evidence: EV('future') } },
+    intermission: { title: 'Your story in moments', lines: ['You both say goodnight twice.', 'Mei plans the trips; Ana finds the food.', 'Saturday is your day.'] },
     plan: { week1: { title: 'Small daily turns', chapter: 'close', days: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
             weeks: [0, 1, 2].map(i => ({ title: 'Week ' + (i + 2), conversation: { title: 'About ' + (worth[i] || 'us'), why: 'It matters to you both.', script: ['Pick a calm time.', 'Each says one thing.', 'Agree one step.'] }, ask: 'Ask ' + i, doTogether: 'Do ' + i })) },
     caveats: 'It can\'t see your days together.' };
@@ -3922,7 +3923,8 @@ elif a[0] == 'thread':
       tg.shallow.saved === false && tg.shallow.problems.some(p => /^truths: exactly three/.test(p)) && tg.shallow.problems.some(p => /16,000 characters/.test(p)), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
   check('someone who said they feel unsafe gets a gentle For you, with support first, no "how to raise it" and no conversation scripts in the plan on their copy; the page has the relationship map, the cycle and the story in moments',
     tg.saved.saved && tg.foryouA.gentle === false && tg.sentB.gentle === true &&
-      /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA),
+      /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map2"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA) && /class="intermission"/.test(htmlA) &&
+      /Your busiest day/.test(htmlA) && htmlA.indexOf('03  When you disagree') < htmlA.indexOf('class="intermission"') && htmlA.indexOf('class="intermission"') < htmlA.indexOf('04  Sharing a life') && /06  Your four weeks/.test(htmlA),
     JSON.stringify([tg.foryouA.gentle, tg.sentB.gentle]));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
