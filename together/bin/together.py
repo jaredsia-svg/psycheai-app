@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 40
+RELEASE = 41
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -330,7 +330,7 @@ def pillar_reasons(sig, core):
 # Psyche points to strain there, four at most.
 
 FLOW = ['appreciation', 'connection', 'needs', 'life', 'growth', 'disagreements', 'future', 'security']
-FOLLOW_MAX = 3
+FOLLOW_MAX = 2      # follow-ups shown, in all (README "Psyche Together, release 41")
 
 
 def core_for(stage):
@@ -354,33 +354,39 @@ def stage_of(s):
     return s.get('stage') or (s.get('answers') or {}).get('stage', {}).get('label')
 
 
+# README "Psyche Together, release 41": the questions follow the read's own order, chapter by chapter, so each one
+# is asked where its answer lands: overall first (the glance), then 01 to 05, the private question last.
+QUESTION_CHAPTERS = [('close', ['appreciation', 'know', 'connection', 'desire']), ('life', ['needs', 'life']),
+                     ('future', ['future', 'decisions', 'growth']), ('secure', ['security']), ('disagree', ['disagreements'])]
+
+
+def chapter_of(it):
+    key = 'know' if it['kind'] == 'know' else 'decisions' if it['kind'] == 'decision' else it.get('pillar')
+    return next((cid for cid, keys in QUESTION_CHAPTERS if key in keys), None)
+
+
 def items(s):
     """Every question this person is asked once their questions are written, in order. Each is a dict:
     id, kind, pillar, opener, text, options, scores (core), follows (a follow-up's core id)."""
     stage, q, out = stage_of(s), s.get('questions') or {}, []
     core = {pid: (text, opts) for pid, text, opts in core_for(stage)}
-    for pid in FLOW:
-        if pid not in core:
-            continue
-        text, opts = core[pid]
-        out.append({'id': 'core:' + pid, 'kind': 'core', 'pillar': pid, 'opener': (q.get('openers') or {}).get(pid, ''),
-                    'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
-        f = (q.get('followUps') or {}).get(pid)
-        if isinstance(f, dict) and f.get('q') and f.get('options'):
-            out.append({'id': 'deep:' + pid, 'kind': 'deeper', 'pillar': pid, 'opener': '', 'text': f['q'], 'follows': 'core:' + pid,
-                        'options': [o for o in f['options'] if o != OTHER] + [OTHER], 'own': True})
-    for k_ in q.get('know') or []:          # how well you know your partner (README "Psyche Together, release 40")
-        out.append({'id': k_['id'], 'kind': 'know', 'pillar': '', 'opener': '', 'text': k_['q'], 'options': list(k_['options'])})
-    if 'desire' in core:
-        text, opts = core['desire']
-        out.append({'id': 'core:desire', 'kind': 'core', 'pillar': 'desire', 'opener': '', 'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
     out += overall_items(stage)
+    for cid, keys in QUESTION_CHAPTERS:
+        for key in keys:
+            if key == 'know':                   # how well you know your partner (README "Psyche Together, release 40")
+                out += [{'id': k_['id'], 'kind': 'know', 'pillar': '', 'opener': '', 'text': k_['q'], 'options': list(k_['options'])} for k_ in q.get('know') or []]
+            elif key == 'decisions':
+                out += [{'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': DECISIONS[t][1],
+                         'onlyIf': 'hope' if t in ('hope', 'children') and stage == 'Dating' else None} for t in BY_STAGE.get(stage) or []]
+            elif key in core:
+                text, opts = core[key]
+                out.append({'id': 'core:' + key, 'kind': 'core', 'pillar': key, 'opener': (q.get('openers') or {}).get(key, '') if key != 'desire' else '',
+                            'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
+                f = (q.get('followUps') or {}).get(key)
+                if key != 'desire' and isinstance(f, dict) and f.get('q') and f.get('options'):
+                    out.append({'id': 'deep:' + key, 'kind': 'deeper', 'pillar': key, 'opener': '', 'text': f['q'], 'follows': 'core:' + key,
+                                'options': [o for o in f['options'] if o != OTHER] + [OTHER], 'own': True})
     out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
-    for t in BY_STAGE.get(stage) or []:
-        out.append({'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': DECISIONS[t][1],
-                    'onlyIf': 'hope' if t in ('hope', 'children') and stage == 'Dating' else None})
-    for c_ in s.get('confirmFor') or []:     # your partner guesses these about you: you say what's right, last
-        out.append({'id': 'me:' + c_['id'], 'kind': 'me', 'pillar': '', 'opener': '', 'text': '{p} will guess this about you. %s' % c_['qSelf'], 'options': list(c_['options'])})
     return out
 
 
@@ -393,11 +399,12 @@ def round_items(s):
     """The questions again, four weeks on: each pillar's own question, the two overall ones and the private one."""
     stage, out = stage_of(s), []
     core = {pid: (text, opts) for pid, text, opts in core_for(stage)}
-    for pid in FLOW + ['desire']:
-        if pid in core:
-            text, opts = core[pid]
-            out.append({'id': 'core:' + pid, 'kind': 'core', 'pillar': pid, 'opener': '', 'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
     out += overall_items(stage)
+    for cid, keys in QUESTION_CHAPTERS:
+        for pid in keys:
+            if pid in core:
+                text, opts = core[pid]
+                out.append({'id': 'core:' + pid, 'kind': 'core', 'pillar': pid, 'opener': '', 'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
     out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
     return out
 
@@ -445,13 +452,17 @@ def certain(s):
 def shown(s, its, answers):
     """The ids shown, given the answers: a follow-up always where their Psyche makes it certain, and any other
     under a low answer to its pillar's question; the Dating decisions only when they haven't talked about the future."""
-    sure, out = certain(s), []
+    sure, out, deep = certain(s), [], 0
     scores = {it['id']: dict(zip(it['options'], it['scores'])) for it in its if it['kind'] == 'core'}
     for it in its:
-        if it['kind'] == 'deeper' and it['pillar'] not in sure:
-            core = answers.get(it['follows'])
-            if core is None or scores.get(it['follows'], {}).get(core.get('label')) != 0:
+        if it['kind'] == 'deeper':
+            if it['pillar'] not in sure:
+                core = answers.get(it['follows'])
+                if core is None or scores.get(it['follows'], {}).get(core.get('label')) != 0:
+                    continue
+            if deep >= FOLLOW_MAX:
                 continue
+            deep += 1
         if it.get('onlyIf') and (answers.get('core:future') or {}).get('label') == 'Yes, and we\'ve talked':
             continue
         out.append(it['id'])
@@ -524,16 +535,13 @@ def shared_profile(s, answered=True):
     if s.get('chat'):
         out['chat'] = {k: v for k, v in s['chat'].items() if k != 'sample'}     # the sample goes in its own box
     know_ = (s.get('questions') or {}).get('know') or []
-    out['knowAsk'] = [{'id': k_['id'], 'q': k_['q'], 'qSelf': k_['qSelf'], 'options': k_['options']} for k_ in know_ if k_.get('from') == 'partner']
     if not answered:
         return out
     answers = s.get('answers') or {}
     if know_:       # the guesses go only when this person isn't on the gentle path, and are scored as a couple
-        out['know'] = {'items': [{'id': k_['id'], 'q': k_['q'], 'options': k_['options'], 'from': k_.get('from'), 'answer': k_.get('answer') if k_.get('from') == 'report' else None}
-                                 for k_ in know_]}
+        out['know'] = {'items': [{'id': k_['id'], 'q': k_['q'], 'options': k_['options'], 'answer': k_.get('answer')} for k_ in know_]}
         if not is_gentle(s):
             out['know']['guesses'] = {k_['id']: (answers.get(k_['id']) or {}).get('label') for k_ in know_ if answers.get(k_['id'])}
-    out['confirm'] = {k[3:]: v.get('label') for k, v in answers.items() if k.startswith('me:') and v.get('label')}
     core, ov = levels_of(stage_of(s), answers)
     out.update(core=core, overall=ov, rounds=s.get('rounds') or [], desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
                decisions={k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')})
@@ -573,17 +581,17 @@ def couple_view(a, b):
 
 
 def know_view(a, b, names):
-    """How well you know each other (README "Psyche Together, release 40"): each one's two guesses about the other,
-    checked against the partner's report or the partner's own answer. The couple total and the right answers are
+    """How well you know each other (README "Psyche Together, releases 40 and 41"): each one's two guesses about the
+    other, checked against what the partner's own report says. The couple total and the right answers are
     shared; each one's own count (knowBy) is shown only on their own copy, and never given to the writer."""
     items, by = [], {}
     for r, me, them, them_name in (('a', a, b, names[1]), ('b', b, a, names[0])):
         kn = me.get('know') or {}
         right = of = 0
         for it in kn.get('items') or []:
-            key = it.get('answer') if it.get('from') == 'report' else (them.get('confirm') or {}).get(it.get('id'))
+            key = it.get('answer')
             if not key or key not in (it.get('options') or []):
-                continue                    # not confirmed in time: left out, never counted against anyone
+                continue
             items.append({'about': them_name, 'q': it.get('q'), 'answer': key})
             g = (kn.get('guesses') or {}).get(it.get('id'))
             if g is None:
@@ -659,8 +667,9 @@ W_JS = r'''
 var D=JSON.parse(document.getElementById('pt-data').textContent),ans={},at=-1,field=document.getElementById('pt-answers'),OTHER=D.other;
 function done_(id){return (id in ans)&&ans[id]!==OTHER+': ';}
 function score(id){var it=D.items.filter(function(x){return x.id===id})[0];return it&&it.scores&&(id in ans)?it.scores[it.options.indexOf(ans[id])]:null;}
-function shown(){return D.items.filter(function(it){
+function shown(){var deep=0;return D.items.filter(function(it){
  if(it.follows&&D.certain.indexOf(it.pillar)<0&&!(it.follows in ans&&score(it.follows)===0))return false;
+ if(it.follows){if(deep>=D.followMax)return false;deep++;}
  if(it.onlyIf&&ans['core:future']===D.talked)return false;return true;}).map(function(it){return it.id});}
 function card(id){return document.getElementById('c-'+id.replace(':','-'));}
 function show(){var ids=shown(),n=ids.filter(done_).length;
@@ -702,13 +711,16 @@ show();restore();setTimeout(restore,300);setTimeout(restore,1200);})();
 def widget_html(s):
     its = its_for(s)
     p = s.get('partner') or 'your partner'
-    data = {'certain': certain(s), 'talked': 'Yes, and we\'ve talked', 'other': OTHER,
+    data = {'certain': certain(s), 'followMax': FOLLOW_MAX, 'talked': 'Yes, and we\'ve talked', 'other': OTHER,
             'items': [{'id': it['id'], 'pillar': it['pillar'], 'options': it['options'], 'scores': it.get('scores'), 'follows': it.get('follows'),
                        'onlyIf': it.get('onlyIf'), 'short': it['text'].replace('{p}', p)} for it in its]}
     cards = []
     for it in its:
+        ch_ = next((c_ for c_ in CHAPTERS if c_[0] == chapter_of(it)), None)
+        what_ = ('How well you know %s' % p if it['kind'] == 'know' else 'Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision'
+                 else 'Overall' if it['kind'] == 'overall' else PILLARS.get(it['pillar'], ''))
         chip = ('<span class="chip lock">Private · never shared</span>' if it.get('private') else
-                '<span class="chip">%s</span>' % _e('How well you know %s' % p if it['kind'] == 'know' else 'About you' if it['kind'] == 'me' else 'Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision' else 'Overall' if it['kind'] == 'overall' else PILLARS.get(it['pillar'], '')))
+                '<span class="chip">%s</span>' % _e(('%s %s · %s' % (ch_[1], ch_[2], what_)) if ch_ else what_))
         opts = ''.join('<label><input type="radio" name="%s" value="%s"><span>%s</span></label>' % (_e(it['id']), _e(o), _e(o)) for o in it['options'])
         if it.get('own'):
             opts += '<textarea class="own" data-for="%s" maxlength="200" rows="2" placeholder="In your own words" hidden></textarea>' % _e(it['id'])
@@ -1784,39 +1796,21 @@ def check_questions(q, partner, pillars):
         problems.append('%s aren\'t pillars for this stage: leave them out' % ', '.join(sorted(set(extra))))
     kn = q.get('know')
     if not (isinstance(kn, list) and len(kn) == 2):
-        problems.append('know: exactly two questions about %s, each q, 3 or 4 options and from (report with its answer and basis, or partner with qSelf)' % (partner or 'your partner'))
+        problems.append('know: exactly two questions about %s, each q, 3 or 4 options, its answer and its basis in their report' % (partner or 'your partner'))
     else:
         for i, k_ in enumerate(kn):
             k_ = k_ if isinstance(k_, dict) else {}
             o_ = k_.get('options')
             ok = (isinstance(k_.get('q'), str) and 10 <= len(k_['q'].strip()) <= 180 and isinstance(o_, list) and 3 <= len(o_) <= 4
                   and all(isinstance(x, str) and 1 <= len(x.strip()) <= 40 for x in o_) and len(set(o_)) == len(o_))
-            if k_.get('from') == 'report':
-                ok = ok and k_.get('answer') in (o_ or []) and isinstance(k_.get('basis'), str) and 10 <= len(k_['basis'].strip()) <= 200
-            elif k_.get('from') == 'partner':
-                ok = ok and isinstance(k_.get('qSelf'), str) and 10 <= len(k_['qSelf'].strip()) <= 180
-            else:
-                ok = False
+            ok = ok and k_.get('answer') in (o_ or []) and isinstance(k_.get('basis'), str) and 10 <= len(k_['basis'].strip()) <= 200
             if not ok:
-                problems.append('know[%d]: q (10 to 180 characters), 3 or 4 different options (each under 40 characters), and from: "report" with answer (one of the options) and basis (where in the report, 10 to 200 characters), or "partner" with qSelf (the same question asked to them about themselves, 10 to 180 characters)' % i)
+                problems.append('know[%d]: q (10 to 180 characters), 3 or 4 different options (each under 40 characters), answer (one of the options) and basis (where in their report it says so, 10 to 200 characters)' % i)
     named = sum(1 for p in pillars if partner and partner.lower() in str(op.get(p, '')).lower())
     if partner and named < (len(pillars) + 1) // 2:
         problems.append('openers: name %s in at least half of them, so each reads as about the two of you' % partner)
     _plain(problems, {'openers': op, 'followUps': fu, 'know': [{k: v for k, v in (x if isinstance(x, dict) else {}).items() if k != 'basis'} for x in (kn if isinstance(kn, list) else [])]}, 240)
     return problems[:16]
-
-
-def confirm_for(s):
-    """The partner's questions about this person that need this person's own answer (README "Psyche Together,
-    release 40"), kept in state so they join the questions, last."""
-    k, got, profiles, box = couple()
-    if got.get('error'):
-        return
-    mine, theirs = mine_theirs(s, profiles)
-    asks = [x for x in theirs.get('knowAsk') or [] if isinstance(x, dict) and x.get('id') and x.get('qSelf') and x.get('options')]
-    if asks != (s.get('confirmFor') or []):
-        s['confirmFor'] = asks
-        save_state(s)
 
 
 def save_questions(path):
@@ -1836,16 +1830,9 @@ def save_questions(path):
     for i, k_ in enumerate(q['know']):
         opts = [x.strip() for x in k_['options']]
         secrets.SystemRandom().shuffle(opts)        # the right one is never always first
-        know_.append(dict({'id': 'know:%d' % (i + 1), 'q': k_['q'].strip(), 'options': opts, 'from': k_['from']},
-                          **({'answer': k_['answer'].strip()} if k_['from'] == 'report' else {'qSelf': k_['qSelf'].strip()})))
+        know_.append({'id': 'know:%d' % (i + 1), 'q': k_['q'].strip(), 'options': opts, 'answer': k_['answer'].strip()})
     s['questions'] = {'openers': {p: q['openers'][p].strip() for p in pillars}, 'followUps': {p: q['followUps'][p] for p in pillars}, 'know': know_}
     save_state(s)
-    try:
-        if any(k_['from'] == 'partner' for k_ in know_):
-            put_profile(s, False)              # what the partner is asked to say about themselves
-        confirm_for(s)
-    except Exception:       # never in the way: a question left unconfirmed is simply not counted
-        pass
     done_task('questions')
     try:
         os.remove(str(path).lstrip('@'))
@@ -1874,13 +1861,9 @@ def send(no_chat=False):
     if live_round(s):
         return round_send(s)
     if s.get('v') == 3:
-        try:
-            confirm_for(s)
-        except Exception:
-            pass
         q = next_step(s)
         if not q.get('done'):
-            return {'missing': True, 'next': q} if q.get('kind') == 'me' else {'error': 'The check-in isn\'t finished yet.', 'next': q}
+            return {'error': 'The check-in isn\'t finished yet.', 'next': q}
     got = put_profile(s, True)
     if got.get('error'):
         return got
@@ -1966,7 +1949,7 @@ SUBTITLES = {'plan': 'Small steps from every chapter'}
 # stand. A pillar area carries its check-in level; the others a count, a match or a short status.
 AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages'), ('know', 'Knowing each other'), ('connection', 'Connection'), ('desire', 'Closeness')],
          'life': [('needs', 'Fairness'), ('life', 'Rhythm'), ('interests', 'Interests')],
-         'future': [('values', 'Values'), ('decisions', 'Big decisions'), ('future', 'Shared future'), ('growth', 'Growth')],
+         'future': [('values', 'Values'), ('future', 'Shared future'), ('decisions', 'Big decisions'), ('growth', 'Growth')],
          'secure': [('security', 'Security'), ('attachment', 'Attachment')],
          'disagree': [('disagreements', 'Repair'), ('cycle', 'Your cycle')]}
 PSY_AREAS = ['loves', 'connection', 'needs', 'life', 'values', 'growth', 'security', 'attachment', 'disagreements', 'cycle']
@@ -2038,9 +2021,9 @@ def check_read(r, view, has_chat=False):
         need(not stray, 'chapters.%s.areas: %s isn\'t one of this chapter\'s areas (%s)' % (cid, ', '.join(stray), ', '.join(want)))
         for a in want:
             x = D(ar.get(a))
-            ok = (0 < len(T(x.get('meaning'))) <= 220 and (a == 'know' and not x.get('evidence') or 1 <= len(L(x.get('evidence'))) <= 2 and ev(x.get('evidence')))
+            ok = (0 < len(T(x.get('meaning'))) <= 220 and (a == 'know' and not x.get('evidence') or 2 <= len(L(x.get('evidence'))) <= 4 and ev(x.get('evidence')))
                   and (a not in PSY_AREAS or 0 < len(T(x.get('psyches'))) <= 320) and (a not in STATUS_AREAS or 0 < len(T(x.get('status'))) <= 32))
-            need(ok, 'chapters.%s.areas.%s: meaning (one sentence, at most 220 characters), one or two dated evidence%s%s'
+            need(ok, 'chapters.%s.areas.%s: meaning (one sentence, at most 220 characters), two to four dated evidence (three is best)%s%s'
                  % (cid, a, ', psyches (at most 320 characters: what your two Psyches mean for this, the issue itself)' if a in PSY_AREAS else '',
                     ', status (at most 32 characters, a few words)' if a in STATUS_AREAS else ''))
     c = D(ch.get('close'))
