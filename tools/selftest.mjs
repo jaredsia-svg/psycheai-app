@@ -2141,7 +2141,8 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         const ids = [E.joined && E.joined.sync, E.list && E.list.syncs && E.list.syncs[0] && E.list.syncs[0].sync].filter(Boolean);
         const theirs = ['synccard', 'sync', 'synccode', 'synccodeof', 'psyche'].flatMap(t => [...store.kvAll(t)].filter(([key, row]) => ids.some(id => String(key).includes(id) || (row && row.u === id))));
         E.rows = theirs.length;
-        const kept = JSON.stringify(theirs);
+        // Each locked box set aside before searching: its random letters can spell "Ana" by chance (README "Psyche Together").
+        const kept = JSON.stringify(theirs, (k, v) => (v && typeof v === 'object' && v.v === 'e2e1' && typeof v.c === 'string' ? '[box]' : v));
         E.leaks = ['Mei', 'Ana', 'Mulan', 'Odysseus', 'Organiser with a warm centre', 'Takes things apart', 'Pickleball', 'weekends you both remember', 'Racquet sports', 'Ana tip 1']
           .filter(w => kept.includes(w)).concat(E.code && kept.includes(E.code) ? ['the code'] : []);
         E.bare = await (await fetch(base + '/sync')).text();
@@ -3758,7 +3759,7 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
       asked.push(q);
       if (q.id === 'partner') { await run[who]('answer', 'partner', who === 'a' ? 'Ana' : 'Mei'); continue; }
       const opts = (q.buttons || []).filter(b => b !== 'Something else');
-      const pick = q.id === 'adult' ? 'Yes' : q.id === 'stage' ? 'Married' : q.id === 'safety' ? safety : opts[Math.min(n, opts.length - 1)];
+      const pick = q.id === 'stage' ? 'Married' : q.id === 'safety' ? safety : opts[Math.min(n, opts.length - 1)];
       await run[who]('answer', q.id, pick);
     }
     return asked;
@@ -3766,7 +3767,7 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   tg.noPsyche = JSON.parse((await execFile('python3', [pathx.join(home.a.dir, 'bin', 'together.py'), 'status'], { env: { ...process.env, PSYCHEAI_BASE: base,
     PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tg-none-')), PSYCHEAI_SKILL_DIR: '/nonexistent', PSYCHEAI_TRANSPORT: 'python' } })).stdout);
   tg.start = await run.a('start');
-  tg.typedNoNearest = await (async () => { await run.a('answer', 'adult', 'Yes'); await run.a('answer', 'partner', 'Ana'); await run.a('answer', 'stage', 'Married');
+  tg.typedNoNearest = await (async () => { await run.a('answer', 'partner', 'Ana'); await run.a('answer', 'stage', 'Married');
     return run.a('answer', 'core:appreciation', '--text', 'Mostly, though not lately. Call me on +65 9123 4567'); })();
   tg.typed = await run.a('answer', 'core:appreciation', '--text', 'Mostly, though Ana forgets. Call me on +65 9123 4567', '--nearest', 'Often');
   tg.askedA = await walk('a', 0, 'No');
@@ -3809,8 +3810,8 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   const code = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, '.keys.json'), 'utf8')).code;
   check('Psyche Together needs a Psyche first, and says how to make one',
     tg.noPsyche.needsPsyche === true && /Install psycheai\.io\/skill and generate my Psyche/.test(tg.noPsyche.say), JSON.stringify(tg.noPsyche));
-  check('the check-in: adults only first, their partner\'s name (kept here), the stage, nine core questions with "Something else", a private safety question, up to four deeper questions picked from their Psyche, then the big decisions for their stage',
-    tg.start.id === 'adult' && tg.askedA.some(q => q.id === 'safety' && q.private) && tg.askedA.filter(q => q.kind === 'deeper').length <= 4 &&
+  check('the check-in: their partner\'s name (kept here), the stage, nine core questions with "Something else", a private safety question, up to four deeper questions picked from their Psyche, then the big decisions for their stage',
+    tg.start.id === 'partner' && tg.askedA.some(q => q.id === 'safety' && q.private) && tg.askedA.filter(q => q.kind === 'deeper').length <= 4 &&
       tg.askedB.filter(q => q.kind === 'deeper').length >= 1 && tg.askedB.some(q => q.id === 'deep:sec_quiet') &&
       tg.askedA.filter(q => q.kind === 'decision').map(q => q.id).join() === 'decide:more_children,decide:money,decide:place,decide:parents' &&
       tg.askedA.filter(q => q.kind === 'core').every(q => q.buttons.includes('Something else')) && !tg.askedA.some(q => /\{p\}/.test(q.say)) &&
@@ -3824,6 +3825,9 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   check('when both have sent, the read is written from the couple view and both Psyches only: each pillar Strong, Steady or Worth attention, never anyone\'s own answers, the decisions side by side',
     tg.write.write === 'read' && Object.values(view.pillars).every(v => ['Strong', 'Steady', 'Worth attention'].includes(v)) && worth.length > 0 &&
       !/"core"|safety|Mostly, though|deep:/.test(JSON.stringify(tg.write)) && view.decisions.length === 4 && view.decisions.every(d => d.a && d.b && d.result), JSON.stringify(view).slice(0, 400));
+  check('what comes back when it\'s time to write is data only, with no guide text or instruction in it (one with them failed Muse\'s safety check); the guide is the signed guide.json',
+    tg.write.write === 'read' && !('spec' in tg.write) && !('schema' in tg.write) && !('save' in tg.write) && !('about' in tg.write) && tg.write.saveTo === 'work/together-read.json' &&
+      tg.saved.write === 'foryou' && !('spec' in tg.saved) && !('save' in tg.saved), JSON.stringify(Object.keys(tg.write)));
   check('a read with a score, a percentage or what one of them answered is sent back, and nothing is saved',
     tg.bad.saved === false && tg.bad.problems.some(p => /scored|%/.test(p)) && tg.bad.problems.some(p => /rated/.test(p)), JSON.stringify(tg.bad));
   check('the read saved, each then writes their own For you; someone who said they feel unsafe gets a gentle one, with support first, no "how to raise it" and no conversation scripts on their copy',
