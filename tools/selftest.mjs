@@ -3915,6 +3915,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
 `], { env: home.a.env, input: JSON.stringify(read) }).toString());
     tg.dupProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, tryThis: good.chapters.close.detail.split('. ')[0] + '.' } } });
     tg.themProblems = await ck({ ...good, caveats: 'It cannot see the days the two of them never wrote down.' });
+    tg.youTwoProblems = await ck({ ...good, caveats: Array.from({ length: 7 }, () => 'you two').join(' and ') + ', as the couple sees it.' });
     tg.traitsProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, traits: undefined } } });
     tg.alikeProblems = await ck({ ...good, chapters: { ...good.chapters, future: { ...good.chapters.future, alike: undefined } } });
   }
@@ -4111,6 +4112,10 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
   check('Shared meaning compares values, beliefs and interests (README "Psyche Together, release 25"): what you both hold in the middle, each one\'s own either side, a line on what it means, and the research behind it; a read without it is sent back',
     />What you both hold<\/p><div class="alike"><div><small>Mei<\/small><span>Big questions<\/span><\/div><div class="both"><small>Both of you<\/small><span>Loyalty to a close circle<\/span>/.test(htmlA) &&
       /Values, decisions and growth/.test(htmlA) && />What you both enjoy<\/p><div class="alike">/.test(htmlA.slice(htmlA.indexOf('id="life"'), htmlA.indexOf('id="future"'))) && /New things to do together/.test(htmlA.slice(htmlA.indexOf('id="life"'), htmlA.indexOf('id="future"'))) && /Sound Relationship House/.test(htmlA) && tg.alikeProblems.some(p => /^chapters\.future\.alike/.test(p)), JSON.stringify(tg.alikeProblems).slice(0, 300));
+  check('the read speaks to you: "you", your names and "you both", "you two" six times at most, never "the couple"; and each side sends its own profile again once when what a profile carries changes (MBTI letters with their strength)',
+    tg.youTwoProblems.some(p => /says "you two" 7 times/.test(p)) && tg.youTwoProblems.some(p => /says "the couple"/.test(p)) &&
+      stateA.profileV === 2 && JSON.parse(fsx.readFileSync(pathx.join(home.b.dir, 'state.json'), 'utf8')).profileV === 2,
+    JSON.stringify(tg.youTwoProblems).slice(0, 300));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
       stateA.answers.safety.label === 'No', '');

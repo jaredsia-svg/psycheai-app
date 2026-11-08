@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 30
+RELEASE = 31
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1573,6 +1573,9 @@ def card_pic():
         return ('data:image/png;base64,' + base64.b64encode(raw).decode()) if len(raw) <= 90000 else None
 
 
+PROFILE_V = 2      # what a profile carries changed (2: MBTI letters with their strength): each side sends theirs again once
+
+
 def put_profile(s, answered):
     k = keys()
     e2e = {'profile': seal(shared_profile(s, answered), key_for('together-box', k['code']))}
@@ -1580,6 +1583,9 @@ def put_profile(s, answered):
     if pic:
         e2e['pic'] = seal({'img': pic}, key_for('together-box', k['code']))
     got = tool('together_put', {'e2e': e2e})
+    if not got.get('error') and answered:
+        s['profileV'] = PROFILE_V
+        save_state(s)
     if pic and not got.get('error'):
         s['picSent'] = True
         save_state(s)
@@ -1876,6 +1882,8 @@ PLAN_TITLE = 'Your 28-day practice'
 TRUTH_HOME = {'strength': 'close', 'edge': 'disagree', 'surprise': 'secure'}     # where a truth sits when an older read named none
 CHAPTER_IDS = [c[0] for c in CHAPTERS]
 THEM_TWO = re.compile(r'\bthe two of them\b', re.I)
+YOU_TWO = re.compile(r'\byou two\b', re.I)
+THE_COUPLE = re.compile(r'\bthe couple\b', re.I)
 
 
 def _sentences(r):
@@ -1963,6 +1971,10 @@ def check_read(r, view, has_chat=False):
     if twice:
         k, at = next(iter(twice.items()))
         problems.append('said twice (%s): "%s…" — say each thing once, in its one place' % (' and '.join(at[:2]), k[:60]))
+    many = sum(len(YOU_TWO.findall(t)) for _, t in _texts(r))
+    need(many <= 6, 'says "you two" %d times: say "you", your names, and "you both" for what you share; "you two" six times at most' % many)
+    couple_ = [at for at, t in _texts(r) if THE_COUPLE.search(t)]
+    need(not couple_, '%s says "the couple": say it to them, "you both" or by name' % ', '.join(couple_[:3]))
     them = [at for at, t in _texts(r) if THEM_TWO.search(t)]
     need(not them, '%s says "the two of them": say it to them, "you two" or by name' % ', '.join(them[:3]))
     _plain(problems, r, 2400)
@@ -2324,6 +2336,11 @@ def status():
     if not psyche() or not account():
         return needs_psyche()
     s = state()
+    if s.get('role') and s.get('sent') and s.get('profileV') != PROFILE_V:
+        try:
+            put_profile(s, True)          # sent before this release: theirs again, with what a profile now carries
+        except Exception:
+            pass
     pending = read_first([PENDING]) or {}
     if not s.get('role') and pending.get('link'):
         return join(pending['link'])          # their Psyche is ready now: on to the invite that waited for it
@@ -2379,6 +2396,8 @@ def check():
         return {'done': True, 'quiet': True}
     try:
         reread_instagram(s)
+        if s.get('sent') and s.get('profileV') != PROFILE_V:
+            put_profile(s, True)
     except Exception:
         pass
     k, got, profiles, box = couple()
