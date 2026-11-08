@@ -3967,7 +3967,7 @@ elif a[0] == 'thread':
   check('someone who said they feel unsafe gets a gentle For you, with support first, no "how to raise it" and no conversation scripts in the plan on their copy; the page has the relationship map, the cycle and the story in moments',
     tg.saved.saved && tg.foryouA.gentle === false && tg.sentB.gentle === true &&
       /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map2"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA) && /class="intermission"/.test(htmlA) &&
-      /Your busiest day/.test(htmlA) && htmlA.indexOf('03  When you disagree') < htmlA.indexOf('class="intermission"') && htmlA.indexOf('class="intermission"') < htmlA.indexOf('04  Sharing a life') && /06  Your four weeks/.test(htmlA),
+      /Your busiest day/.test(htmlA) && htmlA.indexOf('03  Conflict and repair') < htmlA.indexOf('class="intermission"') && htmlA.indexOf('class="intermission"') < htmlA.indexOf('04  Sharing a life') && /06  Your 28-day practice/.test(htmlA),
     JSON.stringify([tg.foryouA.gentle, tg.sentB.gentle]));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
