@@ -425,6 +425,10 @@ async function route(req, res) {
         'Content-Disposition': 'inline; filename="Psyche Report.pdf"', 'X-Robots-Tag': 'noindex' });
       return res.end(pdf);
     }
+    // Psyche Together, bought on the website (lib/togetherpay.js): its page and Stripe Checkout.
+    const buy = /^\/together\/buy\/([\w.-]+?)(\/checkout)?$/.exec(url.pathname);
+    if (buy && req.method === 'GET' && !buy[2]) return sendResult(res, require('./lib/togetherpay').show(buy[1], Date.now(), url.searchParams.get('done') === '1'));
+    if (buy && req.method === 'POST' && buy[2]) return sendResult(res, await require('./lib/togetherpay').checkout(buy[1]));
     // Psyche Together's own skill (lib/togetherskill.js): its files and signed manifest, off unless PSYCHE_TOGETHER=1.
     const tg = require('./lib/togetherskill').route(url.pathname, req.method);
     if (tg) return send(res, tg.status, Buffer.isBuffer(tg.body) ? tg.body.toString('utf8') : tg.body, (tg.type || 'application/json').split(';')[0]);

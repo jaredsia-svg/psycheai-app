@@ -3482,6 +3482,43 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
     check('Plus: past_due keeps Plus while Stripe retries; unpaid does not', plans.isPlus(store.getUser(lin.id)) &&
       (await hook(subEvent('customer.subscription.updated', { status: 'unpaid' }), sign(subEvent('customer.subscription.updated', { status: 'unpaid' })))).status === 200 && !plans.isPlus(store.getUser(lin.id)));
     {
+      // Psyche Together, bought on the website (README "Psyche Together, paid on the website").
+      const pay = require('../lib/togetherpay.js'), tgLib = require('../lib/together.js');
+      const wasTg = process.env.PSYCHE_TOGETHER;
+      process.env.PSYCHE_TOGETHER = '1';
+      const skillUser = () => ({ ...store.getUser(lin.id), via: 'skill' });
+      const idA = 'c'.repeat(64), idB = 'b'.repeat(64);
+      const free = pay.gate(skillUser());
+      process.env.PSYCHE_TOGETHER_PAID = '1'; process.env.STRIPE_PRICE_TOGETHER = 'price_t';
+      const gated = await tgLib.link(skillUser(), { e2e: { id: idA } });
+      const buyUrl = ((gated.access || {}).url || '').replace(/^https?:\/\/[^/]+/, '');
+      const buyPage = await (await fetch(base + buyUrl)).text();
+      const co = await fetch(base + buyUrl + '/checkout', { method: 'POST', redirect: 'manual' });
+      const sentT = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop();
+      check('Psyche Together: off unless switched on; when paid, starting one without a purchase answers with a link to the website, worded as a limit with no price; the page offers it and Checkout is one payment for it, tied to the account',
+        free === null && !store.kvGet('together', idA) && /^\/together\/buy\/[\w.-]+$/.test(buyUrl) && !/US\$|\$\d|price|upgrade|buy/i.test(gated.access.say) &&
+          /Get Psyche Together/.test(buyPage) && /joining is free for them/.test(buyPage) && co.status === 303 &&
+          sentT && sentT.body.get('mode') === 'payment' && sentT.body.get('line_items[0][price]') === 'price_t' && sentT.body.get('metadata[kind]') === 'together' && sentT.body.get('client_reference_id') === lin.id,
+        JSON.stringify([gated, co.status]).slice(0, 300));
+      const paidEvent = (id, status = 'paid', type = 'checkout.session.completed') => JSON.stringify({ type, data: { object: { id, payment_status: status, client_reference_id: lin.id, metadata: { kind: 'together', userId: lin.id } } } });
+      const unpaid = paidEvent('cs_t0', 'unpaid');
+      await hook(unpaid, sign(unpaid));
+      const forged = paidEvent('cs_t1');
+      const refused = (await hook(forged, sign(forged, undefined, 'whsec_wrong'))).status;
+      const before = pay.credits(lin.id);
+      await hook(forged, sign(forged)); await hook(forged, sign(forged));
+      const after = pay.credits(lin.id);
+      const started = await tgLib.link(skillUser(), { e2e: { id: idA } });
+      const retried = await tgLib.link(skillUser(), { e2e: { id: idA } });
+      await tgLib.end(skillUser());
+      const again = await tgLib.link(skillUser(), { e2e: { id: idB } });
+      check('Psyche Together: only a signed webhook for a paid session credits one, once; it is used when a new one starts (a retry of the same link uses nothing), and the next needs another',
+        refused === 400 && before === 0 && after === 1 && started.ok === true && retried.ok === true && pay.credits(lin.id) === 0 && Boolean(again.access) &&
+          !/Plus/.test(JSON.stringify(store.getUser(lin.id).plus || {}).replace(/./g, '')), JSON.stringify([before, after, started, again]).slice(0, 300));
+      delete process.env.PSYCHE_TOGETHER_PAID; delete process.env.STRIPE_PRICE_TOGETHER;
+      if (wasTg === undefined) delete process.env.PSYCHE_TOGETHER; else process.env.PSYCHE_TOGETHER = wasTg;
+    }
+    {
       const setPrefs = mcp.TOOLS.find(t => t.name === 'set_preferences').run;
       const qa = questions.addQuestion({ key: 'reptiles_ok', text: 'Would you be okay with a partner who keeps pet reptiles?' });
       const qb = questions.addQuestion({ key: 'night_owl_ok', text: 'Would you be okay with a partner who stays up past 2am most nights?' });
