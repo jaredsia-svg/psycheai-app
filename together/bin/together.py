@@ -42,7 +42,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 8
+RELEASE = 11
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -795,6 +795,26 @@ SAMPLE = 180             # messages the read sees, spread over the whole span
 GAP = 6 * 3600           # a new conversation after six quiet hours
 THANKS = re.compile(r'\b(thanks|thank you|thx|ty|appreciate|grateful|proud of you|you\'re the best)\b', re.I)
 SORRY = re.compile(r'\b(sorry|my bad|i was wrong|apologi[sz]e|forgive me|let\'s talk|can we talk|i understand)\b', re.I)
+# Language measures from the research (README "Psyche Together, release 9"): function-word categories for
+# language style matching (Ireland et al., Psychological Science 2011), "we" against "I" and "you" (Seider et al.
+# 2009), and a small list of positive and negative words for the balance of the two.
+LSM_CATS = {
+    'personal': 'i me my mine myself you your yours yourself he him his she her hers we us our ours they them their',
+    'impersonal': 'it its this that these those something anything everything nothing',
+    'articles': 'a an the',
+    'prepositions': 'in on at to from with about for of by over under into after before',
+    'auxiliary': 'am is are was were be been being have has had do does did will would can could should shall may might must',
+    'adverbs': 'very really just so too also even only still quite already almost',
+    'conjunctions': 'and but or so because if though although while',
+    'negations': 'no not never none nobody nothing nope dont cant wont isnt arent didnt doesnt',
+    'quantifiers': 'all some any many much more most few lots every each',
+}
+LSM_SETS = {k: set(v.split()) for k, v in LSM_CATS.items()}
+WE = set('we us our ours ourselves'.split())
+I_YOU = set('i me my mine myself you your yours yourself'.split())
+POS = set('love glad happy great good nice thanks thank appreciate excited fun proud lovely sweet amazing awesome yay haha lol miss cute beautiful care hug'.split())
+NEG = set('sorry sad angry upset annoyed hate tired stressed worried hurt bad awful terrible ugh frustrated mad disappointed annoying'.split())
+BANDS = [('late', 0, 5), ('morning', 5, 12), ('afternoon', 12, 18), ('evening', 18, 24)]
 WARM = re.compile(r'\b(love you|miss you|luv u|love u|<3)\b|❤|🥰|😘|💕', re.I)
 
 
@@ -961,12 +981,33 @@ def chat_signals(msgs):
     for s in side.values():
         r = sorted(s.pop('replyMinutes'))
         s['medianReplyMinutes'] = round(r[len(r) // 2], 1) if r else None
+    words = {'me': [], 'them': []}
+    hours = {'me': [0, 0, 0, 0], 'them': [0, 0, 0, 0]}
+    for t, who, text in msgs:
+        words[who] += re.findall(r"[a-z']+", text.lower().replace("'", ''))
+        hours[who][next(i for i, (_, lo, hi) in enumerate(BANDS) if lo <= t.hour < hi)] += 1
+    for who, key in (('me', 'me'), ('them', 'them')):
+        w, s_ = words[who], side[key]
+        n = max(1, len(w))
+        s_['we'] = round(100 * sum(1 for x in w if x in WE) / n, 2)
+        s_['iYou'] = round(100 * sum(1 for x in w if x in I_YOU) / n, 2)
+        pos, neg = sum(1 for x in w if x in POS), sum(1 for x in w if x in NEG)
+        s_['positive'], s_['negative'] = pos, neg
+        tot = max(1, sum(hours[who]))
+        s_['day'] = {b[0]: round(100 * h / tot) for b, h in zip(BANDS, hours[who])}
+    rates = {who: {k: sum(1 for x in words[who] if x in v) / max(1, len(words[who])) for k, v in LSM_SETS.items()} for who in words}
+    lsm = [1 - abs(rates['me'][k] - rates['them'][k]) / (rates['me'][k] + rates['them'][k] + 0.0001) for k in LSM_SETS]
+    by_month = {}
+    for t, _, _ in msgs:
+        by_month[t.strftime('%Y-%m')] = by_month.get(t.strftime('%Y-%m'), 0) + 1
     first, end = msgs[0][0], msgs[-1][0]
     months = max(1, (end.year - first.year) * 12 + end.month - first.month + 1)
     mid = first + (end - first) / 2
     a, b = sum(1 for m in msgs if m[0] < mid), sum(1 for m in msgs if m[0] >= mid)
     return {'from': first.strftime('%Y-%m-%d'), 'to': end.strftime('%Y-%m-%d'), 'messages': len(msgs), 'perMonth': round(len(msgs) / months, 1),
-            'trend': 'rising' if b > a * 1.25 else 'falling' if a > b * 1.25 else 'steady', 'you': side['me'], 'partner': side['them']}
+            'trend': 'rising' if b > a * 1.25 else 'falling' if a > b * 1.25 else 'steady', 'you': side['me'], 'partner': side['them'],
+            'styleMatch': round(sum(lsm) / len(lsm), 2) if words['me'] and words['them'] else None,
+            'months': [[k, by_month[k]] for k in sorted(by_month)][-24:]}
 
 
 def chat_sample(msgs, me_name, them_name):
@@ -1003,8 +1044,6 @@ def read_chat(s, theirs):
     if not msgs:
         return None
     me_first = _first(my_full) or 'You'
-    # Clean the names of the two of them out of nothing: they're who the conversation is between.
-    s.pop('chatAsked', None)
     return {'source': source, 'signals': chat_signals(msgs), 'sample': chat_sample(msgs, me_first, their_first)}
 
 
@@ -1020,9 +1059,32 @@ def add_chat_file(paths):
         return {'error': 'I couldn\'t find your chat with %s in that file: share the export of your one-to-one chat (in WhatsApp: the chat, ⋮, More, Export chat, Without media).' % (their_first or 'your partner')}
     write_private([CHAT_FILE], {'messages': [(t.strftime('%Y-%m-%d %H:%M'), who, text) for t, who, text in msgs]})
     s['chatAsked'] = 'added'
+    s.pop('chat', None)
     save_state(s)
+    if not s.get('questions'):
+        return dict(questions_task(), added='%d messages, %s to %s' % (len(msgs), msgs[0][0].strftime('%b %Y'), msgs[-1][0].strftime('%b %Y')))
     q = next_step(s)
-    return dict(send() if q.get('done') else {'next': q}, added='%d messages, %s to %s' % (len(msgs), msgs[0][0].strftime('%b %Y'), msgs[-1][0].strftime('%b %Y')))
+    return dict(send() if q.get('done') else {'next': q}, added='%d messages' % len(msgs))
+
+
+# What the research says, per pillar and per measure: fixed here, cited, and laid out by the page as written,
+# so a study is never paraphrased into something it didn't find (README "Psyche Together, release 9").
+RESEARCH = {
+    'security': 'How committed you believe your partner is was the single strongest predictor of relationship quality among 11,196 couples (Joel et al., PNAS 2020). Attachment shapes how each partner reads distance and closeness (Mikulincer & Shaver).',
+    'appreciation': 'Feeling appreciated was one of the five strongest predictors of relationship quality in the same pooled study (Joel et al., 2020). How a partner responds to good news, with active, warm interest, builds trust and closeness (Gable et al., 2004).',
+    'connection': 'In Gottman\'s newlywed study, couples still together six years later had turned towards each other\'s small bids for attention about 86% of the time; couples who later split, about 33%.',
+    'desire': 'Sexual satisfaction was one of the five strongest predictors of relationship quality (Joel et al., 2020).',
+    'disagreements': 'About two-thirds of couples\' recurring disagreements are never solved, only handled well (Gottman). How a disagreement starts and whether repair attempts land matter more than how often couples disagree; one partner pushing to talk while the other withdraws is a common, breakable cycle (Christensen & Heavey).',
+    'needs': 'Couples who see the division of practical and emotional work as fair report more satisfaction, whatever the exact split. How partners cope with stress together, not just each on their own, predicts how well the relationship does (Bodenmann, dyadic coping).',
+    'life': 'Similar personalities predict surprisingly little about relationship quality; how partners see the relationship predicts far more (Joel et al., 2020). Doing new and engaging things together keeps satisfaction up over time (Aron et al., self-expansion).',
+    'future': 'Couples who decide their big transitions together, rather than sliding into them, report more commitment later on (Stanley & Rhoades, sliding versus deciding).',
+    'growth': 'Partners who see each other as the person they want to become, and help them get there, both grow and stay more satisfied (the Michelangelo phenomenon, Drigotas et al., 1999).',
+    'styleMatch': 'Couples whose everyday writing styles matched more closely were more likely to still be together three months later (language style matching, Ireland et al., Psychological Science 2011).',
+    'we': 'Couples who say "we" more often show more positive behaviour when they disagree (Seider et al., 2009).',
+    'perpetual': 'Most recurring disagreements come from lasting differences in personality and needs: the goal is a way of living with them, not a winner (Gottman).',
+    'dreams': 'Behind a disagreement that keeps coming back there is often a hope or need that hasn\'t been said; naming it is what loosens it (Gottman, dreams within conflict).',
+    'lovemaps': 'Knowing each other\'s inner world, worries, hopes and everyday life, is the foundation the rest of a relationship is built on (Gottman, love maps).',
+}
 
 
 # ---------------------------------------------------------------- the couple
@@ -1130,12 +1192,24 @@ def questions_task():
         return {'waiting': True, 'say': 'Waiting for your partner to join.'}
     s['partner'] = (theirs.get('psyche') or {}).get('name') or 'your partner'
     s['stage'] = stage_of(s) or (profiles.get('a') or {}).get('stage')
+    if not s.get('chat') and s.get('chatAsked') != 'skipped':
+        chat = read_chat(s, theirs)
+        if chat:
+            s['chat'] = chat
+        elif s.get('chatAsked') not in ('asked', 'added'):
+            s['chatAsked'] = 'asked'
+            save_state(s)
+            name = s['partner']
+            return {'askChat': True, 'say': ('Your conversation with %s makes your questions and your read much sharper, and I couldn\'t find your Instagram chat '
+                                             'with them. In WhatsApp, open your chat with %s, tap ⋮ or their name, then More, Export chat, Without media, '
+                                             'and share the .zip here.') % (name, name),
+                    'buttons': ['I\'ve shared it', 'Skip it'], 'asButtons': True}
     save_state(s)
     stage = s['stage']
     pillars = [p for p in FLOW if p in dict((pid, 1) for pid, _, _ in core_for(stage))]
     focus = {p: n for p, n in base_priority(s).items() if p in pillars}
     return {'write': 'questions', 'you': psyche_profile(psyche() or {}), 'partner': theirs.get('psyche'), 'stage': stage,
-            'yourReport': (psyche() or {}).get('report'), 'partnerReport': theirs.get('report'),
+            'yourReport': (psyche() or {}).get('report'), 'partnerReport': theirs.get('report'), 'yourChat': s.get('chat'),
             'pillars': pillars, 'focus': focus, 'saveTo': 'work/together-questions.json'}
 
 
@@ -1207,20 +1281,6 @@ def send(no_chat=False):
         q = next_step(s)
         if not q.get('done'):
             return {'error': 'The check-in isn\'t finished yet.', 'next': q}
-        if not s.get('chat') and not no_chat:
-            k, got, profiles, box = couple()
-            mine, theirs = mine_theirs(s, profiles)
-            chat = read_chat(s, theirs)
-            if chat:
-                s['chat'] = chat
-                save_state(s)
-            elif s.get('chatAsked') not in ('asked', 'added'):
-                s['chatAsked'] = 'asked'
-                save_state(s)
-                name = (theirs.get('psyche') or {}).get('name') or 'your partner'
-                return {'askChat': True, 'say': ('I couldn\'t find your Instagram chat with %s. Your WhatsApp chat together makes the read much sharper: in WhatsApp, '
-                                                 'open your chat with %s, tap ⋮ or their name, then More, Export chat, Without media, and share the .zip here.') % (name, name),
-                        'buttons': ['I\'ve shared it', 'Send without it'], 'asButtons': True}
     got = put_profile(s, True)
     if got.get('error'):
         return got
@@ -1249,7 +1309,7 @@ def write_task(profiles=None):
     for r in ('a', 'b'):
         pr = profiles[r]
         people.append({'name': (pr.get('psyche') or {}).get('name'), 'card': pr.get('psyche') or {}, 'report': pr.get('report'), 'chat': pr.get('chat')})
-    return {'write': 'read', 'coupleView': view, 'people': people, 'saveTo': 'work/together-read.json'}
+    return {'write': 'read', 'coupleView': view, 'people': people, 'research': RESEARCH, 'saveTo': 'work/together-read.json'}
 
 
 BANNED = re.compile(r'\b(score[sd]?|percent\w*|compatib\w*|incompatib\w*|divorc\w*|predict\w*|toxic|contempt\w*|stonewall\w*|narcissis\w*|'
@@ -1285,65 +1345,67 @@ DATED = re.compile(r'\b(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sep
 
 
 def check_read(r, view, has_chat=False):
-    """The read at Psyche Report depth (README "Psyche Together, release 8"): every pillar a section with its
-    detail and dated evidence, the overview, the pattern with each side, care, the conversation when there is one,
-    and nothing that says who answered what."""
+    """The read at more than a Psyche Report's depth (README "Psyche Together, release 9"): every section there,
+    each long enough to say something specific, with dated evidence, and nothing that says who answered what."""
     problems = []
     if not isinstance(r, dict):
         return ['The read is not a JSON object.']
     strong = {p for p, lv in view['pillars'].items() if lv != 'Worth attention'}
     worth = {p for p, lv in view['pillars'].items() if lv == 'Worth attention'}
-    text = lambda x: x.strip() if isinstance(x, str) else ''
-    dated = lambda xs: isinstance(xs, list) and any(isinstance(e, str) and DATED.search(e) for e in xs)
-    if not text(r.get('summary')) or len(text(r.get('summary')).split()) > 30:
-        problems.append('summary: one warm, specific line, under 30 words')
-    ov = r.get('overview') if isinstance(r.get('overview'), dict) else {}
-    if len(text(ov.get('lede'))) < 500:
-        problems.append('overview.lede: two or three paragraphs, at least 500 characters, on who they are together')
-    st = ov.get('strengths') if isinstance(ov.get('strengths'), list) else []
-    if not 2 <= len(st) <= 4 or not all(isinstance(x, dict) and x.get('pillar') in strong and text(x.get('title')) and len(text(x.get('detail'))) >= 150 and dated(x.get('evidence')) for x in st):
-        problems.append('overview.strengths: two to four, each a Strong or Steady pillar (%s), a title, a detail of three or four sentences, and dated evidence' % (', '.join(sorted(strong)) or 'none'))
-    pl = r.get('pillars') if isinstance(r.get('pillars'), dict) else {}
+    T = lambda x: x.strip() if isinstance(x, str) else ''
+    D = lambda x: x if isinstance(x, dict) else {}
+    L = lambda x: x if isinstance(x, list) else []
+    dated = lambda xs: any(isinstance(e, str) and DATED.search(e) for e in L(xs))
+    need = lambda ok, msg: ok or problems.append(msg)
+    need(T(r.get('summary')) and len(T(r.get('summary')).split()) <= 30, 'summary: one specific line, under 30 words')
+    ov = D(r.get('overview'))
+    need(len(T(ov.get('lede'))) >= 800, 'overview.lede: three or four paragraphs, at least 800 characters')
+    st = L(ov.get('strengths'))
+    need(2 <= len(st) <= 4 and all(isinstance(x, dict) and x.get('pillar') in strong and T(x.get('title')) and len(T(x.get('detail'))) >= 250 and dated(x.get('evidence')) for x in st),
+         'overview.strengths: two to four Strong or Steady pillars (%s), each a title, a detail of four or five sentences, and dated evidence' % (', '.join(sorted(strong)) or 'none'))
+    pl = D(r.get('pillars'))
     for p in view['pillars']:
-        x = pl.get(p) if isinstance(pl.get(p), dict) else {}
-        if len(text(x.get('detail'))) < 400 or not text(x.get('headline')) or not text(x.get('tryThis')):
-            problems.append('pillars.%s: a headline, a detail of two or three paragraphs (at least 400 characters) and tryThis' % p)
-        elif not dated(x.get('evidence')):
-            problems.append('pillars.%s.evidence: one to three dated moments from their reports or their conversation' % p)
+        x = D(pl.get(p))
+        if len(T(x.get('detail'))) < 600 or not all(T(x.get(k)) for k in ('headline', 'insight', 'tryThis')):
+            problems.append('pillars.%s: headline, a detail of three or four paragraphs (at least 600 characters), insight and tryThis' % p)
+        elif len(L(x.get('evidence'))) < 2 or not dated(x.get('evidence')):
+            problems.append('pillars.%s.evidence: two or three dated moments' % p)
     extra = [p for p in pl if p not in view['pillars']]
-    if extra:
-        problems.append('pillars: %s aren\'t in the couple view; leave them out' % ', '.join(extra))
-    pat = r.get('pattern') if isinstance(r.get('pattern'), dict) else {}
-    if len(text(pat.get('loop'))) < 300 or not all(text(pat.get(k)) for k in ('title', 'a', 'b', 'breakTheLoop')) or not dated(pat.get('evidence')):
-        problems.append('pattern: title, loop (at least 300 characters), a and b (each person\'s side), breakTheLoop, and dated evidence')
-    care = r.get('care') if isinstance(r.get('care'), dict) else {}
-    if len(text(care.get('detail'))) < 250 or not text(care.get('a')) or not text(care.get('b')):
-        problems.append('care: detail (at least 250 characters), and a and b')
+    need(not extra, 'pillars: %s aren\'t in the couple view; leave them out' % ', '.join(extra))
+    cy = D(r.get('cycle'))
+    need(len(T(cy.get('loop'))) >= 500 and all(T(cy.get(k)) for k in ('title', 'a', 'b', 'exit')) and dated(cy.get('evidence')),
+         'cycle: title, loop (at least 500 characters), a and b (each side, with the need underneath), exit, and dated evidence')
     if has_chat:
-        m = r.get('messages') if isinstance(r.get('messages'), dict) else {}
-        if not text(m.get('summary')) or not (isinstance(m.get('lines'), list) and 3 <= len(m['lines']) <= 6):
-            problems.append('messages: their conversation is here, so a summary and three to six lines on what it shows')
-    conv = r.get('conversations') if isinstance(r.get('conversations'), list) else []
-    if len(conv) > 5 or not all(isinstance(c, dict) and c.get('pillar') in worth and c.get('title') and c.get('why')
-                                and isinstance(c.get('script'), list) and 3 <= len(c['script']) <= 5 for c in conv):
-        problems.append('conversations: up to five, each from a pillar Worth attention (%s), with title, why and a script of 3 to 5 steps' % (', '.join(sorted(worth)) or 'none, so leave it empty'))
-    if worth and not conv:
-        problems.append('conversations: at least one, for a pillar Worth attention')
-    wk = r.get('weeks') if isinstance(r.get('weeks'), dict) else {}
-    pr = wk.get('practice') if isinstance(wk.get('practice'), dict) else {}
-    if not (pr.get('pillar') in view['pillars'] and pr.get('title') and isinstance(pr.get('days'), list) and len(pr['days']) == 7) \
-            or not (isinstance(wk.get('steps'), list) and len(wk['steps']) == 3):
-        problems.append('weeks: practice (a pillar from the couple view, a title, and seven days) and three steps for weeks 2 to 4')
-    dec = r.get('decisions') if isinstance(r.get('decisions'), list) else []
+        tk = D(r.get('talk'))
+        need(len(T(tk.get('summary'))) >= 400 and T(tk.get('bids')) and 4 <= len(L(tk.get('lines'))) <= 8,
+             'talk: their conversation is here, so a summary (at least 400 characters), bids, and four to eight lines')
+    care = D(r.get('care'))
+    need(len(T(care.get('detail'))) >= 400 and T(care.get('a')) and T(care.get('b')), 'care: detail (at least 400 characters), a and b')
+    pe = D(r.get('perpetual'))
+    need(2 <= len(L(pe.get('lasting'))) <= 3 and all(isinstance(x, dict) and T(x.get('title')) and T(x.get('detail')) and T(x.get('howToLiveWithIt')) for x in L(pe.get('lasting'))),
+         'perpetual.lasting: two or three lasting differences, each title, detail and howToLiveWithIt')
+    need(1 <= len(L(pe.get('solvable'))) <= 2 and all(isinstance(x, dict) and T(x.get('title')) and T(x.get('detail')) and T(x.get('firstStep')) for x in L(pe.get('solvable'))),
+         'perpetual.solvable: one or two solvable ones, each title, detail and firstStep')
+    dr = D(r.get('dreams'))
+    need(all(T(dr.get(k)) for k in ('tension', 'a', 'b', 'question')), 'dreams: tension, a, b and question')
+    gr = D(r.get('growth'))
+    need(len(T(gr.get('detail'))) >= 200 and len(L(gr.get('together'))) == 3, 'growth: detail (at least 200 characters) and three together ideas')
+    need(len(L(r.get('lovemap'))) == 6 and all(T(x) for x in L(r.get('lovemap'))), 'lovemap: six questions')
+    conv = L(r.get('conversations'))
+    need(len(conv) <= 5 and all(isinstance(c, dict) and c.get('pillar') in worth and c.get('title') and c.get('why') and 3 <= len(L(c.get('script'))) <= 5 for c in conv),
+         'conversations: up to five, each from a pillar Worth attention (%s), with title, why and a script of 3 to 5 steps' % (', '.join(sorted(worth)) or 'none, so leave it empty'))
+    need(not worth or conv, 'conversations: at least one, for a pillar Worth attention')
+    wk = D(r.get('weeks'))
+    pr = D(wk.get('practice'))
+    need(pr.get('pillar') in view['pillars'] and pr.get('title') and len(L(pr.get('days'))) == 7 and len(L(wk.get('steps'))) == 3,
+         'weeks: practice (a pillar from the couple view, a title, and seven days) and three steps for weeks 2 to 4')
     topics = {d['topic'] for d in view['decisions']}
-    if topics and not all(isinstance(d, dict) and d.get('topic') in topics and d.get('line') for d in dec):
-        problems.append('decisions: a line for each big decision, by topic (%s)' % ', '.join(sorted(topics)))
-    if not text(r.get('caveats')):
-        problems.append('caveats: what this can\'t see, in a sentence or two')
+    need(not topics or all(isinstance(d, dict) and d.get('topic') in topics and d.get('line') for d in L(r.get('decisions'))),
+         'decisions: a line for each big decision, by topic (%s)' % ', '.join(sorted(topics)))
+    need(T(r.get('caveats')), 'caveats: what this can\'t see, in a sentence or two')
     total = sum(len(t) for _, t in _texts(r))
-    if total < 9000:
-        problems.append('the read is %d characters: write it at the depth of a Psyche Report, at least 9,000 characters across its sections' % total)
-    _plain(problems, r, 1600)
+    need(total >= 16000, 'the read is %d characters: write it deeper than a Psyche Report, at least 16,000 characters across its sections' % total)
+    _plain(problems, r, 2400)
     return problems[:20]
 
 
@@ -1596,7 +1658,7 @@ h2{margin:0 0 10px;font-size:19px}h3{margin:14px 0 4px;font-size:15.5px}p{margin
 .Strong,.Aligned{background:#e5f4ec;color:var(--sage)}.Steady,.Not-decided-yet{background:#fcf1e1;color:var(--amber)}.Worth-attention,.Talk-about{background:#f2e9f8;color:var(--plum)}
 .row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;border-top:1px solid var(--line);padding:9px 0}.row:first-of-type{border-top:0}
 .row b{font-size:15px}.row p{margin:2px 0 0;color:var(--soft);font-size:14px}
-.soft{color:var(--soft);font-size:13.5px}nav{position:sticky;top:0;z-index:3;display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;background:#fbf8fc;scrollbar-width:none}nav a{flex:none;font-size:12.5px;font-weight:700;color:var(--plum);background:#f2e9f8;border-radius:999px;padding:6px 11px;text-decoration:none}.lede{font-size:17px;font-weight:650}.sub{margin-top:18px}.item{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.pillar{border-top:1px solid var(--line);padding:12px 0 4px}.ph{display:flex;justify-content:space-between;align-items:center;gap:8px}.ph b{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.ev{margin:6px 0 10px;padding-left:18px;color:var(--soft);font-size:14px}.try{background:#f6effb;border-radius:12px;padding:9px 12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}@media(max-width:520px){.two{grid-template-columns:1fr}}.two>div{background:#faf6fc;border-radius:12px;padding:10px 12px}table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}th{border-top:0;color:var(--soft);font-size:12.5px}footer{color:var(--soft);font-size:12.5px;text-align:center;margin-top:18px}
+.soft{color:var(--soft);font-size:13.5px}nav{position:sticky;top:0;z-index:3;display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;background:#fbf8fc;scrollbar-width:none}nav a{flex:none;font-size:12.5px;font-weight:700;color:var(--plum);background:#f2e9f8;border-radius:999px;padding:6px 11px;text-decoration:none}.lede{font-size:17px;font-weight:650}.sub{margin-top:18px}.item{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.pillar{border-top:1px solid var(--line);padding:12px 0 4px}.ph{display:flex;justify-content:space-between;align-items:center;gap:8px}.ph b{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.ev{margin:6px 0 10px;padding-left:18px;color:var(--soft);font-size:14px}.try{background:#f6effb;border-radius:12px;padding:9px 12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}@media(max-width:520px){.two{grid-template-columns:1fr}}.two>div{background:#faf6fc;border-radius:12px;padding:10px 12px}.sci{font-size:13px;color:var(--soft);border-left:3px solid #cdb6dd;padding:2px 0 2px 10px;margin:10px 0}.insight{font-weight:650}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}.gauge{display:flex;align-items:baseline;gap:8px;margin:8px 0}.gauge b{font-size:34px;color:var(--plum)}.gauge span{color:var(--soft);font-size:14px}.chart{margin:8px 0}.chart svg{width:100%;height:auto}.chart figcaption{font-size:12px;color:var(--soft)}table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}th{border-top:0;color:var(--soft);font-size:12.5px}footer{color:var(--soft);font-size:12.5px;text-align:center;margin-top:18px}
 '''
 
 
@@ -1609,14 +1671,53 @@ def _ev(xs):
     return ('<ul class="ev">' + ''.join('<li>%s</li>' % _e(x) for x in xs) + '</ul>') if xs else ''
 
 
+def _research(key):
+    return ('<p class="sci"><b>What the research says.</b> %s</p>' % _e(RESEARCH[key])) if key in RESEARCH else ''
+
+
+def _months_svg(months):
+    """Messages by month, as a small bar chart drawn here (no library), newest on the right."""
+    if not months:
+        return ''
+    top, w = max(n for _, n in months) or 1, 300
+    bw = w / len(months)
+    bars = ''.join('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="1.5" fill="#7b3fa0"><title>%s: %d</title></rect>'
+                   % (i * bw + 1, 60 - 56 * n / top, max(1.5, bw - 2), 56 * n / top, _e(m), n) for i, (m, n) in enumerate(months))
+    return ('<figure class="chart"><svg viewBox="0 0 %d 62" role="img" aria-label="Messages by month">%s</svg><figcaption>Messages by month, %s to %s</figcaption></figure>'
+            % (w, bars, _e(months[0][0]), _e(months[-1][0])))
+
+
+def _talk_panel(box, names):
+    sig = (box.get('chat') or {}).get('signals') or {}
+    if not (sig.get('you') and sig.get('partner')):
+        return ''
+    who = box.get('chatOf') or names
+    you, them = sig['you'], sig['partner']
+    v = lambda d, k, suf='': ('%s%s' % (d.get(k), suf)) if d.get(k) is not None else '–'
+    pos = lambda d: '%s : %s' % (d.get('positive', 0), d.get('negative', 0))
+    rows = [('Messages', v(you, 'messages'), v(them, 'messages')), ('Conversations started', v(you, 'starts'), v(them, 'starts')),
+            ('Typical reply', v(you, 'medianReplyMinutes', ' min'), v(them, 'medianReplyMinutes', ' min')), ('Questions asked', v(you, 'questions'), v(them, 'questions')),
+            ('Thanks', v(you, 'thanks'), v(them, 'thanks')), ('Sorry and repair', v(you, 'sorry'), v(them, 'sorry')),
+            ('Warm words : hard words', pos(you), pos(them)), ('"We" per 100 words', v(you, 'we'), v(them, 'we')), ('"I" and "you" per 100 words', v(you, 'iYou'), v(them, 'iYou')),
+            ] + [('Writing in the ' + lbl, '%s%%' % ((you.get('day') or {}).get(k, 0)), '%s%%' % ((them.get('day') or {}).get(k, 0)))
+                 for k, lbl in (('morning', 'morning'), ('afternoon', 'afternoon'), ('evening', 'evening'), ('late', 'late night'))]
+    table = '<table><tr><th></th><th>%s</th><th>%s</th></tr>%s</table>' % (_e(who[0]), _e(who[1]), ''.join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % tuple(_e(c) for c in r) for r in rows))
+    match = ('<div class="gauge"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>%s' % (round(100 * sig['styleMatch']), _research('styleMatch'))
+             if sig.get('styleMatch') is not None else '')
+    return (match + table + '<p class="soft">%s messages from %s to %s, about %s a month, %s.</p>' % (_e(sig.get('messages')), _e(sig.get('from')), _e(sig.get('to')), _e(sig.get('perMonth')), _e(sig.get('trend')))
+            + _months_svg(sig.get('months') or []) + _research('we'))
+
+
 def page(box, s):
-    """The read as a page in parts, like the Psyche Report: For you first (on this copy only), then the overview,
-    each pillar with its three views and evidence, the pattern, care, the conversation, the decisions,
-    conversations to have, the four weeks and how it was read."""
+    """The read as a page in parts, deeper than a Psyche Report (README "Psyche Together, release 9"): For you
+    first (this copy only), then who they are together, the nine pillars three ways with what the research says,
+    their cycle, how they talk (measured), care, the differences to live with and to solve, the dream under their
+    tension, growth, the love map, the decisions, conversations, four weeks and the science."""
     r, view = box.get('read') or {}, box.get('view') or {}
     names = view.get('names') or ['', '']
     fy = s.get('forYou') if isinstance(s.get('forYou'), dict) else None
     gentle = ((s.get('answers') or {}).get('safety') or {}).get('label') in SAFETY_FLAGGED
+    D = lambda x: x if isinstance(x, dict) else {}
     parts, nav = [], []
 
     def part(pid, title, inner, cls=''):
@@ -1629,50 +1730,60 @@ def page(box, s):
                          ('<p class="soft"><b>How to raise it:</b> %s</p>' % _e(x.get('howToRaise'))) if x.get('howToRaise') and not gentle else '')
                          for x in fy.get('focus') or [] if isinstance(x, dict))
         part('foryou', 'For you', items_ + ('<p><b>This week:</b> %s</p>' % _e(fy.get('practice'))) + ('<p class="soft">%s</p>' % _e(fy.get('note')) if fy.get('note') else ''), 'mine')
-    ov = r.get('overview') if isinstance(r.get('overview'), dict) else {}
+    ov = D(r.get('overview'))
     strengths = ''.join('<div class="item"><h3>%s</h3>%s%s</div>' % (_e(x.get('title')), _paras(x.get('detail')), _ev(x.get('evidence')))
                         for x in ov.get('strengths') or [] if isinstance(x, dict))
-    part('overview', 'You two', '<p class="lede">%s</p>%s<h3 class="sub">Your strengths</h3>%s' % (_e(r.get('summary')), _paras(ov.get('lede')), strengths))
-    pl = r.get('pillars') if isinstance(r.get('pillars'), dict) else {}
+    levels = ''.join('<span class="chip %s">%s</span>' % (_e(lv.replace(' ', '-')), _e(PILLARS.get(p, p))) for p, lv in sorted((view.get('pillars') or {}).items(), key=lambda kv: PILLAR_ORDER.index(kv[0])))
+    part('overview', 'You two', '<p class="lede">%s</p><div class="chips">%s</div>%s<h3 class="sub">Your strengths</h3>%s' % (_e(r.get('summary')), levels, _paras(ov.get('lede')), strengths))
+    pl = D(r.get('pillars'))
     rows = ''
     for pid in [p for p in PILLAR_ORDER if p in (view.get('pillars') or {})]:
-        lv, x = view['pillars'][pid], pl.get(pid) if isinstance(pl.get(pid), dict) else {}
-        rows += ('<div class="pillar"><div class="ph"><b>%s</b><span class="chip %s">%s</span></div><h3>%s</h3>%s%s%s</div>'
-                 % (_e(PILLARS.get(pid, pid)), _e(lv.replace(' ', '-')), _e(lv), _e(x.get('headline')), _paras(x.get('detail')), _ev(x.get('evidence')),
-                    ('<p class="try"><b>Try this:</b> %s</p>' % _e(x.get('tryThis'))) if x.get('tryThis') else ''))
-    part('pillars', 'Your pillars', '<p class="soft">Each pillar three ways: how you both see it (Strong when you both do, worth attention when either of you doesn\'t, never saying whose), what your conversation shows, and why, through your two Psyches.</p>' + rows)
-    pat = r.get('pattern') if isinstance(r.get('pattern'), dict) else {}
-    part('pattern', 'Your pattern together', '<h3>%s</h3>%s<div class="two"><div><b>%s</b>%s</div><div><b>%s</b>%s</div></div><p><b>What breaks the loop:</b> %s</p>%s'
-         % (_e(pat.get('title')), _paras(pat.get('loop')), _e(names[0]), _paras(pat.get('a')), _e(names[1]), _paras(pat.get('b')), _e(pat.get('breakTheLoop')), _ev(pat.get('evidence'))))
-    care = r.get('care') if isinstance(r.get('care'), dict) else {}
-    part('care', 'How you each care', '%s<div class="two"><div><b>What makes %s feel cared for</b>%s</div><div><b>What makes %s feel cared for</b>%s</div></div>'
-         % (_paras(care.get('detail')), _e(names[0]), _paras(care.get('a')), _e(names[1]), _paras(care.get('b'))))
-    msg = r.get('messages') if isinstance(r.get('messages'), dict) else None
-    if msg:
-        sig = (box.get('chat') or {}).get('signals') or {}
-        table = ''
-        if sig.get('you') and sig.get('partner'):
-            who = box.get('chatOf') or [names[0], names[1]]
-            row = lambda label, k: '<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % (label, _e(sig['you'].get(k) if sig['you'].get(k) is not None else '–'), _e(sig['partner'].get(k) if sig['partner'].get(k) is not None else '–'))
-            table = ('<table><tr><th></th><th>%s</th><th>%s</th></tr>%s%s%s%s%s%s</table><p class="soft">%s messages, %s to %s, about %s a month, %s.</p>'
-                     % (_e(who[0]), _e(who[1]), row('Messages', 'messages'), row('Conversations started', 'starts'), row('Typical reply (minutes)', 'medianReplyMinutes'),
-                        row('Questions', 'questions'), row('Thanks', 'thanks'), row('Sorry and repair', 'sorry'),
-                        _e(sig.get('messages')), _e(sig.get('from')), _e(sig.get('to')), _e(sig.get('perMonth')), _e(sig.get('trend'))))
-        part('messages', 'What your conversation shows', _paras(msg.get('summary')) + table + _ev(msg.get('lines')))
+        lv, x = view['pillars'][pid], D(pl.get(pid))
+        rows += ('<div class="pillar" id="p-%s"><div class="ph"><b>%s</b><span class="chip %s">%s</span></div><h3>%s</h3>%s%s%s%s%s</div>'
+                 % (pid, _e(PILLARS.get(pid, pid)), _e(lv.replace(' ', '-')), _e(lv), _e(x.get('headline')), _paras(x.get('detail')),
+                    ('<p class="insight">%s</p>' % _e(x.get('insight'))) if x.get('insight') else '', _ev(x.get('evidence')),
+                    ('<p class="try"><b>Try this:</b> %s</p>' % _e(x.get('tryThis'))) if x.get('tryThis') else '', _research(pid)))
+    part('pillars', 'Your nine pillars', '<p class="soft">Each pillar three ways: how you both see it (Strong when you both do, worth attention when either of you doesn\'t, never saying whose), what your conversation shows, and why, through your two Psyches.</p>' + rows)
+    cy = D(r.get('cycle'))
+    part('cycle', 'Your cycle', '<h3>%s</h3>%s<div class="two"><div><b>%s</b>%s</div><div><b>%s</b>%s</div></div><p class="try"><b>The way out:</b> %s</p>%s%s'
+         % (_e(cy.get('title')), _paras(cy.get('loop')), _e(names[0]), _paras(cy.get('a')), _e(names[1]), _paras(cy.get('b')), _e(cy.get('exit')), _ev(cy.get('evidence')), _research('disagreements')))
+    tk = r.get('talk') if isinstance(r.get('talk'), dict) else None
+    if tk:
+        part('talk', 'How you two talk', _paras(tk.get('summary')) + ('<p class="insight"><b>Reaching for each other.</b> %s</p>' % _e(tk.get('bids')) if tk.get('bids') else '')
+             + _research('connection') + _talk_panel(box, names) + _ev(tk.get('lines')))
+    care = D(r.get('care'))
+    part('care', 'How you each care', '%s<div class="two"><div><b>What makes %s feel cared for</b>%s</div><div><b>What makes %s feel cared for</b>%s</div></div>%s'
+         % (_paras(care.get('detail')), _e(names[0]), _paras(care.get('a')), _e(names[1]), _paras(care.get('b')), _research('appreciation')))
+    pe = D(r.get('perpetual'))
+    part('lasting', 'Differences to live with, and ones to solve', '<h3 class="sub">To live with</h3>' + ''.join(
+        '<div class="item"><h3>%s</h3>%s<p class="try"><b>Living with it:</b> %s</p></div>' % (_e(x.get('title')), _paras(x.get('detail')), _e(x.get('howToLiveWithIt'))) for x in pe.get('lasting') or [] if isinstance(x, dict))
+        + '<h3 class="sub">To solve</h3>' + ''.join('<div class="item"><h3>%s</h3>%s<p class="try"><b>First step:</b> %s</p></div>' % (_e(x.get('title')), _paras(x.get('detail')), _e(x.get('firstStep')))
+                                                    for x in pe.get('solvable') or [] if isinstance(x, dict)) + _research('perpetual'))
+    dr = D(r.get('dreams'))
+    part('dreams', 'The dream under your tension', '<p>%s</p><div class="two"><div><b>%s</b>%s</div><div><b>%s</b>%s</div></div><p class="insight"><b>The question that opens it:</b> %s</p>%s'
+         % (_e(dr.get('tension')), _e(names[0]), _paras(dr.get('a')), _e(names[1]), _paras(dr.get('b')), _e(dr.get('question')), _research('dreams')))
+    gr = D(r.get('growth'))
+    part('growth', 'Growing through each other', _paras(gr.get('detail')) + '<h3 class="sub">New things to try together</h3><ul>%s</ul>' % ''.join('<li>%s</li>' % _e(x) for x in gr.get('together') or []) + _research('growth'))
+    if r.get('lovemap'):
+        part('lovemap', 'Your love map', '<p class="soft">Ask each other these, one at a time, over a meal or a walk. Not knowing an answer isn\'t a failing; finding out is the point.</p><ol>%s</ol>%s'
+             % (''.join('<li>%s</li>' % _e(x) for x in r['lovemap']), _research('lovemaps')))
     if view.get('decisions'):
         lines = {d.get('topic'): d.get('line') for d in r.get('decisions') or [] if isinstance(d, dict)}
         rows = ''.join('<div class="row"><div><b>%s</b><p>%s: %s · %s: %s</p><p>%s</p></div><span class="chip %s">%s</span></div>'
                        % (_e(d['label']), _e(names[0]), _e(d.get('a') or '-'), _e(names[1]), _e(d.get('b') or '-'), _e(lines.get(d['topic'], '')),
                           _e(d['result'].replace(' ', '-')), _e(d['result'])) for d in view['decisions'])
-        part('decisions', 'The big decisions', '<p class="soft">These you each stated, so they\'re shown side by side: they exist to be compared.</p>' + rows)
+        part('decisions', 'The big decisions', '<p class="soft">These you each stated, so they\'re shown side by side: they exist to be compared.</p>' + rows + _research('future'))
     if r.get('conversations') and not gentle:
-        part('talk', 'Conversations to have', ''.join('<div class="item"><h3>%s</h3><p>%s</p><ol>%s</ol></div>' % (_e(c.get('title')), _e(c.get('why')), ''.join('<li>%s</li>' % _e(x) for x in c.get('script') or []))
+        part('talks', 'Conversations to have', ''.join('<div class="item"><h3>%s</h3><p>%s</p><ol>%s</ol></div>' % (_e(c.get('title')), _e(c.get('why')), ''.join('<li>%s</li>' % _e(x) for x in c.get('script') or []))
              for c in r['conversations']) + '<p class="soft">About ten minutes each, at a calm time. Worth doing with a counsellor if one keeps getting stuck.</p>')
     wk = r.get('weeks') or {}
     pr = wk.get('practice') or {}
     part('weeks', 'Your four weeks', '<h3>Week 1 · %s</h3><ol>%s</ol>%s<p class="soft">At four weeks, the questions again, to see what moved.</p>'
          % (_e(pr.get('title')), ''.join('<li>%s</li>' % _e(x) for x in pr.get('days') or []), ''.join('<h3>Week %d</h3><p>%s</p>' % (i + 2, _e(x)) for i, x in enumerate(wk.get('steps') or []))))
-    part('how', 'How this was read', '%s<p class="soft">From both your full Psyche reports, shared with your consent for this read, what your conversation together shows where there was one, and the check-in you each did privately. Each pillar\'s question asks how you see this relationship, which research on thousands of couples found matters more than personality. This is coaching, not counselling: if something here feels heavy, a couples counsellor is worth seeing together.</p>' % _paras(r.get('caveats')))
+    part('how', 'How this was read', '%s<p class="soft">From both your full Psyche reports, shared with your consent for this read; your conversation together, measured on your own devices; and the check-in you each did privately, the same core questions for both. '
+         'The measures follow published research: how partners see the relationship (Joel et al., PNAS 2020), turning towards and repair (Gottman), responsiveness to good news (Gable et al., 2004), '
+         'language style matching (Ireland et al., 2011), "we" language (Seider et al., 2009), demand and withdraw (Christensen & Heavey), dyadic coping (Bodenmann), self-expansion (Aron) and the Michelangelo phenomenon (Drigotas et al., 1999). '
+         'They describe couples in general, never a verdict on you two. This is coaching, not counselling: if something here feels heavy, a couples counsellor is worth seeing together.</p>' % _paras(r.get('caveats')))
     when = datetime.fromtimestamp(box.get('at') or time.time()).strftime('%-d %B %Y')
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>Psyche Together · %s &amp; %s</title><style>%s</style></head><body><div class="wrap"><header class="banner"><small>Psyche Together</small>'
@@ -1858,6 +1969,11 @@ def main(argv):
         out = send('--no-chat' in rest)
     elif cmd == 'chat-file':
         out = add_chat_file(rest)
+    elif cmd == 'skip-chat':
+        s = state()
+        s['chatAsked'] = 'skipped'
+        save_state(s)
+        out = questions_task()
     elif cmd == 'write':
         out = write_task()
     elif cmd == 'save':

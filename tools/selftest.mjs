@@ -3806,7 +3806,10 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   tg.badAnswer = await run.b('answers', JSON.stringify({ 'core:needs': 'Hard' }));
   tg.wrongForm = await run.b('code', 'PT-ffff-0000');
   tg.sentB = await run.b('answer', 'safety', 'Yes');
-  tg.statusA = await run.a('status');
+  tg.askChat = await run.a('status');
+  const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
+  fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
+  tg.statusA = await run.a('chat-file', wa);
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.statusA, true)));
   tg.formA = await run.a('save-questions', '@work/together-questions.json');
   tg.checkA2 = await run.a('check');
@@ -3817,21 +3820,23 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
     tg.askedA.push(q);
     q = await run.a('answer', q.id, q.id === 'safety' ? 'No' : q.buttons[0]);
   }
-  tg.askChat = q;
-  const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
-  fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday?', 'thanks for listening', 'sorry, long day', 'miss you'][i % 4]}`).join('\n'));
-  tg.write = await run.a('chat-file', wa);
+  tg.write = q;
   const stateA = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'state.json'), 'utf8'));
   const view = tg.write.coupleView || { pillars: {}, decisions: [] };
   const worth = Object.keys(view.pillars).filter(p => view.pillars[p] === 'Worth attention');
   const okPillar = Object.keys(view.pillars).filter(p => view.pillars[p] !== 'Worth attention');
   const para = (n, what) => Array.from({ length: n }, (_, i) => `In March 2025 the two of you ${what}, and it shows how your Psyches meet here in a way that is specific to you (${i}).`).join(' ');
   const good = { summary: 'Two people who keep showing up for each other, learning to say the hard things sooner.',
-    overview: { lede: para(6, 'planned a weekend away'), strengths: okPillar.slice(0, 2).concat(okPillar.length < 2 ? ['appreciation'] : []).slice(0, 2).map(p => ({ pillar: p, title: 'Strength in ' + p, detail: para(2, 'thanked each other'), evidence: ['your May 2025 messages after a long week'] })) },
-    pillars: Object.fromEntries(Object.keys(view.pillars).map(p => [p, { headline: 'About ' + p, detail: para(5, 'talked through ' + p), evidence: ['your September 2025 chat about ' + p], tryThis: 'One small thing for ' + p + '.' }])),
-    pattern: { title: 'The organiser and the listener', loop: para(4, 'went quiet after a plan changed'), a: 'Mei raises things point by point.', b: 'Ana goes quiet first.', breakTheLoop: 'Ask one question first.', evidence: ['your June 2025 messages about a cancelled dinner'] },
-    care: { detail: para(3, 'showed care by doing'), a: 'Being told plainly.', b: 'Time together.' },
-    messages: { summary: 'You write most evenings, and Ana starts a little more often.', lines: ['Most messages after 9pm.', 'Thanks both ways.', 'Sorry comes quickly, usually within an hour.'] },
+    overview: { lede: para(10, 'planned a weekend away'), strengths: okPillar.slice(0, 2).concat(okPillar.length < 2 ? ['appreciation'] : []).slice(0, 2).map(p => ({ pillar: p, title: 'Strength in ' + p, detail: para(3, 'thanked each other'), evidence: ['your May 2025 messages after a long week'] })) },
+    pillars: Object.fromEntries(Object.keys(view.pillars).map(p => [p, { headline: 'About ' + p, detail: para(8, 'talked through ' + p), evidence: ['your September 2025 chat about ' + p, 'your April 2025 report moment'], insight: 'Something new about ' + p + '.', tryThis: 'One small thing for ' + p + '.' }])),
+    cycle: { title: 'The organiser and the listener', loop: para(6, 'went quiet after a plan changed'), a: 'Mei raises things point by point; underneath, she wants to know she matters.', b: 'Ana goes quiet first; underneath, she needs room to feel safe.', exit: 'Ask one question first, and stay.', evidence: ['your June 2025 messages about a cancelled dinner'] },
+    talk: { summary: para(5, 'wrote most evenings'), bids: 'Most small reaches were met warmly in the sample, as in your May 2025 messages.', lines: ['Most messages after 9pm.', 'Thanks both ways.', 'Sorry comes quickly.', 'Ana starts a little more.'] },
+    care: { detail: para(5, 'showed care by doing'), a: 'Being told plainly.', b: 'Time together.' },
+    perpetual: { lasting: [{ title: 'Pace', detail: para(2, 'moved at different speeds'), howToLiveWithIt: 'Name the pace.' }, { title: 'Space', detail: para(2, 'needed different amounts of space'), howToLiveWithIt: 'Ask for it plainly.' }],
+                 solvable: [{ title: 'Plans', detail: para(2, 'missed a plan'), firstStep: 'A shared calendar.' }] },
+    dreams: { tension: 'Weekends', a: 'Mei hopes for adventure.', b: 'Ana hopes for rest.', question: 'What would a perfect Sunday be for you?' },
+    growth: { detail: para(3, 'cheered each other on'), together: ['A cooking class', 'A new trail', 'A shared project'] },
+    lovemap: ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'],
     decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })),
     conversations: worth.slice(0, 2).map(p => ({ pillar: p, title: 'About ' + p, why: 'It matters to you both.', script: ['Pick a calm time.', 'Each says one thing.', 'Agree one step.'] })),
     weeks: { practice: { pillar: Object.keys(view.pillars)[0], title: 'Small daily turns', days: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }, steps: ['x', 'y', 'z'] },
@@ -3892,12 +3897,18 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
       people.map(p => p.chat.source).sort().join() === 'instagram,whatsapp' && people.find(p => p.chat.source === 'instagram').chat.signals.messages === 80 &&
       !/"core"|safety|deep:/.test(JSON.stringify(tg.write)) && view.decisions.length === 4 && !('spec' in tg.write) && tg.write.saveTo === 'work/together-read.json',
     JSON.stringify(view).slice(0, 400));
-  check('with no Instagram thread with the partner found, it asks once for the WhatsApp chat together, with a way to send without it; the export is read for the two of them only',
-    tg.askChat.askChat === true && /couldn't find your Instagram chat with Ana/.test(tg.askChat.say) && JSON.stringify(tg.askChat.buttons) === '["I\'ve shared it","Send without it"]' &&
+  check('the conversation is read before the questions: with no Instagram thread with the partner, it asks once for the WhatsApp chat together (or "Skip it"), reads the export for the two of them only, then writes the questions with it',
+    tg.askChat.askChat === true && /couldn't find your Instagram chat with them/.test(tg.askChat.say) && JSON.stringify(tg.askChat.buttons) === '["I\'ve shared it","Skip it"]' &&
+      tg.statusA.write === 'questions' && tg.statusA.yourChat && tg.statusA.yourChat.source === 'whatsapp' && tg.join.yourChat && tg.join.yourChat.source === 'instagram' &&
       people.find(p => p.chat.source === 'whatsapp').chat.signals.messages === 40, JSON.stringify(tg.askChat));
+  const sig = (people.find(p => p.chat.source === 'instagram') || { chat: { signals: {} } }).chat.signals;
+  check('the conversation is measured on the device as the research measures it: how closely the two writing styles match, "we" against "I" and "you", warm and hard words, who starts, reply times, the day\'s rhythm and messages by month',
+    sig.styleMatch > 0 && sig.styleMatch <= 1 && typeof sig.you.we === 'number' && typeof sig.partner.iYou === 'number' && sig.you.positive >= 0 &&
+      sig.you.day && Object.keys(sig.you.day).join() === 'late,morning,afternoon,evening' && Array.isArray(sig.months) && sig.months.length >= 1 &&
+      tg.write.research && /Ireland et al\., Psychological Science 2011/.test(tg.write.research.styleMatch) && /86%/.test(tg.write.research.connection), JSON.stringify(sig).slice(0, 400));
   check('a read with a score, a percentage or what one of them answered is sent back, as is one short of a Psyche Report\'s depth; nothing is saved',
     tg.bad.saved === false && tg.bad.problems.some(p => /scored|%/.test(p)) && tg.bad.problems.some(p => /rated/.test(p)) &&
-      tg.shallow.saved === false && tg.shallow.problems.some(p => /overview\.lede/.test(p)) && tg.shallow.problems.some(p => /9,000 characters/.test(p)), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
+      tg.shallow.saved === false && tg.shallow.problems.some(p => /overview\.lede/.test(p)) && tg.shallow.problems.some(p => /16,000 characters/.test(p)), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
   check('the read saved, each writes their own For you; someone who said they feel unsafe gets a gentle one, with support first, no "how to raise it" and no conversation scripts on their copy',
     tg.saved.saved && tg.saved.write === 'foryou' && tg.saved.gentle === false && tg.statusB.write === 'foryou' && tg.statusB.gentle === true &&
       /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/Conversations to have/.test(htmlB) && /Conversations to have/.test(htmlA),
