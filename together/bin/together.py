@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 48
+RELEASE = 49
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -558,8 +558,10 @@ def shared_profile(s, answered=True):
         if not is_gentle(s):
             out['know']['guesses'] = {k_['id']: (answers.get(k_['id']) or {}).get('label') for k_ in know_ if answers.get(k_['id'])}
     core, ov = levels_of(stage_of(s), answers)
-    out.update(core=core, overall=ov, rounds=s.get('rounds') or [], desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
+    out.update(core=core, overall=ov, rounds=s.get('rounds') or [], sentAt=s.get('sent') or int(time.time()), desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
                decisions={k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')})
+    if is_gentle(s):        # someone who said they sometimes feel unsafe: nothing more about them leaves than the pillars need
+        return out
     cm = (answers.get(COMMIT[0]) or {}).get('label')
     if cm in dict(COMMIT[2]):
         out['commit'] = dict(COMMIT[2])[cm]
@@ -702,7 +704,7 @@ function show(){var ids=shown(),n=ids.filter(done_).length;
  [].slice.call(document.querySelectorAll('.card')).forEach(function(c){c.hidden=true});
  document.querySelector('.prog i').style.width=Math.round(100*n/ids.length)+'%';
  field.value=JSON.stringify(ans);
- if(at<0){document.getElementById('c-intro').hidden=false;document.querySelector('.count').textContent=ids.length+' questions · about 3 minutes';return;}
+ if(at<0){document.getElementById('c-intro').hidden=false;document.querySelector('.count').textContent=ids.length+' questions · about '+Math.max(3,Math.round(ids.length/4))+' minutes';return;}
  document.querySelector('.count').textContent=Math.min(at+1,ids.length)+' of '+ids.length;
  if(at>=ids.length){var d=document.getElementById('c-done');d.hidden=false;d.querySelector('h3').textContent='All '+ids.length+' answered';
   document.querySelector('.count').textContent='All '+ids.length+' answered';return;}
@@ -1598,8 +1600,8 @@ def needs_psyche(link=None):
                    'Once it\'s ready, we\'ll go straight on to start your Psyche Together.'}
 
 
-CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, and your partner never sees how you answered: the read shows '
-           'the two of you together. For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked. The one who starts it adds '
+CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, and the read shows the two of you together, never how one of you '
+           'answered, except the big decisions and what you disagree about most, which are set side by side. For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked. The one who starts it adds '
            'your conversation together (your Instagram chat, and your WhatsApp chat if they share it): what it shows, and a dated sample of it, go '
            'with it, locked, for your read. Nothing from chats with anyone else is read, and PsycheAI can\'t read any of it.')
 
@@ -1877,7 +1879,7 @@ def form():
     os.chmod(path, 0o600)
     its = items(s)
     return {'file': path, 'questions': len(shown(s, its, {})),
-            'say': 'Your questions are ready, written from both your Psyches. Tap through them on this page (about 3 minutes), then copy your answer code and paste it here.'}
+            'say': 'Your questions are ready, written from both your Psyches. Tap through them on this page (about 5 minutes), then copy your answer code and paste it here.'}
 
 
 def send(no_chat=False):
@@ -2165,7 +2167,8 @@ def read_sources(profiles, view):
     return {'people': people,
             'chat': {'messages': total, 'counts': chat.get('counts') or {}, 'source': chat.get('source'), 'from': sig.get('from'), 'to': sig.get('to'),
                      'sampleLines': len(sample), 'sampleChars': sum(len(x) for x in sample)} if total else None,
-            'checkin': {'questions': asked, 'decisions': len(view.get('decisions') or [])},
+            'checkin': {'questions': asked, 'decisions': len(view.get('decisions') or []), 'topics': bool(view.get('topics')), 'commitment': bool(view.get('commitment')),
+                        'know': (view.get('know') or {}).get('of') or 0},
             'confidence': {'score': score, 'level': LEVEL_OF(score), 'weakest': weakest, 'talk': talk, 'checkin': checkin}}
 
 
@@ -2219,7 +2222,7 @@ def foryou_task(box=None):
     mine = {}
     for it in items(s):
         a = answers.get(it['id'])
-        if a and it['kind'] in ('core', 'deeper', 'overall'):
+        if a and it['kind'] in ('core', 'deeper', 'overall', 'commit', 'topic'):
             mine[it['text'].replace('{p}', s.get('partner') or 'your partner')] = a.get('text') or a.get('label')
     k, got, profiles, _ = couple()
     _, theirs = mine_theirs(s, profiles) if not got.get('error') else ({}, {})
@@ -2582,8 +2585,16 @@ def check():
                         say='Your Psyche Together has been written again, from the same answers and conversation. Here it is.' if again_ else '%s has finished. Here\'s your Psyche Together.' % name)
         return nudge(s, box, profiles, name) or {'quiet': True}
     if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
+        # The last one in writes the read (their send gave them the task); the other waits for it, and writes it only
+        # if three hours pass without it (README "Psyche Together, release 49"), so two Muses never write it at once.
+        theirs_at = int(theirs.get('sentAt') or 0)
+        if theirs_at >= int(mine.get('sentAt') or s.get('sent') or 0) and time.time() - theirs_at < WRITER_GRACE:
+            return {'quiet': True}
         return write_task(profiles)
     return {'quiet': True}
+
+
+WRITER_GRACE = 3 * 3600
 
 
 FORM_CSS = '''
@@ -3324,8 +3335,12 @@ def _how(box):
             ch['messages'], (' (%s)' % per) if per else '', (', %s to %s' % (fmt(ch.get('from')), fmt(ch.get('to')))) if ch.get('from') else '', ch.get('sampleLines') or 0, ch.get('sampleChars') or 0))
     ck = src.get('checkin') or {}
     if ck.get('questions'):
-        items.append('<li><b>Your check-ins</b>: the same %d questions for each of you, answered privately%s, and how satisfied you each are and think the other is</li>'
-                     % (ck['questions'], (', %d big decisions side by side' % ck['decisions']) if ck.get('decisions') else ''))
+        bits = ['the same %d questions on your relationship for each of you, answered privately' % ck['questions'], 'how satisfied you each are and think the other is']
+        bits += ['how sure you each are yourselves'] if ck.get('commitment') else []
+        bits += ['%d big decisions side by side' % ck['decisions']] if ck.get('decisions') else []
+        bits += ['what you each disagree about most, side by side'] if ck.get('topics') else []
+        bits += ['%d guesses about each other' % ck['know']] if ck.get('know') else []
+        items.append('<li><b>Your check-ins</b>: %s</li>' % _e(', '.join(bits[:-1]) + ' and ' + bits[-1]))
     return out + ('<h3>Read from</h3><ul class="srcs">%s</ul>' % ''.join(items) if items else '')
 
 
@@ -3531,7 +3546,7 @@ def page(box, s):
                 bd = D(x.get('bids'))
                 if bd.get('seen'):
                     pct = lambda k: int(100.0 * (bd.get(k) or 0) / bd['seen'] + 0.5)
-                    lead = ('<div class="bids"><p><b>%d of %d</b> bids for attention in your messages were turned toward (%d%%)</p><div class="bar"><i class="t" style="width:%d%%"></i><i class="w" style="width:%d%%"></i><i class="g" style="width:%d%%"></i></div>'
+                    lead = ('<div class="bids"><p><b>%d of %d</b> bids for attention in the messages read were turned toward (%d%%)</p><div class="bar"><i class="t" style="width:%d%%"></i><i class="w" style="width:%d%%"></i><i class="g" style="width:%d%%"></i></div>'
                             '<p class="soft"><span class="kt"></span>Turned toward %d · <span class="kw"></span>Turned away %d · <span class="kg"></span>Turned against %d</p>%s</div>'
                             % (bd.get('toward') or 0, bd['seen'], pct('toward'), pct('toward'), pct('away'), pct('against'), bd.get('toward') or 0, bd.get('away') or 0, bd.get('against') or 0,
                                ''.join('<p class="miss"><b>Missed · %s</b> %s</p>' % (_e(D(m).get('when')), _e(D(m).get('text'))) for m in bd.get('missed') or [])))
