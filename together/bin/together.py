@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 49
+RELEASE = 50
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1736,12 +1736,85 @@ def couple():
         if isinstance(talk, dict) and isinstance((profiles.get(r) or {}).get('chat'), dict):
             profiles[r]['chat']['sample'] = talk.get('sample') or []
     pics = {r: (unseal((e.get('pics') or {}).get(r), key) or {}).get('img') for r in ('a', 'b')}
-    SEEN.update(pics={r: p for r, p in pics.items() if isinstance(p, str) and p.startswith('data:image/')},
+    for r in ('a', 'b'):
+        if isinstance(profiles.get(r), dict):
+            profiles[r] = clean_profile(profiles[r])
+    SEEN.update(pics={r: p for r, p in pics.items() if isinstance(p, str) and PIC.match(p)},
                 cards={r: (profiles.get(r) or {}).get('psyche') or {} for r in ('a', 'b')})
     return k, got, profiles, unseal(e.get('read'), key)
 
 
 SEEN = {}       # the couple's card pictures and cards, as couple() last opened them, for the page's header
+# A card picture is a JPEG or PNG as data, nothing else, so it can't carry anything into the page (README "Psyche Together, release 50").
+PIC = re.compile(r'^data:image/(jpeg|png);base64,[A-Za-z0-9+/]+={0,2}$')
+
+
+def _int(x, lo=0, hi=10 ** 9):
+    try:
+        return max(lo, min(hi, int(float(x))))
+    except (TypeError, ValueError, OverflowError):
+        return lo
+
+
+def clean_profile(p):
+    """A partner's profile as it is opened here (README "Psyche Together, release 50"): it came from their device, so
+    every number that is drawn into the page is made a number, and the card's few fields their expected shape, before
+    anything reads it. Text is escaped where it's shown; this keeps numbers and attributes honest."""
+    p = dict(p)
+    ch = p.get('chat') if isinstance(p.get('chat'), dict) else None
+    if ch:
+        ch = dict(ch)
+        sig = dict(ch.get('signals') or {}) if isinstance(ch.get('signals'), dict) else {}
+        for side in ('you', 'partner'):
+            d = sig.get(side)
+            if isinstance(d, dict):
+                d = dict(d)
+                for k in ('messages', 'starts', 'questions', 'thanks', 'sorry', 'warm', 'positive', 'negative', 'replyWithin5'):
+                    if k in d:
+                        d[k] = _int(d[k])
+                if isinstance(d.get('day'), dict):
+                    d['day'] = {k: _int(v, 0, 100) for k, v in d['day'].items() if k in ('morning', 'afternoon', 'evening', 'late')}
+                d['emoji'] = [str(x)[:8] for x in d.get('emoji') or [] if isinstance(x, str)][:3]
+                sig[side] = d
+        if isinstance(sig.get('months'), list):
+            sig['months'] = [(str(m[0])[:7], _int(m[1])) for m in sig['months'] if isinstance(m, (list, tuple)) and len(m) == 2][:400]
+        if 'messages' in sig:
+            sig['messages'] = _int(sig['messages'])
+        if sig.get('styleMatch') is not None:
+            try:
+                sig['styleMatch'] = max(0.0, min(1.0, float(sig['styleMatch'])))
+            except (TypeError, ValueError):
+                sig['styleMatch'] = None
+        fun = sig.get('fun') if isinstance(sig.get('fun'), dict) else {}
+        if fun:
+            fun = dict(fun, streak=_int(fun.get('streak')) if fun.get('streak') is not None else None)
+            bd = fun.get('busiestDay')
+            fun['busiestDay'] = [str(bd[0])[:20], _int(bd[1])] if isinstance(bd, (list, tuple)) and len(bd) == 2 else None
+            sig['fun'] = fun
+        ch['signals'] = sig
+        ch['sample'] = [str(x) for x in ch.get('sample') or [] if isinstance(x, str)]
+        p['chat'] = ch
+    ps = p.get('psyche') if isinstance(p.get('psyche'), dict) else {}
+    if ps:
+        ps = dict(ps)
+        for k in ('bigFive', 'motives'):
+            if isinstance(ps.get(k), dict):
+                ps[k] = {str(a)[:30]: _int(b, 0, 100) for a, b in ps[k].items()}
+        ps['mbti'] = ps.get('mbti') if isinstance(ps.get('mbti'), str) and re.match(r'^[EI][SN][TF][JP]$', ps.get('mbti') or '') else ''
+        ps['letters'] = [{'letter': x.get('letter'), 'strength': x.get('strength') if x.get('strength') in LEAN else ''} for x in ps.get('letters') or []
+                         if isinstance(x, dict) and x.get('letter') in 'EISNTFJP' and len(str(x.get('letter'))) == 1]
+        for k in ('caresBy', 'feelsCaredForBy'):
+            ps[k] = [str(x)[:40] for x in ps.get(k) or [] if isinstance(x, str)][:3]
+        for k in ('name', 'character', 'attachment', 'conflict', 'headline'):
+            if k in ps:
+                ps[k] = str(ps.get(k) or '')[:400]
+        p['psyche'] = ps
+    for k in ('commit',):
+        if k in p:
+            p[k] = _int(p[k], 0, 2)
+    if 'topic' in p:
+        p['topic'] = str(p['topic'] or '')[:60]
+    return p
 
 
 def mine_theirs(s, profiles):
@@ -3093,7 +3166,7 @@ def _talk_panel(box, names):
     rows = [('Messages', v(you, 'messages'), v(them, 'messages')), ('Conversations started', v(you, 'starts'), v(them, 'starts')),
             ('Typical reply', rep_(you), rep_(them)), ('Replies within 5 minutes', v(you, 'replyWithin5', '%'), v(them, 'replyWithin5', '%')), ('Questions asked', v(you, 'questions'), v(them, 'questions')),
             ('Thanks', v(you, 'thanks'), v(them, 'thanks')), ('Sorry and repair', v(you, 'sorry'), v(them, 'sorry')),
-            ('Warm words : hard words', pos(you), pos(them)), ('"We" per 100 words', v(you, 'we'), v(them, 'we')), ('"I" and "you" per 100 words', v(you, 'iYou'), v(them, 'iYou'))]
+            ('Positive words : hard words', pos(you), pos(them)), ('"We" per 100 words', v(you, 'we'), v(them, 'we')), ('"I" and "you" per 100 words', v(you, 'iYou'), v(them, 'iYou'))]
     table = '<table><tr><th></th><th>%s</th><th>%s</th></tr>%s</table>' % (_e(who[0]), _e(who[1]), ''.join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % tuple(_e(c) for c in r) for r in rows))
     match = ('<div class="big"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>%s' % (round(100 * sig['styleMatch']), _research('styleMatch'))
              if sig.get('styleMatch') is not None else '')
@@ -3150,8 +3223,8 @@ def _rhythm(sig, who):
     you, them = sig.get('you') or {}, sig.get('partner') or {}
     if not (you.get('day') and them.get('day')):
         return ''
-    rows = ''.join('<div class="rb"><span>%s</span><div><i class="a" style="width:%s%%"></i><em>%s%%</em></div><div><i class="b" style="width:%s%%"></i><em>%s%%</em></div></div>'
-                   % (lbl, you['day'].get(k, 0), you['day'].get(k, 0), them['day'].get(k, 0), them['day'].get(k, 0))
+    rows = ''.join('<div class="rb"><span>%s</span><div><i class="a" style="width:%d%%"></i><em>%d%%</em></div><div><i class="b" style="width:%d%%"></i><em>%d%%</em></div></div>'
+                   % (lbl, _int(you['day'].get(k), 0, 100), _int(you['day'].get(k), 0, 100), _int(them['day'].get(k), 0, 100), _int(them['day'].get(k), 0, 100))
                    for k, lbl in (('morning', 'Morning'), ('afternoon', 'Afternoon'), ('evening', 'Evening'), ('late', 'Late night')))
     return ('<h3>Your day, side by side</h3><div class="rhythm"><p class="soft">When each of you writes: <span class="ka"></span> %s · <span class="kb"></span> %s.</p>%s</div>'
             % (_e(who[0]), _e(who[1]), rows))
@@ -3349,7 +3422,21 @@ def page(box, s):
     since; at a glance (the overall pair, the relationship map by chapter, three truths); five chapters, each told
     once; a light intermission; one 28-day practice; and how it was read."""
     r, view = box.get('read') or {}, box.get('view') or {}
-    names = view.get('names') or ['', '']
+    # The box was written on the partner's device: its numbers are made numbers before they're drawn (release 50).
+    r, view = dict(r) if isinstance(r, dict) else {}, dict(view) if isinstance(view, dict) else {}
+    if isinstance(view.get('know'), dict):
+        view['know'] = dict(view['know'], right=_int(view['know'].get('right')), of=_int(view['know'].get('of')))
+    if isinstance(view.get('knowBy'), dict):
+        view['knowBy'] = {k: [_int(v[0]), _int(v[1])] for k, v in view['knowBy'].items() if isinstance(v, (list, tuple)) and len(v) == 2}
+    try:
+        bd_ = r['chapters']['close']['areas']['connection']['bids']
+        if isinstance(bd_, dict):
+            for k in ('seen', 'toward', 'away', 'against'):
+                bd_[k] = _int(bd_.get(k))
+    except (KeyError, TypeError):
+        pass
+    names = [str(x)[:60] for x in (view.get('names') or ['', ''])][:2] + ['', '']
+    names = names[:2]
     fy = s.get('forYou') if isinstance(s.get('forYou'), dict) else None
     gentle = is_gentle(s)
     D = lambda x: x if isinstance(x, dict) else {}
@@ -3685,7 +3772,7 @@ def page(box, s):
 
     def card(role, nm, side):
         ch_ = (cards.get(role) or {}).get('character') or ''
-        img = (('<button type="button" class="cardp %s" data-view aria-label="Open %s\'s Psyche Card"><img alt="%s\'s Psyche Card" src="%s"></button>' % (side, _e(nm), _e(nm), pics[role]))
+        img = (('<button type="button" class="cardp %s" data-view aria-label="Open %s\'s Psyche Card"><img alt="%s\'s Psyche Card" src="%s"></button>' % (side, _e(nm), _e(nm), _e(pics[role])))
                if pics.get(role) else '<div class="cardp %s nopic"><span>%s</span></div>' % (side, _initial(nm)))
         ty = (cards.get(role) or {}).get('mbti') or ''
         return '<div class="lover">%s<b>%s</b>%s</div>' % (img, _e(nm), ('<small>most like %s%s</small>' % (_e(ch_), (' · ' + _e(ty)) if ty else '')) if ch_ else '')

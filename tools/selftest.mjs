@@ -3986,6 +3986,17 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
     const raw = await store.getBlob(tgLib.blobKey(id, 'read')); if (raw) blobBoxes.read = JSON.parse(raw.toString('utf8'));
   }
   const tgId = (store.kvAll('together')[0] || [''])[0];
+  {
+    const old = 'e'.repeat(64), fresh = 'd'.repeat(64), tgMod = require('../lib/together.js');
+    store.kvSet('together', old, { a: 'sweep-a', b: null, at: Date.now() - 31 * 86400000, has: { profile: { a: true } } });
+    store.kvSet('togetherof', 'sweep-a', old);
+    store.kvSet('together', fresh, { a: 'sweep-c', b: null, at: Date.now() - 86400000 });
+    await store.putBlob(tgMod.blobKey(old, 'profile', 'a'), Buffer.from('{"v":"e2e1"}'));
+    await tgMod.sweep();
+    check('a Psyche Together link no one joined in 30 days goes, with the starter\'s locked boxes; a newer one stays (README "Psyche Together, release 50")',
+      !store.kvGet('together', old) && !store.kvGet('togetherof', 'sweep-a') && !(await store.getBlob(tgMod.blobKey(old, 'profile', 'a'))) && Boolean(store.kvGet('together', fresh)));
+    store.kvDel('together', fresh);
+  }
   const theCode = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, '.keys.json'), 'utf8')).code;
   check('faster from an invite: the invite says where to install from; join answers in a few hundred bytes with its writing job in a task file; the widget comes as a file too; the partner gets the reminder once their answers are in; the bootstrap and SKILL.md say to join straight away, never to search first or open the script',
     /Install the Psyche Together skill from app\.psycheai\.io\/together and join our Psyche Together: \S+\/together#/.test((tg.staged.invite || {}).invite || '') &&
@@ -4024,6 +4035,16 @@ print(json.dumps({'gentleB': {x: x in profiles['b'] for x in ('commit', 'topic')
       /<span class="tl (Aligned|Steady)"><small>What you disagree about<\/small><b>(Same topic|You see it differently)<\/b>/.test(full.html) &&
       /id="secure-security"[^]*?<small>How sure you are of each other<\/small>[^]*?<small>How sure you each are yourselves<\/small><b>(Strong|Steady|Worth attention)<\/b>/.test(full.html),
     JSON.stringify([full.error, full.gentleB, full.view && full.view.topics, full.view && full.view.commitment]).slice(0, 500));
+  const evil = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
+import importlib.util, json
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+p = m.clean_profile({'chat': {'signals': {'you': {'day': {'morning': '10%"><script>x()</script>'}, 'messages': 'lots'}, 'months': [['2024-01', '9"><b>']]}},
+                     'psyche': {'mbti': '<b>', 'bigFive': {'openness': '99"><i>'}, 'letters': [{'letter': '"><x', 'strength': 'clear'}]}})
+print(json.dumps({'p': p, 'pic': bool(m.PIC.match('data:image/png;base64,AAAA" onerror="x()')), 'ok': bool(m.PIC.match('data:image/jpeg;base64,/9j/AA=='))}))
+`], { env: home.a.env })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
+  check('what comes from the partner\'s device is made safe before it is drawn (README "Psyche Together, release 50"): numbers become numbers, the card\'s type and letters their expected shape, and a card picture only a plain JPEG or PNG',
+    evil.p && evil.p.chat.signals.you.day.morning === 0 && evil.p.chat.signals.you.messages === 0 && evil.p.chat.signals.months[0][1] === 0 && evil.p.psyche.mbti === '' &&
+      evil.p.psyche.bigFive.openness === 0 && evil.p.psyche.letters.length === 0 && evil.pic === false && evil.ok === true, JSON.stringify(evil).slice(0, 400));
   check('one page in out/: a page written again removes any older one beside it; a newer release runs the same command at once (status, rewrite and check), once; SKILL.md says rewrite alone when they ask for both, never to open together.py, and never to search memory for where it stands (README "Psyche Together, release 37")',
     tg.outAfter.length === 1 && tg.rewritten.file && tg.outAfter[0] === pathx.basename(tg.rewritten.file) &&
       /if cmd in \('status', 'rewrite', 'check'\) and not os\.environ\.get\('PSYCHE_TOGETHER_FRESH'\)/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&

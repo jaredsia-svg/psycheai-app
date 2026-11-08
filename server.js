@@ -517,6 +517,7 @@ async function main() {
     require('./lib/pdfhold').sweep();
     sync.sweep();
     join.sweep();
+    require('./lib/together').sweep().catch(() => {});
     require('./lib/waitlist').announce();
     psyche.remindUnopened().catch(err => console.error('[psyche] reminder check failed:', err.message));
     notify.digest(Date.now(), { hasNewDrop: weekly.hasNewDrop });
