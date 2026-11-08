@@ -45,7 +45,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 18
+RELEASE = 19
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2008,21 +2008,184 @@ def form_page(s):
 
 # ---------------------------------------------------------------- the page
 
+FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif'
+# README "Psyche Together, release 19": the page in the Psyche Report's own design (its banner and mark, sticky
+# nav, cards that open and close, gradient numbers), with one colour per chapter, used for its row on the map,
+# its chip in the nav and its section, so it's always clear what belongs where.
+COLOURS = {'support': '#c2366d', 'foryou': '#7b3fa0', 'since': '#2f7d5b', 'glance': '#7b3fa0', 'close': '#c2366d', 'secure': '#2f7d6b',
+           'disagree': '#c2571a', 'moments': '#d1477a', 'life': '#2d5fa8', 'future': '#6a4bb5', 'plan': '#2f7d5b', 'how': '#5a4f66'}
+LOGO = ('<svg class="mark" viewBox="0 0 140 140" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+        '<path d="M12 70C12 56.745 37.967 46 70 46C102.033 46 128 56.745 128 70C128 83.255 102.033 94 70 94C37.967 94 12 83.255 12 70Z"/>'
+        '<path d="M46 70C46 37.967 56.745 12 70 12C83.255 12 94 37.967 94 70C94 102.033 83.255 128 70 128C56.745 128 46 102.033 46 70Z"/>'
+        '<path d="M41 19.771C52.479 13.143 74.768 30.259 90.785 58C106.801 85.741 110.479 113.602 99 120.229C87.521 126.857 65.232 109.741 49.215 82C33.199 54.259 29.521 26.398 41 19.771Z"/>'
+        '<circle cx="70" cy="70" r="11" fill="currentColor" stroke="none"/></svg>')
+CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
+
 CSS = '''
-:root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--line:#ece4f1;--plum:#6e3796;--rose:#c2366d;--sage:#2f7d5b;--amber:#9a5b12}
-*{box-sizing:border-box}html,body{margin:0;background:#fbf8fc;color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+:root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--mute:#6b6076;--line:#ece4f1;--sage:#2f7d5b;--amber:#9a5b12;--plum:#6e3796;--rose:#c2366d}
+*{box-sizing:border-box;font-family:inherit}
+html,body{margin:0;padding:0;background:#faf7fb}
+body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%;text-rendering:optimizeLegibility}
 .wrap{max-width:760px;margin:0 auto;padding:0 14px 40px}
-.banner{margin:0 -14px 16px;padding:26px 20px 22px;color:#fff;background:linear-gradient(135deg,#5b2a86,#7b3fa0 45%,#c2366d)}
-.banner h1{margin:8px 0 4px;font-size:28px;line-height:1.15}.banner p{margin:0;opacity:.92}.banner small{opacity:.8;letter-spacing:.1em;text-transform:uppercase;font-weight:700;font-size:11.5px}
-section{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin:0 0 14px}
-h2{margin:0 0 10px;font-size:19px}h3{margin:14px 0 4px;font-size:15.5px}p{margin:0 0 10px}ul,ol{margin:0 0 10px;padding-left:20px}li{margin:3px 0}
-.mine{border-color:#e4cff0;background:#fbf6fe}.mine h2:after{content:" · only on your copy";font-size:12px;font-weight:600;color:var(--soft)}
-.support{border-color:#f0c9d8;background:#fdf1f5}
-.chip{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
-.Strong,.Aligned{background:#e5f4ec;color:var(--sage)}.Steady,.Not-decided-yet{background:#fcf1e1;color:var(--amber)}.Worth-attention,.Talk-about{background:#f2e9f8;color:var(--plum)}
-.row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;border-top:1px solid var(--line);padding:9px 0}.row:first-of-type{border-top:0}
-.row b{font-size:15px}.row p{margin:2px 0 0;color:var(--soft);font-size:14px}
-.soft{color:var(--soft);font-size:13.5px}nav{position:sticky;top:0;z-index:3;display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;background:#fbf8fc;scrollbar-width:none}nav a{flex:none;font-size:12.5px;font-weight:700;color:var(--plum);background:#f2e9f8;border-radius:999px;padding:6px 11px;text-decoration:none}.lede{font-size:17px;font-weight:650}.sub{margin-top:18px}.item{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.pillar{border-top:1px solid var(--line);padding:12px 0 4px}.ph{display:flex;justify-content:space-between;align-items:center;gap:8px}.ph b{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.ev{margin:6px 0 10px;padding-left:18px;color:var(--soft);font-size:14px}.try{background:#f6effb;border-radius:12px;padding:9px 12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}@media(max-width:520px){.two{grid-template-columns:1fr}}.two>div{background:#faf6fc;border-radius:12px;padding:10px 12px}.sci{font-size:13px;color:var(--soft);border-left:3px solid #cdb6dd;padding:2px 0 2px 10px;margin:10px 0}.insight{font-weight:650}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}.gauge{display:flex;align-items:baseline;gap:8px;margin:8px 0}.gauge b{font-size:34px;color:var(--plum)}.gauge span{color:var(--soft);font-size:14px}.chart{margin:8px 0}.chart svg{width:100%;height:auto}.chart figcaption{font-size:12px;color:var(--soft)}.map2{display:flex;flex-direction:column;gap:8px;margin:10px 0}.mrow{display:grid;grid-template-columns:30px 1fr;gap:4px 8px;text-decoration:none;color:var(--ink);align-items:center}.mnum{grid-row:span 2;font-weight:800;color:var(--plum);font-size:17px}.mtitle{font-weight:700;font-size:14px}.mtitle em{display:block;font-style:normal;font-weight:500;color:var(--soft);font-size:12px}.subt{margin:-6px 0 12px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}.mtiles{display:flex;flex-wrap:wrap;gap:6px}.mtiles .tile{flex:1 1 30%;min-height:52px}.chapter h2{font-size:21px}.intermission{background:linear-gradient(135deg,#fff7ec,#fdeff6);border-color:#f5d9e6}.intermission small{font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:var(--rose)}.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}.fact{background:#fff;border-radius:12px;padding:9px 11px}.fact small{display:block;font-size:11.5px;color:var(--soft);font-weight:600;letter-spacing:0;text-transform:none}.fact b{font-size:15px}.map{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}.tile{position:relative;display:block;text-decoration:none;color:var(--ink);border-radius:12px;padding:9px 9px 8px;min-height:62px}.tile b{display:block;font-size:12.5px;line-height:1.25;padding-right:14px;overflow-wrap:anywhere}.tile span{font-size:11px;font-weight:700}.tile i{position:absolute;right:8px;top:6px;font-style:normal;font-weight:800;font-size:15px}.tile.Strong{background:#e5f4ec}.tile.Strong span{color:var(--sage)}.tile.Steady{background:#fcf1e1}.tile.Steady span{color:var(--amber)}.tile.Worth-attention{background:#f2e9f8}.tile.Worth-attention span{color:var(--plum)}.truth{border-radius:14px;padding:12px 14px;margin:10px 0;background:#faf6fc}.truth small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--plum)}.truth.strength small{color:var(--sage)}.truth.edge small{color:var(--rose)}.truth h3{margin-top:4px}.views{border-top:1px solid var(--line);padding:12px 0 6px}.vh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.vh b{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.sig{font-size:12px;color:var(--soft)}.views dl{margin:6px 0 0}.views dt{font-size:12px;font-weight:800;color:var(--soft);margin-top:6px}.views dd{margin:2px 0 0}.cycle{display:grid;grid-template-columns:1fr 26px 1fr;grid-template-rows:auto 26px auto;gap:4px;align-items:center;margin:10px 0}.cs{background:#f6effb;border-radius:12px;padding:9px 10px;font-size:13.5px;min-height:64px}.ca{text-align:center;color:var(--plum);font-weight:800}.cc{grid-column:2;text-align:center;font-size:18px;color:var(--rose)}.ask{background:#fdf6ee;border-radius:12px;padding:9px 12px;margin:10px 0}.ask ul{margin:4px 0 0}.rhythm .rb{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:center;font-size:12.5px;margin:4px 0}.rb div{position:relative;height:16px;background:#f4eff7;border-radius:8px;overflow:hidden}.rb i{position:absolute;left:0;top:0;bottom:0;border-radius:8px}.rb i.a,.ka{background:#7b3fa0}.rb i.b,.kb{background:#c2366d}.rb em{position:relative;font-style:normal;font-size:11px;padding-left:5px;color:#fff;mix-blend-mode:difference}.ka,.kb{display:inline-block;width:9px;height:9px;border-radius:3px}.timeline{list-style:none;padding:0;margin:6px 0;border-left:2px solid #e4cff0}.timeline li{position:relative;padding:4px 0 10px 14px}.timeline li:before{content:"";position:absolute;left:-6px;top:9px;width:10px;height:10px;border-radius:50%;background:#7b3fa0}.timeline b{display:block;font-size:12.5px;color:var(--plum)}.timeline em{display:block;font-size:11.5px;color:var(--soft);font-style:normal}.week{background:#faf6fc;border-radius:14px;padding:10px 14px;margin:10px 0}.week small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--rose)}.week h3{margin-top:2px}table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}th{border-top:0;color:var(--soft);font-size:12.5px}footer{color:var(--soft);font-size:12.5px;text-align:center;margin-top:18px}.ovr{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}.ovr .tile{min-height:0}.ovr .tile b{font-size:11.5px;color:var(--soft);font-weight:700}.ovr .tile span{font-size:14px}.tile.Happier-than-you-each-think,.tile.About-right{background:#e5f4ec}.tile.Happier-than-you-each-think span,.tile.About-right span{color:var(--sage)}.tile.Worth-asking-each-other{background:#f2e9f8}.tile.Worth-asking-each-other span{color:var(--plum)}.since{border-color:#cfe8da;background:#f5fbf7}.since small{font-weight:800;letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--sage)}.mv{display:grid;grid-template-columns:1fr auto;gap:2px 10px;border-top:1px solid var(--line);padding:8px 0}.mv b{font-size:14px}.mv span{font-size:12.5px;font-weight:700;white-space:nowrap}.mv span.up{color:var(--sage)}.mv span.down{color:var(--rose)}.mv span.same{color:var(--soft)}.mv p{grid-column:1/-1;margin:2px 0 0;font-size:14px;color:var(--soft)}
+.banner{position:relative;overflow:hidden;margin:0 -14px;padding:26px 20px 26px;color:#fff;background:linear-gradient(135deg,#5b2a86 0%,#7b3fa0 45%,#c2366d 100%)}
+.banner:before{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,230,190,.55),rgba(255,230,190,0) 70%)}
+.banner .mark{position:absolute;top:-4.6rem;right:-3.8rem;width:240px;height:auto;color:#fff;opacity:.16;pointer-events:none}
+.banner>*{position:relative}
+.pair{display:flex;align-items:center;margin-bottom:12px}
+.pair span{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;font-weight:800;font-size:18px;color:#fff;border:2.5px solid rgba(255,255,255,.9);box-shadow:0 6px 16px rgba(40,10,60,.3)}
+.pair span:first-child{background:linear-gradient(135deg,#8f4fc0,#5b2a86)}.pair span:last-child{margin-left:-10px;background:linear-gradient(135deg,#e0558a,#a8295c)}
+.facts{display:inline-block;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.banner h1{margin:10px 0 2px;font-size:30px;line-height:1.12;letter-spacing:-.02em}
+.banner .lede{margin:8px 0 0;font-size:14.5px;line-height:1.5;opacity:.92;max-width:34em}
+.banner .sub{margin-top:8px;font-size:12.5px;opacity:.75}
+@media (max-width:480px){.banner .mark{top:-3.6rem;right:-3.4rem;width:165px;opacity:.14}.banner h1{font-size:26px}.facts{font-size:10px;letter-spacing:.06em}}
+nav{position:sticky;top:0;z-index:5;margin:0 -14px 14px;padding:10px 14px;background:rgba(250,247,251,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav a{flex:none;display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid #e2d8e9;background:#fff;color:var(--soft);font-size:13px;font-weight:650;text-decoration:none;white-space:nowrap}
+nav a i{font-style:normal;font-weight:800;color:var(--c)}
+nav a.on{background:var(--c);border-color:var(--c);color:#fff}nav a.on i{color:#fff}
+nav button,.foldall{all:unset;box-sizing:border-box;cursor:pointer;-webkit-tap-highlight-color:transparent}
+nav button{flex:none;margin-left:auto;padding:6px 12px;border-radius:999px;color:#7b3fa0;font-size:13px;font-weight:700;white-space:nowrap}
+.part{background:#fff;border:1px solid #e6dcec;border-top:4px solid var(--c);border-radius:20px;margin:0 0 14px;box-shadow:0 1px 2px rgba(36,26,46,.04),0 10px 30px rgba(36,26,46,.06);overflow:hidden;scroll-margin-top:var(--navh,62px)}
+.part>.hd{all:unset;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:14px;width:100%;padding:16px 18px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.part>.hd:focus-visible{outline:2px solid var(--c);outline-offset:-2px;border-radius:18px}
+.num{grid-row:1/span 2;min-width:34px;font-size:30px;font-weight:800;line-height:1;letter-spacing:-.03em;background:linear-gradient(135deg,var(--c),#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ttl{font-size:19px;font-weight:750;letter-spacing:-.01em;line-height:1.25}
+.tease{grid-column:2;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--c);opacity:.85}
+.chev{grid-row:1/span 2;grid-column:3;width:24px;height:24px;color:var(--mute);transition:transform .2s}
+.part.open .chev{transform:rotate(180deg)}
+.body{padding:2px 18px 18px;border-top:1px solid #f1eaf5}
+.js .part:not(.open) .body{display:none}
+h3{margin:24px 0 10px;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:8px}
+h3:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#efe6f3,transparent)}
+h4{margin:0 0 4px;font-size:16px;line-height:1.35}
+p{margin:0 0 10px}
+.soft{color:var(--soft);font-size:14px}
+.lead{font-size:16.5px;font-weight:650;line-height:1.45}
+.hero{margin:16px 0 4px;padding:18px;border-radius:18px;background:linear-gradient(135deg,#f3e9f8,#fdf0f6);border:1px solid #ead9f1}
+.hero small,.lbl{display:block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.hero b{display:block;margin-top:4px;font-size:22px;line-height:1.3;letter-spacing:-.01em;background:linear-gradient(135deg,#7b3fa0,#d1477a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lv{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:750;white-space:nowrap}
+.lv:before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:currentColor}
+.tile .lv,.pv .lv{align-self:flex-start}
+.tile:only-child{grid-column:1/-1}
+.lv.Strong,.lv.Aligned,.lv.Happier-than-you-each-think,.lv.About-right{background:#e3f4ec;color:var(--sage)}
+.lv.Steady,.lv.Not-decided-yet{background:#fdf1e2;color:var(--amber)}
+.lv.Worth-attention,.lv.Talk-about,.lv.Worth-asking-each-other{background:#f2e9f8;color:var(--plum)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.stat{padding:14px;border-radius:16px;background:#fff;border:1px solid #ece2f2;box-shadow:0 4px 14px rgba(70,20,100,.06)}
+.stat .lbl{margin-bottom:8px}
+.sv{display:flex;align-items:flex-start;gap:7px;font-size:16.5px;font-weight:800;line-height:1.25}.sv:before{content:"";flex:none;width:10px;height:10px;margin-top:5px;border-radius:50%;background:currentColor}
+.sv.Strong,.sv.Happier-than-you-each-think,.sv.About-right{color:var(--sage)}.sv.Steady{color:var(--amber)}.sv.Worth-attention,.sv.Worth-asking-each-other{color:var(--plum)}
+.map{display:flex;flex-direction:column;gap:10px;margin:8px 0}
+.mch{display:block;text-decoration:none;color:var(--ink);border:1px solid #ece2f2;border-left:5px solid var(--c);border-radius:16px;padding:12px 12px 12px 14px;background:linear-gradient(90deg,var(--t),#fff 60%)}
+.mhd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.mhd .n{flex:none;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--c);color:#fff;font-weight:800;font-size:13px}
+.mhd b{display:block;font-size:15.5px;line-height:1.2}.mhd small{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c);opacity:.85}
+.mhd em{margin-left:auto;font-style:normal;font-size:20px;color:var(--c);opacity:.6}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tile{position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:8px;padding:10px 11px;border-radius:12px;background:#fff;border:1px solid #efe6f4;min-height:74px}
+.tile>b{font-size:13.5px;line-height:1.25;padding-right:22px}
+.tile .sg{position:absolute;right:8px;top:8px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;background:#f4eff7;color:var(--soft)}
+.key{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--soft);margin:10px 0 0}
+.key span{display:inline-flex;align-items:center;gap:5px}.key i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.truth{position:relative;padding:14px 16px;border-radius:16px;margin:10px 0;background:#fff;border:1px solid #ece2f2;border-left:5px solid var(--k)}
+.truth .lbl{color:var(--k)}.truth h4{margin-top:4px}
+.sci{margin:12px 0;padding:11px 14px;border-radius:14px;background:#f8f5fa;border:1px solid #eee5f3;font-size:13.5px;color:var(--soft)}
+.sci .lbl{color:var(--c);margin-bottom:3px}.sci ul{margin:0;padding-left:18px}.sci li{margin:4px 0}
+.pv{margin:14px 0;padding:14px;border-radius:16px;border:1px solid #efe6f4;background:#fdfbfe}
+.pv .top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.pv .top b{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--c)}
+.pv h4{margin:8px 0 10px;font-size:16.5px}
+.sig{display:block;margin:-4px 0 8px;font-size:12.5px;font-weight:650;color:var(--soft)}
+.three{display:grid;gap:8px}
+.three div{display:grid;grid-template-columns:22px 1fr;gap:8px;font-size:14.5px}
+.three i{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:11px;font-weight:800;color:#fff;background:var(--c);margin-top:1px}
+.three small{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.ev{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px}
+.ev li{padding:8px 12px;border-radius:12px;background:#f8f5fa;font-size:13.5px;color:var(--soft)}
+.ev li b{display:inline-block;margin-right:6px;padding:1px 8px;border-radius:999px;background:#fff;border:1px solid #eadff0;color:var(--c);font-size:11.5px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+@media (max-width:540px){.two{grid-template-columns:1fr}}
+.two>div{padding:12px 14px;border-radius:14px;background:#faf6fc;border:1px solid #efe6f4}
+.two>div>b{display:flex;align-items:center;gap:7px;font-size:13px;margin-bottom:4px}
+.two>div>b span{flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:11px;color:#fff;background:#7b3fa0}
+.two>div:last-child>b span{background:#c2366d}
+.two p{margin:0;font-size:14.5px}
+.callout{margin:12px 0;padding:12px 14px;border-radius:14px;font-size:14.5px}
+.callout .lbl{margin-bottom:3px}
+.callout.ask{background:#fdf6ee;border:1px solid #f4e3cc}.callout.ask .lbl{color:#9a5b12}
+.callout.ask ul{margin:4px 0 0;padding-left:18px}.callout.ask li{margin:4px 0}
+.callout.try{background:#eef8f2;border:1px solid #cfe9db}.callout.try .lbl{color:var(--sage)}
+.callout.key2{background:#f5effa;border:1px solid #e7dbf0;font-weight:650}.callout.key2 ol{font-weight:400;margin:6px 0 0;padding-left:20px}.callout.key2 .lbl{color:var(--c)}
+.cycle{display:grid;grid-template-columns:1fr 28px 1fr;grid-template-rows:auto 28px auto;gap:4px;align-items:center;margin:12px 0}
+.cs{position:relative;padding:12px 10px 10px;border-radius:14px;background:#fff;border:1.5px solid #f1dccb;font-size:13.5px;min-height:70px;box-shadow:0 3px 10px rgba(194,87,26,.07)}
+.cs i{position:absolute;top:-9px;left:10px;width:20px;height:20px;border-radius:50%;background:var(--c);color:#fff;font-style:normal;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.ca{text-align:center;color:var(--c);font-weight:800}.cc{grid-column:2;text-align:center;font-size:20px;color:var(--c)}
+.item{padding:12px 0;border-top:1px solid #f2ecf5}
+.big{display:flex;align-items:baseline;gap:10px;margin:10px 0}
+.big b{font-size:44px;font-weight:800;line-height:1;letter-spacing:-.03em;background:linear-gradient(135deg,var(--c),#7b3fa0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.big span{color:var(--soft);font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}td,th{text-align:left;padding:7px 4px;border-top:1px solid #f2ecf5}th{border-top:0;color:var(--c);font-size:12px;letter-spacing:.04em;text-transform:uppercase}td:not(:first-child),th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.chart{margin:10px 0}.chart svg{width:100%;height:auto;display:block}.chart figcaption{font-size:12px;color:var(--soft);margin-top:4px}
+.rb{display:grid;grid-template-columns:76px 1fr 1fr;gap:6px;align-items:center;font-size:12.5px;margin:5px 0}
+.rb div{position:relative;height:18px;background:#f1eef6;border-radius:9px;overflow:hidden}
+.rb i{position:absolute;left:0;top:0;bottom:0;border-radius:9px}.rb i.a,.ka{background:#7b3fa0}.rb i.b,.kb{background:#c2366d}
+.rb em{position:relative;font-style:normal;font-size:11px;font-weight:700;padding-left:6px;color:#fff;mix-blend-mode:difference}
+.ka,.kb{display:inline-block;width:9px;height:9px;border-radius:3px}
+.row{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:start;padding:11px 0;border-top:1px solid #f2ecf5}.row:first-of-type{border-top:0}
+.row b{font-size:15px}.row p{grid-column:1/-1;margin:0;color:var(--soft);font-size:14px}
+.part.mine{background:linear-gradient(180deg,#fbf6fe,#fff 40%)}
+.private{display:inline-flex;align-items:center;gap:5px;margin-top:12px;padding:4px 10px;border-radius:999px;background:#f3e9f8;color:#6a3590;font-size:11.5px;font-weight:800;letter-spacing:.04em}
+.fy{padding:12px 0;border-top:1px solid #f2ecf5}.fy:first-of-type{border-top:0}
+.part.intermission{border-top:0;background:linear-gradient(135deg,#fff6ea 0%,#fdeef6 55%,#f4ecfd 100%);border-color:#f5d9e6}
+.part.intermission .num{font-size:24px;background:none;-webkit-text-fill-color:initial;color:#d1477a}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;background:#fff;color:#d1477a;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;box-shadow:0 2px 8px rgba(209,71,122,.15)}
+.lines p{font-size:16px;font-weight:600;color:#3b2a49}
+.funfacts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.fact{padding:12px;border-radius:16px;background:rgba(255,255,255,.85);border:1px solid #f3dfe9;box-shadow:0 4px 14px rgba(209,71,122,.08)}
+.fact em{display:block;font-style:normal;font-size:22px;line-height:1}.fact small{display:block;margin-top:6px;font-size:11.5px;font-weight:700;color:var(--soft)}.fact b{display:block;font-size:15.5px;line-height:1.25;margin-top:2px}
+.timeline{list-style:none;padding:0;margin:8px 0 0 6px;border-left:2px solid #f0cfe0}
+.timeline li{position:relative;padding:4px 0 12px 16px}
+.timeline li:before{content:"";position:absolute;left:-7px;top:9px;width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#7b3fa0,#d1477a);border:2px solid #fff}
+.timeline b{display:block;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#d1477a}.timeline em{display:block;font-size:11.5px;color:var(--soft);font-style:normal}
+.weeks{position:relative;margin:12px 0 0;padding-left:44px}
+.weeks:before{content:"";position:absolute;left:17px;top:8px;bottom:8px;width:2px;background:linear-gradient(#2f7d5b,#7b3fa0)}
+.wk{position:relative;margin:0 0 14px;padding:14px;border-radius:16px;background:#fff;border:1px solid #e6efe9;box-shadow:0 4px 14px rgba(47,125,91,.06)}
+.wk>i{position:absolute;left:-44px;top:12px;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:12px;color:#fff;background:linear-gradient(135deg,#2f7d5b,#3f9a74);box-shadow:0 4px 10px rgba(47,125,91,.3)}
+.wk small{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--sage)}
+.wk h4{margin:2px 0 8px}
+.wk ol.days{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.days li{display:grid;grid-template-columns:24px 1fr;gap:8px;font-size:14px}
+.days li b{width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#e3f4ec;color:var(--sage);font-size:12px}
+.wk ol{margin:6px 0 10px;padding-left:20px;font-size:14px}
+.mv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:10px 0;border-top:1px solid #e3efe8}
+.mv b{font-size:14.5px}.mv span{font-size:12.5px;font-weight:750;white-space:nowrap}.mv span.up{color:var(--sage)}.mv span.down{color:var(--rose)}.mv span.same{color:var(--mute)}
+.mv p{grid-column:1/-1;margin:0;font-size:14px;color:var(--soft)}
+.support .body p{font-size:15px}
+footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line-height:1.6}
+.foldall{display:block;margin:6px auto 0;padding:8px 16px;border-radius:999px;color:#7b3fa0;font-size:13px;font-weight:700}
+@media print{nav,.foldall{display:none}.js .part:not(.open) .body{display:block}}
+'''.replace('__FONT__', FONT)
+
+JS = r'''
+(function(){
+document.documentElement.classList.add('js');
+var parts=[].slice.call(document.querySelectorAll('.part')),chips=[].slice.call(document.querySelectorAll('nav a')),bar=document.querySelector('nav');
+function navh(){if(bar)document.documentElement.style.setProperty('--navh',(bar.offsetHeight+10)+'px');}navh();window.addEventListener('resize',navh);
+function mark(){chips.forEach(function(c){var p=document.querySelector(c.getAttribute('href'));c.classList.toggle('on',!!(p&&p.classList.contains('open')));});}
+function set(p,open){p.classList.toggle('open',open);var b=p.querySelector('.hd');if(b)b.setAttribute('aria-expanded',open?'true':'false');mark();}
+function go(el){requestAnimationFrame(function(){try{el.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){el.scrollIntoView(true);}});}
+parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',function(){set(p,!p.classList.contains('open'));});});
+function open(id){var p=document.querySelector(id);if(p){set(p,true);go(p);}}
+chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();open(c.getAttribute('href'));});});
+[].slice.call(document.querySelectorAll('.mch')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
+var fold=[].slice.call(document.querySelectorAll('[data-fold]'));
+function label(){var any=parts.some(function(p){return !p.classList.contains('open');});fold.forEach(function(b){b.textContent=any?'Open all ▼':'Close all ▲';});}
+fold.forEach(function(b){b.addEventListener('click',function(){var any=parts.some(function(p){return !p.classList.contains('open');});parts.forEach(function(p){set(p,any);});label();if(!any)go(document.getElementById('top'));});});
+parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',label);});
+mark();label();
+})();
 '''
 
 
@@ -2036,7 +2199,27 @@ def _ev(xs):
 
 
 def _research(key):
-    return ('<p class="sci"><b>What the research says.</b> %s</p>' % _e(RESEARCH[key])) if key in RESEARCH else ''
+    return ('<div class="sci"><span class="lbl">What the research says</span>%s</div>' % _e(RESEARCH[key])) if key in RESEARCH else ''
+
+
+def _lv(level):
+    return '<span class="lv %s">%s</span>' % (_e(str(level).replace(' ', '-')), _e(level)) if level else ''
+
+
+def _sv(level):
+    return '<span class="sv %s">%s</span>' % (_e(str(level).replace(' ', '-')), _e(level)) if level else ''
+
+
+def _science(keys):
+    """A chapter's research lines in one box."""
+    lines = [RESEARCH[k] for k in keys if k in RESEARCH]
+    if len(lines) < 2:
+        return ''.join(_research(k) for k in keys)
+    return '<div class="sci"><span class="lbl">What the research says</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in lines)
+
+
+def _initial(name):
+    return _e((str(name or '?').strip() or '?')[0].upper())
 
 
 def _months_svg(months):
@@ -2045,9 +2228,10 @@ def _months_svg(months):
         return ''
     top, w = max(n for _, n in months) or 1, 300
     bw = w / len(months)
-    bars = ''.join('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="1.5" fill="#7b3fa0"><title>%s: %d</title></rect>'
+    bars = ''.join('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="2" fill="url(#mg)"><title>%s: %d</title></rect>'
                    % (i * bw + 1, 60 - 56 * n / top, max(1.5, bw - 2), 56 * n / top, _e(m), n) for i, (m, n) in enumerate(months))
-    return ('<figure class="chart"><svg viewBox="0 0 %d 62" role="img" aria-label="Messages by month">%s</svg><figcaption>Messages by month, %s to %s</figcaption></figure>'
+    return ('<figure class="chart"><svg viewBox="0 0 %d 62" role="img" aria-label="Messages by month"><defs><linearGradient id="mg" x1="0" y1="0" x2="0" y2="1">'
+            '<stop offset="0" stop-color="#d1477a"/><stop offset="1" stop-color="#7b3fa0"/></linearGradient></defs>%s</svg><figcaption>Messages by month, %s to %s</figcaption></figure>'
             % (w, bars, _e(months[0][0]), _e(months[-1][0])))
 
 
@@ -2062,14 +2246,13 @@ def _talk_panel(box, names):
     rows = [('Messages', v(you, 'messages'), v(them, 'messages')), ('Conversations started', v(you, 'starts'), v(them, 'starts')),
             ('Typical reply', v(you, 'medianReplyMinutes', ' min'), v(them, 'medianReplyMinutes', ' min')), ('Questions asked', v(you, 'questions'), v(them, 'questions')),
             ('Thanks', v(you, 'thanks'), v(them, 'thanks')), ('Sorry and repair', v(you, 'sorry'), v(them, 'sorry')),
-            ('Warm words : hard words', pos(you), pos(them)), ('"We" per 100 words', v(you, 'we'), v(them, 'we')), ('"I" and "you" per 100 words', v(you, 'iYou'), v(them, 'iYou')),
-            ] + [('Writing in the ' + lbl, '%s%%' % ((you.get('day') or {}).get(k, 0)), '%s%%' % ((them.get('day') or {}).get(k, 0)))
-                 for k, lbl in (('morning', 'morning'), ('afternoon', 'afternoon'), ('evening', 'evening'), ('late', 'late night'))]
+            ('Warm words : hard words', pos(you), pos(them)), ('"We" per 100 words', v(you, 'we'), v(them, 'we')), ('"I" and "you" per 100 words', v(you, 'iYou'), v(them, 'iYou'))]
     table = '<table><tr><th></th><th>%s</th><th>%s</th></tr>%s</table>' % (_e(who[0]), _e(who[1]), ''.join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % tuple(_e(c) for c in r) for r in rows))
-    match = ('<div class="gauge"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>%s' % (round(100 * sig['styleMatch']), _research('styleMatch'))
+    match = ('<div class="big"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>%s' % (round(100 * sig['styleMatch']), _research('styleMatch'))
              if sig.get('styleMatch') is not None else '')
-    return (match + table + '<p class="soft">%s messages from %s to %s, about %s a month, %s.</p>' % (_e(sig.get('messages')), _e(sig.get('from')), _e(sig.get('to')), _e(sig.get('perMonth')), _e(sig.get('trend')))
-            + _months_svg(sig.get('months') or []) + _research('we'))
+    return ('<h3>How you talk to each other</h3>' + match + table
+            + '<p class="soft">%s messages from %s to %s, about %s a month, %s.</p>' % (_e(sig.get('messages')), _e(sig.get('from')), _e(sig.get('to')), _e(sig.get('perMonth')), _e(sig.get('trend')))
+            + _research('we'))
 
 
 MONTHS = {m: i + 1 for i, m in enumerate(['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])}
@@ -2084,7 +2267,7 @@ def _when_key(w):
 
 def _moments(xs, tag=''):
     xs = [x for x in (xs or []) if isinstance(x, dict) and x.get('what')]
-    return ('<ul class="ev">' + ''.join('<li><b>%s</b> %s</li>' % (_e(x.get('when')), _e(x.get('what'))) for x in xs) + '</ul>') if xs else ''
+    return ('<ul class="ev">' + ''.join('<li><b>%s</b>%s</li>' % (_e(x.get('when')), _e(x.get('what'))) for x in xs) + '</ul>') if xs else ''
 
 
 SIGNAL = {'more': ('↑', 'Your messages show more than you see'), 'less': ('↓', 'Your messages show less than you see'),
@@ -2092,24 +2275,26 @@ SIGNAL = {'more': ('↑', 'Your messages show more than you see'), 'less': ('↓
 
 
 def _views(r, view, pids):
-    """A chapter's pillars, each as three views in a row: how you see it, what your messages show, and why."""
+    """A chapter's pillars, each as three views: how you see it, what your messages show, and why."""
     out = ''
     for pid in pids:
         if pid not in (view.get('pillars') or {}):
             continue
         lv, x = view['pillars'][pid], (r.get('pillars') or {}).get(pid) or {}
         arrow, said = SIGNAL.get(x.get('signal'), ('', ''))
-        out += ('<div class="views"><div class="vh"><b>%s</b><span class="chip %s">%s</span>%s</div><h3>%s</h3><dl>'
-                '<dt>How you see it</dt><dd>%s</dd>%s<dt>Why, through your Psyches</dt><dd>%s</dd></dl></div>'
-                % (_e(PILLARS.get(pid, pid)), _e(lv.replace(' ', '-')), _e(lv), ('<span class="sig" title="%s">%s %s</span>' % (_e(said), arrow, _e(said))) if arrow else '',
-                   _e(x.get('headline')), _e(x.get('seeIt')),
-                   ('<dt>What your messages show</dt><dd>%s</dd>' % _e(x.get('messages'))) if x.get('messages') else '', _e(x.get('psyches'))))
+        rows = [('1', 'How you see it', x.get('seeIt'))]
+        if x.get('messages'):
+            rows.append(('2', 'What your messages show', x.get('messages')))
+        rows.append((str(len(rows) + 1), 'Why, through your Psyches', x.get('psyches')))
+        out += ('<div class="pv"><div class="top"><b>%s</b>%s</div><h4>%s</h4>%s<div class="three">%s</div></div>'
+                % (_e(PILLARS.get(pid, pid)), _lv(lv), _e(x.get('headline')), ('<span class="sig">%s %s</span>' % (arrow, _e(said))) if arrow else '',
+                   ''.join('<div><i>%s</i><span><small>%s</small>%s</span></div>' % (n, _e(t), _e(v)) for n, t, v in rows)))
     return out
 
 
 def _cycle(cy, names):
     st = [str(x) for x in (cy.get('steps') or [])][:4] + [''] * 4
-    box = lambda i: '<div class="cs">%s</div>' % _e(st[i])
+    box = lambda i: '<div class="cs"><i>%d</i>%s</div>' % (i + 1, _e(st[i]))
     return ('<div class="cycle">%s<div class="ca">→</div>%s<div class="ca">↑</div><div class="cc">↻</div><div class="ca">↓</div>%s<div class="ca">←</div>%s</div>'
             % (box(0), box(1), box(3), box(2)))
 
@@ -2121,14 +2306,20 @@ def _rhythm(sig, who):
     rows = ''.join('<div class="rb"><span>%s</span><div><i class="a" style="width:%s%%"></i><em>%s%%</em></div><div><i class="b" style="width:%s%%"></i><em>%s%%</em></div></div>'
                    % (lbl, you['day'].get(k, 0), you['day'].get(k, 0), them['day'].get(k, 0), them['day'].get(k, 0))
                    for k, lbl in (('morning', 'Morning'), ('afternoon', 'Afternoon'), ('evening', 'Evening'), ('late', 'Late night')))
-    return ('<div class="rhythm"><p class="soft">When each of you writes: <span class="ka"></span> %s · <span class="kb"></span> %s. Conversations started: %s by %s, %s by %s.</p>%s</div>'
+    return ('<h3>Your day, side by side</h3><div class="rhythm"><p class="soft">When each of you writes: <span class="ka"></span> %s · <span class="kb"></span> %s. Conversations started: %s by %s, %s by %s.</p>%s</div>'
             % (_e(who[0]), _e(who[1]), _e(you.get('starts')), _e(who[0]), _e(them.get('starts')), _e(who[1]), rows))
 
 
+def _tint(hexc):
+    h = hexc.lstrip('#')
+    r_, g_, b_ = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return '#%02x%02x%02x' % tuple(int(c + (255 - c) * 0.9) for c in (r_, g_, b_))
+
+
 def page(box, s):
-    """The read, integrated (README "Psyche Together, release 14"): For you first (this copy only); at a glance
-    (the relationship map and three truths); five chapters, each told once, with its pillars' three views and its
-    research; their story in moments; one four-week plan; and how it was read."""
+    """The read, integrated (README "Psyche Together", releases 14 to 19): For you first (this copy only); what moved
+    since; at a glance (the overall pair, the relationship map by chapter, three truths); five chapters, each told
+    once; a light intermission; one 28-day practice; and how it was read."""
     r, view = box.get('read') or {}, box.get('view') or {}
     names = view.get('names') or ['', '']
     fy = s.get('forYou') if isinstance(s.get('forYou'), dict) else None
@@ -2139,136 +2330,156 @@ def page(box, s):
     who = box.get('chatOf') or names
     parts, nav, moments = [], [], []
 
-    def part(pid, title, inner, cls='', sub=''):
-        nav.append('<a href="#%s">%s</a>' % (pid, _e(title.replace('  ', ' '))))
-        parts.append('<section id="%s" class="%s"><h2>%s</h2>%s%s</section>' % (pid, cls, _e(title), ('<p class="subt">%s</p>' % _e(sub)) if sub else '', inner))
+    def part(pid, num, title, inner, cls='', sub='', opened=False, colour=None):
+        c = colour or COLOURS.get(pid, '#7b3fa0')
+        nav.append('<a href="#%s" style="--c:%s">%s%s</a>' % (pid, c, ('<i>%s</i>' % _e(num)) if num else '', _e(title)))
+        parts.append('<section class="part %s%s" id="%s" style="--c:%s"><button type="button" class="hd" aria-expanded="%s"><span class="num">%s</span>'
+                     '<span class="ttl">%s</span>%s%s</button><div class="body">%s</div></section>'
+                     % (cls, ' open' if opened else '', pid, c, 'true' if opened else 'false', _e(num), _e(title),
+                        ('<span class="tease">%s</span>' % _e(sub)) if sub else '', CHEV, inner))
 
     def keep(xs, tag):
         for x in xs or []:
             if isinstance(x, dict) and x.get('what') and x.get('what') not in [m[1] for m in moments]:
                 moments.append((x.get('when'), x.get('what'), tag))
         return _moments(xs)
-    ask = lambda xs: ('<div class="ask"><b>Ask each other</b><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in xs)) if xs else ''
-    tryit = lambda t: ('<p class="try"><b>Try this:</b> %s</p>' % _e(t)) if t else ''
-    two = lambda a, b, la, lb: '<div class="two"><div><b>%s</b>%s</div><div><b>%s</b>%s</div></div>' % (_e(la), _paras(a), _e(lb), _paras(b))
+    ask = lambda xs: ('<div class="callout ask"><span class="lbl">Ask each other</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in xs)) if xs else ''
+    tryit = lambda t, label='Try this': ('<div class="callout try"><span class="lbl">%s</span>%s</div>' % (_e(label), _e(t))) if t else ''
+    two = lambda a, b, la, lb, na=names[0], nb=names[1]: ('<div class="two"><div><b><span>%s</span>%s</b>%s</div><div><b><span>%s</span>%s</b>%s</div></div>'
+                                                         % (_initial(na), _e(la), _paras(a), _initial(nb), _e(lb), _paras(b)))
     if gentle:
-        part('support', 'For you first', '<p>' + _e(SUPPORT) + '</p>', 'support mine')
+        part('support', '♡', 'For you first', '<p>' + _e(SUPPORT) + '</p>', 'support mine', 'Only on your copy', True)
     if fy:
-        items_ = ''.join('<h3>%s</h3>%s%s' % (_e(x.get('title')), _paras(x.get('detail')),
-                         ('<p class="soft"><b>How to raise it:</b> %s</p>' % _e(x.get('howToRaise'))) if x.get('howToRaise') and not gentle else '')
+        items_ = ''.join('<div class="fy"><h4>%s</h4>%s%s</div>' % (_e(x.get('title')), _paras(x.get('detail')),
+                         ('<div class="callout key2"><span class="lbl">How to raise it</span>%s</div>' % _e(x.get('howToRaise'))) if x.get('howToRaise') and not gentle else '')
                          for x in fy.get('focus') or [] if isinstance(x, dict))
-        part('foryou', 'For you', items_ + ('<p><b>This week:</b> %s</p>' % _e(fy.get('practice'))) + ('<p class="soft">%s</p>' % _e(fy.get('note')) if fy.get('note') else ''), 'mine')
-    # Four weeks on (README "Psyche Together, release 17"): each check-in again, newest first, above the read it updates.
+        part('foryou', '✦', 'For you', items_ + tryit(fy.get('practice'), 'This week') + ('<p class="soft">%s</p>' % _e(fy.get('note')) if fy.get('note') else '')
+             + '<span class="private">🔒 Only on your copy: %s never sees this</span>' % _e(names[1] if s.get('role') == 'a' else names[0]), 'mine', 'Private advice, just for you', True)
+    # What moved (README "Psyche Together, release 17"): each check-in again, newest first, above the read it updates.
     arrows = {'up': '↑ up', 'down': '↓ down', 'same': '= same'}
-    for rc in reversed(rounds_in(box)):
+    for k_, rc in enumerate(reversed(rounds_in(box))):
         nt, rv = D(rc.get('note')), D(rc.get('view'))
         lines = {c.get('pillar'): c.get('line') for c in nt.get('changes') or [] if isinstance(c, dict)}
-        rows = ''
-        for pid in PILLAR_ORDER:
-            d = (rc.get('moved') or {}).get(pid)
-            if d:
-                rows += '<div class="mv"><b>%s</b><span class="%s">%s · %s</span>%s</div>' % (_e(PILLARS[pid]), d, _e(arrows[d]), _e((rv.get('pillars') or {}).get(pid, '')),
-                                                                                     ('<p>%s</p>' % _e(lines[pid])) if lines.get(pid) else '')
+        rows = ''.join('<div class="mv"><b>%s</b><span class="%s">%s · %s</span>%s</div>' % (_e(PILLARS[pid]), d, _e(arrows[d]), _e((rv.get('pillars') or {}).get(pid, '')),
+                                                                                       ('<p>%s</p>' % _e(lines[pid])) if lines.get(pid) else '')
+                       for pid in PILLAR_ORDER for d in [(rc.get('moved') or {}).get(pid)] if d)
         ov2 = rv.get('overall') or {}
         nx = D(nt.get('next'))
         when_ = datetime.fromtimestamp(rc.get('at') or time.time()).strftime('%-d %B %Y')
-        part('since%d' % rc.get('n', 2), '%d weeks on' % weeks_on(rc.get('n', 2)),
-             '<small>Checked in again · %s</small><p class="lede">%s</p>%s%s<p>%s</p><div class="week"><h3>%s</h3><ol>%s</ol></div>'
-             % (_e(when_), _e(nt.get('summary')), ('<div class="ovr"><span class="tile %s"><b>How satisfied you both are</b><span>%s</span></span><span class="tile %s"><b>How well you read each other</b><span>%s</span></span></div>'
-                                                    % (_e(ov2['level'].replace(' ', '-')), _e(ov2['level']), _e(ov2['reading'].replace(' ', '-')), _e(ov2['reading']))) if ov2 else '',
-                rows, _e(nt.get('held')), _e(nx.get('title')), ''.join('<li>%s</li>' % _e(x) for x in nx.get('steps') or [])), 'since')
-    # At a glance: the relationship map, one numbered row per chapter, as the chapters below; then three truths.
-    rows_ = ''
+        stats = ('<div class="stats"><div class="stat"><span class="lbl">How satisfied you both are</span>%s</div><div class="stat"><span class="lbl">How well you read each other</span>%s</div></div>'
+                 % (_sv(ov2.get('level')), _sv(ov2.get('reading')))) if ov2 else ''
+        part('since%d' % rc.get('n', 2), '↻', '%d weeks on' % weeks_on(rc.get('n', 2)),
+             '<div class="hero"><small>These weeks, in one line</small><b>%s</b></div>%s<h3>What moved</h3>%s<div class="callout try"><span class="lbl">What held</span>%s</div>'
+             '<div class="wk"><small>The next four weeks</small><h4>%s</h4><ol>%s</ol></div>'
+             % (_e(nt.get('summary')), stats, rows, _e(nt.get('held')), _e(nx.get('title')), ''.join('<li>%s</li>' % _e(x) for x in nx.get('steps') or [])),
+             'since', 'Checked in again · ' + when_, k_ == 0, COLOURS['since'])
+    # At a glance: the overall pair, the map (one card per chapter, in its colour), then three truths.
+    mp = ''
     for cid, num, title, pids, refs in CHAPTERS:
         tl = ''
         for pid in [p for p in pids if p in (view.get('pillars') or {})]:
             lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
-            arrow = SIGNAL.get(x.get('signal'), ('', ''))[0]
-            tl += '<span class="tile %s"><b>%s</b><span>%s</span>%s</span>' % (_e(lv.replace(' ', '-')), _e(PILLARS.get(pid, pid)), _e(lv), ('<i>%s</i>' % arrow) if arrow else '')
+            arrow, said = SIGNAL.get(x.get('signal'), ('', ''))
+            tl += '<span class="tile"><b>%s</b>%s%s</span>' % (_e(PILLARS.get(pid, pid)), _lv(lv), ('<span class="sg" title="%s">%s</span>' % (_e(said), arrow)) if arrow else '')
         if tl:
-            rows_ += '<a class="mrow" href="#%s"><span class="mnum">%s</span><span class="mtitle">%s<em>%s</em></span><span class="mtiles">%s</span></a>' % (cid, num, _e(title), _e(SUBTITLES.get(cid, '')), tl)
-    tiles = rows_
-    kinds = {'strength': 'Your strength', 'edge': 'Your growth edge', 'surprise': 'The surprise'}
-    truths = ''.join('<div class="truth %s"><small>%s</small><h3>%s</h3>%s%s</div>' % (_e(x.get('kind')), _e(kinds.get(x.get('kind'), '')), _e(x.get('title')), _paras(x.get('detail')), keep(x.get('evidence'), kinds.get(x.get('kind'), '')))
-                     for x in r.get('truths') or [] if isinstance(x, dict))
+            c = COLOURS[cid]
+            mp += ('<a class="mch" href="#%s" style="--c:%s;--t:%s"><span class="mhd"><span class="n">%s</span><span><b>%s</b><small>%s</small></span><em>›</em></span><span class="tiles">%s</span></a>'
+                   % (cid, c, _tint(c), num, _e(title), _e(SUBTITLES.get(cid, '')), tl))
+    kinds = {'strength': ('Your strength', '#2f7d5b'), 'edge': ('Your growth edge', '#c2366d'), 'surprise': ('The surprise', '#c2571a')}
+    truths = ''.join('<div class="truth" style="--k:%s"><span class="lbl">%s</span><h4>%s</h4>%s%s</div>'
+                     % (kinds.get(x.get('kind'), ('', '#7b3fa0'))[1], _e(kinds.get(x.get('kind'), ('', ''))[0]), _e(x.get('title')), _paras(x.get('detail')),
+                        keep(x.get('evidence'), kinds.get(x.get('kind'), ('', ''))[0])) for x in r.get('truths') or [] if isinstance(x, dict))
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
     band = ''
     if ovv:
-        band = ('<div class="ovr"><span class="tile %s"><b>How satisfied you both are</b><span>%s</span></span><span class="tile %s"><b>How well you read each other</b><span>%s</span></span></div>'
-                % (_e(ovv['level'].replace(' ', '-')), _e(ovv['level']), _e(ovv['reading'].replace(' ', '-')), _e(ovv['reading'])))
+        band = ('<div class="stats"><div class="stat"><span class="lbl">How satisfied you both are</span>%s</div><div class="stat"><span class="lbl">How well you read each other</span>%s</div></div>'
+                % (_sv(ovv['level']), _sv(ovv['reading'])))
         if ovr.get('detail'):
-            band += '<h3>%s</h3>%s%s' % (_e(ovr.get('title')), _paras(ovr.get('detail')), _research('overall'))
-    part('glance', 'At a glance', '<p class="lede">%s</p>%s<div class="map2">%s</div><p class="soft">Each tile is how you both see it: green Strong, amber Steady, purple worth attention (when either of you sees it so, never saying whose). ↑ your messages show more than you see; ↓ less; = they match.</p>%s'
-         % (_e(r.get('summary')), band, tiles, truths))
+            band += '<h4>%s</h4>%s%s' % (_e(ovr.get('title')), _paras(ovr.get('detail')), _research('overall'))
+    key = ('<div class="key"><span><i style="background:#2f7d5b"></i>Strong: you both see it so</span><span><i style="background:#9a5b12"></i>Steady</span>'
+           '<span><i style="background:#6e3796"></i>Worth attention: either of you sees it so, never whose</span><span>↑ ↓ = your messages show more, less or the same</span></div>')
+    part('glance', '★', 'At a glance', '<div class="hero"><small>The two of you, in one line</small><b>%s</b></div>%s<h3>Your relationship map</h3><div class="map">%s</div>%s<h3>Three truths</h3>%s'
+         % (_e(r.get('summary')), band, mp, key, truths), '', 'The whole read on one screen', True)
     # Chapters.
     for cid, num, title, pids, refs in CHAPTERS:
         c = D(ch.get(cid))
-        inner = _views(r, view, pids) + ''.join(_research(k) for k in refs) + _paras(c.get('detail'))
+        inner = _views(r, view, pids) + _science(refs) + ('<h3>The full picture</h3>' if c.get('detail') else '') + _paras(c.get('detail'))
         if cid == 'close':
-            inner += ('<p class="insight"><b>Reaching for each other.</b> %s</p>' % _e(c.get('bids')) if c.get('bids') else '') + _talk_panel(box, names)
-            inner += two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), 'What makes %s feel cared for' % names[0], 'What makes %s feel cared for' % names[1])
+            inner += ('<div class="callout key2"><span class="lbl">Reaching for each other</span>%s</div>' % _e(c.get('bids')) if c.get('bids') else '') + _talk_panel(box, names)
+            inner += '<h3>What makes each of you feel cared for</h3>' + two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), names[0], names[1])
         if cid == 'disagree':
             cy = D(c.get('cycle'))
-            inner += '<h3 class="sub">Your cycle</h3>' + _cycle(cy, names) + two(cy.get('a'), cy.get('b'), names[0], names[1]) + ('<p class="try"><b>The way out:</b> %s</p>' % _e(cy.get('exit')))
-            inner += '<h3 class="sub">Differences to live with, and one to solve</h3>' + ''.join('<div class="item"><h3>%s</h3>%s<p class="try"><b>Living with it:</b> %s</p></div>' % (_e(x.get('title')), _paras(x.get('detail')), _e(x.get('howToLiveWithIt'))) for x in c.get('lasting') or [] if isinstance(x, dict))
-            inner += ''.join('<div class="item"><h3>%s</h3>%s<p class="try"><b>First step:</b> %s</p></div>' % (_e(x.get('title')), _paras(x.get('detail')), _e(x.get('firstStep'))) for x in c.get('solvable') or [] if isinstance(x, dict))
+            inner += '<h3>Your cycle</h3>' + _cycle(cy, names) + two(cy.get('a'), cy.get('b'), names[0], names[1]) + tryit(cy.get('exit'), 'The way out')
+            inner += '<h3>Differences to live with, and one to solve</h3>' + ''.join('<div class="item"><h4>%s</h4>%s%s</div>' % (_e(x.get('title')), _paras(x.get('detail')), tryit(x.get('howToLiveWithIt'), 'Living with it')) for x in c.get('lasting') or [] if isinstance(x, dict))
+            inner += ''.join('<div class="item"><h4>%s</h4>%s%s</div>' % (_e(x.get('title')), _paras(x.get('detail')), tryit(x.get('firstStep'), 'First step')) for x in c.get('solvable') or [] if isinstance(x, dict))
             dr = D(c.get('dream'))
-            inner += '<h3 class="sub">The dream under it</h3><p>%s</p>%s<p class="insight"><b>The question that opens it:</b> %s</p>' % (_e(dr.get('tension')), two(dr.get('a'), dr.get('b'), names[0], names[1]), _e(dr.get('question')))
+            inner += '<h3>The dream under it</h3><p>%s</p>%s<div class="callout key2"><span class="lbl">The question that opens it</span>%s</div>' % (_e(dr.get('tension')), two(dr.get('a'), dr.get('b'), names[0], names[1]), _e(dr.get('question')))
         if cid == 'secure':
-            inner += two(c.get('a'), c.get('b'), 'What %s needs to feel sure' % names[0], 'What %s needs to feel sure' % names[1])
+            inner += '<h3>What each of you needs to feel sure</h3>' + two(c.get('a'), c.get('b'), names[0], names[1])
         if cid == 'life':
             inner += _rhythm(sig, who)
         if cid == 'future':
             lines = {x.get('topic'): x.get('line') for x in c.get('decisions') or [] if isinstance(x, dict)}
-            inner += ''.join('<div class="row"><div><b>%s</b><p>%s: %s · %s: %s</p><p>%s</p></div><span class="chip %s">%s</span></div>'
-                             % (_e(x['label']), _e(names[0]), _e(x.get('a') or '-'), _e(names[1]), _e(x.get('b') or '-'), _e(lines.get(x['topic'], '')), _e(x['result'].replace(' ', '-')), _e(x['result']))
-                             for x in view.get('decisions') or [])
-            inner += two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
-            inner += '<h3 class="sub">New things to try together</h3><ul>%s</ul>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
-        inner += keep(c.get('evidence'), title) + ask(c.get('askEachOther')) + tryit(c.get('tryThis'))
-        part(cid, num + '  ' + title, inner, 'chapter', SUBTITLES.get(cid, ''))
+            if view.get('decisions'):
+                inner += '<h3>The big decisions, side by side</h3>' + ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p><p>%s</p></div>'
+                                                                       % (_e(x['label']), _lv(x['result']), _e(names[0]), _e(x.get('a') or '-'), _e(names[1]), _e(x.get('b') or '-'), _e(lines.get(x['topic'], '')))
+                                                                       for x in view.get('decisions') or [])
+            inner += '<h3>How you help each other grow</h3>' + two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s' % (names[0], names[1]), 'How %s helps %s' % (names[1], names[0]))
+            inner += '<h3>New things to try together</h3><ul>%s</ul>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
+        ev_ = keep(c.get('evidence'), title)
+        inner += ('<h3>When it showed</h3>' + ev_ if ev_ else '') + ask(c.get('askEachOther')) + tryit(c.get('tryThis'))
+        part(cid, num, title, inner, 'chapter', SUBTITLES.get(cid, ''))
         if cid == 'disagree':
             parts.append('@@INTERMISSION@@')
-    # The intermission (README "Psyche Together, release 16"): a light breather after the heaviest chapter, as the
-    # Psyche Report has its roast: the playful facts of their conversation, a few light lines, and every dated moment once.
+    # The intermission (README "Psyche Together, release 16"): a light breather after the heaviest chapter.
     fun = sig.get('fun') or {}
     im = D(r.get('intermission'))
     facts = []
     if fun.get('first'):
-        facts.append(('Your first message here', fun['first']))
+        facts.append(('💬', 'Your first message here', fun['first']))
     if fun.get('busiestDay'):
-        facts.append(('Your busiest day', '%s, %s messages' % (fun['busiestDay'][0], fun['busiestDay'][1])))
+        facts.append(('🔥', 'Your busiest day', '%s, %s messages' % (fun['busiestDay'][0], fun['busiestDay'][1])))
     if fun.get('streak'):
-        facts.append(('Your longest run of days in a row', '%s days' % fun['streak']))
+        facts.append(('📆', 'Your longest run of days in a row', '%s days' % fun['streak']))
     for side_, nm in (('you', who[0]), ('partner', who[1])):
         em = ((sig.get(side_) or {}).get('emoji') or [])
         if em:
-            facts.append(('%s\'s favourite emoji' % nm, ' '.join(em)))
-    facts_html = ''.join('<div class="fact"><small>%s</small><b>%s</b></div>' % (_e(a_), _e(b_)) for a_, b_ in facts)
+            facts.append((em[0], '%s\'s favourite emoji' % nm, ' '.join(em)))
+    facts_html = ''.join('<div class="fact"><em>%s</em><small>%s</small><b>%s</b></div>' % (_e(i_), _e(a_), _e(b_)) for i_, a_, b_ in facts)
     line = ''.join('<li><b>%s</b><span>%s</span><em>%s</em></li>' % (_e(w), _e(t), _e(tag)) for w, t, tag in sorted(moments, key=lambda m: _when_key(m[0])))
-    inter = ('<section id="moments" class="intermission"><small>Intermission</small><h2>%s</h2>%s<div class="facts">%s</div>%s%s%s</section>'
-             % (_e(im.get('title') or 'Your story in moments'), ''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), facts_html,
-                _months_svg(sig.get('months') or []), ('<ol class="timeline">%s</ol>' % line) if line else '', ''))
-    nav.insert(next((i for i, n in enumerate(nav) if '#life' in n), len(nav)), '<a href="#moments">✦ Moments</a>')
+    inner = ('<span class="badge">Intermission</span><div class="lines" style="margin-top:12px">%s</div>%s%s%s'
+             % (''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), ('<div class="funfacts">%s</div>' % facts_html) if facts_html else '',
+                _months_svg(sig.get('months') or []), ('<h3>Your story in moments</h3><ol class="timeline">%s</ol>' % line) if line else ''))
+    part('moments', '✦', im.get('title') or 'Your story in moments', inner, 'intermission', 'A light break', False, COLOURS['moments'])
+    inter, inter_nav = parts.pop(), nav.pop()
     parts[parts.index('@@INTERMISSION@@')] = inter
-    # One plan.
+    nav.insert(next((i for i, n in enumerate(nav) if '#life' in n), len(nav)), inter_nav)
+    # One practice.
     pn = D(r.get('plan'))
     w1 = D(pn.get('week1'))
-    weeks = ''.join('<div class="week"><small>Week %d</small><h3>%s</h3>%s<p><b>Ask each other:</b> %s</p><p><b>Do together:</b> %s</p></div>'
-                    % (i + 2, _e(w.get('title')), ('' if gentle else '<p><b>A conversation:</b> %s. %s</p><ol>%s</ol>' % (_e(D(w.get('conversation')).get('title')), _e(D(w.get('conversation')).get('why')),
+    weeks = ''.join('<div class="wk"><i>W%d</i><small>Week %d</small><h4>%s</h4>%s<p><b>Ask each other:</b> %s</p><p style="margin:0"><b>Do together:</b> %s</p></div>'
+                    % (i + 2, i + 2, _e(w.get('title')), ('' if gentle else '<div class="callout key2"><span class="lbl">A conversation: %s</span>%s<ol>%s</ol></div>' % (_e(D(w.get('conversation')).get('title')), _e(D(w.get('conversation')).get('why')),
                                                                                                          ''.join('<li>%s</li>' % _e(x) for x in D(w.get('conversation')).get('script') or []))),
                        _e(w.get('ask')), _e(w.get('doTogether'))) for i, w in enumerate(pn.get('weeks') or []) if isinstance(w, dict))
-    part('plan', '06  ' + PLAN_TITLE, '<div class="week"><small>Week 1, a little every day</small><h3>%s</h3><ol>%s</ol></div>%s%s<p class="soft">In four weeks, Psyche Together asks you both the same questions again, here in Muse, and shows what has moved at the top of this page.</p>'
-         % (_e(w1.get('title')), ''.join('<li>%s</li>' % _e(x) for x in w1.get('days') or []), weeks, _research('lovemaps')), 'chapter', SUBTITLES['plan'])
-    part('how', 'How this was read', '%s<p class="soft">From both your full Psyche reports, shared with your consent for this read; your conversation together, measured on the device of the one who added it; and the check-in you each did privately, the same core questions for both. '
+    part('plan', '06', PLAN_TITLE, '<div class="weeks"><div class="wk"><i>W1</i><small>Week 1 · a little every day</small><h4>%s</h4><ol class="days">%s</ol></div>%s</div>%s'
+         '<p class="soft">In four weeks, Psyche Together asks you both the same questions again, here in Muse, and shows what has moved at the top of this page.</p>'
+         % (_e(w1.get('title')), ''.join('<li><b>%d</b><span>%s</span></li>' % (i + 1, _e(x)) for i, x in enumerate(w1.get('days') or [])), weeks, _research('lovemaps')),
+         'chapter', SUBTITLES['plan'])
+    part('how', 'i', 'How this was read', '%s<p class="soft">From both your full Psyche reports, shared with your consent for this read; your conversation together, measured on the device of the one who added it; and the check-in you each did privately, the same core questions for both. '
          'The measures follow published research: how partners see the relationship (Joel et al., PNAS 2020), turning towards and repair (Gottman), responsiveness to good news (Gable et al., 2004), '
          'language style matching (Ireland et al., 2011), "we" language (Seider et al., 2009), demand and withdraw (Christensen & Heavey), dyadic coping (Bodenmann), self-expansion (Aron) and the Michelangelo phenomenon (Drigotas et al., 1999). '
-         'They describe couples in general, never a verdict on you two. This is coaching, not counselling: if something here feels heavy, a couples counsellor is worth seeing together.</p>' % _paras(r.get('caveats')))
+         'They describe couples in general, never a verdict on you two. This is coaching, not counselling: if something here feels heavy, a couples counsellor is worth seeing together.</p>' % _paras(r.get('caveats')),
+         '', 'Sources, method and limits')
     when = datetime.fromtimestamp(box.get('at') or time.time()).strftime('%-d %B %Y')
-    return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-            '<title>Psyche Together · %s &amp; %s</title><style>%s</style></head><body><div class="wrap"><header class="banner"><small>Psyche Together</small>'
-            '<h1>%s &amp; %s</h1><p>%s</p></header><nav>%s</nav>%s<footer>Psyche Together by PsycheAI · made in your own Muse workspace</footer></div></body></html>'
-            % (_e(names[0]), _e(names[1]), CSS, _e(names[0]), _e(names[1]), _e(when), ''.join(nav), ''.join(parts)))
+    facts_ = ' · '.join(x for x in ['Psyche Together', view.get('stage') or '', '6 chapters'] if x)
+    banner = ('<header class="banner" id="top">%s<div class="pair"><span>%s</span><span>%s</span></div><div class="facts">%s</div><h1>%s &amp; %s</h1>'
+              '<p class="lede">How the two of you meet: how you each see it, what your conversation shows, why through both your Psyches, and what to try next.</p><div class="sub">%s</div></header>'
+              % (LOGO, _initial(names[0]), _initial(names[1]), _e(facts_), _e(names[0]), _e(names[1]), _e(when)))
+    bar = '<nav aria-label="Sections">%s<button type="button" data-fold>Open all ▼</button></nav>' % ''.join(nav)
+    return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
+            '<title>Psyche Together · %s &amp; %s</title><style>%s</style></head><body><div class="wrap">%s%s%s<button type="button" class="foldall" data-fold>Open all ▼</button>'
+            '<footer><b>Psyche Together</b> by PsycheAI · psycheai.io<br>Made in your own Muse workspace. PsycheAI keeps no copy it can read.</footer></div><script>%s</script></body></html>'
+            % (_e(names[0]), _e(names[1]), CSS, banner, bar, ''.join(parts), JS))
 
 
 def show(box=None):

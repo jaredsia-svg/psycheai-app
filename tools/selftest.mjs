@@ -3942,7 +3942,7 @@ elif a[0] == 'thread':
       tg.recheck.write === 'recheck' && movedP.length > 0 && tg.recheck.before.pillars && tg.recheck.now.pillars && !/"core"|safety/.test(JSON.stringify(tg.recheck)) &&
       tg.recheckBad.saved === false && /changes: one line for each pillar that moved/.test(JSON.stringify(tg.recheckBad.problems)) &&
       tg.recheckSaved.file && /Ana has checked in again too\. Here's what has moved\./.test(tg.checkA4.say || '') && tg.checkA5.quiet === true &&
-      /4 weeks on/.test(htmlR) && /↑ up/.test(htmlR) && /Keep the habit/.test(htmlR) && htmlR.indexOf('4 weeks on') < htmlR.indexOf('At a glance') && /The daily turns helped here/.test(htmlR),
+      /4 weeks on/.test(htmlR) && /↑ up/.test(htmlR) && /Keep the habit/.test(htmlR) && htmlR.indexOf('id="since2"') < htmlR.indexOf('id="glance"') && /The daily turns helped here/.test(htmlR),
     JSON.stringify([tg.nudgeA, tg.roundA.say, tg.nudgeB.say, tg.recheck.moved, tg.recheckBad.problems, tg.checkA4.say]).slice(0, 600));
   const people = tg.write.people || [];
   check('when both have answered, the read is written from both full Psyche reports, the conversation the one who started added, and the couple view, never anyone\'s own answers; the result is data only',
@@ -3966,9 +3966,15 @@ elif a[0] == 'thread':
       tg.shallow.saved === false && tg.shallow.problems.some(p => /^truths: exactly three/.test(p)) && tg.shallow.problems.some(p => /16,000 characters/.test(p)), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
   check('someone who said they feel unsafe gets a gentle For you, with support first, no "how to raise it" and no conversation scripts in the plan on their copy; the page has the relationship map, the cycle and the story in moments',
     tg.saved.saved && tg.foryouA.gentle === false && tg.sentB.gentle === true &&
-      /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map2"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA) && /class="intermission"/.test(htmlA) &&
-      /Your busiest day/.test(htmlA) && htmlA.indexOf('03  Conflict and repair') < htmlA.indexOf('class="intermission"') && htmlA.indexOf('class="intermission"') < htmlA.indexOf('04  Sharing a life') && /06  Your 28-day practice/.test(htmlA),
+      /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map"/.test(htmlA) && /class="mch"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA) && /id="moments"/.test(htmlA) &&
+      /Your busiest day/.test(htmlA) && htmlA.indexOf('id="disagree"') < htmlA.indexOf('id="moments"') && htmlA.indexOf('id="moments"') < htmlA.indexOf('id="life"') && /<span class="num">06<\/span><span class="ttl">Your 28-day practice/.test(htmlA),
     JSON.stringify([tg.foryouA.gentle, tg.sentB.gentle]));
+  const mapCards = [...htmlA.matchAll(/<a class="mch" href="#(\w+)" style="--c:(#[0-9a-f]{6})/g)].map(m => [m[1], m[2]]);
+  check('the page is drawn as the Psyche Report is (banner with the mark, sticky nav, sections that open and close, with the glance and For you open), and each chapter keeps one colour: its card on the map links to its own section, in the same colour as that section and its nav chip',
+    /<header class="banner" id="top"><svg class="mark"/.test(htmlA) && /<nav aria-label="Sections">/.test(htmlA) && /data-fold/.test(htmlA) &&
+      /class="part  open" id="glance"|class="part open" id="glance"/.test(htmlA) && /class="part mine open" id="foryou"/.test(htmlA) && /class="part chapter" id="close"/.test(htmlA) &&
+      mapCards.length === 5 && mapCards.every(([id, c]) => htmlA.includes('id="' + id + '" style="--c:' + c + '"') && htmlA.includes('<a href="#' + id + '" style="--c:' + c + '">')) &&
+      new Set(mapCards.map(m => m[1])).size === 5, JSON.stringify(mapCards));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
       stateA.answers.safety.label === 'No', '');
