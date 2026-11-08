@@ -3784,9 +3784,10 @@ elif a[0] == 'thread':
   tg.picked = await run.a('pick-thread', 'Ana Lim');
   const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
   fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
-  tg.staged = await run.a('chat-file', wa);
-  tg.join = await run.b('join', tg.staged.invite.url);
-  tg.joinAgain = await run.b('join', tg.staged.invite.url);
+  tg.waAdded = await run.a('chat-file', wa);
+  tg.staged = tg.picked;
+  tg.join = await run.b('join', tg.picked.invite.url);
+  tg.joinAgain = await run.b('join', tg.picked.invite.url);
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, false)));
   tg.badQ = await run.b('save-questions', '@work/together-questions.json');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, true)));
@@ -3802,26 +3803,30 @@ elif a[0] == 'thread':
     }
     picked[it.id] = it.id === 'safety' ? 'Yes' : /^core:/.test(it.id) ? it.options[Math.min(2, it.options.length - 1)] : it.options[0];
   }
-  tg.checkA1 = await run.a('check');
-  const code = JSON.parse((await execFile('python3', ['-c', `import importlib.util, json, sys
-spec = importlib.util.spec_from_file_location('t', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'together.py')], { env: home.b.env })).stdout);
   tg.partial = await run.b('answers', JSON.stringify(Object.fromEntries(Object.entries(picked).filter(([k]) => k !== 'safety'))));
   tg.badAnswer = await run.b('answers', JSON.stringify({ 'core:needs': 'Hard' }));
   tg.wrongForm = await run.b('code', 'PT-ffff-0000');
   tg.sentB = await run.b('answer', 'safety', 'Yes');
-  tg.statusA = await run.a('status');
-  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.statusA, true)));
+  // Ana's For you, written right after she submits (gentle: she said she sometimes feels unsafe).
+  fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'needs', title: 'Your needs', detail: 'They count too.', howToRaise: 'Can we talk?' }], practice: 'An evening for you.' }));
+  tg.gentleRefused = await run.b('save-foryou', '@work/together-foryou.json');
+  fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'needs', title: 'Your needs', detail: 'They count too.' }], practice: 'An evening for you.' }));
+  tg.waitB = await run.b('save-foryou', '@work/together-foryou.json');
+  // Mei's reminder: Ana has joined, so her questions come ready to write.
+  tg.checkA1 = await run.a('check');
+  tg.statusA = tg.checkA1;
+  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.checkA1, true)));
   tg.formA = await run.a('save-questions', '@work/together-questions.json');
   tg.checkA2 = await run.a('check');
-  // Mei answers in the chat instead, the best button each time.
   tg.askedA = [];
   let q = await run.a('next');
   for (let i = 0; i < 40 && q.id; i++) {
     tg.askedA.push(q);
     q = await run.a('answer', q.id, q.id === 'safety' ? 'No' : q.buttons[0]);
   }
-  tg.write = q;
+  tg.foryouA = q;
+  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'disagreements', title: 'One question first', detail: 'You argue a case.', howToRaise: 'I want to hear you out first.' }], practice: 'Ask before you answer.' }));
+  tg.write = await run.a('save-foryou', '@work/together-foryou.json');
   const stateA = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'state.json'), 'utf8'));
   const view = tg.write.coupleView || { pillars: {}, decisions: [] };
   const worth = Object.keys(view.pillars).filter(p => view.pillars[p] === 'Worth attention');
@@ -3849,15 +3854,11 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   tg.shallow = await run.a('save', '@work/together-read.json');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify(good));
   tg.saved = await run.a('save', '@work/together-read.json');
-  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'disagreements', title: 'One question first', detail: 'You argue a case.', howToRaise: 'I want to hear you out first.' }], practice: 'Ask before you answer.' }));
-  tg.pageA = await run.a('save-foryou', '@work/together-foryou.json');
+  tg.pageA = tg.saved;
   tg.checkB2 = await run.b('check');
+  tg.pageB = tg.checkB2;
   tg.checkA3 = await run.a('check');
-  tg.statusB = await run.b('status');
-  fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'needs', title: 'Your needs', detail: 'They count too.', howToRaise: 'Can we talk?' }], practice: 'An evening for you.' }));
-  tg.gentleRefused = await run.b('save-foryou', '@work/together-foryou.json');
-  fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'needs', title: 'Your needs', detail: 'They count too.' }], practice: 'An evening for you.' }));
-  tg.pageB = await run.b('save-foryou', '@work/together-foryou.json');
+  tg.checkB3 = await run.b('check');
   const htmlA = tg.pageA.file ? fsx.readFileSync(tg.pageA.file, 'utf8') : '', htmlB = tg.pageB.file ? fsx.readFileSync(tg.pageB.file, 'utf8') : '';
   const boxes = [];
   const kept = JSON.stringify(store.kvAll('together'), (k, v) => (v && typeof v === 'object' && v.v === 'e2e1' ? (boxes.push(v), '[box]') : v)) + JSON.stringify(store.kvAll('togetherof'));
@@ -3866,7 +3867,9 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
     tg.noPsyche.needsPsyche === true && /Install psycheai\.io\/skill and generate my Psyche/.test(tg.noPsyche.say), JSON.stringify(tg.noPsyche));
   check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their full report and their conversation together go to their partner, locked, and nothing from other chats',
     tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report goes to your partner's Muse, locked/.test(tg.start.consent || '') && /The one who starts it adds your conversation together/.test(tg.start.consent || '') && /Nothing from chats with anyone else is read/.test(tg.start.consent || '') &&
-      /^Mei invited you to Psyche Together/.test((tg.staged.invite || {}).invite || '') && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || ''),
+      /^Mei invited you to Psyche Together/.test((tg.staged.invite || {}).invite || '') && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || '') &&
+      /Highly recommended while you wait/.test(tg.picked.whatsapp || '') && JSON.stringify(tg.picked.buttons) === '["Add our WhatsApp chat","Has my partner joined?"]' &&
+      /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || ''),
     JSON.stringify([tg.start, tg.staged]).slice(0, 400));
   check('the partner joins once, sees the consent line, and goes straight to their questions: no stage question, their partner named from the other Psyche, the stage from the one who started',
     tg.join.joined && tg.join.write === 'questions' && tg.join.partner.name === 'Mei' && tg.join.stage === 'Married' && tg.join.pillars.length === 8 &&
@@ -3877,14 +3880,16 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
       /How often do you feel appreciated by Mei\?/.test(Whtml) && /Private · never shared/.test(Whtml) && /<input type="radio" name="core:appreciation" value="Often">/.test(Whtml) &&
       /name="psyche-together-answers"/.test(Whtml) && /‹ Back/.test(Whtml) && !/localStorage|sessionStorage|BroadcastChannel/.test(Whtml) &&
       JSON.stringify(tg.formB.buttons) === '["Submit my answers"]' && W.certain.length <= 4 && !Whtml.includes('Ana Lim'), Whtml.slice(0, 300));
-  check('a reminder\'s check is quiet until something is waiting, then one line and a button: the partner joined, or the read is ready; done once it has been shown',
-    /Ana has joined Psyche Together/.test(tg.checkA1.say || '') && JSON.stringify(tg.checkA1.buttons) === '["Show my questions"]' &&
-      tg.checkA2.quiet === true && /has finished\. Your Psyche Together is ready/.test(tg.checkB2.say || '') && tg.checkA3.done === true &&
-      tg.staged.setCheck === true && JSON.stringify(tg.staged.buttons) === '["Has my partner joined?"]' && JSON.stringify(tg.sentB.buttons) === '["Is our read ready?"]',
-    JSON.stringify([tg.checkA1, tg.checkA2, tg.checkB2, tg.checkA3]));
+  check('the reminder does the work: when the partner has joined, it gives the questions to write and show ("Ana has joined Psyche Together. Here are your questions."); quiet while they answer; when the read is ready, the page itself ("Mei has finished"); done once shown',
+    tg.checkA1.write === 'questions' && /Ana has joined Psyche Together\. Here are your questions\./.test(tg.checkA1.say || '') && tg.checkA2.quiet === true &&
+      tg.checkB2.file && /Mei has finished\. Here's your Psyche Together\./.test(tg.checkB2.say || '') && tg.checkA3.done === true && tg.checkB3.done === true,
+    JSON.stringify([tg.checkA1.say, tg.checkA2, tg.checkB2.say, tg.checkA3, tg.checkB3]));
+  check('each person\'s For you is written right after they submit, from their answers, their full report and their partner\'s card; the first one in then waits with a button, the last one in goes straight on to write the read, and the page follows its save',
+    tg.sentB.write === 'foryou' && tg.sentB.yourReport && tg.sentB.partner && tg.sentB.partner.name === 'Mei' && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?"]' &&
+      tg.foryouA.write === 'foryou' && tg.write.write === 'read' && tg.saved.file && /Psyche-Together/.test(tg.saved.file), JSON.stringify([tg.waitB, tg.foryouA.write, tg.write.write]).slice(0, 300));
   check('what Muse reads back from the widget is saved at once: an option that isn\'t one is refused, and what\'s still to answer comes back as one question with buttons, until the answers are sent',
     tg.badAnswer.saved === false && /isn't one of its options/.test(JSON.stringify(tg.badAnswer.problems)) && tg.partial.missing === true && tg.partial.next.id === 'safety' &&
-      tg.partial.next.private === true && tg.sentB.waiting === true && /another set of questions/.test(tg.wrongForm.error || ''), JSON.stringify([tg.partial, tg.sentB]).slice(0, 400));
+      tg.partial.next.private === true && tg.sentB.write === 'foryou' && /another set of questions/.test(tg.wrongForm.error || ''), JSON.stringify([tg.partial, tg.sentB]).slice(0, 400));
   check('in the chat the same questions come one at a time, each pillar\'s opener first, the core question\'s options fixed, a follow-up only where it helps (four at most), "Difficult" for needs, "this relationship" for security',
     tg.askedA[0].id === 'core:appreciation' && /^Ana and you meet appreciation/.test(tg.askedA[0].say) && /How often do you feel appreciated by Ana\?$/.test(tg.askedA[0].say) &&
       tg.askedA.filter(x => x.kind === 'deeper').length <= 4 && tg.askedA.some(x => x.id === 'safety' && x.private) &&
@@ -3897,9 +3902,9 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
       people.length === 2 && people.every(p => p.report && p.report.attachment) && people[0].chat && people[0].chat.sample.length > 10 &&
       !/"core"|safety|deep:/.test(JSON.stringify(tg.write)) && view.decisions.length === 4 && !('spec' in tg.write) && tg.write.saveTo === 'work/together-read.json',
     JSON.stringify(view).slice(0, 400));
-  check('only the one who starts adds the conversation: after the stage, their own one-to-one Instagram chats as buttons (groups left out), the one they pick read, then WhatsApp, highly recommended, then the invite; the partner has no chat step, and both get questions with it, the partner\'s seen from their side',
-    tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && tg.picked.askChat === true && /highly recommended/.test(tg.picked.say) &&
-      /80 messages from your Instagram chat with Ana Lim/.test(tg.picked.read) && JSON.stringify(tg.picked.buttons) === '["I\'ve shared it","Skip WhatsApp"]' &&
+  check('only the one who starts adds the conversation: after the stage, their own one-to-one Instagram chats as buttons (groups left out), the one they pick read, then the invite at once, with WhatsApp highly recommended while they wait and added to it; the partner has no chat step, and both get questions with it, the partner\'s seen from their side',
+    tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && tg.picked.invite && tg.picked.setCheck === true &&
+      /80 messages from your Instagram chat with Ana Lim/.test(tg.picked.read) &&
       tg.join.write === 'questions' && tg.join.yourChat && tg.join.yourChat.source === 'instagram and whatsapp' && tg.statusA.yourChat.source === 'instagram and whatsapp' &&
       tg.join.yourChat.signals.you.messages === tg.statusA.yourChat.signals.partner.messages && people.filter(p => p.chat).length === 1 && people[0].chat.signals.messages === 120,
     JSON.stringify([tg.threads, tg.picked]).slice(0, 400));
@@ -3911,10 +3916,10 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   check('a read with a score, a percentage or what one of them answered is sent back, as is one short of a Psyche Report\'s depth; nothing is saved',
     tg.bad.saved === false && tg.bad.problems.some(p => /scored|%/.test(p)) && tg.bad.problems.some(p => /rated/.test(p)) &&
       tg.shallow.saved === false && tg.shallow.problems.some(p => /overview\.lede/.test(p)) && tg.shallow.problems.some(p => /16,000 characters/.test(p)), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
-  check('the read saved, each writes their own For you; someone who said they feel unsafe gets a gentle one, with support first, no "how to raise it" and no conversation scripts on their copy',
-    tg.saved.saved && tg.saved.write === 'foryou' && tg.saved.gentle === false && tg.statusB.write === 'foryou' && tg.statusB.gentle === true &&
+  check('someone who said they feel unsafe gets a gentle For you, with support first, no "how to raise it" and no conversation scripts on their copy',
+    tg.saved.saved && tg.foryouA.gentle === false && tg.sentB.gentle === true &&
       /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/Conversations to have/.test(htmlB) && /Conversations to have/.test(htmlA),
-    JSON.stringify([tg.saved.write, tg.statusB.write, tg.statusB.gentle]));
+    JSON.stringify([tg.foryouA.gentle, tg.sentB.gentle]));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
       stateA.answers.safety.label === 'No', '');

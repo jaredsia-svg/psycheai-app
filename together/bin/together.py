@@ -42,7 +42,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 12
+RELEASE = 13
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -305,7 +305,7 @@ def pillar_reasons(sig, core):
 # Psyche points to strain there, four at most.
 
 FLOW = ['appreciation', 'connection', 'needs', 'life', 'growth', 'disagreements', 'future', 'security']
-FOLLOW_MAX = 4
+FOLLOW_MAX = 3
 
 
 def core_for(stage):
@@ -1036,20 +1036,15 @@ def keep_messages(msgs, sources, partner):
 
 
 def chat_step(s):
-    """The initiator's conversation, after the stage and before the invite: their Instagram chat with their
-    partner, picked from a list, then their WhatsApp chat together, highly recommended."""
-    if 'instagram' not in s.get('chatDone', []) and 'instagram' not in s.get('chatSkipped', []):
+    """The initiator's Instagram chat with their partner, picked from a list, after the stage; then the invite at
+    once. WhatsApp is added while they wait (README "Psyche Together, release 13")."""
+    if not s.get('chatFinished') and 'instagram' not in s.get('chatDone', []) and 'instagram' not in s.get('chatSkipped', []):
         ths = instagram_threads()
         s['threads'] = ths
         save_state(s)
         if ths:
-            return {'pickThread': True, 'say': 'Which of your Instagram chats is with your partner? Your conversation together makes the read much deeper, and only that one chat is read.',
+            return {'pickThread': True, 'say': 'Which of your Instagram chats is with your partner? Only that one chat is read.',
                     'buttons': [t['label'] for t in ths] + ['Not on Instagram'], 'asButtons': True}
-    if 'whatsapp' not in s.get('chatDone', []) and 'whatsapp' not in s.get('chatSkipped', []):
-        return {'askChat': True, 'say': ('Your WhatsApp chat together is highly recommended: it\'s often where couples talk most, and it makes the read far more '
-                                         'specific to the two of you. In WhatsApp, open your chat with your partner, tap ⋮ or their name, then More, Export chat, '
-                                         'Without media, and share the .zip here.'),
-                'buttons': ['I\'ve shared it', 'Skip WhatsApp'], 'asButtons': True}
     return finish_chat(s)
 
 
@@ -1070,33 +1065,54 @@ def pick_thread(label):
     return dict(chat_step(s), read='%d messages from your Instagram chat with %s' % (len(msgs), label))
 
 
+WHATSAPP_HOW = 'in WhatsApp, open your chat with your partner, tap ⋮ or their name, then More, Export chat, Without media, and share the .zip here'
+
+
 def add_chat_file(paths):
-    """Their WhatsApp chat together, from the export they shared."""
+    """Their WhatsApp chat together, any time before the read is written: added to the conversation, and the
+    locked card sent again with it."""
     s = state()
+    if s.get('readAt'):
+        return {'error': 'Your read is already written, so the WhatsApp chat can\'t be added to it now.'}
     old, sources, partner = kept_messages()
     me = psyche() or {}
     msgs = whatsapp_file(paths, [partner, _first(partner)], [str(me.get('name') or ''), _first(me.get('name'))])
     if not msgs:
-        return {'error': 'I couldn\'t find a one-to-one chat in that file: share the export of your chat together (in WhatsApp: the chat, ⋮, More, Export chat, Without media).'}
+        return {'error': 'I couldn\'t find a one-to-one chat in that file: share the export of your chat together (%s).' % WHATSAPP_HOW}
     keep_messages(old + msgs, sources + ['whatsapp'], partner)
     s.setdefault('chatDone', []).append('whatsapp')
     save_state(s)
-    return dict(chat_step(s), read='%d messages from your WhatsApp chat, %s to %s' % (len(msgs), msgs[0][0].strftime('%b %Y'), msgs[-1][0].strftime('%b %Y')))
+    count_chat(s)
+    got = put_profile(s, bool(s.get('sent')))
+    if got.get('error'):
+        return got
+    return {'say': 'Added: %d messages from your WhatsApp chat, %s to %s. Your read will use it.' % (len(msgs), msgs[0][0].strftime('%b %Y'), msgs[-1][0].strftime('%b %Y')),
+            'buttons': ['Has my partner joined?'] if not s.get('questions') else ['Is our read ready?'], 'asButtons': True}
 
 
-def finish_chat(s):
-    """The conversation, counted and sampled here, goes in their locked card with the stage; then the invite."""
+def count_chat(s):
     msgs, sources, partner = kept_messages()
     me_first = _first((psyche() or {}).get('name')) or 'You'
     them_first = _first(partner) or 'Partner'
     s['chat'] = {'source': ' and '.join(sources), 'signals': chat_signals(msgs), 'sample': chat_sample(msgs, me_first, them_first)} if msgs else None
+    save_state(s)
+    return msgs
+
+
+def finish_chat(s):
+    """The conversation so far, counted and sampled here, goes in their locked card with the stage; then the invite,
+    the reminder, and WhatsApp offered while they wait."""
+    msgs = count_chat(s)
     s['chatFinished'] = True
     save_state(s)
     got = put_profile(s, False)
     if got.get('error'):
         return got
-    return {'invite': invite(), 'say': 'All set. Once your partner joins, you\'ll each get your own questions, written from both your Psyches%s.' % (' and your conversation together' if msgs else ''),
-            'buttons': ['Has my partner joined?'], 'asButtons': True, 'setCheck': True}
+    return {'invite': invite(), 'setCheck': True,
+            'say': 'All set. I\'ll tell you here when your partner joins, with your questions ready.',
+            'whatsapp': ('Highly recommended while you wait: your WhatsApp chat together makes the read far more specific to the two of you. '
+                         'To add it, %s.' % WHATSAPP_HOW),
+            'buttons': ['Add our WhatsApp chat', 'Has my partner joined?'], 'asButtons': True}
 
 
 def flip_chat(chat):
@@ -1313,6 +1329,8 @@ def send(no_chat=False):
         return got
     s['sent'] = int(time.time())
     save_state(s)
+    if not s.get('forYou'):
+        return dict(foryou_task(), sent=True)
     k, got, profiles, box = couple()
     if got.get('error'):
         return got
@@ -1467,29 +1485,24 @@ def save_read(path):
     s = state()
     s['readAt'] = box['at']
     save_state(s)
-    return dict(foryou_task(box), saved=True)
+    return dict(show(box) if s.get('forYou') else foryou_task(), saved=True)
 
 
 def foryou_task(box=None):
+    """This person's own For you, written right after they submit, from their answers, their full report and their
+    partner's Psyche (README "Psyche Together, release 13"). Data only."""
     s = state()
-    if box is None:
-        k, got, profiles, box = couple()
-        if got.get('error'):
-            return got
-        if not box:
-            return {'waiting': True, 'say': 'Your read isn\'t written yet.'}
-    guide = read_first([GUIDE]) or {}
     answers = s.get('answers') or {}
     mine = {}
     for it in items(s):
         a = answers.get(it['id'])
         if a and it['kind'] in ('core', 'deeper'):
             mine[it['text'].replace('{p}', s.get('partner') or 'your partner')] = a.get('text') or a.get('label')
+    k, got, profiles, _ = couple()
+    _, theirs = mine_theirs(s, profiles) if not got.get('error') else ({}, {})
     flagged = (answers.get('safety') or {}).get('label') in SAFETY_FLAGGED
-    return {'write': 'foryou',
-            'yourAnswers': mine, 'coupleView': box.get('view'), 'yourPsyche': psyche_profile(psyche() or {}),
-            'gentle': flagged,
-            'saveTo': 'work/together-foryou.json'}
+    return {'write': 'foryou', 'yourAnswers': mine, 'yourPsyche': psyche_profile(psyche() or {}), 'yourReport': (psyche() or {}).get('report'),
+            'partner': theirs.get('psyche'), 'gentle': flagged, 'saveTo': 'work/together-foryou.json'}
 
 
 def check_foryou(f, gentle=False):
@@ -1527,10 +1540,22 @@ def save_foryou(path):
         os.remove(str(path).lstrip('@'))
     except OSError:
         pass
-    return show()
+    k, got, profiles, box = couple()
+    if got.get('error'):
+        return got
+    if box:
+        return show(box)
+    if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
+        return write_task(profiles)
+    return {'waiting': True, 'say': 'Your answers are in, and your own advice is ready for when your read arrives. I\'ll tell you here when %s has done theirs.' % (s.get('partner') or 'your partner'),
+            'buttons': ['Is our read ready?'], 'asButtons': True}
 
 
 def status():
+    try:
+        update()            # a newer signed release, if there is one: the next command runs it
+    except Exception:       # never in the way of the person: status answers either way
+        pass
     if not psyche() or not account():
         return needs_psyche()
     s = state()
@@ -1562,8 +1587,9 @@ def status():
 
 
 def check():
-    """For the "Psyche Together check" reminder: quiet until something is waiting for them, then one line and a
-    button; `done` once their read is shown or it has ended, so the reminder can go."""
+    """For the "Psyche Together check" reminder (README "Psyche Together, release 13"): quiet until something is
+    waiting, then the thing itself: the questions to write and show when the partner has joined, the read to
+    write when both have answered, the page when it's ready; `done` once it has been shown."""
     s = state()
     if not s.get('role'):
         return {'done': True, 'quiet': True}
@@ -1573,14 +1599,19 @@ def check():
     mine, theirs = mine_theirs(s, profiles)
     name = (theirs.get('psyche') or {}).get('name') or 'Your partner'
     if not s.get('questions'):
-        return {'quiet': True} if not theirs.get('psyche') else {'say': '%s has joined Psyche Together. Your questions are ready.' % name,
-                                                                 'buttons': ['Show my questions'], 'asButtons': True}
+        if not theirs.get('psyche'):
+            return {'quiet': True}
+        return dict(questions_task(), say='%s has joined Psyche Together. Here are your questions.' % name)
     if not s.get('sent'):
         return {'quiet': True}
-    if box and s.get('forYou'):
-        return {'done': True, 'quiet': True}
-    if box or all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
-        return {'say': '%s has finished. Your Psyche Together is ready.' % name, 'buttons': ['Show our Psyche Together'], 'asButtons': True}
+    if box:
+        if s.get('shown') == box.get('at'):
+            return {'done': True, 'quiet': True}
+        s['shown'] = box.get('at')
+        save_state(s)
+        return dict(show(box) if s.get('forYou') else foryou_task(), say='%s has finished. Here\'s your Psyche Together.' % name)
+    if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
+        return write_task(profiles)
     return {'quiet': True}
 
 
@@ -1828,6 +1859,9 @@ def show(box=None):
             return got
         if not box:
             return {'waiting': True, 'say': 'Your read isn\'t written yet.'}
+    if s.get('shown') != box.get('at'):
+        s['shown'] = box.get('at')
+        save_state(s)
     os.makedirs(OUT, exist_ok=True)
     names = (box.get('view') or {}).get('names') or ['', '']
     path = os.path.join(OUT, 'Psyche-Together-%s-%s.html' % tuple(re.sub(r'[^A-Za-z0-9]+', '', n) or 'Partner' for n in names))
