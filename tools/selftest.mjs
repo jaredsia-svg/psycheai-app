@@ -3751,7 +3751,8 @@ elif a[0] == 'thread':
     for i in range(80):
         day = 1700000000 + i * 36000
         msgs.append({'content': {'text_body': ['how was your day?', 'thank you for dinner', 'sorry I was short earlier', 'love you', 'see you at 7'][i % 5] + ' (%d)' % i},
-                     'message_sent_at': day * 1000, 'sender_fbid': 'm1' if i % 2 else 'b1'})
+                     'message_sent_at': ({'user_local': __import__('datetime').datetime.utcfromtimestamp(day + 8 * 3600).strftime('%Y-%m-%dT%H:%M:%S+08:00'), 'user_timezone': 'Asia/Singapore', 'utc': day} if i % 3 else day * 1000),
+                     'sender_fbid': 'm1' if i % 2 else 'b1'})
     print(json.dumps({'messages': msgs, 'messages_page_info': {'has_next_page': False}}))
 `);
   fsx.chmodSync(fakeCli, 0o755);
@@ -3790,6 +3791,15 @@ elif a[0] == 'thread':
   const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
   fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
   tg.waAdded = await run.a('chat-file', wa);
+  // A Psyche Together picked before release 21 (no igRetried): status reads the Instagram chat again once, adding nothing twice.
+  const stA = pathx.join(home.a.dir, 'state.json'), chatA = pathx.join(home.a.dir, 'chat.json');
+  const before = JSON.parse(fsx.readFileSync(chatA, 'utf8')).messages.length;
+  const old = JSON.parse(fsx.readFileSync(stA, 'utf8'));
+  delete old.igRetried; delete old.pickedThread; delete old.igCount;
+  fsx.writeFileSync(stA, JSON.stringify(old));
+  tg.reread = await run.a('status');
+  tg.rereadState = JSON.parse(fsx.readFileSync(stA, 'utf8'));
+  tg.rereadCounts = [before, JSON.parse(fsx.readFileSync(chatA, 'utf8')).messages.length];
   tg.staged = tg.picked;
   tg.join = await run.b('join', tg.picked.invite.url);
   tg.joinAgain = await run.b('join', tg.picked.invite.url);
@@ -3897,8 +3907,14 @@ elif a[0] == 'thread':
   tg.checkA5 = await runR('a', 'check');
   const htmlR = tg.checkA4.file ? fsx.readFileSync(tg.checkA4.file, 'utf8') : '';
   const htmlA = tg.pageA.file ? fsx.readFileSync(tg.pageA.file, 'utf8') : '', htmlB = tg.pageB.file ? fsx.readFileSync(tg.pageB.file, 'utf8') : '';
-  const boxes = [];
+  const boxes = [], tgLib = require('../lib/together.js');
   const kept = JSON.stringify(store.kvAll('together'), (k, v) => (v && typeof v === 'object' && v.v === 'e2e1' ? (boxes.push(v), '[box]') : v)) + JSON.stringify(store.kvAll('togetherof'));
+  const blobBoxes = {};
+  for (const [id] of store.kvAll('together')) {
+    for (const k of ['profile', 'chat', 'pic']) for (const r of ['a', 'b']) { const raw = await store.getBlob(tgLib.blobKey(id, k, r)); if (raw) blobBoxes[k + ':' + r] = JSON.parse(raw.toString('utf8')); }
+    const raw = await store.getBlob(tgLib.blobKey(id, 'read')); if (raw) blobBoxes.read = JSON.parse(raw.toString('utf8'));
+  }
+  const tgId = (store.kvAll('together')[0] || [''])[0];
   const theCode = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, '.keys.json'), 'utf8')).code;
   check('Psyche Together needs a Psyche first, and says how to make one',
     tg.noPsyche.needsPsyche === true && /Install psycheai\.io\/skill and generate my Psyche/.test(tg.noPsyche.say), JSON.stringify(tg.noPsyche));
@@ -3962,6 +3978,9 @@ elif a[0] == 'thread':
       tg.join.yourChat.signals.you.messages === tg.statusA.yourChat.signals.partner.messages && people.filter(p => p.chat).length === 1 && people[0].chat.signals.messages === 120,
     JSON.stringify([tg.threads, tg.picked]).slice(0, 400));
   const sig = (people.find(p => p.chat) || { chat: { signals: {} } }).chat.signals;
+  check('Instagram\'s dates as a bundle ({user_local, user_timezone, utc}) are read, by their own wall-clock time; a chat picked before that fix is read again once, adding nothing twice',
+    /80 messages from your Instagram chat/.test(tg.picked.read) && tg.rereadState.igRetried === true && tg.rereadState.igCount === 80 && tg.rereadState.pickedThread === 'Ana Lim' &&
+      tg.rereadCounts[0] === tg.rereadCounts[1] && tg.rereadCounts[0] === 120, JSON.stringify([tg.rereadCounts, tg.rereadState.igCount]));
   check('the conversation is measured on the device as the research measures it: how closely the two writing styles match, "we" against "I" and "you", warm and hard words, who starts, reply times, the day\'s rhythm and messages by month',
     sig.styleMatch > 0 && sig.styleMatch <= 1 && typeof sig.you.we === 'number' && typeof sig.partner.iYou === 'number' && sig.you.positive >= 0 &&
       sig.you.day && Object.keys(sig.you.day).join() === 'late,morning,afternoon,evening' && Array.isArray(sig.months) && sig.months.length >= 1 &&
@@ -3987,8 +4006,9 @@ elif a[0] == 'thread':
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&
       stateA.answers.safety.label === 'No', '');
-  check('PsycheAI keeps only boxes it can\'t open: no name, answer, code or Psyche in what it keeps for the couple',
-    kept.length > 50 && boxes.length === 4 && boxes.every(x => Object.keys(x).sort().join() === 'c,n,t,v' && x.c.length > 40) &&
+  check('PsycheAI keeps only boxes it can\'t open, each its own sealed blob (never in the rows loaded at boot), the conversation in its own: no name, answer, code or Psyche in what it keeps for the couple',
+    kept.length > 50 && boxes.length === 0 && Object.keys(blobBoxes).sort().join() === 'chat:a,pic:a,profile:a,profile:b,read' &&
+      Object.values(blobBoxes).every(x => Object.keys(x).sort().join() === 'c,n,t,v' && x.c.length > 40) && !/Mei|Ana|Mulan|Often|Married/.test(JSON.stringify(blobBoxes)) &&
       !/Mei|Ana|Mulan|Often|Married|Mostly|Loyalty|safety|achievement/.test(kept) && !kept.includes(theCode), kept.slice(0, 200));
   check('Psyche Together stands apart from the PsycheAI skill: its own files, served and signed under its own name, its tools hidden from the host, nothing of it in PsycheAI\'s script or SKILL.md; its SKILL.md keeps its answers, partner and link out of memory notes',
     !/Psyche Together|together_|together\.py|psyche-together/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) && !/Psyche Together/.test(await (await fetch(base + '/skill/SKILL.md')).text()) &&
@@ -3997,8 +4017,23 @@ elif a[0] == 'thread':
       /not in memory notes/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')), JSON.stringify({ signed: Boolean(tgSkill.signed()), hiddenTools }));
   tg.end = await run.a('end');
   tg.afterEnd = await run.b('status');
-  check('either can end it: everything kept goes, for both, and the other sees only that it ended',
-    tg.end.ended && store.kvAll('together').length === 0 && /ended/.test(JSON.stringify(tg.afterEnd)), JSON.stringify(tg.afterEnd));
+  tg.blobsAfterEnd = (await Promise.all(['profile:a', 'profile:b', 'chat:a', 'pic:a', 'read'].map(k => store.getBlob(tgLib.blobKey(tgId, ...k.split(':')))))).filter(Boolean).length;
+  // The sample's budget (README "Psyche Together, release 21"): a long conversation fills up to 120,000 characters, over its whole span.
+  tg.big = JSON.parse((await execFile('python3', ['-c', `
+import importlib.util, json, datetime
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+t0 = datetime.datetime(2023, 1, 1)
+msgs = [(t0 + datetime.timedelta(hours=7 * i), 'me' if i % 2 else 'them', ('thanks so much for today, ' if i % 9 == 0 else 'see you later, ') + 'x' * (i % 120)) for i in range(9000)]
+out = m.chat_sample(msgs, 'Mei', 'Ana')
+small = m.chat_sample(msgs[:50], 'Mei', 'Ana')
+long = m.clean_line('word ' * 400)
+print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'months': len({x[:7] for x in out}), 'allMonths': len({(t0 + datetime.timedelta(hours=7 * i)).strftime('%Y-%m') for i in range(9000)}),
+                  'small': len(small), 'long': len(long), 'sorted': out == sorted(out)}))
+`], { env: home.a.env })).stdout);
+  check('the read sees up to 120,000 characters of their conversation, at least what a Psyche Report reads of all of someone\'s messages: all of it when it fits, otherwise every month of it and what matters most, in time order, a long message as its opening and its end',
+    tg.big.chars <= 120000 && tg.big.chars > 110000 && tg.big.months === tg.big.allMonths && tg.big.small === 50 && tg.big.long <= 483 && tg.big.sorted, JSON.stringify(tg.big));
+  check('either can end it: everything kept goes, for both, its blobs too, and the other sees only that it ended',
+    tg.end.ended && store.kvAll('together').length === 0 && tg.blobsAfterEnd === 0 && /ended/.test(JSON.stringify(tg.afterEnd)), JSON.stringify(tg.afterEnd));
   if (was === undefined) delete process.env.PSYCHE_TOGETHER; else process.env.PSYCHE_TOGETHER = was;
   await new Promise(r => srv.close(r));
 }

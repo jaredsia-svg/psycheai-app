@@ -47,7 +47,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 20
+RELEASE = 21
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -505,7 +505,7 @@ def shared_profile(s, answered=True):
     out = {'v': 8, 'psyche': psyche_profile(kept) if kept else {}, 'stage': stage_of(s) if s.get('role') == 'a' else None,
            'report': (kept or {}).get('report'), 'fullName': str((kept or {}).get('name') or '')[:60]}
     if s.get('chat'):
-        out['chat'] = s['chat']
+        out['chat'] = {k: v for k, v in s['chat'].items() if k != 'sample'}     # the sample goes in its own box
     if not answered:
         return out
     answers = s.get('answers') or {}
@@ -877,8 +877,13 @@ def tool(name, args):
 IG_CLI = os.environ.get('PSYCHEAI_IG_CLI') or '/opt/hatch/bin/instagram-cli'
 IGM_CLI = os.environ.get('PSYCHEAI_IGM_CLI') or '/opt/hatch/bin/instagram-messages-cli'
 CHAT_FILE = os.path.join(HERE, 'chat.json')
-CHAT_MAX = 2000          # messages read from the thread, newest first
-SAMPLE = 180             # messages the read sees, spread over the whole span
+CHAT_MAX = 6000          # messages read from the Instagram thread, newest first (a WhatsApp export is read whole)
+# README "Psyche Together, release 21": what the read sees of their conversation, at least what a Psyche Report
+# reads of all of someone's messages (its 115,000 characters): spread over the whole span, a long message as its
+# opening and its end, as the PsycheAI skill keeps one (TEXT_CHARS).
+CHAT_BUDGET = 120000
+CHAT_BYTES = 160000      # and at most this in UTF-8, so locked it fits one request (256 KB) whatever the script: Chinese or emoji take 3 or 4 bytes a character
+TEXT_CHARS = 483
 GAP = 6 * 3600           # a new conversation after six quiet hours
 THANKS = re.compile(r'\b(thanks|thank you|thx|ty|appreciate|grateful|proud of you|you\'re the best)\b', re.I)
 SORRY = re.compile(r'\b(sorry|my bad|i was wrong|apologi[sz]e|forgive me|let\'s talk|can we talk|i understand)\b', re.I)
@@ -940,6 +945,17 @@ def _accounts(data):
 
 
 def _when(v):
+    """A message's time as a local datetime. Instagram now sends it as a bundle ({user_local, user_timezone, utc}):
+    their own wall-clock time is used as it is, so the day's rhythm is theirs, else utc made local (README
+    "Psyche Together, release 21")."""
+    if isinstance(v, dict):
+        local = v.get('user_local')
+        if isinstance(local, str) and local.strip():
+            try:
+                return datetime.fromisoformat(local.strip().replace('Z', '+00:00')).replace(tzinfo=None)
+            except ValueError:
+                pass
+        return _when(v.get('utc') or v.get('timestamp') or v.get('ms'))
     try:
         n = float(v)
         return datetime.fromtimestamp(n / 1000 if n > 1e11 else n)
@@ -972,8 +988,12 @@ def instagram_threads():
 def instagram_thread(th):
     """One Instagram thread, read from this account: [(datetime, 'me'|'them', text)], oldest first."""
     out, after, pages, them = [], None, 0, set(th.get('them') or [])
-    while len(out) < CHAT_MAX and pages < 40:
-        page = _cli(IGM_CLI, 'thread', '--account-id', th['account'], '--thread-fbid', th['fbid'], '--first', 50, *(('--after', after) if after else ()))
+    size = 100
+    while len(out) < CHAT_MAX and pages < 80:
+        page = _cli(IGM_CLI, 'thread', '--account-id', th['account'], '--thread-fbid', th['fbid'], '--first', size, *(('--after', after) if after else ()))
+        if not page and size > 50:
+            size = 50           # a page of 100 refused: 50 a page, as the PsycheAI skill does
+            continue
         if not page:
             break
         pages += 1
@@ -1106,24 +1126,43 @@ def chat_signals(msgs):
                     'streak': best, 'daysTalking': len(days)}}
 
 
-def chat_sample(msgs, me_name, them_name):
-    """A sample the read sees: spread over the whole span, favouring what matters (questions, thanks, sorry,
-    longer messages), each line its date, time, who, and the message with links, emails, handles and numbers out."""
+def clean_line(text):
+    """One message for the sample: links, emails, handles and numbers out; a long one as its opening and its end."""
+    t = re.sub(r'\s+', ' ', str(text or '')).strip()
+    for rx, sub in SCRUB:
+        t = rx.sub(sub, t)
+    return t if len(t) <= TEXT_CHARS else t[:330].rstrip() + ' … ' + t[-(TEXT_CHARS - 334):].lstrip()
+
+
+def chat_sample(msgs, me_name, them_name, budget=None):
+    """What the read sees of their conversation, up to CHAT_BUDGET characters: all of it when it fits; otherwise
+    every month represented (an even spread first), then what matters most (questions, thanks, sorry, longer
+    messages) until the budget is used, in time order. Each line its date, time, who, and the message."""
+    budget = budget or CHAT_BUDGET
     if not msgs:
         return []
-    keep = set()
-    step = max(1, len(msgs) // (SAMPLE // 2))
-    keep.update(range(0, len(msgs), step))
-    ranked = sorted(range(len(msgs)), key=lambda i: -(('?' in msgs[i][2]) + bool(THANKS.search(msgs[i][2])) * 2 + bool(SORRY.search(msgs[i][2])) * 2 + min(len(msgs[i][2]), 300) / 150))
-    for i in ranked:
-        if len(keep) >= SAMPLE:
+    lines = ['%s %s: %s' % (t.strftime('%Y-%m-%d %H:%M'), me_name if who == 'me' else them_name, clean_line(text)) for t, who, text in msgs]
+    chars = [len(x) + 1 for x in lines]
+    wide = sum(len(x.encode('utf-8')) + 1 for x in lines) / max(1, sum(chars))     # bytes a character, for this conversation
+    budget = min(budget, int(CHAT_BYTES / max(1.0, wide)))
+    size = chars
+    if sum(size) <= budget:
+        return lines
+    keep, used = set(), 0
+    avg = sum(size) / len(size)
+    step = max(1, int(len(msgs) / max(1, (budget / 2) / avg)))
+    for i in range(0, len(msgs), step):
+        if used + size[i] > budget / 2:
             break
         keep.add(i)
-    out = []
-    for i in sorted(keep)[:SAMPLE]:
-        t, who, text = msgs[i]
-        out.append('%s %s: %s' % (t.strftime('%Y-%m-%d %H:%M'), me_name if who == 'me' else them_name, clean_typed(text.replace('\n', ' '))[:300] if len(text) < 300 else clean_typed(text.replace('\n', ' '))[:300] + '…'))
-    return out
+        used += size[i]
+    weight = lambda i: (('?' in msgs[i][2]) + bool(THANKS.search(msgs[i][2])) * 2 + bool(SORRY.search(msgs[i][2])) * 2 + bool(WARM.search(msgs[i][2])) + min(len(msgs[i][2]), 300) / 150)
+    for i in sorted(range(len(msgs)), key=lambda i: (-weight(i), i)):
+        if i in keep or used + size[i] > budget:
+            continue
+        keep.add(i)
+        used += size[i]
+    return [lines[i] for i in sorted(keep)]
 
 
 def kept_messages():
@@ -1162,8 +1201,36 @@ def pick_thread(label):
     old, sources, partner = kept_messages()
     keep_messages(old + msgs, sources + ['instagram'], partner or label)
     s.setdefault('chatDone', []).append('instagram')
+    s['pickedThread'], s['igCount'], s['igRetried'] = label, len(msgs), True
     save_state(s)
     return dict(chat_step(s), read='%d messages from your Instagram chat with %s' % (len(msgs), label))
+
+
+def reread_instagram(s):
+    """Once, before the read is written: the picked Instagram chat read again when it came back empty, or was read
+    before release 21, when Instagram's new date format (a bundle: user_local, user_timezone, utc) made every
+    message drop out. New messages are added to what's kept (none twice), counted, and the locked copy updated."""
+    if s.get('role') != 'a' or s.get('readAt') or s.get('igRetried') or 'instagram' not in (s.get('chatDone') or []):
+        return None
+    old, sources, partner = kept_messages()
+    label = s.get('pickedThread') or partner
+    th = next((t for t in s.get('threads') or [] if t.get('label') == label), None)
+    s['igRetried'] = True
+    save_state(s)
+    if not th:
+        return None
+    msgs = instagram_thread(th)
+    seen = {(t.strftime('%Y-%m-%d %H:%M'), who, text) for t, who, text in old}
+    new = [m for m in msgs if (m[0].strftime('%Y-%m-%d %H:%M'), m[1], m[2]) not in seen]
+    s['pickedThread'], s['igCount'] = label, len(msgs)
+    save_state(s)
+    if not new:
+        return None
+    keep_messages(old + new, sources if 'instagram' in sources else sources + ['instagram'], partner or label)
+    count_chat(s)
+    if s.get('chatFinished') or s.get('questions'):
+        put_profile(s, bool(s.get('sent')))
+    return len(new)
 
 
 WHATSAPP_HOW = 'in WhatsApp, open your chat with your partner, tap ⋮ or their name, then More, Export chat, Without media, and share the .zip here'
@@ -1309,6 +1376,13 @@ def put_profile(s, answered):
     if pic and not got.get('error'):
         s['picSent'] = True
         save_state(s)
+    sample = (s.get('chat') or {}).get('sample')
+    mark = hashlib.sha256(json.dumps(sample or [], ensure_ascii=False).encode()).hexdigest()[:16]
+    if sample and not got.get('error') and s.get('chatSent') != mark:
+        got = tool('together_put', {'e2e': {'chat': seal({'sample': sample}, key_for('together-box', k['code']))}})     # its own request: up to 120,000 characters
+        if not got.get('error'):
+            s['chatSent'] = mark
+            save_state(s)
     return got
 
 
@@ -1360,6 +1434,10 @@ def couple():
     e = got.get('e2e') or {}
     key = key_for('together-box', k['code'])
     profiles = {r: unseal((e.get('profiles') or {}).get(r), key) for r in ('a', 'b')}
+    for r in ('a', 'b'):
+        talk = unseal((e.get('chats') or {}).get(r), key)
+        if isinstance(talk, dict) and isinstance((profiles.get(r) or {}).get('chat'), dict):
+            profiles[r]['chat']['sample'] = talk.get('sample') or []
     pics = {r: (unseal((e.get('pics') or {}).get(r), key) or {}).get('img') for r in ('a', 'b')}
     SEEN.update(pics={r: p for r, p in pics.items() if isinstance(p, str) and p.startswith('data:image/')},
                 cards={r: (profiles.get(r) or {}).get('psyche') or {} for r in ('a', 'b')})
@@ -1891,6 +1969,10 @@ def status():
     if not psyche() or not account():
         return needs_psyche()
     s = state()
+    try:
+        reread_instagram(s)
+    except Exception:       # never in the way: the chat stays as it was
+        pass
     if not s.get('role'):
         return {'none': True, 'say': 'Psyche Together is a private check-in for you and your partner, built on both your Psyches.', 'buttons': ['Start Psyche Together'], 'asButtons': True}
     if s.get('role') == 'a' and not stage_of(s):
@@ -1929,6 +2011,10 @@ def check():
     s = state()
     if not s.get('role'):
         return {'done': True, 'quiet': True}
+    try:
+        reread_instagram(s)
+    except Exception:
+        pass
     k, got, profiles, box = couple()
     if got.get('ended') or (got.get('error') and not profiles):
         return {'done': True, 'quiet': True}
