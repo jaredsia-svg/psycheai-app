@@ -3785,7 +3785,9 @@ elif a[0] == 'thread':
   // What Muse writes for each person: an opener and a follow-up per pillar, from both Psyches.
   const questionsFor = (task, named) => ({
     openers: Object.fromEntries(task.pillars.map(p => [p, named ? `${task.partner.name} and you meet ${p} in your own ways: ${task.partner.caresBy[0] || 'care'} on one side.` : `About ${p}, in your own ways.`])),
-    followUps: Object.fromEntries(task.pillars.map(p => [p, { q: `When ${p} feels thin, what do you do?`, options: ['I say so', 'I wait', 'I pull back'] }])) });
+    followUps: Object.fromEntries(task.pillars.map(p => [p, { q: `When ${p} feels thin, what do you do?`, options: ['I say so', 'I wait', 'I pull back'] }])),
+    know: [{ q: `What does ${task.partner.name} reach for first after a hard week?`, options: ['A long run', 'A quiet book', 'Calling a friend'], from: 'report', answer: 'A quiet book', basis: 'How they recharge, in their report' },
+           { q: `How does ${task.partner.name} most like to spend a Sunday?`, qSelf: 'How do you most like to spend a Sunday?', options: ['Out with friends', 'At home, slowly', 'Somewhere new'], from: 'partner' }] });
   tg.noPsyche = JSON.parse((await execFile('python3', [pathx.join(home.a.dir, 'bin', 'together.py'), 'status'], { env: { ...home.a.env,
     PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tg-none-')), PSYCHEAI_SKILL_DIR: '/nonexistent' } })).stdout);
   tg.start = await run.a('start');
@@ -3835,6 +3837,8 @@ elif a[0] == 'thread':
   await runSolo('end');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, false)));
   tg.badQ = await run.b('save-questions', '@work/together-questions.json');
+  fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify({ ...questionsFor(tg.join, true), know: [{ q: 'What does Mei like most?', options: ['Tea', 'Coffee', 'Juice'], from: 'report', answer: 'Water', basis: 'x' }] }));
+  tg.noKnowQ = await run.b('save-questions', '@work/together-questions.json');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, true)));
   tg.formB = await run.b('save-questions', '@work/together-questions.json');
   const Whtml = String(tg.formB.widget || '');
@@ -3880,7 +3884,8 @@ elif a[0] == 'thread':
   const EV = w => [{ when: 'June 2025', what: 'your messages after a long week, about ' + w }];
   const AREA_IDS = { close: ['appreciation', 'loves', 'connection', 'desire'], life: ['needs', 'life', 'interests'], future: ['values', 'decisions', 'future', 'growth'], secure: ['security', 'attachment'], disagree: ['disagreements', 'cycle'] };
   const PILLAR_IDS = ['appreciation', 'connection', 'desire', 'needs', 'life', 'future', 'growth', 'security', 'disagreements'];
-  const AR = cid => Object.fromEntries(AREA_IDS[cid].filter(a => (!PILLAR_IDS.includes(a) || a in view.pillars) && (a !== 'decisions' || view.decisions.length))
+  AREA_IDS.close.splice(2, 0, 'know');
+  const AR = cid => Object.fromEntries(AREA_IDS[cid].filter(a => (!PILLAR_IDS.includes(a) || a in view.pillars) && (a !== 'decisions' || view.decisions.length) && (a !== 'know' || (view.know && view.know.items.length)))
     .map(a => [a, { meaning: 'What ' + a + ' means for you both, said plainly.', psyches: 'Your two Psyches shape ' + a + ' in your own way.',
                     ...(a === 'cycle' ? { status: 'one pushes, one waits' } : a === 'attachment' ? { status: 'both lean secure' } : {}),
                     evidence: [{ when: 'May 2025', what: 'a moment that shows ' + a }] }]));
@@ -3986,6 +3991,14 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /no searching memory, chats or old folders/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /Never open bin\/together\.py/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       /What save-questions checks/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec),
     JSON.stringify([tg.join.short, tg.formB.widgetFile, tg.waitB.setCheck]));
+  check('two questions about your partner (README "Psyche Together, release 40"): written with the others, from the partner\'s report with its answer, or confirmed by the partner in their own check-in, asked last as About you; save-questions refuses anything else; the couple total and the right answers are shared, each one\'s own count only on their own copy and never to the writer, never on the gentle path, and a question left unconfirmed is not counted',
+    tg.noKnowQ.saved === false && tg.noKnowQ.problems.some(p => /^know: exactly two questions about Mei/.test(p)) &&
+      tg.askedA.some(x => x.id === 'know:1' && x.kind === 'know' && x.buttons.length === 3) && tg.askedA.some(x => x.id === 'me:know:2' && x.kind === 'me' && /^Ana will guess this about you\. How do you most like to spend a Sunday\?$/.test(x.say)) &&
+      /<span class="chip">About you<\/span>/.test(String(tg.formA.widget || '')) && /<span class="chip">How well you know Ana<\/span>/.test(String(tg.formA.widget || '')) &&
+      view.know && view.know.items.length === 3 && view.know.of === 1 && !('knowBy' in view) && view.know.items.some(x => x.about === 'Mei' && x.answer === 'A quiet book') &&
+      /<div class="area" id="close-know"><div class="at"><b>Knowing each other<\/b><span class="lv (Aligned|Talk-about)">[01] of 1<\/span>/.test(htmlA) && /Worth knowing about each other/.test(htmlA) && /You knew [01] of 1 about Ana\./.test(htmlA) &&
+      /Knowing each other <span class="lw (Aligned|Talk-about)">[01] of 1<\/span>/.test(htmlA) && !/You knew/.test(htmlB) && /id="close-know"/.test(htmlB),
+    JSON.stringify([tg.noKnowQ.problems, view.know, tg.askedA.filter(x => /know/.test(x.id))]).slice(0, 600));
   check('one page in out/: a page written again removes any older one beside it; a newer release runs the same command at once (status, rewrite and check), once; SKILL.md says rewrite alone when they ask for both, never to open together.py, and never to search memory for where it stands (README "Psyche Together, release 37")',
     tg.outAfter.length === 1 && tg.rewritten.file && tg.outAfter[0] === pathx.basename(tg.rewritten.file) &&
       /if cmd in \('status', 'rewrite', 'check'\) and not os\.environ\.get\('PSYCHE_TOGETHER_FRESH'\)/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
