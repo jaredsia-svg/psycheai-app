@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 47
+RELEASE = 48
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -105,6 +105,14 @@ CORE_SEPARATED = {
     'life': 'How comfortable are you with how {p} handles time, money and energy around the children?',
 }
 SKIP_SEPARATED = {'desire', 'growth'}
+
+# README "Psyche Together, release 48": how sure you are yourself, beside how sure you are of your partner (security),
+# and what you disagree about most, the same for both. Commitment shows only as the couple's level, never whose;
+# the topic shows side by side, as the big decisions do, since naming different topics is itself the finding.
+COMMIT = ('commit:self', 'And how sure are you that you want this relationship for the long run?', [('Completely', 2), ('Mostly', 1), ('Not sure', 0)])
+COMMIT_SEPARATED = 'And how sure are you that you want to keep working together for the children?'
+TOPIC = ('topic:disagree', 'What do you and {p} disagree about most? Your answer is shown to you both, side by side.',
+         ['Chores and who does what', 'Money', 'Time together', 'Family and parents', 'Plans and timekeeping', 'How we talk to each other'])
 
 # README "Psyche Together, release 17": two overall questions, the same for both. How satisfied someone believes
 # their partner is was among the strongest predictors of relationship quality across 11,196 couples (Joel et al.,
@@ -386,6 +394,11 @@ def items(s):
                 if key != 'desire' and isinstance(f, dict) and f.get('q') and f.get('options'):
                     out.append({'id': 'deep:' + key, 'kind': 'deeper', 'pillar': key, 'opener': '', 'text': f['q'], 'follows': 'core:' + key,
                                 'options': [o for o in f['options'] if o != OTHER] + [OTHER], 'own': True})
+                if key == 'security':
+                    out.append({'id': COMMIT[0], 'kind': 'commit', 'pillar': 'security', 'opener': '', 'text': COMMIT_SEPARATED if stage == SEPARATED else COMMIT[1],
+                                'options': [o for o, _ in COMMIT[2]], 'scores': [sc for _, sc in COMMIT[2]]})
+                if key == 'disagreements':
+                    out.append({'id': TOPIC[0], 'kind': 'topic', 'pillar': 'disagreements', 'opener': '', 'text': TOPIC[1], 'options': TOPIC[2] + [OTHER], 'own': True})
     # how well you know your partner (README "Psyche Together, releases 40 and 47"): last, before the private one
     out += [{'id': k_['id'], 'kind': 'know', 'pillar': '', 'opener': '', 'text': k_['q'], 'options': list(k_['options'])} for k_ in q.get('know') or []]
     out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
@@ -547,6 +560,12 @@ def shared_profile(s, answered=True):
     core, ov = levels_of(stage_of(s), answers)
     out.update(core=core, overall=ov, rounds=s.get('rounds') or [], desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
                decisions={k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')})
+    cm = (answers.get(COMMIT[0]) or {}).get('label')
+    if cm in dict(COMMIT[2]):
+        out['commit'] = dict(COMMIT[2])[cm]
+    tp = answers.get(TOPIC[0]) or {}
+    if tp.get('label'):
+        out['topic'] = (clean_typed(tp.get('text'), [s.get('partner') or ''])[:60] or OTHER) if tp['label'] == OTHER else tp['label']
     return out
 
 
@@ -576,6 +595,11 @@ def couple_view(a, b):
     ov = overall_view(a.get('overall'), b.get('overall'))
     if ov:
         out['overall'] = ov
+    if isinstance(a.get('commit'), int) and isinstance(b.get('commit'), int):
+        x, y = a['commit'], b['commit']
+        out['commitment'] = LEVELS[2 if x == 2 and y == 2 else 0 if 0 in (x, y) else 1]
+    if a.get('topic') and b.get('topic'):
+        out['topics'] = {'a': a['topic'], 'b': b['topic'], 'same': a['topic'].strip().lower() == b['topic'].strip().lower()}
     kv = know_view(a, b, out['names'])
     if kv:
         out['know'], out['knowBy'] = kv
@@ -1953,7 +1977,7 @@ AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages')
          'life': [('needs', 'Fairness'), ('life', 'Rhythm'), ('interests', 'Interests')],
          'future': [('values', 'Values'), ('future', 'Shared future'), ('decisions', 'Big decisions'), ('growth', 'Growth')],
          'secure': [('security', 'Security'), ('attachment', 'Attachment')],
-         'disagree': [('disagreements', 'Repair'), ('cycle', 'Your cycle')]}
+         'disagree': [('topics', 'What you disagree about'), ('cycle', 'Your cycle'), ('disagreements', 'Repair')]}
 PSY_AREAS = ['loves', 'connection', 'needs', 'life', 'values', 'growth', 'security', 'attachment', 'disagreements', 'cycle']
 STATUS_AREAS = ['attachment', 'cycle']
 EVIDENCE_KINDS = ['messages', 'psyches', 'report', 'moment']
@@ -1967,7 +1991,7 @@ VERDICTS = {'matches': 'Matches how you see it', 'better': 'Better than you thin
 def areas_of(cid, view):
     """A chapter's areas that apply: a pillar area only when the couple view has it, big decisions only with decisions."""
     return [(a, n) for a, n in AREAS.get(cid, []) if (a not in PILLARS or a in (view.get('pillars') or {})) and (a != 'decisions' or view.get('decisions'))
-            and (a != 'know' or (view.get('know') or {}).get('items'))]
+            and (a != 'know' or (view.get('know') or {}).get('items')) and (a != 'topics' or view.get('topics'))]
 PLAN_TITLE = 'Your 28-day practice'
 
 
@@ -2057,6 +2081,9 @@ def check_read(r, view, has_chat=False):
         need(all(isinstance(n, int) and n >= 0 for n in nums) and nums[0] > 0 and nums[1] + nums[2] + nums[3] == nums[0]
              and len(L(bd.get('missed'))) <= 2 and all(DATED.search(T(D(m).get('when'))) and 0 < len(T(D(m).get('text'))) <= 200 for m in L(bd.get('missed'))),
              'chapters.close.areas.connection.bids: the bids for attention you counted in the sample (seen), how many were turned toward, away (missed, ignored, changed the subject) and against (met sharply), adding up to seen, and up to two missed ones (when, text)')
+    if view.get('topics'):
+        need(A_('disagree', 'topics').get('type') in ('solvable', 'perpetual'),
+             'chapters.disagree.areas.topics.type: solvable (it can be settled) or perpetual (it comes from a lasting difference between you, to manage, not win)')
     hz = D(A_('future', 'future').get('horizons'))
     if 'future' in (view.get('pillars') or {}):
         need(all(0 < len(T(hz.get(k))) <= 180 for k in ('5', '10', '15')),
@@ -2944,6 +2971,7 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .who2 b span{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:#fff;background:#7b3fa0}.who2>div+div b span{background:#d1477a}
 .who2 p{margin:6px 0 0;font-size:14px}.who2 small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
 @media (max-width:420px){.who2{grid-template-columns:1fr}}
+.kind2{margin:8px 0 0;font-size:13.5px;font-weight:650}.kind2.solvable{color:#2f6f53}.kind2.perpetual{color:#2b5d8f}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -3413,6 +3441,8 @@ def page(box, s):
             return ' · '.join(y for y in ['<span class="lw Aligned">%d aligned</span>' % al_ if al_ else '', '<span class="lw Talk-about">%d to talk about</span>' % tk_ if tk_ else ''] if y)
         elif aid in STATUS_AREAS:
             txt = D(D(c_.get('areas')).get(aid)).get('status') or ''
+        elif aid == 'topics' and view.get('topics'):
+            txt, cls = ('Same topic', 'Aligned') if view['topics'].get('same') else ('You see it differently', 'Steady')
         if not txt:
             return ''
         return ('<span class="lv %s">%s</span>' if pill else '<span class="lw %s">%s</span>') % (cls, _e(txt))
@@ -3432,7 +3462,7 @@ def page(box, s):
             great = {'loves': cls == 'Aligned', 'know': cls == 'Aligned',
                      'interests': len(D(D(D(D(ch.get(cid)).get('areas')).get(aid)).get('columns')).get('shared') or D(D(ch.get(cid)).get('enjoy')).get('shared') or []) >= 3,
                      'values': len(D(D(D(D(ch.get(cid)).get('areas')).get(aid)).get('columns')).get('shared') or D(D(ch.get(cid)).get('alike')).get('shared') or []) >= 3,
-                     'attachment': secure_(pa_) and secure_(pb_)}.get(aid, False)
+                     'attachment': secure_(pa_) and secure_(pb_), 'topics': bool(D(view.get('topics')).get('same'))}.get(aid, False)
             cls = 'Aligned' if great else 'Steady'
         return '<span class="tl %s"><small>%s</small><b>%s</b></span>' % (_e(cls), _e(nm), _e(txt[:1].upper() + txt[1:]))
     rows = ''
@@ -3530,6 +3560,16 @@ def page(box, s):
                 cy = D(c.get('cycle'))
                 steps_ = x.get('steps') or cy.get('steps')
                 lead = _cycle({'steps': steps_}, names) if steps_ else ''
+            elif aid == 'topics':
+                tv = D(view.get('topics'))
+                lead = ('<div class="who2">%s</div>' % ''.join('<div><b><span>%s</span>%s</b><p><small>Disagrees with %s most about</small>%s</p></div>'
+                                                               % (_initial(n_), _e(n_), _e(o_), _e(tv.get(k_))) for n_, o_, k_ in ((names[0], names[1], 'a'), (names[1], names[0], 'b'))))
+                if x.get('type') in ('solvable', 'perpetual'):
+                    lead += ('<p class="kind2 %s">%s</p>' % (x['type'], 'Solvable: this one can be settled' if x['type'] == 'solvable'
+                                                              else 'Lasting: it comes from a difference between you, so the aim is to handle it well, not to win it'))
+            elif aid == 'security' and view.get('commitment') and 'security' in (view.get('pillars') or {}):
+                lead = ('<div class="tiles"><span class="tl %s"><small>How sure you are of each other</small><b>%s</b></span><span class="tl %s"><small>How sure you each are yourselves</small><b>%s</b></span></div>'
+                        % (_e(view['pillars']['security'].replace(' ', '-')), _e(view['pillars']['security']), _e(view['commitment'].replace(' ', '-')), _e(view['commitment'])))
             st_lead = ('<div class="st">%s</div>' % lead) if lead else ''
             st2 = ('<div class="st"><span class="sl">What the evidence shows</span>%s%s</div>' % (('<ul class="evd">%s</ul>' % lis) if lis else '', data_)) if (lis or data_) else ''
             # 3. What it means, and what to do about it (no verdict tag: the area's own badge already says it)

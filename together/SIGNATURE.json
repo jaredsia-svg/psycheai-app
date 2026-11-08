@@ -1,10 +1,10 @@
 {
- "version": "ea228768126c",
- "release": 47,
+ "version": "ff59a78ec582",
+ "release": 48,
  "hashes": {
   "SKILL.md": "6b9dddf146729ed2dfb0e9435e8247f4f90dfe3394c3a8ef046e857909f85801",
-  "bin/together.py": "0cf6750d48fc26399f9a43f72b8ebff6095405b0391c793808a548cf548ad4dd",
-  "guide.json": "77f310881972b697b2d9e774742c32a704bd4f08e8825709eb9ac6e14c586583"
+  "bin/together.py": "68eed80d92a19c633f4c554cabe91e3bb0bfb71e70b20f29d62ea5b33c2bcf40",
+  "guide.json": "d5d3a71a290d6577e1c47aa51bd7a18721649b6dc3d7e210c188e7ad43816c36"
  },
- "signature": "dzL-V6QL7yZ6gDV6DWTXUhmvXKz3Mthg_87p4gOo0e1KggWebxtTWMMeeOkeYwt94xZDTHE0w2sWJSaaDZXJAA"
+ "signature": "kyzi90FIXvbHa5F-KBLEg4jq8ZfClduO10fe7wMGS1IS24Cm_NrF3ZiidZcRwyevPR21WUnzzLbplYrf2VIDCA"
 }
