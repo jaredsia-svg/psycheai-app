@@ -3928,7 +3928,9 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
   tg.noteTask = await run.a('rewrite', '--note', 'In 05 Conflict and repair, this felt off: the loop is the other way round');
   tg.rewrite = await run.a('rewrite');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify({ ...good, summary: 'Two people who keep coming back, written again.' }));
+  fsx.writeFileSync(pathx.join(home.a.dir, 'out', 'Psyche-Together-Old-Name.html'), '<p>an older page</p>');
   tg.rewritten = await run.a('save', '@work/together-read.json');
+  tg.outAfter = fsx.readdirSync(pathx.join(home.a.dir, 'out')).filter(f => /^Psyche-Together-.*\.html$/.test(f));
   tg.checkBagain = await run.b('check');
   tg.pageB = tg.checkB2;
   tg.checkA3 = await run.a('check');
@@ -3977,6 +3979,14 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /no searching memory, chats or old folders/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /Never open bin\/together\.py/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       /What save-questions checks/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec),
     JSON.stringify([tg.join.short, tg.formB.widgetFile, tg.waitB.setCheck]));
+  check('one page in out/: a page written again removes any older one beside it; a newer release runs the same command at once (status, rewrite and check), once; SKILL.md says rewrite alone when they ask for both, never to open together.py, and never to search memory for where it stands (README "Psyche Together, release 37")',
+    tg.outAfter.length === 1 && tg.rewritten.file && tg.outAfter[0] === pathx.basename(tg.rewritten.file) &&
+      /if cmd in \('status', 'rewrite', 'check'\) and not os\.environ\.get\('PSYCHE_TOGETHER_FRESH'\)/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
+      /os\.execv\(sys\.executable/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
+      /When the same message also asks to write the read again, run only `rewrite`/.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')) &&
+      /Never open bin\/together\.py: its results, their task files and guide\.json say everything needed/.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')) &&
+      /Never search memory for where Psyche Together stands: `status` says\./.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')),
+    JSON.stringify(tg.outAfter));
   check('the widget reads back what Muse restores when it draws it again (ticked radios and typed words), opening on the first one still to answer; "Something else" opens a box for their own words on the deeper questions, kept as their words; no part of it scrolls on its own',
     /function restore\(\)/.test(Whtml) && /input\[type=radio\]:checked/.test(Whtml) && /setTimeout\(restore,1200\)/.test(Whtml) && /id="c-intro"/.test(Whtml) &&
       W.items.filter(x => /^deep:/.test(x.id)).every(x => x.options[x.options.length - 1] === 'Something else') && W.items.filter(x => /^core:/.test(x.id)).every(x => !x.options.includes('Something else')) &&

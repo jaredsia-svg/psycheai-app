@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 36
+RELEASE = 37
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2344,10 +2344,6 @@ def nudge(s, box, profiles, name):
 
 
 def status():
-    try:
-        update()            # a newer signed release, if there is one: the next command runs it
-    except Exception:       # never in the way of the person: status answers either way
-        pass
     if not psyche() or not account():
         return needs_psyche()
     s = state()
@@ -3388,6 +3384,12 @@ def show(box=None):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(page(box, s))
     os.chmod(path, 0o600)
+    for old in glob.glob(os.path.join(OUT, 'Psyche-Together-*.html')):
+        if os.path.abspath(old) != os.path.abspath(path):
+            try:
+                os.remove(old)      # one page in out/, the newest: an older page never sits beside it
+            except OSError:
+                pass
     latest = (rounds_in(box)[-1].get('note') or {}) if rounds_in(box) else {}
     return {'file': path, 'say': 'Your Psyche Together is ready.', 'summary': latest.get('summary') or (box.get('read') or {}).get('summary'),
             'buttons': (['Check in again'] if time.time() >= due_at(box) else []) + ['Ask about our read', 'Our 28-day practice', 'Write our read again', 'Done'], 'asButtons': True}
@@ -3517,6 +3519,13 @@ def main(argv):
         print(__doc__)
         return
     cmd, rest = argv[0], argv[1:]
+    if cmd in ('status', 'rewrite', 'check') and not os.environ.get('PSYCHE_TOGETHER_FRESH'):
+        try:                # a newer signed release, if there is one, runs this same command (README release 37)
+            if update().get('updated'):
+                os.environ['PSYCHE_TOGETHER_FRESH'] = '1'
+                os.execv(sys.executable, [sys.executable, os.path.abspath(__file__)] + list(argv))
+        except Exception:   # never in the way of the person: the command answers either way
+            pass
     opt = lambda name: rest[rest.index(name) + 1] if name in rest and rest.index(name) + 1 < len(rest) else None
     if cmd == 'status':
         out = status()
