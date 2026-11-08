@@ -3767,23 +3767,21 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   tg.badQ = await run.b('save-questions', '@work/together-questions.json');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, true)));
   tg.formB = await run.b('save-questions', '@work/together-questions.json');
-  const pageB = tg.formB.file ? fsx.readFileSync(tg.formB.file, 'utf8') : '';
-  // Ana answers on the page: low on the core questions, the follow-ups the page shows, "Yes" to the safety question.
+  const W = tg.formB.widget || { items: [] };
+  // Ana answers in the widget, as Muse reads it back: low on the pillar questions, the follow-ups that open, "Yes" to the safety question.
+  const picked = {};
+  for (const it of W.items) {
+    const pick = it.id === 'safety' ? 'Yes' : /^core:/.test(it.id) ? it.options[Math.min(2, it.options.length - 1)] : it.options[0];
+    picked[it.id] = pick;
+    if (it.followUp && it.followUp.opensUnder.includes(pick)) picked[it.followUp.id] = it.followUp.options[0];
+  }
   const code = JSON.parse((await execFile('python3', ['-c', `import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location('t', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-s = m.state(); its = m.items(s); ans = {}
-for it in its:
-    if it['kind'] == 'core':
-        ans[it['id']] = {'label': it['options'][min(2, len(it['options']) - 1)]}
-    elif it['kind'] == 'safety':
-        ans[it['id']] = {'label': 'Yes'}
-    else:
-        ans[it['id']] = {'label': it['options'][0]}
-ids = m.shown(s, its, ans)
-print(json.dumps(['PT-' + m.form_id(s) + '-' + ''.join(str(it['options'].index(ans[it['id']]['label'])) if it['id'] in ids else '-' for it in its), m.form_id(s), len(ids)]))`,
-    pathx.join(home.b.dir, 'bin', 'together.py')], { env: home.b.env })).stdout);
-  tg.wrongForm = await run.b('code', code[0].replace(code[1], 'ffff'));
-  tg.sentB = await run.b('code', code[0]);
+print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'together.py')], { env: home.b.env })).stdout);
+  tg.partial = await run.b('answers', JSON.stringify(Object.fromEntries(Object.entries(picked).filter(([k]) => k !== 'safety'))));
+  tg.badAnswer = await run.b('answers', JSON.stringify({ 'core:needs': 'Hard' }));
+  tg.wrongForm = await run.b('code', 'PT-ffff-0000');
+  tg.sentB = await run.b('answer', 'safety', 'Yes');
   tg.statusA = await run.a('status');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.statusA, true)));
   tg.formA = await run.a('save-questions', '@work/together-questions.json');
@@ -3831,12 +3829,15 @@ print(json.dumps(['PT-' + m.form_id(s) + '-' + ''.join(str(it['options'].index(a
   check('the partner joins once, sees the consent line, and goes straight to their questions: no stage question, their partner named from the other Psyche, the stage from the one who started',
     tg.join.joined && tg.join.write === 'questions' && tg.join.partner.name === 'Mei' && tg.join.stage === 'Married' && tg.join.pillars.length === 8 &&
       /already/.test(tg.joinAgain.error || '') && tg.statusA.write === 'questions' && tg.statusA.partner.name === 'Ana', JSON.stringify(tg.join).slice(0, 300));
-  check('Muse\'s openers must name the partner in at least half, and each pillar needs an opener and a follow-up of 3 to 5 options; then the questions page is made',
-    tg.badQ.saved === false && tg.badQ.problems.some(p => /name Mei/.test(p)) && tg.formB.file && tg.formB.questions >= 10 &&
-      /Mei and you meet appreciation/.test(pageB) && /How often do you feel appreciated by Mei\?/.test(pageB) && /Private · never shared/.test(pageB) &&
-      /id="data"/.test(pageB) && /Copy my answer code/.test(pageB) && !/Ana Lim/.test(pageB), JSON.stringify(tg.badQ.problems));
-  check('the page\'s answer code is the form\'s id and one digit per question: a code from another form is refused, the right one saves the answers and sends them',
-    /another set of questions/.test(tg.wrongForm.error || '') && tg.sentB.waiting === true && /^PT-[0-9a-f]{4}-[0-9-]+$/.test(code[0]), JSON.stringify([code, tg.sentB]));
+  check('Muse\'s openers must name the partner in at least half, and each pillar needs an opener and a follow-up of 3 to 5 options; then the questions come back as ONE widget for the chat: each pillar\'s label, opener, fixed question and options, the private question marked, follow-ups opening under a low answer or, where their Psyche makes one certain, an item of its own',
+    tg.badQ.saved === false && tg.badQ.problems.some(p => /name Mei/.test(p)) && W.items.length >= 10 && W.title === 'You & Mei' && /tell me when you're done/.test(W.end) &&
+      W.items[0].id === 'core:appreciation' && W.items[0].label === 'Feeling appreciated' && /^Mei and you meet appreciation/.test(W.items[0].opener) &&
+      W.items[0].question === 'How often do you feel appreciated by Mei?' && W.items.some(it => it.id === 'safety' && /never shared/.test(it.private)) &&
+      W.items.some(it => it.followUp && it.followUp.opensUnder.length > 0 && /^deep:/.test(it.followUp.id)) && W.items.some(it => /^deep:/.test(it.id)) &&
+      !JSON.stringify(W).includes('Ana Lim'), JSON.stringify(W).slice(0, 600));
+  check('what Muse reads back from the widget is saved at once: an option that isn\'t one is refused, and what\'s still to answer comes back as one question with buttons, until the answers are sent',
+    tg.badAnswer.saved === false && /isn't one of its options/.test(JSON.stringify(tg.badAnswer.problems)) && tg.partial.missing === true && tg.partial.next.id === 'safety' &&
+      tg.partial.next.private === true && tg.sentB.waiting === true && /another set of questions/.test(tg.wrongForm.error || ''), JSON.stringify([tg.partial, tg.sentB]).slice(0, 400));
   check('in the chat the same questions come one at a time, each pillar\'s opener first, the core question\'s options fixed, a follow-up only where it helps (four at most), "Difficult" for needs, "this relationship" for security',
     tg.askedA[0].id === 'core:appreciation' && /^Ana and you meet appreciation/.test(tg.askedA[0].say) && /How often do you feel appreciated by Ana\?$/.test(tg.askedA[0].say) &&
       tg.askedA.filter(x => x.kind === 'deeper').length <= 4 && tg.askedA.some(x => x.id === 'safety' && x.private) &&

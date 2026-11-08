@@ -42,7 +42,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 4
+RELEASE = 5
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -358,18 +358,22 @@ def base_priority(s):
     return pillar_reasons(signals(psyche()), {})
 
 
+def certain(s):
+    """The pillars whose follow-up always shows: where this person's own Psyche points (2 or more), four at most."""
+    base = base_priority(s)
+    return [p for p in FLOW if base.get(p, 0) >= 2][:FOLLOW_MAX]
+
+
 def shown(s, its, answers):
-    """The ids shown so far, given the answers: a follow-up when its core answer is low or its pillar's priority
-    is 2 or more, four at most; the Dating decisions only when they haven't talked about the future."""
-    base, out, follows = base_priority(s), [], 0
+    """The ids shown, given the answers: a follow-up always where their Psyche makes it certain, and any other
+    under a low answer to its pillar's question; the Dating decisions only when they haven't talked about the future."""
+    sure, out = certain(s), []
     scores = {it['id']: dict(zip(it['options'], it['scores'])) for it in its if it['kind'] == 'core'}
     for it in its:
-        if it['kind'] == 'deeper':
+        if it['kind'] == 'deeper' and it['pillar'] not in sure:
             core = answers.get(it['follows'])
-            low = core is not None and scores.get(it['follows'], {}).get(core.get('label')) == 0
-            if core is None or follows >= FOLLOW_MAX or not (low or base.get(it['pillar'], 0) >= 2):
+            if core is None or scores.get(it['follows'], {}).get(core.get('label')) != 0:
                 continue
-            follows += 1
         if it.get('onlyIf') and (answers.get('core:future') or {}).get('label') == 'Yes, and we\'ve talked':
             continue
         out.append(it['id'])
@@ -469,6 +473,72 @@ def couple_view(a, b):
     return {'stage': a.get('stage') or b.get('stage'), 'stages': [a.get('stage'), b.get('stage')], 'pillars': pillars,
             'desireTalk': bool(a.get('desireTalk') and b.get('desireTalk')), 'decisions': decisions,
             'names': [(a.get('psyche') or {}).get('name') or 'Partner A', (b.get('psyche') or {}).get('name') or 'Partner B']}
+
+
+# ---------------------------------------------------------------- the check-in widget
+# README "Psyche Together, release 5": the questions are ONE interactive widget in the chat, the kind Muse
+# already shows for "Correct something": tap through, say done, and Muse reads what was entered. Data only:
+# how to show it is in SKILL.md.
+
+def widget(s):
+    its, sure = items(s), certain(s)
+    p = s.get('partner') or 'your partner'
+    out, follow = [], {it['follows']: it for it in its if it['kind'] == 'deeper'}
+    for it in its:
+        if it['kind'] == 'deeper':
+            if it['pillar'] in sure:
+                out.append({'id': it['id'], 'question': it['text'].replace('{p}', p), 'options': it['options']})
+            continue
+        row = {'id': it['id'], 'question': it['text'].replace('{p}', p), 'options': list(it['options'])}
+        if it.get('pillar') in PILLARS:
+            row['label'] = PILLARS[it['pillar']]
+        if it.get('opener'):
+            row['opener'] = it['opener']
+        if it.get('private'):
+            row['private'] = 'Private: never shared, and only shapes your own advice.'
+        if it['kind'] == 'decision':
+            row['label'] = 'The big decisions'
+        f = follow.get(it['id'])
+        if f and it['pillar'] not in sure:
+            row['followUp'] = {'id': f['id'], 'question': f['text'].replace('{p}', p), 'options': f['options'],
+                               'opensUnder': [o for o, sc in zip(it['options'], it['scores']) if sc == 0]}
+        if it.get('onlyIf'):
+            row['onlyIf'] = 'Leave this out if they tapped "Yes, and we\'ve talked" for the next 5 to 10 years.'
+        out.append(row)
+    return {'title': 'You & %s' % p, 'intro': 'Your questions, from both your Psyches. Only you see your answers.', 'items': out,
+            'end': 'Tap your answers, then tell me when you\'re done.'}
+
+
+def take_answers(raw):
+    """Everything entered in the widget at once (id → the option tapped). Saves what's there; anything still
+    to answer comes back as `missing`, asked one at a time with buttons; otherwise their answers are sent."""
+    s = state()
+    if not s.get('questions'):
+        return {'error': 'There are no questions here yet.'}
+    try:
+        got = json.loads(open(raw[1:], encoding='utf-8').read() if str(raw).startswith('@') else raw)
+    except (OSError, ValueError) as err:
+        return {'error': 'Couldn\'t read the answers: %s' % err}
+    if not isinstance(got, dict):
+        return {'error': 'The answers are one JSON object: question id → the option tapped.'}
+    its, bad = items(s), []
+    byid = {it['id']: it for it in its}
+    answers = dict(s.get('answers') or {})
+    for k, v in got.items():
+        it = byid.get(k)
+        if not it:
+            bad.append('%s isn\'t one of the questions' % k)
+        elif v in it['options']:
+            answers[k] = {'label': v}
+        elif v not in (None, ''):
+            bad.append('%s: "%s" isn\'t one of its options' % (k, v))
+    ids = shown(s, its, answers)
+    s['answers'] = {k: v for k, v in answers.items() if k in ids}
+    save_state(s)
+    if bad:
+        return {'saved': False, 'problems': bad}
+    q = next_step(s)
+    return send() if q.get('done') else {'missing': True, 'next': q}
 
 
 # ---------------------------------------------------------------- the answer code
@@ -808,7 +878,7 @@ def save_questions(path):
         os.remove(str(path).lstrip('@'))
     except OSError:
         pass
-    return form()
+    return {'widget': widget(s), 'questions': len(shown(s, items(s), {}))}
 
 
 def form():
@@ -1039,7 +1109,7 @@ def status():
             if not theirs.get('psyche'):
                 return {'waiting': True, 'say': 'Waiting for your partner to join.', 'invite': invite()}
             return questions_task()
-        return dict(form(), next=next_step(s))
+        return {'widget': widget(s), 'answered': len(s.get('answers') or {})}
     k, got, profiles, box = couple()
     if got.get('error'):
         return got
@@ -1081,12 +1151,12 @@ FORM_JS = r'''
 var D=JSON.parse(document.getElementById('data').textContent),ans={};
 function score(id){var it=D.items.filter(function(x){return x.id===id})[0];if(!it||!it.scores||!(id in ans))return null;return it.scores[ans[id]];}
 function shown(){var out=[],f=0;D.items.forEach(function(it){
- if(it.follows){var c=ans[it.follows];if(c===undefined||f>=D.max)return;var low=score(it.follows)===0;if(!(low||(D.base[it.pillar]||0)>=2))return;f++;}
+ if(it.follows&&D.certain.indexOf(it.pillar)<0){if(ans[it.follows]===undefined||score(it.follows)!==0)return;}
  if(it.onlyIf){var fu=D.items.filter(function(x){return x.id==='core:future'})[0];if(fu&&ans['core:future']===0)return;}
  out.push(it.id);});return out;}
 function render(){var ids=shown(),n=0;D.items.forEach(function(it){var el=document.getElementById('q-'+it.id.replace(':','-'));if(!el)return;
  var on=ids.indexOf(it.id)>=0;el.hidden=!on;if(on&&(it.id in ans))n++;el.classList.toggle('done',it.id in ans);});
- var f=ids.filter(function(x){return x.indexOf('deep:')===0}).length,total=ids.length+Math.max(0,Math.min(D.max-f,D.items.filter(function(it){return it.follows&&!(it.follows in ans)&&(D.base[it.pillar]||0)>=2}).length));document.querySelector('.bar i').style.width=Math.round(100*n/Math.max(1,total))+'%';
+ var total=ids.length;document.querySelector('.bar i').style.width=Math.round(100*n/Math.max(1,total))+'%';
  document.querySelector('.bar span').textContent=n+' of '+total+' answered';
  var end=document.querySelector('.end');end.hidden=n<total;
  if(n>=total){var code='PT-'+D.form+'-'+D.items.map(function(it){return ids.indexOf(it.id)>=0&&(it.id in ans)?String(ans[it.id]):'-'}).join('');
@@ -1111,7 +1181,7 @@ render();})();
 def form_page(s):
     its = items(s)
     p = s.get('partner') or 'your partner'
-    data = {'form': form_id(s), 'max': FOLLOW_MAX, 'base': base_priority(s),
+    data = {'form': form_id(s), 'certain': certain(s),
             'items': [{'id': it['id'], 'pillar': it['pillar'], 'scores': it.get('scores'), 'follows': it.get('follows'), 'onlyIf': it.get('onlyIf')} for it in its]}
     cards, open_card = [], None
 
@@ -1372,6 +1442,10 @@ def main(argv):
         out = save_questions(rest[0] if rest else '')
     elif cmd == 'form':
         out = form()
+    elif cmd == 'answers':
+        out = take_answers(' '.join(rest))
+    elif cmd == 'widget':
+        out = {'widget': widget(state())}
     elif cmd == 'code':
         out = read_code(' '.join(rest))
     elif cmd == 'send':
