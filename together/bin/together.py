@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 42
+RELEASE = 43
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1938,8 +1938,8 @@ DATED = re.compile(r'\b(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sep
 # The read's five chapters, in order, numbered as the glance and the page show them (README "Psyche Together,
 # release 16"): (id, number, title, its pillars, its research lines).
 CHAPTERS = [('close', '01', 'Care & Connection', ['appreciation', 'connection', 'desire'], ['appreciation', 'connection']),
-            ('life', '02', 'Fairness, Rhythm & Interests', ['needs', 'life'], ['needs', 'life']),
-            ('future', '03', 'Values, Decisions & Growth', ['future', 'growth'], ['values', 'future', 'growth']),
+            ('life', '02', 'Living together', ['needs', 'life'], ['needs', 'life']),
+            ('future', '03', 'Shared meaning', ['future', 'growth'], ['values', 'future', 'growth']),
             ('secure', '04', 'Attachment & Commitment', ['security'], ['security']),
             ('disagree', '05', 'Conflict & Repair', ['disagreements'], ['disagreements', 'perpetual', 'dreams'])]
 # README "Psyche Together, release 18": a plain title, and under it the research it comes from.
@@ -2906,6 +2906,14 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .vd.matches{background:#eaf1f9;color:#2b5d8f}.vd.better{background:#eef6f1;color:#2f6f53}.vd.closer{background:#fbeeed;color:#a8322a}
 .nx{margin:4px 0;padding-left:18px}.nx li{margin:6px 0;font-size:14.5px}.nx li b{display:block}.nx li span{display:block;font-size:13px;color:var(--soft)}
 .psyd{margin-top:16px;border-top:1px solid #f2ecf5;padding-top:10px}.psyd summary{cursor:pointer;font-weight:750;font-size:14px;color:#7b3fa0}.psyd summary .soft{font-weight:500;font-size:12.5px;margin-left:6px}
+.map .ws{display:block;margin:10px 0;padding:14px;border:1px solid #eee6f3;border-radius:16px;background:#fff;text-decoration:none;color:var(--ink)}
+.ws .wh{display:flex;align-items:center;gap:10px}.ws .wh b{flex:1;font-size:16px}.ws .wh i{font-style:normal;color:var(--mute);font-size:18px}.ws .n2{font-size:15px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:10px 0 6px}
+.tl{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:12px;background:#f6f2f9;border-left:0}.tl small{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+.tl b{font-size:14.5px;font-weight:750;color:#5a4f66}.tl b:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:middle}
+.tl.Strong,.tl.Aligned{background:#eef6f1}.tl.Strong b,.tl.Aligned b{color:#2f6f53}.tl.Steady{background:#eaf1f9}.tl.Steady b{color:#2b5d8f}
+.tl.Worth-attention,.tl.Talk-about{background:#fbeeed}.tl.Worth-attention b,.tl.Talk-about b{color:#a8322a}.tl.Info{background:#f3ecf8}.tl.Info b{color:#7b3fa0}
+.ws .tk2{margin:6px 0 0;font-size:13.5px;color:var(--soft)}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -3369,13 +3377,25 @@ def page(box, s):
         if not txt:
             return ''
         return ('<span class="lv %s">%s</span>' if pill else '<span class="lw %s">%s</span>') % (cls, _e(txt))
+    def tile(cid, aid, nm):
+        """One area as a tile at a glance (README "Psyche Together, release 43"): its name, and its state in colour."""
+        if aid in (view.get('pillars') or {}):
+            txt, cls = view['pillars'][aid], view['pillars'][aid].replace(' ', '-')
+        elif aid == 'decisions' and dec:
+            txt, cls = '%d of %d aligned' % (al_, len(dec)), ('Aligned' if al_ == len(dec) else 'Steady' if al_ * 2 >= len(dec) else 'Talk-about')
+        else:
+            m_ = re.search(r'<span class="l[vw] ([\w-]+)">([^<]*)</span>', badge(cid, aid, True) or '')
+            if not m_:
+                return ''
+            cls, txt = m_.group(1), html.unescape(m_.group(2))
+        return '<span class="tl %s"><small>%s</small><b>%s</b></span>' % (_e(cls), _e(nm), _e(txt[:1].upper() + txt[1:]))
     rows = ''
     for cid, num, title, pids, refs in CHAPTERS:
-        areas = ' · '.join('%s %s' % (_e(nm), b_) for aid, nm in areas_of(cid, view) for b_ in [badge(cid, aid)] if b_)
+        tiles_ = ''.join(tile(cid, aid, nm) for aid, nm in areas_of(cid, view))
         take_ = D(ch.get(cid)).get('takeaway')
-        if areas:
-            rows += ('<a class="it2" href="#%s"><span class="n2">%s</span><span><b>%s</b><span class="areas2">%s</span>%s</span><i>›</i></a>'
-                     % (cid, num, _e(title), areas, ('<span class="tk2">%s</span>' % _e(take_)) if take_ else ''))
+        if tiles_:
+            rows += ('<a class="it2 ws" href="#%s" style="--c:%s"><div class="wh"><span class="n2">%s</span><b>%s</b><i>›</i></div><div class="tiles">%s</div>%s</a>'
+                     % (cid, COLOURS.get(cid, '#7b3fa0'), num, _e(title), tiles_, ('<p class="tk2">%s</p>' % _e(take_)) if take_ else ''))
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
     summary_ = ''
     if ovv:
