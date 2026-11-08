@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 34
+RELEASE = 36
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1929,20 +1929,24 @@ def check_read(r, view, has_chat=False):
     for cid in CHAPTER_IDS:
         c = D(ch.get(cid))
         need(0 < len(T(c.get('traits'))) <= 320, 'chapters.%s.traits: one or two sentences (at most 320 characters) on what your two Psyches, shown here side by side, mean for this part of you two' % cid)
-        need(0 < len(T(c.get('takeaway'))) <= 240 and len(T(c.get('detail'))) >= (500 if cid in ('close', 'disagree') else 350) and ev(c.get('evidence')),
-             'chapters.%s: a takeaway (at most 240 characters), a detail (at least %d characters) and dated evidence' % (cid, 500 if cid in ('close', 'disagree') else 350))
+        lo_, hi_ = {'disagree': (300, 700), 'secure': (300, 800)}.get(cid, (350, 1100))
+        paras_ = len([x for x in T(c.get('detail')).split('\n') if x.strip()])
+        need(0 < len(T(c.get('takeaway'))) <= 240 and lo_ <= len(T(c.get('detail'))) <= hi_ and paras_ <= (1 if cid in ('disagree', 'secure') else 2) and ev(c.get('evidence')),
+             'chapters.%s: a takeaway (at most 240 characters), a detail of %d to %d characters in %s, and dated evidence' % (cid, lo_, hi_, 'one paragraph' if cid in ('disagree', 'secure') else 'two paragraphs at most'))
     c = D(ch.get('close'))
     need(T(c.get('bids')) and T(D(c.get('care')).get('a')) and T(D(c.get('care')).get('b')) and len(L(c.get('askEachOther'))) == 2 and T(c.get('tryThis')),
          'chapters.close: bids, care a and b, two askEachOther, tryThis')
     d = D(ch.get('disagree'))
     cy = D(d.get('cycle'))
-    need(len(L(cy.get('steps'))) == 4 and all(T(x) and len(T(x)) <= 110 for x in L(cy.get('steps'))) and T(cy.get('a')) and T(cy.get('b')) and T(cy.get('exit'))
+    signs_ = lambda x: all(2 <= len(L(D(x).get(k))) <= 3 and all(T(y) and len(T(y)) <= 90 for y in L(D(x).get(k))) for k in ('a', 'b'))
+    need(len(L(cy.get('steps'))) == 4 and all(T(x) and len(T(x)) <= 110 for x in L(cy.get('steps'))) and T(cy.get('a')) and T(cy.get('b'))
+         and signs_(d.get('signs')) and T(D(d.get('moves')).get('a')) and T(D(d.get('moves')).get('b')) and T(d.get('askYourself'))
          and len(L(d.get('lasting'))) == 2 and all(T(D(x).get('title')) and T(D(x).get('howToLiveWithIt')) for x in L(d.get('lasting')))
-         and len(L(d.get('solvable'))) == 1 and all(T(D(x).get('title')) and T(D(x).get('firstStep')) for x in L(d.get('solvable')))
-         and T(D(d.get('dream')).get('tension')) and T(D(d.get('dream')).get('question')),
-         'chapters.disagree: cycle (four short steps, a, b, exit), two lasting (title, howToLiveWithIt), one solvable (title, firstStep), dream (tension, question)')
+         and len(L(d.get('solvable'))) == 1 and all(T(D(x).get('title')) and T(D(x).get('firstStep')) for x in L(d.get('solvable'))),
+         'chapters.disagree: cycle (four short steps, a, b), signs (a and b, two or three early signs each, under 90 characters), moves (a and b), askYourself, two lasting (title, howToLiveWithIt), one solvable (title, firstStep)')
     sc = D(ch.get('secure'))
-    need(T(sc.get('a')) and T(sc.get('b')) and len(L(sc.get('askEachOther'))) == 1 and T(sc.get('tryThis')), 'chapters.secure: a, b, one askEachOther, tryThis')
+    need(signs_(sc.get('signs')) and T(sc.get('a')) and T(sc.get('b')) and len(L(sc.get('askEachOther'))) == 1 and T(sc.get('tryThis')),
+         'chapters.secure: signs (a and b, two or three early signs each that one of you feels unsure, under 90 characters), a, b (what reassures each), one askEachOther, tryThis')
     lf = D(ch.get('life'))
     need(len(L(lf.get('askEachOther'))) == 1 and T(lf.get('tryThis')), 'chapters.life: one askEachOther, tryThis')
     fu = D(ch.get('future'))
@@ -2172,7 +2176,7 @@ def again(box=None):
     return widget_out(s, 'The same questions as last time, to see what has moved. About 2 minutes.')
 
 
-def rewrite():
+def rewrite(note=None):
     """A fresh read from what is already here (README "Psyche Together, release 22"): both full reports, both people's
     answers and the conversation, with nothing deleted and nothing answered again. Their own profile goes again first,
     so a newer Psyche or a chat added since is in it; the partner's is as they sent it."""
@@ -2189,7 +2193,18 @@ def rewrite():
         return got
     if not box:
         return write_task(profiles) if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')) else {'error': 'Your read hasn\'t been written yet.'}
-    return dict(write_task(profiles), rewrite=True, say='Writing your Psyche Together again, from both your Psyches and your conversation. About 4 minutes.')
+    task = write_task(profiles)
+    if note and task.get('task'):
+        path = os.path.join(HERE, task['task'])
+        try:
+            d = json.load(open(path, encoding='utf-8'))
+            d['feedback'] = [clean_typed(note)[:300]]
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(d, f, ensure_ascii=False)
+            task['feedback'] = d['feedback']
+        except (OSError, ValueError):
+            pass
+    return dict(task, rewrite=True, say='Writing your Psyche Together again, from both your Psyches and your conversation. About 4 minutes.')
 
 
 def later():
@@ -2781,6 +2796,10 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .it2 b{display:block;font-size:15px}.areas2{display:block;font-size:13.5px;color:var(--soft);margin-top:2px}.it2>i{font-style:normal;color:var(--mute);font-size:18px}
 .sat{font-size:14px;color:var(--soft)}.foot2{margin:12px 0 2px;font-size:13px;color:var(--soft)}.foot2 a{color:#7b3fa0;text-decoration:none;font-weight:650}
 .glance-hero b{font-size:19px}
+.tz{grid-column:2;display:block;font-size:13px;line-height:1.4;color:var(--soft);margin-top:4px}.part.open .tz{display:none}
+.signs ul{margin:4px 0 0;padding-left:18px;font-size:14px}.signs li{margin:3px 0}
+.fb{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0 0;font-size:13px;color:var(--mute)}.fb>button{all:unset;cursor:pointer;font-size:17px;padding:2px 6px;border-radius:8px}.fb>button.on{background:#f3e9f8}
+.fbx{flex-basis:100%}.fbx textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:14px;resize:none;margin:6px 0}.fbok{flex-basis:100%;margin:2px 0 0}
 @media print{nav,.foldall{display:none}.js .part:not(.open) .body{display:block}}
 '''.replace('__FONT__', FONT)
 
@@ -2808,6 +2827,11 @@ mark();label();
 [].slice.call(document.querySelectorAll('[data-copy]')).forEach(function(b){b.addEventListener('click',function(){var t=b.getAttribute('data-copy'),done=function(){b.textContent='Copied ✓';setTimeout(function(){b.textContent='Copy';},1800);};
  try{navigator.clipboard.writeText(t).then(done,function(){sel(b);});}catch(e){sel(b);}});});
 function sel(b){var c=b.parentNode.querySelector('code');if(!c)return;var r=document.createRange();r.selectNodeContents(c);var s=window.getSelection();s.removeAllRanges();s.addRange(r);b.textContent='Selected: copy it';}
+[].slice.call(document.querySelectorAll('.fb')).forEach(function(f){var x=f.querySelector('.fbx'),ok=f.querySelector('.fbok'),t=f.querySelector('textarea'),code=f.querySelector('code'),cp=f.querySelector('[data-copy]');
+ function line(){var v=(t.value||'').trim();var s='Write our read again. In '+f.getAttribute('data-ch')+', this felt off'+(v?': '+v:'.');code.textContent=s;cp.setAttribute('data-copy',s);}
+ [].slice.call(f.querySelectorAll('[data-fb]')).forEach(function(b){b.addEventListener('click',function(){[].slice.call(f.querySelectorAll('[data-fb]')).forEach(function(o){o.classList.toggle('on',o===b);});
+  var up=b.getAttribute('data-fb')==='up';x.hidden=up;ok.hidden=!up;if(!up){line();t.focus();}});});
+ t.addEventListener('input',line);});
 var vw=document.getElementById('viewer');
 [].slice.call(document.querySelectorAll('[data-view]')).forEach(function(b){b.addEventListener('click',function(){if(!vw)return;vw.querySelector('img').src=b.querySelector('img').src;vw.hidden=false;});});
 if(vw){vw.addEventListener('click',function(){vw.hidden=true;});document.addEventListener('keydown',function(e){if(e.key==='Escape')vw.hidden=true;});}
@@ -3003,6 +3027,15 @@ def _radar(ma, mb):
             % (rings, pts(ma), pts(mb), labels))
 
 
+def _thumbs(cid, num, title):
+    """👍 or 👎 on a chapter, as the Psyche Report's sections (README "Psyche Together, release 35"). The page can't send:
+    a 👎 opens What's off? and makes the line to say in the chat, which writes the read again with it in mind."""
+    return ('<div class="fb" data-ch="%s %s"><span>Did this ring true?</span><button type="button" data-fb="up">👍</button><button type="button" data-fb="down">👎</button>'
+            '<div class="fbx" hidden><textarea maxlength="300" rows="2" placeholder="What\'s off? A few words"></textarea>'
+            '<div class="sayrow"><code></code><button type="button" data-copy="">Copy</button></div><p class="soft">Say this in your Psyche Together chat, and your read is written again with it in mind.</p></div>'
+            '<p class="fbok" hidden>Thanks: glad it landed.</p></div>' % (_e(num), _e(title)))
+
+
 def _psyches(cid, pa, pb, names, line):
     """One chapter's part of your two Psyches, side by side, and Muse's line on what it means here."""
     traits, letters, extra = PSYCHES_BY.get(cid, ([], [], None))
@@ -3024,8 +3057,12 @@ def _psyches(cid, pa, pb, names, line):
             _e(names[0]), _e(cut(pa.get('conflict') or '–')), _e(names[1]), _e(cut(pb.get('conflict') or '–')))
     if extra == 'motives' and pa.get('motives') and pb.get('motives'):
         both = sorted(((min(pa['motives'].get(k, 0), pb['motives'].get(k, 0)), lb) for k, lb in MOTIVE_LABEL), reverse=True)[:3]
+        apart = sorted(((abs((pa['motives'].get(k) or 0) - (pb['motives'].get(k) or 0)), k, lb) for k, lb in MOTIVE_LABEL), reverse=True)[:2]
+        apart = [(d, k, lb) for d, k, lb in apart if d >= 10]
         body = '<p class="lbl" style="margin-top:4px">Your ten motivations</p>' + _radar(pa['motives'], pb['motives']) + (
-            '<p class="soft">What you both rank highest: <b>%s</b></p>' % _e(', '.join(lb for _, lb in both))) + body
+            '<div class="pair2"><div><b>What drives you both</b><span>%s</span></div><div><b>Where you pull apart most</b><span>%s</span></div></div>'
+            % (_e(', '.join(lb for _, lb in both)),
+               _e('; '.join('%s (%s %d · %s %d)' % (lb, names[0], pa['motives'].get(k) or 0, names[1], pb['motives'].get(k) or 0) for _, k, lb in apart) or 'Nowhere by much'))) + body
     if not body:
         return ''
     key = '<div class="pkey"><span><i class="a"></i>%s%s</span><span><i class="b"></i>%s%s</span></div>' % (
@@ -3084,13 +3121,13 @@ def page(box, s):
     who = box.get('chatOf') or names
     parts, nav, moments = [], [], []
 
-    def part(pid, num, title, inner, cls='', sub='', opened=False, colour=None):
+    def part(pid, num, title, inner, cls='', sub='', opened=False, colour=None, teaser=''):
         c = colour or COLOURS.get(pid, '#7b3fa0')
         nav.append('<a href="#%s" style="--c:%s">%s%s</a>' % (pid, c, ('<i>%s</i>' % _e(num)) if num else '', _e(title)))
         parts.append('<section class="part %s%s" id="%s" style="--c:%s"><button type="button" class="hd" aria-expanded="%s"><span class="num">%s</span>'
                      '<span class="ttl">%s</span>%s%s</button><div class="body">%s</div></section>'
                      % (cls, ' open' if opened else '', pid, c, 'true' if opened else 'false', _e(num), _e(title),
-                        ('<span class="tease">%s</span>' % _e(sub)) if sub else '', CHEV, inner))
+                        (('<span class="tease">%s</span>' % _e(sub)) if sub else '') + (('<span class="tz">%s</span>' % _e(teaser)) if teaser else ''), CHEV, inner))
 
     def keep(xs, tag):
         for x in xs or []:
@@ -3099,6 +3136,8 @@ def page(box, s):
         return _moments(xs)
     ask = lambda xs: ('<div class="callout ask"><span class="lbl">Ask each other</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in xs)) if xs else ''
     tryit = lambda t, label='Try this': ('<div class="callout try"><span class="lbl">%s</span>%s</div>' % (_e(label), _e(t))) if t else ''
+    signs2 = lambda sg, la, lb: ('<div class="two signs">%s%s</div>' % (''.join('<div><b><span>%s</span>%s</b><ul>%s</ul></div>' % (_initial(n_), _e(l_), ''.join('<li>%s</li>' % _e(x) for x in D(sg).get(k) or []))
+                                                                              for n_, l_, k in ((names[0], la, 'a'), (names[1], lb, 'b'))), '')) if D(sg).get('a') else ''
     two = lambda a, b, la, lb, na=names[0], nb=names[1]: ('<div class="two"><div><b><span>%s</span>%s</b>%s</div><div><b><span>%s</span>%s</b>%s</div></div>'
                                                          % (_initial(na), _e(la), _paras(a), _initial(nb), _e(lb), _paras(b)))
     if gentle:
@@ -3201,12 +3240,21 @@ def page(box, s):
             going += ('<div class="callout key2"><span class="lbl">Reaching for each other</span>%s</div>' % _e(c.get('bids')) if c.get('bids') else '')
             going += two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), 'What makes %s feel cared for' % names[0], 'What makes %s feel cared for' % names[1])
         if cid == 'secure':
-            going += two(c.get('a'), c.get('b'), 'What %s needs to feel sure' % names[0], 'What %s needs to feel sure' % names[1])
+            going += signs2(c.get('signs'), 'When %s is feeling unsure' % names[0], 'When %s is feeling unsure' % names[1])
+            going += two(c.get('a'), c.get('b'), 'What reassures %s' % names[0], 'What reassures %s' % names[1])
         if cid == 'disagree':
             cy, dr = D(c.get('cycle')), D(c.get('dream'))
-            going += '<p class="lbl" style="margin-top:14px">Your cycle</p>' + _cycle(cy, names) + two(cy.get('a'), cy.get('b'), 'Under it, for %s' % names[0], 'Under it, for %s' % names[1])
-            todo += ('<div class="callout try"><span class="lbl">The way out</span>%s%s</div>'
-                     % (_e(cy.get('exit')), ('<p class="q"><b>The question that opens it:</b> %s</p>' % _e(dr.get('question'))) if dr.get('question') else ''))
+            going += '<p class="lbl" style="margin-top:14px">Your cycle</p>' + _cycle(cy, names)
+            going += signs2(c.get('signs'), 'Early signs, for %s' % names[0], 'Early signs, for %s' % names[1])
+            going += two(cy.get('a'), cy.get('b'), 'Under it, for %s' % names[0], 'Under it, for %s' % names[1])
+            mv = D(c.get('moves'))
+            if mv.get('a'):
+                todo += '<p class="lbl" style="margin-top:6px">When you see the signs</p>' + two(mv.get('a'), mv.get('b'), 'Your move, %s' % names[0], 'Your move, %s' % names[1])
+            elif cy.get('exit'):          # an older read
+                todo += '<div class="callout try"><span class="lbl">The way out</span>%s</div>' % _e(cy.get('exit'))
+            q_ = c.get('askYourself') or dr.get('question')
+            if q_:
+                todo += '<div class="callout key2"><span class="lbl">A question to ask yourself</span>%s</div>' % _e(q_)
             diffs = ''.join('<li><b>%s</b> %s</li>' % (_e(x.get('title')), _e(x.get('howToLiveWithIt'))) for x in c.get('lasting') or [] if isinstance(x, dict))
             diffs += ''.join('<li><b>%s</b> <span class="solv">to solve</span> %s</li>' % (_e(x.get('title')), _e(x.get('firstStep'))) for x in c.get('solvable') or [] if isinstance(x, dict))
             todo += ('<div class="callout ask"><span class="lbl">Differences to live with, and one to solve</span><ul class="diffs">%s</ul></div>' % diffs) if diffs else ''
@@ -3237,7 +3285,7 @@ def page(box, s):
         todo += private(mine_by.get(cid, []))
         inner += ('<h3>What to try</h3>' + todo) if todo else ''
         inner += _science(refs, folded=True)
-        part(cid, num, title, inner, 'chapter', SUBTITLES.get(cid, ''))
+        part(cid, num, title, inner, 'chapter', SUBTITLES.get(cid, ''), teaser=take)
         if cid == 'future':             # the breather comes between the everyday and the deeper chapters
             parts.append('@@INTERMISSION@@')
     # The intermission (README "Psyche Together, release 16"): a light breather after the heaviest chapter.
@@ -3504,7 +3552,7 @@ def main(argv):
     elif cmd == 'later':
         out = later()
     elif cmd == 'rewrite':
-        out = rewrite()
+        out = rewrite(opt('--note'))
     elif cmd == 'save-recheck':
         out = save_recheck(rest[0] if rest else '')
     elif cmd == 'code':

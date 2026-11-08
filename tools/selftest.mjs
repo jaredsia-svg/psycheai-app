@@ -3883,17 +3883,19 @@ elif a[0] == 'thread':
     pillars: Object.fromEntries(Object.keys(view.pillars).map(p => [p, { headline: 'About ' + p, seeIt: 'You both see ' + p + ' this way.', messages: 'In March 2025 you wrote about ' + p + ' often.',
       psyches: para(2, 'met ' + p + ' from your two Psyches'), signal: 'more' }])),
     chapters: {
-      close: { traits: 'Mei gives care by doing and Ana wants it said: the same warmth, two languages.', takeaway: 'You turn up for each other again and again: say the warm word out loud too.', detail: para(16, 'reached for each other'), bids: 'Most small reaches in the sample were met warmly, as in your May 2025 messages.', care: { a: 'Being told plainly.', b: 'Time together.' },
+      close: { traits: 'Mei gives care by doing and Ana wants it said: the same warmth, two languages.', takeaway: 'You turn up for each other again and again: say the warm word out loud too.', detail: para(7, 'reached for each other'), bids: 'Most small reaches in the sample were met warmly, as in your May 2025 messages.', care: { a: 'Being told plainly.', b: 'Time together.' },
                evidence: EV('closeness'), askEachOther: ['What made you feel close this week?', 'What would make tomorrow easier?'], tryThis: 'One warm reply a day.' },
-      disagree: { traits: 'Mei thinks it through and Ana feels it through, so the same row runs on two clocks.', takeaway: 'Name the one point early, and the loop loosens.', detail: para(16, 'came back after a disagreement'), cycle: { steps: ['Mei raises it, point by point', 'Ana goes quiet to think', 'Mei pushes for an answer', 'Ana withdraws further'],
-               a: 'Mei raises things; underneath, she wants to know she matters.', b: 'Ana goes quiet; underneath, she needs room to feel safe.', exit: 'Ask one question first, and stay.' },
+      disagree: { traits: 'Mei thinks it through and Ana feels it through, so the same row runs on two clocks.', takeaway: 'Name the one point early, and the loop loosens.', detail: para(5, 'came back after a disagreement'), cycle: { steps: ['Mei raises it, point by point', 'Ana goes quiet to think', 'Mei pushes for an answer', 'Ana withdraws further'],
+               a: 'Mei raises things; underneath, she wants to know she matters.', b: 'Ana goes quiet; underneath, she needs room to feel safe.' },
+               signs: { a: ['Replies get longer and numbered', 'A third question mark'], b: ['Short replies', 'Another time'] },
+               moves: { a: 'Ask one question, then wait.', b: 'Say one sentence about what you need.' }, askYourself: 'What is the one point that matters most right now?',
                lasting: [{ title: 'Pace', detail: para(2, 'moved at different speeds'), howToLiveWithIt: 'Name the pace.' }, { title: 'Space', detail: para(2, 'needed different space'), howToLiveWithIt: 'Ask plainly.' }],
                solvable: [{ title: 'Plans', detail: para(2, 'missed a plan'), firstStep: 'A shared calendar.' }],
                dream: { tension: 'Weekends', a: 'Mei hopes for adventure.', b: 'Ana hopes for rest.', question: 'What would a perfect Sunday be?' }, evidence: EV('disagreeing') },
-      secure: { traits: 'You both lean secure, and the one who feels things more needs the plain word sooner.', takeaway: 'You already come back: say it out loud after a hard day.', detail: para(10, 'kept your promises'), a: 'Mei needs plain reassurance.', b: 'Ana needs time to warm up.', evidence: EV('security'), askEachOther: ['When do you feel most sure of us?'], tryThis: 'Say it out loud.' },
+      secure: { traits: 'You both lean secure, and the one who feels things more needs the plain word sooner.', takeaway: 'You already come back: say it out loud after a hard day.', detail: para(6, 'kept your promises'), signs: { a: ['Jokes more than usual', 'Plans go vague'], b: ['Goes quiet', 'Checks in twice'] }, a: 'Mei needs plain reassurance.', b: 'Ana needs time to warm up.', evidence: EV('security'), askEachOther: ['When do you feel most sure of us?'], tryThis: 'Say it out loud.' },
       life: { enjoy: { shared: ['Long dinners out'], a: ['Night runs'], b: ['Hosting'], line: 'You share a love of a long dinner; the rest you can lend each other.' },
-              together: ['A cooking class', 'A new trail', 'A shared project'], traits: 'One of you plans the week and the other keeps it open: your rhythm shows where they meet.', takeaway: 'Your evenings carry a lot: protect one that is only yours.', detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
-      future: { traits: 'You rank care and freedom highest together, and your own loves widen each other.', takeaway: 'You point the same way: decide the next step together.', detail: para(10, 'talked about next year'),
+              together: ['A cooking class', 'A new trail', 'A shared project'], traits: 'One of you plans the week and the other keeps it open: your rhythm shows where they meet.', takeaway: 'Your evenings carry a lot: protect one that is only yours.', detail: para(7, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
+      future: { traits: 'You rank care and freedom highest together, and your own loves widen each other.', takeaway: 'You point the same way: decide the next step together.', detail: para(7, 'talked about next year'),
                 alike: { shared: ['Loyalty to a close circle', 'Good food, shared'], a: ['Big questions'], b: ['Hosting'], line: 'You hold the same people close. Your own loves widen each other.' }, decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
                 together: ['A cooking class', 'A new trail', 'A shared project'], evidence: EV('future') } },
     overall: { title: 'How you feel about it all', detail: 'You are both more content than you each guess: ask each other plainly what would make this month better.' },
@@ -3915,6 +3917,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
 `], { env: home.a.env, input: JSON.stringify(read) }).toString());
     tg.dupProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, tryThis: good.chapters.close.detail.split('. ')[0] + '.' } } });
     tg.themProblems = await ck({ ...good, caveats: 'It cannot see the days the two of them never wrote down.' });
+    tg.longProblems = await ck({ ...good, chapters: { ...good.chapters, close: { ...good.chapters.close, detail: para(14, 'reached for each other') } } });
     tg.youTwoProblems = await ck({ ...good, caveats: Array.from({ length: 7 }, () => 'you two').join(' and ') + ', as the couple sees it.' });
     tg.traitsProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, traits: undefined } } });
     tg.alikeProblems = await ck({ ...good, chapters: { ...good.chapters, future: { ...good.chapters.future, alike: undefined } } });
@@ -3922,6 +3925,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
   tg.pageA = tg.saved;
   tg.checkB2 = await run.b('check');
   // Written again from what's already here (README "Psyche Together, release 22").
+  tg.noteTask = await run.a('rewrite', '--note', 'In 05 Conflict and repair, this felt off: the loop is the other way round');
   tg.rewrite = await run.a('rewrite');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify({ ...good, summary: 'Two people who keep coming back, written again.' }));
   tg.rewritten = await run.a('save', '@work/together-read.json');
@@ -4107,11 +4111,17 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
     (htmlA.match(/<div class="psy">/g) || []).length === 5 && /<span>Extraversion<\/span>/.test(htmlA.slice(htmlA.indexOf('id="close"'), htmlA.indexOf('id="secure"'))) &&
       /Shows care by: Acts of service/.test(htmlA) && /Leans anxious/.test(htmlA.slice(htmlA.indexOf('id="secure"'), htmlA.indexOf('id="disagree"'))) &&
       /How you decide<\/span><div class="axis"><b title="Thinking">T<\/b>/.test(htmlA.slice(htmlA.indexOf('id="disagree"'), htmlA.indexOf('id="plan"'))) && /<svg class="radar"/.test(htmlA.slice(htmlA.indexOf('id="future"'), htmlA.indexOf('id="moments"'))) &&
-      /What you both rank highest: <b>Care, Achievement/.test(htmlA) && /most like Mulan · INFJ/.test(htmlB) && /Mei gives care by doing and Ana wants it said/.test(htmlA) &&
+      /<b>What drives you both<\/b><span>Care, Achievement/.test(htmlA) && /most like Mulan · INFJ/.test(htmlB) && /Mei gives care by doing and Ana wants it said/.test(htmlA) &&
       tg.traitsProblems.some(p => /^chapters\.\w+\.traits/.test(p)), JSON.stringify(tg.traitsProblems).slice(0, 300));
   check('Shared meaning compares values, beliefs and interests (README "Psyche Together, release 25"): what you both hold in the middle, each one\'s own either side, a line on what it means, and the research behind it; a read without it is sent back',
     />What you both hold<\/p><div class="alike"><div><small>Mei<\/small><span>Big questions<\/span><\/div><div class="both"><small>Both of you<\/small><span>Loyalty to a close circle<\/span>/.test(htmlA) &&
       /Values, decisions and growth/.test(htmlA) && />What you both enjoy<\/p><div class="alike">/.test(htmlA.slice(htmlA.indexOf('id="life"'), htmlA.indexOf('id="future"'))) && /New things to do together/.test(htmlA.slice(htmlA.indexOf('id="life"'), htmlA.indexOf('id="future"'))) && /Sound Relationship House/.test(htmlA) && tg.alikeProblems.some(p => /^chapters\.future\.alike/.test(p)), JSON.stringify(tg.alikeProblems).slice(0, 300));
+  check('05 and 04 say what to do in the moment (README "Psyche Together, release 35"): early signs for each of you under the cycle, each one\'s counter-move and a question to ask yourself; in 04 the signs one of you feels unsure and what reassures each; stories capped; a closed chapter shows its takeaway; no thumbs, but a rewrite can carry what felt off; where your motivations pull apart',
+    /Early signs, for Mei<\/b><ul><li>Replies get longer and numbered/.test(htmlA) && /Your move, Ana<\/b><p>Say one sentence about what you need/.test(htmlA) && /A question to ask yourself<\/span>What is the one point/.test(htmlA) &&
+      /When Ana is feeling unsure<\/b><ul><li>Goes quiet/.test(htmlA) && /What reassures Mei/.test(htmlA) && /<span class="tz">Name the one point early, and the loop loosens\.<\/span>/.test(htmlA) &&
+      !/class="fb" data-ch=/.test(htmlA) && /Where you pull apart most/.test(htmlA) &&
+      tg.longProblems.some(p => /^chapters\.close: a takeaway \(at most 240 characters\), a detail of 350 to 1100/.test(p)) && tg.noteTask.feedback && /felt off/.test(tg.noteTask.feedback[0]),
+    JSON.stringify([tg.longProblems, tg.noteTask && tg.noteTask.feedback]).slice(0, 300));
   check('the read speaks to you: "you", your names and "you both", "you two" six times at most, never "the couple"; and each side sends its own profile again once when what a profile carries changes (MBTI letters with their strength)',
     tg.youTwoProblems.some(p => /says "you two" 7 times/.test(p)) && tg.youTwoProblems.some(p => /says "the couple"/.test(p)) &&
       stateA.profileV === 2 && JSON.parse(fsx.readFileSync(pathx.join(home.b.dir, 'state.json'), 'utf8')).profileV === 2,
