@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 178
+RELEASE = 179
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1721,6 +1721,21 @@ def activity(stamps):
     return out
 
 
+def source_stamps():
+    """The times on their own lines in the added sources (WhatsApp, Facebook), never the "> " context lines,
+    so the rhythm counts the chats they added as well as their Instagram (README "WhatsApp in the rhythm")."""
+    stamps = []
+    for name in ('whatsapp.txt', 'facebook.txt'):
+        try:
+            with open(os.path.join(SOURCES, name), encoding='utf-8') as f:
+                for line in f:
+                    if TIMED.match(line):
+                        stamps.append((line[:10], int(line[11:13].rstrip(':'))))
+        except OSError:
+            pass
+    return stamps
+
+
 def digest_activity(path=None):
     """activity() of the digest on this device: its timed posts, comments and messages, counted, nothing else kept."""
     try:
@@ -1734,7 +1749,7 @@ def digest_activity(path=None):
             section = line[3:].strip().replace(' (all read)', '')
         elif section in ('Posts and stories', 'Comments', 'Messages') and TIMED.match(line):
             stamps.append((line[:10], int(line[11:13].rstrip(':'))))
-    return activity(stamps)
+    return activity(stamps + (source_stamps() if path is None else []))
 
 
 def clean_activity(a):
@@ -1749,6 +1764,7 @@ def clean_activity(a):
 
 
 def check_digest(path=None):
+    own = path is None          # this workspace's digest: its added chats count towards the rhythm too
     path = path or DIGEST
     if not os.path.exists(path):
         return {'ok': False, 'problems': ['No digest yet: build digest/digest.md as the reading plan says.']}
@@ -1886,7 +1902,7 @@ def check_digest(path=None):
                 room.append('Posts and stories: %d%% are from %s and %s. Go back through the earlier years too.' % (round(100 * recent / len(post_dates)), int(years[-1]) - 1, years[-1]))
     return {'ok': not problems, 'depth': depth, 'reads': reads, 'characters': total, 'sections': sizes, 'targets': goal,
             'span': [min(dates), max(dates)] if dates else None, 'last': last.group(1) if last else None,
-            'context': context, 'rhythm': rhythm(stamps), 'problems': problems, 'room': room}
+            'context': context, 'rhythm': rhythm(stamps + (source_stamps() if own else [])), 'problems': problems, 'room': room}
 
 
 # ---------- WhatsApp chats, made ready on the device (prep) ----------
@@ -2182,7 +2198,7 @@ def choose_messages(messages, owner, cap):
         units.append({'t': m['t'], 'text': text, 'len': len(text), 'score': score, 'hash': zlib.crc32(text.encode()), 'ctx': m.get('ctx') or []})
     if not units:
         return mine_all, []
-    cost = lambda u: min(u['len'], 483) + 13
+    cost = lambda u: min(u['len'], 483) + 19          # the line's "YYYY-MM-DD HH:MM  " and its newline
     avg = sum(cost(u) for u in units) / len(units)
     want = min(len(units), int(cap / avg * 1.1) + 1)
     first, span = units[0]['t'], (units[-1]['t'] - units[0]['t']).total_seconds()
@@ -2263,7 +2279,8 @@ def prep(paths, me=None, deep=False):
                 said = clean(re.sub(r'\s+', ' ', y['text']).strip(), sorted(names + own, key=lambda n: -len(n[0])))
                 lines.append('> %s: %s' % (label.get(y['sender'], 'Friend'), said if len(said) <= CTX_CHARS else said[:CTX_CHARS].rstrip() + ' …'))
                 answered += 1
-            lines.append(x['t'].strftime('%Y-%m-%d') + '  ' + keep_ends(clean(x['text'], names)))
+            # With the time, so the daily rhythm counts WhatsApp too (README "WhatsApp in the rhythm").
+            lines.append(x['t'].strftime('%Y-%m-%d %H:%M') + '  ' + keep_ends(clean(x['text'], names)))
         first, last = (mine[0]['t'], mine[-1]['t']) if mine else (None, None)
         group = len(others) > 1
         head = 'Chat %d: %s, %d of their messages from %s to %s, %d kept here' % (
