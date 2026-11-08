@@ -42,7 +42,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 11
+RELEASE = 12
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -437,6 +437,8 @@ def shared_profile(s, answered=True):
     kept = psyche()
     out = {'v': 8, 'psyche': psyche_profile(kept) if kept else {}, 'stage': stage_of(s) if s.get('role') == 'a' else None,
            'report': (kept or {}).get('report'), 'fullName': str((kept or {}).get('name') or '')[:60]}
+    if s.get('chat'):
+        out['chat'] = s['chat']
     if not answered:
         return out
     answers = s.get('answers') or {}
@@ -446,8 +448,6 @@ def shared_profile(s, answered=True):
         a = answers.get('core:' + pid)
         if a and pid != 'desire' and dict(opts).get(a.get('label')) is not None:
             core[pid] = dict(opts)[a['label']]
-    if s.get('chat'):
-        out['chat'] = s['chat']
     out.update(core=core, desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
                decisions={k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')})
     return out
@@ -862,48 +862,43 @@ def _when(v):
             return None
 
 
-def instagram_thread(partner_names):
-    """Their Instagram thread with the partner, read from this account: [(datetime, 'me'|'them', text)], newest
-    first read, oldest first returned, or None if there isn't one to be found."""
+def instagram_threads():
+    """The initiator's one-to-one Instagram chats, busiest first: [{label, account, fbid, them}], or []."""
     if not os.path.exists(IGM_CLI):
-        return None
-    accts = _accounts(_cli(IGM_CLI, 'accounts') or {})
-    if not accts:
-        return None
-    names = [n.lower() for n in partner_names if n and len(n) >= 2]
-    for acct in accts:
-        got = _cli(IGM_CLI, 'top-recipients', '--account-id', acct['id'], '--count', 40) or {}
-        best = None
+        return []
+    out = []
+    for acct in _accounts(_cli(IGM_CLI, 'accounts') or {}):
+        got = _cli(IGM_CLI, 'top-recipients', '--account-id', acct['id'], '--count', 12) or {}
         for th in (got.get('entities') or {}).get('thread') or []:
             others = [u for u in th.get('users') or [] if str(u.get('id')) != acct['id']]
-            if len(others) != 1:
+            if len(others) != 1 or not th.get('thread_fbid'):
                 continue
             u = others[0]
-            label = ' '.join(str(u.get(k) or '') for k in ('full_name', 'username')).lower()
-            if any(re.search(r'(?<![a-z])' + re.escape(n) + r'(?![a-z])', label) for n in names):
-                best = (th, {str(v) for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v})
-                break
-        if not best:
-            continue
-        th, them_ids = best
-        out, after, pages = [], None, 0
-        while len(out) < CHAT_MAX and pages < 30:
-            page = _cli(IGM_CLI, 'thread', '--account-id', acct['id'], '--thread-fbid', th['thread_fbid'], '--first', 50, *(('--after', after) if after else ()))
-            if not page:
-                break
-            pages += 1
-            for m in page.get('messages') or []:
-                text = str(((m.get('content') or {}).get('text_body')) or '').strip()
-                t = _when(m.get('message_sent_at') or m.get('timestamp'))
-                if text and t:
-                    sender = str(m.get('sender_fbid') or '')
-                    out.append((t, 'them' if sender in them_ids else 'me', text))
-            info = page.get('messages_page_info') or {}
-            after = info.get('end_cursor') if info.get('has_next_page') else None
-            if not after:
-                break
-        return sorted(out, key=lambda x: x[0]) if out else None
-    return None
+            label = str(u.get('full_name') or u.get('username') or '').strip()[:40]
+            if label and label not in [x['label'] for x in out]:
+                out.append({'label': label, 'account': acct['id'], 'fbid': th['thread_fbid'],
+                            'them': sorted({str(v) for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v})})
+    return out[:8]
+
+
+def instagram_thread(th):
+    """One Instagram thread, read from this account: [(datetime, 'me'|'them', text)], oldest first."""
+    out, after, pages, them = [], None, 0, set(th.get('them') or [])
+    while len(out) < CHAT_MAX and pages < 40:
+        page = _cli(IGM_CLI, 'thread', '--account-id', th['account'], '--thread-fbid', th['fbid'], '--first', 50, *(('--after', after) if after else ()))
+        if not page:
+            break
+        pages += 1
+        for m in page.get('messages') or []:
+            text = str(((m.get('content') or {}).get('text_body')) or '').strip()
+            t = _when(m.get('message_sent_at') or m.get('timestamp'))
+            if text and t:
+                out.append((t, 'them' if str(m.get('sender_fbid') or '') in them else 'me', text))
+        info = page.get('messages_page_info') or {}
+        after = info.get('end_cursor') if info.get('has_next_page') else None
+        if not after:
+            break
+    return sorted(out, key=lambda x: x[0])
 
 
 WA_LINE = re.compile(r'^‎?\[?(\d{1,2})[/.](\d{1,2})[/.](\d{2,4}),?\s+(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?\]?\s*(?:-\s*)?([^:]{1,60}):\s(.*)$')
@@ -1030,41 +1025,88 @@ def chat_sample(msgs, me_name, them_name):
     return out
 
 
-def read_chat(s, theirs):
-    """This side's copy of the conversation together: Instagram first, else the WhatsApp chat they shared."""
-    kept = psyche() or {}
-    my_full, their_full = str(kept.get('name') or ''), str((theirs.get('report') or {}).get('name') or theirs.get('fullName') or '')
-    their_first = (theirs.get('psyche') or {}).get('name') or _first(their_full)
-    partner_names = [their_full, their_first] + their_full.split(' ')[1:2]
-    msgs, source = instagram_thread([n for n in partner_names if n]), 'instagram'
-    if not msgs and os.path.exists(CHAT_FILE):
-        got = read_first([CHAT_FILE]) or {}
-        msgs = [(datetime.strptime(m[0], '%Y-%m-%d %H:%M'), m[1], m[2]) for m in got.get('messages') or []]
-        source = 'whatsapp'
-    if not msgs:
-        return None
-    me_first = _first(my_full) or 'You'
-    return {'source': source, 'signals': chat_signals(msgs), 'sample': chat_sample(msgs, me_first, their_first)}
+def kept_messages():
+    got = read_first([CHAT_FILE]) or {}
+    return [(datetime.strptime(m[0], '%Y-%m-%d %H:%M'), m[1], m[2]) for m in got.get('messages') or []], got.get('sources') or [], got.get('partner') or ''
+
+
+def keep_messages(msgs, sources, partner):
+    write_private([CHAT_FILE], {'messages': [(t.strftime('%Y-%m-%d %H:%M'), who, text) for t, who, text in sorted(msgs, key=lambda x: x[0])],
+                                'sources': sources, 'partner': partner})
+
+
+def chat_step(s):
+    """The initiator's conversation, after the stage and before the invite: their Instagram chat with their
+    partner, picked from a list, then their WhatsApp chat together, highly recommended."""
+    if 'instagram' not in s.get('chatDone', []) and 'instagram' not in s.get('chatSkipped', []):
+        ths = instagram_threads()
+        s['threads'] = ths
+        save_state(s)
+        if ths:
+            return {'pickThread': True, 'say': 'Which of your Instagram chats is with your partner? Your conversation together makes the read much deeper, and only that one chat is read.',
+                    'buttons': [t['label'] for t in ths] + ['Not on Instagram'], 'asButtons': True}
+    if 'whatsapp' not in s.get('chatDone', []) and 'whatsapp' not in s.get('chatSkipped', []):
+        return {'askChat': True, 'say': ('Your WhatsApp chat together is highly recommended: it\'s often where couples talk most, and it makes the read far more '
+                                         'specific to the two of you. In WhatsApp, open your chat with your partner, tap ⋮ or their name, then More, Export chat, '
+                                         'Without media, and share the .zip here.'),
+                'buttons': ['I\'ve shared it', 'Skip WhatsApp'], 'asButtons': True}
+    return finish_chat(s)
+
+
+def pick_thread(label):
+    s = state()
+    if label == 'Not on Instagram':
+        s.setdefault('chatSkipped', []).append('instagram')
+        save_state(s)
+        return chat_step(s)
+    th = next((t for t in s.get('threads') or [] if t['label'] == label), None)
+    if not th:
+        return {'error': '"%s" isn\'t one of the chats listed.' % label}
+    msgs = instagram_thread(th)
+    old, sources, partner = kept_messages()
+    keep_messages(old + msgs, sources + ['instagram'], partner or label)
+    s.setdefault('chatDone', []).append('instagram')
+    save_state(s)
+    return dict(chat_step(s), read='%d messages from your Instagram chat with %s' % (len(msgs), label))
 
 
 def add_chat_file(paths):
-    """Their WhatsApp chat together, kept here (chat.json) until it's read for the read."""
+    """Their WhatsApp chat together, from the export they shared."""
     s = state()
-    k, got, profiles, box = couple()
-    mine, theirs = mine_theirs(s, profiles)
-    their_full = str((theirs.get('report') or {}).get('name') or '')
-    their_first = (theirs.get('psyche') or {}).get('name') or _first(their_full)
-    msgs = whatsapp_file(paths, [their_full, their_first], [str((psyche() or {}).get('name') or ''), _first((psyche() or {}).get('name'))])
+    old, sources, partner = kept_messages()
+    me = psyche() or {}
+    msgs = whatsapp_file(paths, [partner, _first(partner)], [str(me.get('name') or ''), _first(me.get('name'))])
     if not msgs:
-        return {'error': 'I couldn\'t find your chat with %s in that file: share the export of your one-to-one chat (in WhatsApp: the chat, ⋮, More, Export chat, Without media).' % (their_first or 'your partner')}
-    write_private([CHAT_FILE], {'messages': [(t.strftime('%Y-%m-%d %H:%M'), who, text) for t, who, text in msgs]})
-    s['chatAsked'] = 'added'
-    s.pop('chat', None)
+        return {'error': 'I couldn\'t find a one-to-one chat in that file: share the export of your chat together (in WhatsApp: the chat, ⋮, More, Export chat, Without media).'}
+    keep_messages(old + msgs, sources + ['whatsapp'], partner)
+    s.setdefault('chatDone', []).append('whatsapp')
     save_state(s)
-    if not s.get('questions'):
-        return dict(questions_task(), added='%d messages, %s to %s' % (len(msgs), msgs[0][0].strftime('%b %Y'), msgs[-1][0].strftime('%b %Y')))
-    q = next_step(s)
-    return dict(send() if q.get('done') else {'next': q}, added='%d messages' % len(msgs))
+    return dict(chat_step(s), read='%d messages from your WhatsApp chat, %s to %s' % (len(msgs), msgs[0][0].strftime('%b %Y'), msgs[-1][0].strftime('%b %Y')))
+
+
+def finish_chat(s):
+    """The conversation, counted and sampled here, goes in their locked card with the stage; then the invite."""
+    msgs, sources, partner = kept_messages()
+    me_first = _first((psyche() or {}).get('name')) or 'You'
+    them_first = _first(partner) or 'Partner'
+    s['chat'] = {'source': ' and '.join(sources), 'signals': chat_signals(msgs), 'sample': chat_sample(msgs, me_first, them_first)} if msgs else None
+    s['chatFinished'] = True
+    save_state(s)
+    got = put_profile(s, False)
+    if got.get('error'):
+        return got
+    return {'invite': invite(), 'say': 'All set. Once your partner joins, you\'ll each get your own questions, written from both your Psyches%s.' % (' and your conversation together' if msgs else ''),
+            'buttons': ['Has my partner joined?'], 'asButtons': True, 'setCheck': True}
+
+
+def flip_chat(chat):
+    """The initiator's conversation, seen from the partner's side: "you" and "partner" swapped."""
+    if not chat:
+        return None
+    sig = dict(chat.get('signals') or {})
+    if sig.get('you') is not None:
+        sig['you'], sig['partner'] = sig.get('partner'), sig.get('you')
+    return {'source': chat.get('source'), 'signals': sig, 'sample': chat.get('sample')}
 
 
 # What the research says, per pillar and per measure: fixed here, cited, and laid out by the page as written,
@@ -1094,9 +1136,9 @@ def needs_psyche():
 
 
 CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, and your partner never sees how you answered: the read shows '
-           'the two of you together. For a read this deep, your full Psyche report goes to your partner\'s Muse, locked, and so does what your '
-           'conversation together shows (your Instagram chat with them, or your WhatsApp chat together if you add it), with a dated sample of it. '
-           'Nothing from your chats with anyone else is shared, and PsycheAI can\'t read any of it.')
+           'the two of you together. For a read this deep, your full Psyche report goes to your partner\'s Muse, locked. The one who starts it adds '
+           'your conversation together (your Instagram chat, and your WhatsApp chat if they share it): what it shows, and a dated sample of it, go '
+           'with it, locked, for your read. Nothing from chats with anyone else is read, and PsycheAI can\'t read any of it.')
 
 
 def start():
@@ -1120,12 +1162,8 @@ def put_profile(s, answered):
 
 
 def after_stage(s):
-    """The stage is in: their card goes, locked, and the invite comes back."""
-    got = put_profile(s, False)
-    if got.get('error'):
-        return got
-    return {'invite': invite(), 'say': 'Your Psyche is ready for the two of you. Once your partner joins, you\'ll each get your own questions, written from both your Psyches.',
-            'buttons': ['Has my partner joined?'], 'asButtons': True, 'setCheck': True}
+    """The stage is in: their conversation next (README "Psyche Together, release 12"), then the invite."""
+    return chat_step(s)
 
 
 def join(link):
@@ -1192,24 +1230,13 @@ def questions_task():
         return {'waiting': True, 'say': 'Waiting for your partner to join.'}
     s['partner'] = (theirs.get('psyche') or {}).get('name') or 'your partner'
     s['stage'] = stage_of(s) or (profiles.get('a') or {}).get('stage')
-    if not s.get('chat') and s.get('chatAsked') != 'skipped':
-        chat = read_chat(s, theirs)
-        if chat:
-            s['chat'] = chat
-        elif s.get('chatAsked') not in ('asked', 'added'):
-            s['chatAsked'] = 'asked'
-            save_state(s)
-            name = s['partner']
-            return {'askChat': True, 'say': ('Your conversation with %s makes your questions and your read much sharper, and I couldn\'t find your Instagram chat '
-                                             'with them. In WhatsApp, open your chat with %s, tap ⋮ or their name, then More, Export chat, Without media, '
-                                             'and share the .zip here.') % (name, name),
-                    'buttons': ['I\'ve shared it', 'Skip it'], 'asButtons': True}
     save_state(s)
     stage = s['stage']
     pillars = [p for p in FLOW if p in dict((pid, 1) for pid, _, _ in core_for(stage))]
     focus = {p: n for p, n in base_priority(s).items() if p in pillars}
     return {'write': 'questions', 'you': psyche_profile(psyche() or {}), 'partner': theirs.get('psyche'), 'stage': stage,
-            'yourReport': (psyche() or {}).get('report'), 'partnerReport': theirs.get('report'), 'yourChat': s.get('chat'),
+            'yourReport': (psyche() or {}).get('report'), 'partnerReport': theirs.get('report'),
+            'yourChat': s.get('chat') if s.get('role') == 'a' else flip_chat(theirs.get('chat')),
             'pillars': pillars, 'focus': focus, 'saveTo': 'work/together-questions.json'}
 
 
@@ -1511,6 +1538,8 @@ def status():
         return {'none': True, 'say': 'Psyche Together is a private check-in for you and your partner, built on both your Psyches.', 'buttons': ['Start Psyche Together'], 'asButtons': True}
     if s.get('role') == 'a' and not stage_of(s):
         return next_step(s)
+    if s.get('role') == 'a' and not s.get('chatFinished') and not s.get('questions'):
+        return chat_step(s)
     if not s.get('sent'):
         if not s.get('questions'):
             k, got, profiles, box = couple()
@@ -1969,11 +1998,13 @@ def main(argv):
         out = send('--no-chat' in rest)
     elif cmd == 'chat-file':
         out = add_chat_file(rest)
+    elif cmd == 'pick-thread':
+        out = pick_thread(' '.join(rest))
     elif cmd == 'skip-chat':
         s = state()
-        s['chatAsked'] = 'skipped'
+        s.setdefault('chatSkipped', []).append('whatsapp')
         save_state(s)
-        out = questions_task()
+        out = chat_step(s)
     elif cmd == 'write':
         out = write_task()
     elif cmd == 'save':

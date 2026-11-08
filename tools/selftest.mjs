@@ -3742,10 +3742,10 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
 import json, sys
 a = sys.argv[1:]
 if a[0] == 'accounts':
-    print(json.dumps({'accounts': [{'username': 'ana.lim', 'user_fbid': 'b1'}]}))
+    print(json.dumps({'accounts': [{'username': 'mei.tan', 'user_fbid': 'b1'}]}))
 elif a[0] == 'top-recipients':
     print(json.dumps({'entities': {'thread': [{'thread_fbid': 'x9', 'users': [{'id': 'f2', 'full_name': 'Someone Else'}, {'id': 'z3', 'full_name': 'Group'}]},
-                                              {'thread_fbid': 't1', 'users': [{'id': 'm1', 'full_name': 'Mei Tan', 'username': 'mei.t'}]}]}}))
+                                              {'thread_fbid': 't1', 'users': [{'id': 'm1', 'full_name': 'Ana Lim', 'username': 'ana.l'}]}]}}))
 elif a[0] == 'thread':
     msgs = []
     for i in range(80):
@@ -3769,7 +3769,7 @@ elif a[0] == 'thread':
     fsx.writeFileSync(pathx.join(root, 'skills', 'psycheai', 'report.json'), JSON.stringify(rep));
     home[who] = { root, dir, keep: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'together-home-')) };
     const env = { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: home[who].keep, PSYCHEAI_TRANSPORT: 'python', NO_PROXY: '*', no_proxy: '*',
-      PSYCHEAI_IGM_CLI: who === 'b' ? fakeCli : '/nonexistent/igm' };
+      PSYCHEAI_IGM_CLI: who === 'a' ? fakeCli : '/nonexistent/igm' };
     home[who].env = env;
     run[who] = async (...args) => JSON.parse((await execFile('python3', [pathx.join(dir, 'bin', 'together.py'), ...args], { cwd: dir, env, timeout: 60000 })).stdout);
   }
@@ -3780,7 +3780,11 @@ elif a[0] == 'thread':
   tg.noPsyche = JSON.parse((await execFile('python3', [pathx.join(home.a.dir, 'bin', 'together.py'), 'status'], { env: { ...home.a.env,
     PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tg-none-')), PSYCHEAI_SKILL_DIR: '/nonexistent' } })).stdout);
   tg.start = await run.a('start');
-  tg.staged = await run.a('answer', 'stage', 'Married');
+  tg.threads = await run.a('answer', 'stage', 'Married');
+  tg.picked = await run.a('pick-thread', 'Ana Lim');
+  const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
+  fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
+  tg.staged = await run.a('chat-file', wa);
   tg.join = await run.b('join', tg.staged.invite.url);
   tg.joinAgain = await run.b('join', tg.staged.invite.url);
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, false)));
@@ -3806,10 +3810,7 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   tg.badAnswer = await run.b('answers', JSON.stringify({ 'core:needs': 'Hard' }));
   tg.wrongForm = await run.b('code', 'PT-ffff-0000');
   tg.sentB = await run.b('answer', 'safety', 'Yes');
-  tg.askChat = await run.a('status');
-  const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
-  fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
-  tg.statusA = await run.a('chat-file', wa);
+  tg.statusA = await run.a('status');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.statusA, true)));
   tg.formA = await run.a('save-questions', '@work/together-questions.json');
   tg.checkA2 = await run.a('check');
@@ -3864,7 +3865,7 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
   check('Psyche Together needs a Psyche first, and says how to make one',
     tg.noPsyche.needsPsyche === true && /Install psycheai\.io\/skill and generate my Psyche/.test(tg.noPsyche.say), JSON.stringify(tg.noPsyche));
   check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their full report and their conversation together go to their partner, locked, and nothing from other chats',
-    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report goes to your partner's Muse, locked/.test(tg.start.consent || '') && /Nothing from your chats with anyone else is shared/.test(tg.start.consent || '') &&
+    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report goes to your partner's Muse, locked/.test(tg.start.consent || '') && /The one who starts it adds your conversation together/.test(tg.start.consent || '') && /Nothing from chats with anyone else is read/.test(tg.start.consent || '') &&
       /^Mei invited you to Psyche Together/.test((tg.staged.invite || {}).invite || '') && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || ''),
     JSON.stringify([tg.start, tg.staged]).slice(0, 400));
   check('the partner joins once, sees the consent line, and goes straight to their questions: no stage question, their partner named from the other Psyche, the stage from the one who started',
@@ -3891,17 +3892,18 @@ print(json.dumps([m.form_id(m.state())]))`, pathx.join(home.b.dir, 'bin', 'toget
       tg.askedA.filter(x => x.kind === 'decision').map(x => x.id).join() === 'decide:more_children,decide:money,decide:place,decide:parents' && !tg.askedA.some(x => x.id === 'stage'),
     JSON.stringify(tg.askedA.map(x => x.id)));
   const people = tg.write.people || [];
-  check('when both have answered, the read is written from both full Psyche reports and both sides\' conversation (Instagram on one, WhatsApp added on the other), and the couple view, never anyone\'s own answers; the result is data only',
+  check('when both have answered, the read is written from both full Psyche reports, the conversation the one who started added, and the couple view, never anyone\'s own answers; the result is data only',
     tg.write.write === 'read' && Object.values(view.pillars).every(v => ['Strong', 'Steady', 'Worth attention'].includes(v)) && worth.length > 0 &&
-      people.length === 2 && people.every(p => p.report && p.report.attachment && p.chat && p.chat.signals && p.chat.sample.length > 10) &&
-      people.map(p => p.chat.source).sort().join() === 'instagram,whatsapp' && people.find(p => p.chat.source === 'instagram').chat.signals.messages === 80 &&
+      people.length === 2 && people.every(p => p.report && p.report.attachment) && people[0].chat && people[0].chat.sample.length > 10 &&
       !/"core"|safety|deep:/.test(JSON.stringify(tg.write)) && view.decisions.length === 4 && !('spec' in tg.write) && tg.write.saveTo === 'work/together-read.json',
     JSON.stringify(view).slice(0, 400));
-  check('the conversation is read before the questions: with no Instagram thread with the partner, it asks once for the WhatsApp chat together (or "Skip it"), reads the export for the two of them only, then writes the questions with it',
-    tg.askChat.askChat === true && /couldn't find your Instagram chat with them/.test(tg.askChat.say) && JSON.stringify(tg.askChat.buttons) === '["I\'ve shared it","Skip it"]' &&
-      tg.statusA.write === 'questions' && tg.statusA.yourChat && tg.statusA.yourChat.source === 'whatsapp' && tg.join.yourChat && tg.join.yourChat.source === 'instagram' &&
-      people.find(p => p.chat.source === 'whatsapp').chat.signals.messages === 40, JSON.stringify(tg.askChat));
-  const sig = (people.find(p => p.chat.source === 'instagram') || { chat: { signals: {} } }).chat.signals;
+  check('only the one who starts adds the conversation: after the stage, their own one-to-one Instagram chats as buttons (groups left out), the one they pick read, then WhatsApp, highly recommended, then the invite; the partner has no chat step, and both get questions with it, the partner\'s seen from their side',
+    tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && tg.picked.askChat === true && /highly recommended/.test(tg.picked.say) &&
+      /80 messages from your Instagram chat with Ana Lim/.test(tg.picked.read) && JSON.stringify(tg.picked.buttons) === '["I\'ve shared it","Skip WhatsApp"]' &&
+      tg.join.write === 'questions' && tg.join.yourChat && tg.join.yourChat.source === 'instagram and whatsapp' && tg.statusA.yourChat.source === 'instagram and whatsapp' &&
+      tg.join.yourChat.signals.you.messages === tg.statusA.yourChat.signals.partner.messages && people.filter(p => p.chat).length === 1 && people[0].chat.signals.messages === 120,
+    JSON.stringify([tg.threads, tg.picked]).slice(0, 400));
+  const sig = (people.find(p => p.chat) || { chat: { signals: {} } }).chat.signals;
   check('the conversation is measured on the device as the research measures it: how closely the two writing styles match, "we" against "I" and "you", warm and hard words, who starts, reply times, the day\'s rhythm and messages by month',
     sig.styleMatch > 0 && sig.styleMatch <= 1 && typeof sig.you.we === 'number' && typeof sig.partner.iYou === 'number' && sig.you.positive >= 0 &&
       sig.you.day && Object.keys(sig.you.day).join() === 'late,morning,afternoon,evening' && Array.isArray(sig.months) && sig.months.length >= 1 &&
