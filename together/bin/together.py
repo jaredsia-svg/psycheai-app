@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 43
+RELEASE = 44
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -3382,12 +3382,19 @@ def page(box, s):
         if aid in (view.get('pillars') or {}):
             txt, cls = view['pillars'][aid], view['pillars'][aid].replace(' ', '-')
         elif aid == 'decisions' and dec:
-            txt, cls = '%d of %d aligned' % (al_, len(dec)), ('Aligned' if al_ == len(dec) else 'Steady' if al_ * 2 >= len(dec) else 'Talk-about')
+            txt, cls = '%d of %d aligned' % (al_, len(dec)), ('Aligned' if al_ == len(dec) else 'Steady')
         else:
             m_ = re.search(r'<span class="l[vw] ([\w-]+)">([^<]*)</span>', badge(cid, aid, True) or '')
             if not m_:
                 return ''
             cls, txt = m_.group(1), html.unescape(m_.group(2))
+            # Release 44: an area that isn't a check-in level is green when it's a great result, blue otherwise, never red.
+            secure_ = lambda p_: bool(re.search(r'\bsecure', str(p_.get('attachment') or ''), re.I)) and not re.search(r'insecure', str(p_.get('attachment') or ''), re.I)
+            great = {'loves': cls == 'Aligned', 'know': cls == 'Aligned',
+                     'interests': len(D(D(D(D(ch.get(cid)).get('areas')).get(aid)).get('columns')).get('shared') or D(D(ch.get(cid)).get('enjoy')).get('shared') or []) >= 3,
+                     'values': len(D(D(D(D(ch.get(cid)).get('areas')).get(aid)).get('columns')).get('shared') or D(D(ch.get(cid)).get('alike')).get('shared') or []) >= 3,
+                     'attachment': secure_(pa_) and secure_(pb_)}.get(aid, False)
+            cls = 'Aligned' if great else 'Steady'
         return '<span class="tl %s"><small>%s</small><b>%s</b></span>' % (_e(cls), _e(nm), _e(txt[:1].upper() + txt[1:]))
     rows = ''
     for cid, num, title, pids, refs in CHAPTERS:
