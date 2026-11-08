@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 32
+RELEASE = 34
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2766,7 +2766,10 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .lw{font-weight:650}.lw.Strong,.lw.Happier-than-you-each-think,.lw.About-right{color:#2f6f53}.lw.Steady{color:#5a4f66}.lw.Worth-attention,.lw.Worth-asking-each-other{color:#a8322a}
 .callout,.callout.ask,.callout.try,.callout.key2,.truth,.take,.minebox,.psy,.two>div,.pair2>div{background:#faf7fb;border:1px solid #eee6f3;box-shadow:none}
 .callout .lbl,.callout.ask .lbl,.callout.try .lbl,.callout.key2 .lbl,.truth .lbl,.take .lbl,.psy .lbl{color:var(--c)}
-.callout.key2{font-weight:500}.truth{border-left:3px solid var(--c)}.minebox{border-style:dashed}
+.callout.key2{font-weight:500}.minebox{border-style:dashed}
+.truth{border-left:1px solid #eee6f3;background:linear-gradient(135deg,#f6f0fa,#fcf5f8)}.truth .th{display:flex;align-items:center;gap:8px}
+.truth .th .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;background:linear-gradient(135deg,#7b3fa0,#d1477a)}
+.truth .th .lbl{color:var(--mute)}
 .take{background:linear-gradient(135deg,#f6f0fa,#fcf5f8)}.take p{font-size:16px;font-weight:650}
 .prow{background:#fff;border:0;border-bottom:1px solid #f1ebf5;border-radius:0;padding:12px 0;margin:0}
 .evp{background:#fff}.two>div>b span{background:#7b3fa0}.two>div:last-child>b span{background:#a3487a}
@@ -3158,9 +3161,7 @@ def page(box, s):
     dec = view.get('decisions') or []
     al_, tk_ = sum(1 for x in dec if x.get('result') == 'Aligned'), sum(1 for x in dec if x.get('result') != 'Aligned')
     conf_ = ((box.get('sources') or {}).get('confidence') or {})
-    foot = ' · '.join(x for x in [
-        ('<a href="#future">Big decisions: %s</a>' % _e(', '.join(y for y in ['%d aligned' % al_ if al_ else '', '%d to talk about' % tk_ if tk_ else ''] if y))) if dec else '',
-        ('<a href="#how">Read with %d%% confidence (%s)</a>' % (conf_['score'], _e(conf_.get('level')))) if conf_.get('score') is not None else ''] if x)
+    foot = ('<a href="#future">Big decisions: %s</a>' % _e(', '.join(y for y in ['%d aligned' % al_ if al_ else '', '%d to talk about' % tk_ if tk_ else ''] if y))) if dec else ''
     part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You two, in one line</small><b>%s</b></div>%s%s%s%s'
          % (_e(r.get('summary')), ('<h3>Executive summary</h3>' + summary_) if summary_ else '', ('<h3>What stands out</h3>' + stands) if stands else '',
             ('<h3>Where you stand</h3><div class="map">%s</div>' % rows) if rows else '', ('<p class="foot2">%s</p>' % foot) if foot else ''),
@@ -3186,9 +3187,12 @@ def page(box, s):
         inner += ('<h3>Where you are</h3>' + where) if where else ''
         # 2. What's going on: the truth opens it, then the story, its moments and the chapter's one picture
         going = ''
+        order_ = [x.get('kind') for x in r.get('truths') or [] if isinstance(x, dict)]
         for t in truths_by.get(cid, []):
             k_ = kinds.get(t.get('kind'), ('', '#7b3fa0'))
-            going += '<div class="truth" style="--k:%s"><span class="lbl">%s</span><h4>%s</h4>%s%s</div>' % (k_[1], _e(k_[0]), _e(t.get('title')), _paras(t.get('detail')), _pills(t.get('evidence')))
+            n_ = (order_.index(t.get('kind')) + 1) if t.get('kind') in order_ else ''
+            going += ('<div class="truth" style="--k:%s"><div class="th"><span class="n">%s</span><span class="lbl">%s</span></div><h4>%s</h4>%s%s</div>'
+                      % (k_[1], n_, _e(k_[0]), _e(t.get('title')), _paras(t.get('detail')), _pills(t.get('evidence'))))
             keep(t.get('evidence'), k_[0])
         going += _paras(c.get('detail')) + _pills(c.get('evidence'))
         keep(c.get('evidence'), title)
@@ -3284,6 +3288,7 @@ def page(box, s):
     # The header (README "Psyche Together, release 20"): both Psyche Cards leaning in, a heart between them; whose copy
     # this is, since each holds that person's private advice (README "Psyche Together, release 29").
     mine_name = (names[0] if s.get('role') == 'a' else names[1] if s.get('role') == 'b' else '') or ''
+    conf_h = ((box.get('sources') or {}).get('confidence') or {}).get('score')     # in the header, as the Psyche Report's signal strength
     pics, cards = SEEN.get('pics') or {}, SEEN.get('cards') or {}
     since = (sig.get('fun') or {}).get('first')
 
@@ -3297,7 +3302,7 @@ def page(box, s):
     banner = ('<header class="banner love" id="top">%s%s<div class="facts">%s</div><div class="couple">%s<div class="heart"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1">'
               '<stop offset="0" stop-color="#ff7aa2"/><stop offset="1" stop-color="#c2366d"/></linearGradient></defs><path fill="url(#hg)" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.6 1.1 4.6 2.6l1 1.4 1-1.4C14 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg></div>%s</div>'
               '<h1>%s <i>&amp;</i> %s</h1><p class="lede">The two of you, read together: how you love, how you disagree and how you grow, from both your Psyches and your own words.</p><div class="sub">%s</div></header>'
-              % (LOGO, hearts, _e(' · '.join(x for x in ['Psyche Together', view.get('stage') or '', ('%s\'s copy' % mine_name) if mine_name else ''] if x)), card('a', names[0], 'l'), card('b', names[1], 'r'), _e(names[0]), _e(names[1]),
+              % (LOGO, hearts, _e(' · '.join(x for x in ['Psyche Together', view.get('stage') or '', ('%d%% confidence' % conf_h) if conf_h is not None else '', ('%s\'s copy' % mine_name) if mine_name else ''] if x)), card('a', names[0], 'l'), card('b', names[1], 'r'), _e(names[0]), _e(names[1]),
                  _e(' · '.join(x for x in [('Talking since ' + since) if since else '', when] if x))))
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>' if pics else ''
     bar = '<nav aria-label="Sections">%s<button type="button" data-fold>Close all ▲</button></nav>' % ''.join(nav)
