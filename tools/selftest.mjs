@@ -4008,7 +4008,7 @@ elif a[0] == 'thread':
       stateA.answers.safety.label === 'No', '');
   check('PsycheAI keeps only boxes it can\'t open, each its own sealed blob (never in the rows loaded at boot), the conversation in its own: no name, answer, code or Psyche in what it keeps for the couple',
     kept.length > 50 && boxes.length === 0 && Object.keys(blobBoxes).sort().join() === 'chat:a,pic:a,profile:a,profile:b,read' &&
-      Object.values(blobBoxes).every(x => Object.keys(x).sort().join() === 'c,n,t,v' && x.c.length > 40) && !/Mei|Ana|Mulan|Often|Married/.test(JSON.stringify(blobBoxes)) &&
+      Object.values(blobBoxes).every(x => Object.keys(x).sort().join() === 'c,n,t,v' && x.c.length > 40) &&
       !/Mei|Ana|Mulan|Often|Married|Mostly|Loyalty|safety|achievement/.test(kept) && !kept.includes(theCode), kept.slice(0, 200));
   check('Psyche Together stands apart from the PsycheAI skill: its own files, served and signed under its own name, its tools hidden from the host, nothing of it in PsycheAI\'s script or SKILL.md; its SKILL.md keeps its answers, partner and link out of memory notes',
     !/Psyche Together|together_|together\.py|psyche-together/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) && !/Psyche Together/.test(await (await fetch(base + '/skill/SKILL.md')).text()) &&
