@@ -4088,11 +4088,19 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /End is never offered as a button/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')), JSON.stringify(tg.saved.buttons));
   check('the read is lean (README "Psyche Together, release 24"): each chapter opens with its takeaway, holds its truth when one belongs there (the map marks it), its pillars as compact rows, the story with dated moments as pills, and private advice as a 🔒 box where it belongs; no For you section of its own and no separate truths; one section open at a time, as the Psyche Report; a closed section has no coloured top edge; Worth attention in dark red; a sentence said twice, or "the two of them", is sent back',
     (htmlA.match(/<div class="take">/g) || []).length === 5 && /class="truth" style="--k:#2f7d5b"><span class="lbl">★ Your strength/.test(htmlA.slice(htmlA.indexOf('id="close"'), htmlA.indexOf('id="secure"'))) &&
-      /class="tb"/.test(htmlA) && /class="prow"/.test(htmlA) && /class="evp"/.test(htmlA) && !/When it showed/.test(htmlA) && !/Three truths/.test(htmlA) &&
+      /class="ttl3"/.test(htmlA) && /class="prow"/.test(htmlA) && /class="evp"/.test(htmlA) && !/When it showed/.test(htmlA) && !/Three truths/.test(htmlA) &&
       /class="minebox"><span class="lbl">🔒 Just for you · Ana never sees this/.test(htmlA) && /One question first/.test(htmlA.slice(htmlA.indexOf('id="disagree"'), htmlA.indexOf('id="moments"'))) &&
       /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);/.test(htmlA) && /\.part\{background:#fff;border:1px solid #e6dcec;border-radius:20px;/.test(htmlA) && /\.part\.open\{border-top:4px solid var\(--c\)\}/.test(htmlA) &&
       /\.lv\.Worth-attention,\.lv\.Worth-asking-each-other\{background:#fbe7e5;color:#b3261e\}/.test(htmlA) &&
       tg.dupProblems.some(p => /^said twice/.test(p)) && tg.themProblems.some(p => /the two of them/.test(p)), JSON.stringify([tg.dupProblems, tg.themProblems]).slice(0, 400));
+  const chapterParts = ['close', 'secure', 'disagree', 'life', 'future'].map(id => {
+    const from = htmlA.indexOf('id="' + id + '"'), sec = htmlA.slice(from, htmlA.indexOf('</section>', from));
+    return [...sec.matchAll(/<h3>([^<]+)<\/h3>/g)].map(m => m[1]).join('|');
+  });
+  check('each chapter is its takeaway and three parts at most (README "Psyche Together, release 28"): Where you are, What\'s going on, What to try; at a glance holds the line, satisfaction and reading each other, the three truths each a line opening its chapter, the map, the big decisions and the confidence, on one screen',
+    chapterParts.every(x => x === 'Where you are|What&#x27;s going on|What to try' || x === "Where you are|What's going on|What to try") &&
+      /<a class="ttl3" href="#close" style="--k:#2f7d5b"><span>★ Strength<\/span>The strength<\/a>/.test(htmlA) && /class="fchip">Big decisions: /.test(htmlA) && /class="fchip">Read with \d+% confidence/.test(htmlA),
+    JSON.stringify(chapterParts));
   check('your two Psyches are woven into the chapters as a Sync compares them (README "Psyche Together, release 26"): each chapter has its "In your Psyches" panel, drawn from both cards (Extraversion and how each shows and wants care in 01, attachment and Sensitivity in 02, Thinking or Feeling, Judging or Perceiving, Agreeableness and conflict styles in 03, Conscientiousness and Extraversion or Introversion in 04, the ten motivations overlaid and Openness in 05), with Muse\'s line on what it means; MBTI types under the cards; a read without the lines is sent back',
     (htmlA.match(/<div class="psy">/g) || []).length === 5 && /<span>Extraversion<\/span>/.test(htmlA.slice(htmlA.indexOf('id="close"'), htmlA.indexOf('id="secure"'))) &&
       /Shows care by: Acts of service/.test(htmlA) && /Leans anxious/.test(htmlA.slice(htmlA.indexOf('id="secure"'), htmlA.indexOf('id="disagree"'))) &&
@@ -4100,7 +4108,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /What you both rank highest: <b>Care, Achievement/.test(htmlA) && /most like Mulan · INFJ/.test(htmlB) && /Mei gives care by doing and Ana wants it said/.test(htmlA) &&
       tg.traitsProblems.some(p => /^chapters\.\w+\.traits/.test(p)), JSON.stringify(tg.traitsProblems).slice(0, 300));
   check('Shared meaning compares values, beliefs and interests (README "Psyche Together, release 25"): what you both hold in the middle, each one\'s own either side, a line on what it means, and the research behind it; a read without it is sent back',
-    /<h3>What you share<\/h3><div class="alike"><div><small>Mei<\/small><span>Big questions<\/span><\/div><div class="both"><small>Both of you<\/small><span>Loyalty to a close circle<\/span>/.test(htmlA) &&
+    />What you share<\/p><div class="alike"><div><small>Mei<\/small><span>Big questions<\/span><\/div><div class="both"><small>Both of you<\/small><span>Loyalty to a close circle<\/span>/.test(htmlA) &&
       /Values, decisions and growth/.test(htmlA) && /Sound Relationship House/.test(htmlA) && tg.alikeProblems.some(p => /^chapters\.future\.alike/.test(p)), JSON.stringify(tg.alikeProblems).slice(0, 300));
   check('each copy carries only its own For you, and the safety answer never leaves the workspace that gave it',
     /One question first/.test(htmlA) && !/One question first/.test(htmlB) && /Your needs/.test(htmlB) && !/Your needs/.test(htmlA) && !/For you first/.test(htmlA) &&

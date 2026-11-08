@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 27
+RELEASE = 28
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2678,12 +2678,12 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}td,th{te
 .mv b{font-size:14.5px}.mv span{font-size:12.5px;font-weight:750;white-space:nowrap}.mv span.up{color:var(--sage)}.mv span.down{color:var(--rose)}.mv span.same{color:var(--mute)}
 .mv p{grid-column:1/-1;margin:0;font-size:14px;color:var(--soft)}
 .support .body p{font-size:15px}
-.glance-hero{margin:10px 0 6px;padding:12px 14px}.glance-hero b{font-size:18px}
-.ovl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 4px}.ovl>span{flex-direction:column;align-items:flex-start!important;gap:4px!important;padding:8px 10px;border-radius:12px;background:#faf7fb;border:1px solid #efe6f4}.ovl .lv{white-space:normal;font-size:12px}.ovl>span{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ovl small{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
-.ovd{font-size:13.5px;color:var(--soft);margin:6px 0 4px}
-.map{display:flex;flex-direction:column;gap:6px;margin:12px 0 6px}
-.mr{display:grid;grid-template-columns:28px 1fr 12px;gap:10px;align-items:center;padding:9px 10px;border-radius:14px;background:#fff;border:1px solid #ece2f2;border-left:4px solid var(--c);text-decoration:none;color:var(--ink)}
-.mr .n{width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
+.glance-hero{margin:8px 0 6px;padding:10px 12px}.glance-hero small{font-size:10px}.glance-hero b{font-size:16.5px;margin-top:2px}
+.ovl{display:flex;flex-direction:column;gap:4px;margin:8px 0 2px}.ovl>span{display:flex;align-items:center;justify-content:space-between;gap:8px}.ovl small{font-size:10.5px}.ovl .lv{font-size:12px;padding:2px 9px}.ovl>span{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ovl small{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.ovd{font-size:13px;line-height:1.45;color:var(--soft);margin:4px 0 2px}
+.map{display:flex;flex-direction:column;gap:5px;margin:10px 0 6px}
+.mr{display:grid;grid-template-columns:26px 1fr 12px;gap:9px;align-items:center;padding:6px 10px;border-radius:14px;background:#fff;border:1px solid #ece2f2;border-left:4px solid var(--c);text-decoration:none;color:var(--ink)}
+.mr .n{width:26px;height:26px;border-radius:50%;background:var(--c);color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
 .mr b{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14.5px;line-height:1.2}.mr>i{font-style:normal;color:var(--c);font-size:18px}
 .dots{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px}
 .pd{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:650;color:var(--soft)}.pd:before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
@@ -2702,6 +2702,9 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}td,th{te
 .diffs{padding-left:18px}.diffs li{margin:6px 0;font-size:14.5px}.diffs b{display:block}.solv{display:inline-block;font-size:11px;font-weight:800;color:#b57418;background:#fdf1e2;border-radius:999px;padding:0 7px;margin-right:4px}
 details.sci{margin:14px 0 4px}details.sci summary{cursor:pointer;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c)}details.sci ul{margin:6px 0 0}
 .callout .q{margin:4px 0;font-weight:650}
+.tts{display:flex;flex-direction:column;gap:3px;margin:8px 0 0}.ttl3{display:grid;grid-template-columns:104px 1fr;gap:6px;align-items:baseline;text-decoration:none;color:var(--ink);font-size:13.5px;font-weight:650;line-height:1.3}
+.ttl3 span{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--k)}
+.fchips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.fchip{font-size:12.5px;font-weight:700;color:var(--c);background:#f5effa;border:1px solid #e7dbf0;border-radius:999px;padding:5px 11px;text-decoration:none}
 .psy{margin:12px 0;padding:12px 14px;border-radius:16px;background:#fff;border:1px solid #ece2f2;box-shadow:0 3px 12px rgba(70,20,100,.05)}.psy .lbl{color:var(--c)}
 .pkey{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;font-weight:700;margin:6px 0 8px}.pkey i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
 .pkey i.a,.dr i.a{background:#7b3fa0}.pkey i.b,.dr i.b{background:#d1477a}
@@ -2744,7 +2747,7 @@ function only(p){parts.forEach(function(q){if(q!==p)set(q,false);});set(p,true);
 parts.forEach(function(p){var b=p.querySelector('.hd');if(b)b.addEventListener('click',function(){if(p.classList.contains('open'))set(p,false);else only(p);});});
 function open(id){var p=document.querySelector(id);if(p)only(p);}
 chips.forEach(function(c){c.addEventListener('click',function(e){e.preventDefault();open(c.getAttribute('href'));});});
-[].slice.call(document.querySelectorAll('.mr')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
+[].slice.call(document.querySelectorAll('.mr,.ttl3,.fchip')).forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();open(a.getAttribute('href'));});});
 var fold=[].slice.call(document.querySelectorAll('[data-fold]'));
 function label(){var any=parts.some(function(p){return p.classList.contains('open');});fold.forEach(function(b){b.hidden=!any;});}
 fold.forEach(function(b){b.textContent='Close all ▲';b.addEventListener('click',function(){parts.forEach(function(p){set(p,false);});label();go(document.getElementById('top'));});});
@@ -3074,7 +3077,7 @@ def page(box, s):
             lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
             dots += '<span class="pd %s" title="%s">%s<em>%s</em></span>' % (_e(lv.replace(' ', '-')), _e(lv), _e(SHORT.get(pid, pid)), _e(SIGNAL.get(x.get('signal'), ('', ''))[0]))
         if dots:
-            badge = ''.join('<span class="tb" style="--k:%s">%s</span>' % (kinds[t['kind']][1], _e(kinds[t['kind']][0].split(' ', 1)[0])) for t in truths_by.get(cid, []) if t.get('kind') in kinds)
+            badge = ''        # the three truths have their own lines above the map
             mp += ('<a class="mr" href="#%s" style="--c:%s"><span class="n">%s</span><span class="mt"><b>%s%s</b><span class="dots">%s</span></span><i>›</i></a>'
                    % (cid, COLOURS[cid], num, _e(title), badge, dots))
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
@@ -3083,64 +3086,86 @@ def page(box, s):
         band = ('<div class="ovl"><span><small>Satisfaction</small>%s</span><span><small>Reading each other</small>%s</span></div>' % (_lv(ovv['level']), _lv(ovv['reading']))
                 + (('<p class="ovd">%s</p>' % _e(ovr.get('detail'))) if ovr.get('detail') else ''))
     key = ('<div class="key"><span><i class="k Strong"></i>Strong</span><span><i class="k Steady"></i>Steady</span><span><i class="k Worth-attention"></i>Worth attention</span>'
-           '<span>★ ↗ ✦ where your strength, growth edge and surprise are</span><span>↑ ↓ = what your messages show</span></div>')
-    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You two, in one line</small><b>%s</b></div>%s<div class="map">%s</div>%s%s'
-         % (_e(r.get('summary')), band, mp, key, ('<details class="sci"><summary>What the research says</summary>%s</details>' % _e(RESEARCH['overall'])) if ovv else ''),
+           '<span>↑ ↓ = your messages show more, less, the same</span></div>')
+    # The three truths in a line each, each opening its chapter; the big decisions and how far to trust the read.
+    short_k = {'strength': '★ Strength', 'edge': '↗ Growth edge', 'surprise': '✦ Surprise'}
+    tt = ''.join('<a class="ttl3" href="#%s" style="--k:%s"><span>%s</span>%s</a>' % (
+        x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close'), kinds[x['kind']][1], _e(short_k[x['kind']]), _e(x.get('title')))
+        for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds)
+    dec = view.get('decisions') or []
+    al_, tk_ = sum(1 for x in dec if x.get('result') == 'Aligned'), sum(1 for x in dec if x.get('result') != 'Aligned')
+    conf_ = ((box.get('sources') or {}).get('confidence') or {})
+    foot = ''.join(x for x in [
+        ('<a href="#future" class="fchip">Big decisions: %s</a>' % _e(' · '.join(y for y in ['%d aligned' % al_ if al_ else '', '%d to talk about' % tk_ if tk_ else ''] if y))) if dec else '',
+        ('<a href="#how" class="fchip">Read with %d%% confidence (%s)</a>' % (conf_['score'], _e(conf_.get('level')))) if conf_.get('score') is not None else ''] if x)
+    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You two, in one line</small><b>%s</b></div>%s%s<div class="map">%s</div>%s%s%s'
+         % (_e(r.get('summary')), band, ('<div class="tts">%s</div>' % tt) if tt else '', mp, ('<div class="fchips">%s</div>' % foot) if foot else '', key,
+            ('<details class="sci"><summary>What the research says</summary>%s</details>' % _e(RESEARCH['overall'])) if ovv else ''),
          '', 'The whole read on one screen', True)
-    # Chapters (README "Psyche Together, release 24"): the takeaway; its truth; its pillars; the story with its moments;
-    # its own picture; what's private to you; one box to try together; the research, folded.
+    # Chapters (README "Psyche Together, release 28"): the takeaway on top, then three parts at most: where you are (the
+    # pillars and your two Psyches, one card), what's going on (the story, opened by the chapter's truth, its moments and
+    # its one picture) and what to try (together, and what's only yours); the research folded at the end.
     for cid, num, title, pids, refs in CHAPTERS:
         c = D(ch.get(cid))
         take = c.get('takeaway') or ' '.join(D(D(r.get('pillars')).get(p)).get('headline') or '' for p in pids if p in (view.get('pillars') or {}))
         inner = '<div class="take"><span class="lbl">The takeaway</span><p>%s</p></div>' % _e(take)
-        for t in truths_by.get(cid, []):
-            k_ = kinds.get(t.get('kind'), ('', '#7b3fa0'))
-            inner += '<div class="truth" style="--k:%s"><span class="lbl">%s</span><h4>%s</h4>%s%s</div>' % (k_[1], _e(k_[0]), _e(t.get('title')), _paras(t.get('detail')), _pills(t.get('evidence')))
-            keep(t.get('evidence'), k_[0])
+        # 1. Where you are
+        where = ''
         for pid in [p for p in pids if p in (view.get('pillars') or {})]:
             lv, x = view['pillars'][pid], D(D(r.get('pillars')).get(pid))
             arrow, said = SIGNAL.get(x.get('signal'), ('', ''))
-            inner += ('<div class="prow"><div class="pt"><b>%s</b>%s</div><p class="phl">%s</p><p><span>You see it:</span> %s</p>%s%s</div>'
+            where += ('<div class="prow"><div class="pt"><b>%s</b>%s</div><p class="phl">%s</p><p><span>You see it:</span> %s</p>%s%s</div>'
                       % (_e(PILLARS.get(pid, pid)), _lv(lv), _e(x.get('headline')), _e(x.get('seeIt')),
                          ('<p><span>Your messages:</span> %s</p>' % _e(x.get('messages'))) if x.get('messages') else '',
                          ('<p class="sig">%s %s</p>' % (arrow, _e(said))) if arrow else ''))
         pcards = box.get('psyches') or {'a': (SEEN.get('cards') or {}).get('a') or {}, 'b': (SEEN.get('cards') or {}).get('b') or {}}
-        inner += _psyches(cid, pcards.get('a') or {}, pcards.get('b') or {}, names, c.get('traits'))
-        inner += ('<h3>The story</h3>' + _paras(c.get('detail')) + _pills(c.get('evidence'))) if c.get('detail') else ''
+        where += _psyches(cid, pcards.get('a') or {}, pcards.get('b') or {}, names, c.get('traits'))
+        inner += ('<h3>Where you are</h3>' + where) if where else ''
+        # 2. What's going on: the truth opens it, then the story, its moments and the chapter's one picture
+        going = ''
+        for t in truths_by.get(cid, []):
+            k_ = kinds.get(t.get('kind'), ('', '#7b3fa0'))
+            going += '<div class="truth" style="--k:%s"><span class="lbl">%s</span><h4>%s</h4>%s%s</div>' % (k_[1], _e(k_[0]), _e(t.get('title')), _paras(t.get('detail')), _pills(t.get('evidence')))
+            keep(t.get('evidence'), k_[0])
+        going += _paras(c.get('detail')) + _pills(c.get('evidence'))
         keep(c.get('evidence'), title)
+        todo = ''
         if cid == 'close':
-            inner += ('<div class="callout key2"><span class="lbl">Reaching for each other</span>%s</div>' % _e(c.get('bids')) if c.get('bids') else '')
-            inner += two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), 'What makes %s feel cared for' % names[0], 'What makes %s feel cared for' % names[1])
+            going += ('<div class="callout key2"><span class="lbl">Reaching for each other</span>%s</div>' % _e(c.get('bids')) if c.get('bids') else '')
+            going += two(D(c.get('care')).get('a'), D(c.get('care')).get('b'), 'What makes %s feel cared for' % names[0], 'What makes %s feel cared for' % names[1])
         if cid == 'secure':
-            inner += two(c.get('a'), c.get('b'), 'What %s needs to feel sure' % names[0], 'What %s needs to feel sure' % names[1])
+            going += two(c.get('a'), c.get('b'), 'What %s needs to feel sure' % names[0], 'What %s needs to feel sure' % names[1])
         if cid == 'disagree':
             cy, dr = D(c.get('cycle')), D(c.get('dream'))
-            inner += '<h3>Your cycle</h3>' + _cycle(cy, names) + two(cy.get('a'), cy.get('b'), 'Under it, for %s' % names[0], 'Under it, for %s' % names[1])
-            inner += ('<div class="callout try"><span class="lbl">The way out</span>%s%s</div>'
-                      % (_e(cy.get('exit')), ('<p class="q"><b>The question that opens it:</b> %s</p>' % _e(dr.get('question'))) if dr.get('question') else ''))
+            going += '<p class="lbl" style="margin-top:14px">Your cycle</p>' + _cycle(cy, names) + two(cy.get('a'), cy.get('b'), 'Under it, for %s' % names[0], 'Under it, for %s' % names[1])
+            todo += ('<div class="callout try"><span class="lbl">The way out</span>%s%s</div>'
+                     % (_e(cy.get('exit')), ('<p class="q"><b>The question that opens it:</b> %s</p>' % _e(dr.get('question'))) if dr.get('question') else ''))
             diffs = ''.join('<li><b>%s</b> %s</li>' % (_e(x.get('title')), _e(x.get('howToLiveWithIt'))) for x in c.get('lasting') or [] if isinstance(x, dict))
             diffs += ''.join('<li><b>%s</b> <span class="solv">to solve</span> %s</li>' % (_e(x.get('title')), _e(x.get('firstStep'))) for x in c.get('solvable') or [] if isinstance(x, dict))
-            inner += ('<h3>Differences to live with, and one to solve</h3><ul class="diffs">%s</ul>' % diffs) if diffs else ''
+            todo += ('<div class="callout ask"><span class="lbl">Differences to live with, and one to solve</span><ul class="diffs">%s</ul></div>' % diffs) if diffs else ''
         if cid == 'life':
-            inner += _rhythm(sig, who)
+            going += _rhythm(sig, who).replace('<h3>Your day, side by side</h3>', '<p class="lbl" style="margin-top:14px">Your day, side by side</p>')
         if cid == 'future':
             al = D(c.get('alike'))
             if al.get('shared'):
                 chips = lambda xs: ''.join('<span>%s</span>' % _e(x) for x in xs or [])
-                inner += ('<h3>What you share</h3><div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
+                going += ('<p class="lbl" style="margin-top:14px">What you share</p><div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
                           % (_e(names[0]), chips(al.get('a')), chips(al.get('shared')), _e(names[1]), chips(al.get('b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
             lines = {x.get('topic'): x.get('line') for x in c.get('decisions') or [] if isinstance(x, dict)}
             if view.get('decisions'):
-                inner += '<h3>The big decisions, side by side</h3>' + ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p><p>%s</p></div>'
+                going += '<p class="lbl" style="margin-top:14px">The big decisions, side by side</p>' + ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p><p>%s</p></div>'
                                                                        % (_e(x['label']), _lv(x['result']), _e(names[0]), _e(x.get('a') or '-'), _e(names[1]), _e(x.get('b') or '-'), _e(lines.get(x['topic'], '')))
                                                                        for x in view.get('decisions') or [])
-            inner += two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
+            going += two(D(c.get('growth')).get('a'), D(c.get('growth')).get('b'), 'How %s helps %s grow' % (names[0], names[1]), 'How %s helps %s grow' % (names[1], names[0]))
             if c.get('together'):
-                inner += '<div class="callout ask"><span class="lbl">New things to try together</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
-        inner += private(mine_by.get(cid, []))
+                todo += '<div class="callout ask"><span class="lbl">New things to do together</span><ul>%s</ul></div>' % ''.join('<li>%s</li>' % _e(x) for x in c.get('together') or [])
+        inner += ('<h3>What\'s going on</h3>' + going) if going.strip() else ''
+        # 3. What to try
         if c.get('askEachOther') or c.get('tryThis'):
-            inner += ('<div class="callout ask"><span class="lbl">Try together</span>%s%s</div>'
-                      % (''.join('<p class="q">%s</p>' % _e(x) for x in c.get('askEachOther') or []), ('<p><b>This week:</b> %s</p>' % _e(c.get('tryThis'))) if c.get('tryThis') else ''))
+            todo = ('<div class="callout ask"><span class="lbl">Try together</span>%s%s</div>'
+                    % (''.join('<p class="q">%s</p>' % _e(x) for x in c.get('askEachOther') or []), ('<p><b>This week:</b> %s</p>' % _e(c.get('tryThis'))) if c.get('tryThis') else '')) + todo
+        todo += private(mine_by.get(cid, []))
+        inner += ('<h3>What to try</h3>' + todo) if todo else ''
         inner += _science(refs, folded=True)
         part(cid, num, title, inner, 'chapter', SUBTITLES.get(cid, ''))
         if cid == 'disagree':
