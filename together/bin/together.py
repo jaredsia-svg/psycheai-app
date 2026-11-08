@@ -16,6 +16,9 @@ of them is answered and written here and locked before it's sent: the server kee
   python3 bin/together.py save @f             save the joint read Muse wrote
   python3 bin/together.py save-foryou @f      save their own private "For you"
   python3 bin/together.py show                their page
+  python3 bin/together.py again               four weeks on: the same questions again, to see what moved
+  python3 bin/together.py later               not now: asks again in a few days
+  python3 bin/together.py save-recheck @f     save what moved, as Muse wrote it
   python3 bin/together.py end                 end it, for both
   python3 bin/together.py forget              delete everything of it in this workspace
   python3 bin/together.py update              install the latest signed release
@@ -42,7 +45,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 16
+RELEASE = 17
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -99,6 +102,20 @@ CORE_SEPARATED = {
     'life': 'How comfortable are you with how {p} handles time, money and energy around the children?',
 }
 SKIP_SEPARATED = {'desire', 'growth'}
+
+# README "Psyche Together, release 17": two overall questions, the same for both. How satisfied someone believes
+# their partner is was among the strongest predictors of relationship quality across 11,196 couples (Joel et al.,
+# 2020), so the read compares each one's sense of the other with how the other feels, as a couple, never whose.
+OVERALL = [('overall:you', 'Overall, how satisfied are you with your relationship with {p}?'),
+           ('overall:them', 'And how satisfied do you think {p} is with it?')]
+OVERALL_SEPARATED = {'overall:you': 'Overall, how satisfied are you with how you and {p} work together for the children?'}
+OVERALL_OPTS = [('Very satisfied', 3), ('Satisfied', 2), ('Somewhat', 1), ('Not very', 0)]
+READING = ('Happier than you each think', 'About right', 'Worth asking each other')
+
+# README "Psyche Together, release 17": four weeks after the read, the same questions again (no openers, no
+# follow-ups, no decisions), and what moved shown at the top of the page. Every four weeks after that.
+RECHECK_DAYS = float(os.environ.get('PSYCHE_TOGETHER_RECHECK_DAYS') or 28)
+NUDGE_DAYS = 3
 
 SAFETY = ('safety', 'One private question, never shared with anyone: do you ever feel unsafe or afraid with {p}?',
           ['No', 'Sometimes', 'Yes', 'I\'d rather not say'])
@@ -346,11 +363,59 @@ def items(s):
     if 'desire' in core:
         text, opts = core['desire']
         out.append({'id': 'core:desire', 'kind': 'core', 'pillar': 'desire', 'opener': '', 'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
+    out += overall_items(stage)
     out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
     for t in BY_STAGE.get(stage) or []:
         out.append({'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': DECISIONS[t][1],
                     'onlyIf': 'hope' if t in ('hope', 'children') and stage == 'Dating' else None})
     return out
+
+
+def overall_items(stage):
+    return [{'id': qid, 'kind': 'overall', 'pillar': '', 'opener': '', 'text': (OVERALL_SEPARATED.get(qid, text) if stage == SEPARATED else text),
+             'options': [o for o, _ in OVERALL_OPTS], 'scores': [sc for _, sc in OVERALL_OPTS]} for qid, text in OVERALL]
+
+
+def round_items(s):
+    """The questions again, four weeks on: each pillar's own question, the two overall ones and the private one."""
+    stage, out = stage_of(s), []
+    core = {pid: (text, opts) for pid, text, opts in core_for(stage)}
+    for pid in FLOW + ['desire']:
+        if pid in core:
+            text, opts = core[pid]
+            out.append({'id': 'core:' + pid, 'kind': 'core', 'pillar': pid, 'opener': '', 'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
+    out += overall_items(stage)
+    out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
+    return out
+
+
+def live_round(s):
+    r = s.get('round')
+    return r if isinstance(r, dict) and not r.get('sent') else None
+
+
+def its_for(s):
+    return round_items(s) if live_round(s) else items(s)
+
+
+def ans_for(s):
+    r = live_round(s)
+    return r.setdefault('answers', {}) if r else s.setdefault('answers', {})
+
+
+def is_gentle(s):
+    return ((s.get('answers') or {}).get('safety') or {}).get('label') in SAFETY_FLAGGED or bool(s.get('gentleLater'))
+
+
+def levels_of(stage, answers):
+    """The pillar answers as good / middling / low, and the overall two as 3 to 0: what is shared."""
+    core = {}
+    for pid, _, opts in core_for(stage):
+        a = answers.get('core:' + pid)
+        if a and pid != 'desire' and dict(opts).get(a.get('label')) is not None:
+            core[pid] = dict(opts)[a['label']]
+    ov = {k[8:]: dict(OVERALL_OPTS)[a['label']] for k, a in answers.items() if k.startswith('overall:') and a.get('label') in dict(OVERALL_OPTS)}
+    return core, ov
 
 
 def base_priority(s):
@@ -395,8 +460,8 @@ def next_step(s=None):
         return {'id': 'stage', 'say': 'Which stage of a relationship are you two at right now?', 'kind': 'stage', 'buttons': STAGES, 'asButtons': True}
     if not s.get('questions'):
         return {'notReady': True}
-    answers = s.get('answers') or {}
-    its = items(s)
+    answers = ans_for(s)
+    its = its_for(s)
     ids = shown(s, its, answers)
     todo = [it for it in its if it['id'] in ids and it['id'] not in answers]
     if not todo:
@@ -419,12 +484,12 @@ def answer(qid, label=None, text=None, nearest=None):
         s['stage'] = label
         save_state(s)
         return after_stage(s)
-    it = next((x for x in items(s) if x['id'] == qid), None) if s.get('questions') else None
+    it = next((x for x in its_for(s) if x['id'] == qid), None) if s.get('questions') else None
     if not it:
         return {'error': 'There\'s no question %s right now.' % qid}
     if label not in it['options']:
         return {'error': '"%s" isn\'t one of the buttons: %s.' % (label, ', '.join(it['options']))}
-    s.setdefault('answers', {})[qid] = {'label': label}
+    ans_for(s)[qid] = {'label': label}
     save_state(s)
     q = next_step(s)
     return send() if q.get('done') else q
@@ -442,13 +507,8 @@ def shared_profile(s, answered=True):
     if not answered:
         return out
     answers = s.get('answers') or {}
-    stage = stage_of(s)
-    core = {}
-    for pid, _, opts in core_for(stage):
-        a = answers.get('core:' + pid)
-        if a and pid != 'desire' and dict(opts).get(a.get('label')) is not None:
-            core[pid] = dict(opts)[a['label']]
-    out.update(core=core, desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
+    core, ov = levels_of(stage_of(s), answers)
+    out.update(core=core, overall=ov, rounds=s.get('rounds') or [], desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
                decisions={k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')})
     return out
 
@@ -473,9 +533,30 @@ def couple_view(a, b):
             result = ('Not decided yet' if not x or not y or x in UNDECIDED or y in UNDECIDED
                       else 'Aligned' if x == y else 'Talk about')
             decisions.append({'topic': t, 'label': DECISION_LABELS[t], 'a': x, 'b': y, 'result': result})
-    return {'stage': a.get('stage') or b.get('stage'), 'stages': [a.get('stage'), b.get('stage')], 'pillars': pillars,
+    out = {'stage': a.get('stage') or b.get('stage'), 'stages': [a.get('stage'), b.get('stage')], 'pillars': pillars,
             'desireTalk': bool(a.get('desireTalk') and b.get('desireTalk')), 'decisions': decisions,
             'names': [(a.get('psyche') or {}).get('name') or 'Partner A', (b.get('psyche') or {}).get('name') or 'Partner B']}
+    ov = overall_view(a.get('overall'), b.get('overall'))
+    if ov:
+        out['overall'] = ov
+    return out
+
+
+def overall_view(x, y):
+    """How satisfied they both are (as a pillar level) and how well each reads the other's, for the couple only:
+    happier than they each think when both are more satisfied than the other guessed, about right when both
+    guesses are within a step, otherwise worth asking each other. Never whose."""
+    x, y = x if isinstance(x, dict) else {}, y if isinstance(y, dict) else {}
+    if not all(isinstance(v.get(k), int) for v in (x, y) for k in ('you', 'them')):
+        return None
+    level = LEVELS[2 if x['you'] >= 2 and y['you'] >= 2 else 0 if 0 in (x['you'], y['you']) else 1]
+    if x['you'] > y['them'] and y['you'] > x['them']:
+        reading = READING[0]
+    elif abs(x['you'] - y['them']) <= 1 and abs(y['you'] - x['them']) <= 1:
+        reading = READING[1]
+    else:
+        reading = READING[2]
+    return {'level': level, 'reading': reading}
 
 
 # ---------------------------------------------------------------- the check-in widget
@@ -544,7 +625,7 @@ show();})();
 
 
 def widget_html(s):
-    its = items(s)
+    its = its_for(s)
     p = s.get('partner') or 'your partner'
     data = {'certain': certain(s), 'talked': 'Yes, and we\'ve talked',
             'items': [{'id': it['id'], 'pillar': it['pillar'], 'options': it['options'], 'scores': it.get('scores'), 'follows': it.get('follows'),
@@ -552,19 +633,19 @@ def widget_html(s):
     cards = []
     for it in its:
         chip = ('<span class="chip lock">Private · never shared</span>' if it.get('private') else
-                '<span class="chip">%s</span>' % _e('Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision' else PILLARS.get(it['pillar'], '')))
+                '<span class="chip">%s</span>' % _e('Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision' else 'Overall' if it['kind'] == 'overall' else PILLARS.get(it['pillar'], '')))
         opts = ''.join('<label><input type="radio" name="%s" value="%s"><span>%s</span></label>' % (_e(it['id']), _e(o), _e(o)) for o in it['options'])
         cards.append('<section class="card" id="c-%s" hidden>%s%s<p class="question">%s</p><div class="opts">%s</div>'
                      '<div class="nav"><button type="button" class="back">‹ Back</button><button type="button" class="next" hidden>Next ›</button></div></section>'
                      % (it['id'].replace(':', '-'), chip, ('<p class="opener">%s</p>' % _e(it['opener'])) if it.get('opener') else '',
                         _e(it['text'].replace('{p}', p)), opts))
-    return ('<div class="pt"><style>%s</style><div class="top"><small>Psyche Together</small><b>You &amp; %s</b><div class="prog"><i></i></div>'
+    return ('<div class="pt"><style>%s</style><div class="top"><small>Psyche Together%s</small><b>You &amp; %s</b><div class="prog"><i></i></div>'
             '<div class="count"></div></div><form id="pt-form" onsubmit="return false">%s'
             '<section class="card done" id="c-done" hidden><h3>All done ✓</h3><p>Check your answers, then tap <b>Submit my answers</b> below.</p><ol></ol>'
             '<div class="nav"><button type="button" class="edit">‹ Change an answer</button><span></span></div></section>'
             '<input type="hidden" id="pt-answers" name="psyche-together-answers" value="{}"></form>'
             '<script type="application/json" id="pt-data">%s</script><script>%s</script></div>'
-            % (W_CSS, _e(p), ''.join(cards), json.dumps(data).replace('</', '<\\/'), W_JS))
+            % (W_CSS, ' · %d weeks on' % weeks_on(live_round(s)['n']) if live_round(s) else '', _e(p), ''.join(cards), json.dumps(data).replace('</', '<\\/'), W_JS))
 
 
 def take_answers(raw):
@@ -579,9 +660,9 @@ def take_answers(raw):
         return {'error': 'Couldn\'t read the answers: %s' % err}
     if not isinstance(got, dict):
         return {'error': 'The answers are one JSON object: question id → the option tapped.'}
-    its, bad = items(s), []
+    its, bad = its_for(s), []
     byid = {it['id']: it for it in its}
-    answers = dict(s.get('answers') or {})
+    answers = dict(ans_for(s))
     for k, v in got.items():
         it = byid.get(k)
         if not it:
@@ -591,7 +672,11 @@ def take_answers(raw):
         elif v not in (None, ''):
             bad.append('%s: "%s" isn\'t one of its options' % (k, v))
     ids = shown(s, its, answers)
-    s['answers'] = {k: v for k, v in answers.items() if k in ids}
+    kept_ = {k: v for k, v in answers.items() if k in ids}
+    if live_round(s):
+        s['round']['answers'] = kept_
+    else:
+        s['answers'] = kept_
     save_state(s)
     if bad:
         return {'saved': False, 'problems': bad}
@@ -1155,6 +1240,7 @@ RESEARCH = {
     'we': 'Couples who say "we" more often show more positive behaviour when they disagree (Seider et al., 2009).',
     'perpetual': 'Most recurring disagreements come from lasting differences in personality and needs: the goal is a way of living with them, not a winner (Gottman).',
     'dreams': 'Behind a disagreement that keeps coming back there is often a hope or need that hasn\'t been said; naming it is what loosens it (Gottman, dreams within conflict).',
+    'overall': 'How satisfied someone believes their partner is was among the five strongest predictors of relationship quality across 11,196 couples (Joel et al., PNAS 2020): reading each other well matters as much as how each one feels.',
     'lovemaps': 'Knowing each other\'s inner world, worries, hopes and everyday life, is the foundation the rest of a relationship is built on (Gottman, love maps).',
 }
 
@@ -1334,6 +1420,8 @@ def send(no_chat=False):
     s = state()
     if not s.get('role'):
         return {'error': 'There\'s no Psyche Together here.'}
+    if live_round(s):
+        return round_send(s)
     if s.get('v') == 3:
         q = next_step(s)
         if not q.get('done'):
@@ -1459,6 +1547,9 @@ def check_read(r, view, has_chat=False):
          'chapters.future: detail (at least 500 characters), a line per big decision (%s), growth a and b, three together ideas, dated evidence' % (', '.join(sorted(topics)) or 'none'))
     im = D(r.get('intermission'))
     need(T(im.get('title')) and 3 <= len(L(im.get('lines'))) <= 5 and all(T(x) and len(T(x)) <= 220 for x in L(im.get('lines'))), 'intermission: a title and three to five short, light lines')
+    if view.get('overall'):
+        ov = D(r.get('overall'))
+        need(T(ov.get('title')) and len(T(ov.get('detail'))) >= 300, 'overall: a title and a detail of three or four sentences (at least 300 characters) on how satisfied they both are and how well they read each other, for the couple, never whose')
     pn = D(r.get('plan'))
     w1 = D(pn.get('week1'))
     need(T(w1.get('title')) and len(L(w1.get('days'))) == 7 and len(L(pn.get('weeks'))) == 3
@@ -1513,11 +1604,11 @@ def foryou_task(box=None):
     mine = {}
     for it in items(s):
         a = answers.get(it['id'])
-        if a and it['kind'] in ('core', 'deeper'):
+        if a and it['kind'] in ('core', 'deeper', 'overall'):
             mine[it['text'].replace('{p}', s.get('partner') or 'your partner')] = a.get('text') or a.get('label')
     k, got, profiles, _ = couple()
     _, theirs = mine_theirs(s, profiles) if not got.get('error') else ({}, {})
-    flagged = (answers.get('safety') or {}).get('label') in SAFETY_FLAGGED
+    flagged = is_gentle(s)
     return {'write': 'foryou', 'yourAnswers': mine, 'yourPsyche': psyche_profile(psyche() or {}), 'yourReport': (psyche() or {}).get('report'),
             'partner': theirs.get('psyche'), 'gentle': flagged, 'saveTo': 'work/together-foryou.json'}
 
@@ -1547,8 +1638,7 @@ def save_foryou(path):
         return {'saved': False, 'problems': ['Couldn\'t read %s: %s' % (path, err)]}
     fy = fy.get('answer', fy) if isinstance(fy, dict) else fy
     s = state()
-    gentle = ((s.get('answers') or {}).get('safety') or {}).get('label') in SAFETY_FLAGGED
-    problems = check_foryou(fy, gentle)
+    problems = check_foryou(fy, is_gentle(s))
     if problems:
         return {'saved': False, 'problems': problems}
     s['forYou'] = fy
@@ -1566,6 +1656,186 @@ def save_foryou(path):
         return write_task(profiles)
     return {'waiting': True, 'say': 'Your answers are in, and your own advice is ready for when your read arrives. I\'ll tell you here when %s has done theirs.' % (s.get('partner') or 'your partner'),
             'buttons': ['Is our read ready?'], 'asButtons': True}
+
+
+# ---------------------------------------------------------------- four weeks on (README "Psyche Together, release 17")
+
+def weeks_on(n):
+    return int(round(RECHECK_DAYS * (n - 1) / 7)) or 4
+
+
+def rounds_in(box):
+    return [x for x in (box or {}).get('rechecks') or [] if isinstance(x, dict)]
+
+
+def due_at(box):
+    last = max([(box or {}).get('at') or 0] + [x.get('at') or 0 for x in rounds_in(box)])
+    return last + RECHECK_DAYS * 86400
+
+
+def next_round(box):
+    return len(rounds_in(box)) + 2
+
+
+def round_of(profile, n):
+    return next((r for r in (profile or {}).get('rounds') or [] if isinstance(r, dict) and r.get('n') == n), None)
+
+
+def again(box=None):
+    """"Check in again": the same questions as before, in one widget, to see what moved."""
+    s = state()
+    if not s.get('role') or not s.get('sent'):
+        return {'error': 'The check-in again comes once your Psyche Together has been read.'}
+    if box is None:
+        k, got, profiles, box = couple()
+        if got.get('error'):
+            return got
+    if not box:
+        return {'error': 'The check-in again comes once your Psyche Together has been read.'}
+    n = next_round(box)
+    r = s.get('round') if isinstance(s.get('round'), dict) else None
+    if not r or r.get('n') != n:
+        s['round'] = {'n': n, 'answers': {}, 'started': int(time.time())}
+        save_state(s)
+    elif r.get('sent'):
+        return round_status(s, box)
+    return {'widget': widget_html(s), 'say': 'The same questions as last time, to see what has moved. About 2 minutes.', 'buttons': ['Submit my answers'], 'asButtons': True}
+
+
+def later():
+    s = state()
+    s['snoozeUntil'] = int(time.time() + NUDGE_DAYS * 86400)
+    save_state(s)
+    return {'say': 'I\'ll ask again in a few days.', 'buttons': ['Done'], 'asButtons': True}
+
+
+def round_send(s):
+    r = live_round(s)
+    if not next_step(s).get('done'):
+        return {'error': 'The check-in isn\'t finished yet.', 'next': next_step(s)}
+    core, ov = levels_of(stage_of(s), r.get('answers') or {})
+    if (r.get('answers') or {}).get('safety', {}).get('label') in SAFETY_FLAGGED:
+        s['gentleLater'] = True
+    s['rounds'] = [x for x in s.get('rounds') or [] if x.get('n') != r['n']] + [{'n': r['n'], 'at': int(time.time()), 'core': core, 'overall': ov}]
+    got = put_profile(s, True)
+    if got.get('error'):
+        return got
+    r['sent'] = int(time.time())
+    save_state(s)
+    k, got, profiles, box = couple()
+    if got.get('error'):
+        return got
+    return dict(round_status(s, box, profiles), sent=True)
+
+
+def round_status(s, box, profiles=None):
+    """After this person's answers again are sent: what moved, once both are in."""
+    n = (s.get('round') or {}).get('n')
+    if any(x.get('n') == n for x in rounds_in(box)):
+        return show(box)
+    if profiles is None:
+        k, got, profiles, _ = couple()
+        if got.get('error'):
+            return got
+    if all(round_of(profiles.get(x), n) for x in ('a', 'b')):
+        return recheck_task(profiles, box)
+    return {'waiting': True, 'setCheck': True, 'buttons': ['Has my partner checked in?'], 'asButtons': True,
+            'say': 'Your answers are in. When %s has done theirs too, you\'ll both see what has moved.' % (s.get('partner') or 'your partner')}
+
+
+ORDER = {'Worth attention': 0, 'Steady': 1, 'Strong': 2}
+
+
+def round_view(profiles, n):
+    a, b = profiles['a'], profiles['b']
+    ra, rb = round_of(a, n), round_of(b, n)
+    return couple_view(dict(a, core=ra.get('core'), overall=ra.get('overall')), dict(b, core=rb.get('core'), overall=rb.get('overall')))
+
+
+def moved(before, now):
+    out = {}
+    for pid, lv in (now.get('pillars') or {}).items():
+        old = (before.get('pillars') or {}).get(pid)
+        if old:
+            out[pid] = 'up' if ORDER[lv] > ORDER[old] else 'down' if ORDER[lv] < ORDER[old] else 'same'
+    return out
+
+
+def recheck_task(profiles, box):
+    """Data for Muse to write what moved: the couple view last time and now, the read's summary and plan. Data only."""
+    n = next_round(box)
+    before = (rounds_in(box)[-1].get('view') if rounds_in(box) else box.get('view')) or {}
+    now = round_view(profiles, n)
+    return {'write': 'recheck', 'round': n, 'weeks': weeks_on(n), 'names': now['names'], 'before': {'pillars': before.get('pillars'), 'overall': before.get('overall')},
+            'now': {'pillars': now['pillars'], 'overall': now.get('overall')}, 'moved': moved(before, now), 'pillarNames': PILLARS,
+            'summary': (box.get('read') or {}).get('summary'), 'plan': (box.get('read') or {}).get('plan'), 'saveTo': 'work/together-recheck.json'}
+
+
+def check_recheck(x, mv):
+    problems = []
+    if not isinstance(x, dict):
+        return ['What moved is not a JSON object.']
+    T = lambda v: v.strip() if isinstance(v, str) else ''
+    if not T(x.get('summary')) or len(T(x.get('summary')).split()) > 30:
+        problems.append('summary: one line on the four weeks, under 30 words')
+    want = sorted(p for p, d in mv.items() if d != 'same')
+    ch = x.get('changes') if isinstance(x.get('changes'), list) else []
+    got = sorted(c.get('pillar') for c in ch if isinstance(c, dict) and T(c.get('line')))
+    if got != want:
+        problems.append('changes: one line for each pillar that moved (%s), nothing else' % (', '.join(want) or 'none moved: leave it empty'))
+    if not T(x.get('held')):
+        problems.append('held: one or two sentences on what held steady')
+    nx = x.get('next') if isinstance(x.get('next'), dict) else {}
+    if not (T(nx.get('title')) and isinstance(nx.get('steps'), list) and len(nx['steps']) == 3 and all(T(v) for v in nx['steps'])):
+        problems.append('next: a title and three small steps for the next four weeks')
+    _plain(problems, x, 600)
+    return problems[:10]
+
+
+def save_recheck(path):
+    try:
+        with open(str(path).lstrip('@'), encoding='utf-8') as f:
+            x = json.load(f)
+    except (OSError, ValueError) as err:
+        return {'saved': False, 'problems': ['Couldn\'t read %s: %s' % (path, err)]}
+    x = x.get('answer', x) if isinstance(x, dict) else x
+    k, got, profiles, box = couple()
+    if got.get('error'):
+        return got
+    if not box:
+        return {'saved': False, 'problems': ['There\'s no read to add to yet.']}
+    n = next_round(box)
+    if not all(round_of(profiles.get(r), n) for r in ('a', 'b')):
+        return {'saved': False, 'problems': ['Both of you need to have checked in again first.']}
+    task = recheck_task(profiles, box)
+    problems = check_recheck(x, task['moved'])
+    if problems:
+        return {'saved': False, 'problems': problems}
+    box['rechecks'] = rounds_in(box) + [{'n': n, 'at': int(time.time()), 'view': round_view(profiles, n), 'moved': task['moved'], 'note': x}]
+    put = tool('together_put', {'e2e': {'read': seal(box, key_for('together-box', k['code']))}})
+    if put.get('error'):
+        return put
+    try:
+        os.remove(str(path).lstrip('@'))
+    except OSError:
+        pass
+    return dict(show(box), saved=True, say='What has moved is at the top of your Psyche Together.')
+
+
+def nudge(s, box, profiles, name):
+    """The reminder's ask to check in again: when the partner already has, or four weeks are up; every few days at most."""
+    now = time.time()
+    n = next_round(box)
+    theirs = round_of(mine_theirs(s, profiles)[1], n)
+    if not theirs and now < due_at(box):
+        return None
+    if now < (s.get('snoozeUntil') or 0) or now - (s.get('nudgedAt') or 0) < NUDGE_DAYS * 86400:
+        return None
+    s['nudgedAt'] = int(now)
+    save_state(s)
+    say = ('%s has checked in again. Your turn: the same questions, about 2 minutes, to see what has moved.' % name if theirs else
+           'It has been %d weeks since your Psyche Together. Time for the same questions again, to see what has moved? About 2 minutes.' % weeks_on(n))
+    return {'say': say, 'buttons': ['Check in again', 'Not now'], 'asButtons': True}
 
 
 def status():
@@ -1600,6 +1870,10 @@ def status():
             'waiting': True, 'say': '%s hasn\'t finished theirs yet.' % (s.get('partner') or 'Your partner'), 'buttons': ['Is our read ready?'], 'asButtons': True}
     if not s.get('forYou'):
         return foryou_task(box)
+    if live_round(s):
+        return {'widget': widget_html(s), 'say': 'The same questions as last time, to see what has moved.', 'buttons': ['Submit my answers'], 'asButtons': True}
+    if (s.get('round') or {}).get('sent'):
+        return round_status(s, box, profiles)
     return show(box)
 
 
@@ -1622,11 +1896,20 @@ def check():
     if not s.get('sent'):
         return {'quiet': True}
     if box:
-        if s.get('shown') == box.get('at'):
-            return {'done': True, 'quiet': True}
-        s['shown'] = box.get('at')
-        save_state(s)
-        return dict(show(box) if s.get('forYou') else foryou_task(), say='%s has finished. Here\'s your Psyche Together.' % name)
+        r = s.get('round') if isinstance(s.get('round'), dict) else None
+        if r and r.get('sent'):
+            if any(x.get('n') == r['n'] for x in rounds_in(box)):
+                return dict(show(box), say='%s has checked in again too. Here\'s what has moved.' % name)
+            if all(round_of(profiles.get(x), r['n']) for x in ('a', 'b')):
+                return recheck_task(profiles, box)
+            return {'quiet': True}
+        if r:
+            return {'quiet': True}
+        if s.get('shown') != box.get('at'):
+            s['shown'] = box.get('at')
+            save_state(s)
+            return dict(show(box) if s.get('forYou') else foryou_task(), say='%s has finished. Here\'s your Psyche Together.' % name)
+        return nudge(s, box, profiles, name) or {'quiet': True}
     if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
         return write_task(profiles)
     return {'quiet': True}
@@ -1735,7 +2018,7 @@ h2{margin:0 0 10px;font-size:19px}h3{margin:14px 0 4px;font-size:15.5px}p{margin
 .Strong,.Aligned{background:#e5f4ec;color:var(--sage)}.Steady,.Not-decided-yet{background:#fcf1e1;color:var(--amber)}.Worth-attention,.Talk-about{background:#f2e9f8;color:var(--plum)}
 .row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;border-top:1px solid var(--line);padding:9px 0}.row:first-of-type{border-top:0}
 .row b{font-size:15px}.row p{margin:2px 0 0;color:var(--soft);font-size:14px}
-.soft{color:var(--soft);font-size:13.5px}nav{position:sticky;top:0;z-index:3;display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;background:#fbf8fc;scrollbar-width:none}nav a{flex:none;font-size:12.5px;font-weight:700;color:var(--plum);background:#f2e9f8;border-radius:999px;padding:6px 11px;text-decoration:none}.lede{font-size:17px;font-weight:650}.sub{margin-top:18px}.item{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.pillar{border-top:1px solid var(--line);padding:12px 0 4px}.ph{display:flex;justify-content:space-between;align-items:center;gap:8px}.ph b{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.ev{margin:6px 0 10px;padding-left:18px;color:var(--soft);font-size:14px}.try{background:#f6effb;border-radius:12px;padding:9px 12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}@media(max-width:520px){.two{grid-template-columns:1fr}}.two>div{background:#faf6fc;border-radius:12px;padding:10px 12px}.sci{font-size:13px;color:var(--soft);border-left:3px solid #cdb6dd;padding:2px 0 2px 10px;margin:10px 0}.insight{font-weight:650}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}.gauge{display:flex;align-items:baseline;gap:8px;margin:8px 0}.gauge b{font-size:34px;color:var(--plum)}.gauge span{color:var(--soft);font-size:14px}.chart{margin:8px 0}.chart svg{width:100%;height:auto}.chart figcaption{font-size:12px;color:var(--soft)}.map2{display:flex;flex-direction:column;gap:8px;margin:10px 0}.mrow{display:grid;grid-template-columns:30px 1fr;gap:4px 8px;text-decoration:none;color:var(--ink);align-items:center}.mnum{grid-row:span 2;font-weight:800;color:var(--plum);font-size:17px}.mtitle{font-weight:700;font-size:14px}.mtiles{display:flex;flex-wrap:wrap;gap:6px}.mtiles .tile{flex:1 1 30%;min-height:52px}.chapter h2{font-size:21px}.intermission{background:linear-gradient(135deg,#fff7ec,#fdeff6);border-color:#f5d9e6}.intermission small{font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:var(--rose)}.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}.fact{background:#fff;border-radius:12px;padding:9px 11px}.fact small{display:block;font-size:11.5px;color:var(--soft);font-weight:600;letter-spacing:0;text-transform:none}.fact b{font-size:15px}.map{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}.tile{position:relative;display:block;text-decoration:none;color:var(--ink);border-radius:12px;padding:9px 9px 8px;min-height:62px}.tile b{display:block;font-size:12.5px;line-height:1.25;padding-right:14px;overflow-wrap:anywhere}.tile span{font-size:11px;font-weight:700}.tile i{position:absolute;right:8px;top:6px;font-style:normal;font-weight:800;font-size:15px}.tile.Strong{background:#e5f4ec}.tile.Strong span{color:var(--sage)}.tile.Steady{background:#fcf1e1}.tile.Steady span{color:var(--amber)}.tile.Worth-attention{background:#f2e9f8}.tile.Worth-attention span{color:var(--plum)}.truth{border-radius:14px;padding:12px 14px;margin:10px 0;background:#faf6fc}.truth small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--plum)}.truth.strength small{color:var(--sage)}.truth.edge small{color:var(--rose)}.truth h3{margin-top:4px}.views{border-top:1px solid var(--line);padding:12px 0 6px}.vh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.vh b{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.sig{font-size:12px;color:var(--soft)}.views dl{margin:6px 0 0}.views dt{font-size:12px;font-weight:800;color:var(--soft);margin-top:6px}.views dd{margin:2px 0 0}.cycle{display:grid;grid-template-columns:1fr 26px 1fr;grid-template-rows:auto 26px auto;gap:4px;align-items:center;margin:10px 0}.cs{background:#f6effb;border-radius:12px;padding:9px 10px;font-size:13.5px;min-height:64px}.ca{text-align:center;color:var(--plum);font-weight:800}.cc{grid-column:2;text-align:center;font-size:18px;color:var(--rose)}.ask{background:#fdf6ee;border-radius:12px;padding:9px 12px;margin:10px 0}.ask ul{margin:4px 0 0}.rhythm .rb{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:center;font-size:12.5px;margin:4px 0}.rb div{position:relative;height:16px;background:#f4eff7;border-radius:8px;overflow:hidden}.rb i{position:absolute;left:0;top:0;bottom:0;border-radius:8px}.rb i.a,.ka{background:#7b3fa0}.rb i.b,.kb{background:#c2366d}.rb em{position:relative;font-style:normal;font-size:11px;padding-left:5px;color:#fff;mix-blend-mode:difference}.ka,.kb{display:inline-block;width:9px;height:9px;border-radius:3px}.timeline{list-style:none;padding:0;margin:6px 0;border-left:2px solid #e4cff0}.timeline li{position:relative;padding:4px 0 10px 14px}.timeline li:before{content:"";position:absolute;left:-6px;top:9px;width:10px;height:10px;border-radius:50%;background:#7b3fa0}.timeline b{display:block;font-size:12.5px;color:var(--plum)}.timeline em{display:block;font-size:11.5px;color:var(--soft);font-style:normal}.week{background:#faf6fc;border-radius:14px;padding:10px 14px;margin:10px 0}.week small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--rose)}.week h3{margin-top:2px}table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}th{border-top:0;color:var(--soft);font-size:12.5px}footer{color:var(--soft);font-size:12.5px;text-align:center;margin-top:18px}
+.soft{color:var(--soft);font-size:13.5px}nav{position:sticky;top:0;z-index:3;display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;background:#fbf8fc;scrollbar-width:none}nav a{flex:none;font-size:12.5px;font-weight:700;color:var(--plum);background:#f2e9f8;border-radius:999px;padding:6px 11px;text-decoration:none}.lede{font-size:17px;font-weight:650}.sub{margin-top:18px}.item{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.pillar{border-top:1px solid var(--line);padding:12px 0 4px}.ph{display:flex;justify-content:space-between;align-items:center;gap:8px}.ph b{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.ev{margin:6px 0 10px;padding-left:18px;color:var(--soft);font-size:14px}.try{background:#f6effb;border-radius:12px;padding:9px 12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}@media(max-width:520px){.two{grid-template-columns:1fr}}.two>div{background:#faf6fc;border-radius:12px;padding:10px 12px}.sci{font-size:13px;color:var(--soft);border-left:3px solid #cdb6dd;padding:2px 0 2px 10px;margin:10px 0}.insight{font-weight:650}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}.gauge{display:flex;align-items:baseline;gap:8px;margin:8px 0}.gauge b{font-size:34px;color:var(--plum)}.gauge span{color:var(--soft);font-size:14px}.chart{margin:8px 0}.chart svg{width:100%;height:auto}.chart figcaption{font-size:12px;color:var(--soft)}.map2{display:flex;flex-direction:column;gap:8px;margin:10px 0}.mrow{display:grid;grid-template-columns:30px 1fr;gap:4px 8px;text-decoration:none;color:var(--ink);align-items:center}.mnum{grid-row:span 2;font-weight:800;color:var(--plum);font-size:17px}.mtitle{font-weight:700;font-size:14px}.mtiles{display:flex;flex-wrap:wrap;gap:6px}.mtiles .tile{flex:1 1 30%;min-height:52px}.chapter h2{font-size:21px}.intermission{background:linear-gradient(135deg,#fff7ec,#fdeff6);border-color:#f5d9e6}.intermission small{font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:var(--rose)}.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}.fact{background:#fff;border-radius:12px;padding:9px 11px}.fact small{display:block;font-size:11.5px;color:var(--soft);font-weight:600;letter-spacing:0;text-transform:none}.fact b{font-size:15px}.map{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}.tile{position:relative;display:block;text-decoration:none;color:var(--ink);border-radius:12px;padding:9px 9px 8px;min-height:62px}.tile b{display:block;font-size:12.5px;line-height:1.25;padding-right:14px;overflow-wrap:anywhere}.tile span{font-size:11px;font-weight:700}.tile i{position:absolute;right:8px;top:6px;font-style:normal;font-weight:800;font-size:15px}.tile.Strong{background:#e5f4ec}.tile.Strong span{color:var(--sage)}.tile.Steady{background:#fcf1e1}.tile.Steady span{color:var(--amber)}.tile.Worth-attention{background:#f2e9f8}.tile.Worth-attention span{color:var(--plum)}.truth{border-radius:14px;padding:12px 14px;margin:10px 0;background:#faf6fc}.truth small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--plum)}.truth.strength small{color:var(--sage)}.truth.edge small{color:var(--rose)}.truth h3{margin-top:4px}.views{border-top:1px solid var(--line);padding:12px 0 6px}.vh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.vh b{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}.sig{font-size:12px;color:var(--soft)}.views dl{margin:6px 0 0}.views dt{font-size:12px;font-weight:800;color:var(--soft);margin-top:6px}.views dd{margin:2px 0 0}.cycle{display:grid;grid-template-columns:1fr 26px 1fr;grid-template-rows:auto 26px auto;gap:4px;align-items:center;margin:10px 0}.cs{background:#f6effb;border-radius:12px;padding:9px 10px;font-size:13.5px;min-height:64px}.ca{text-align:center;color:var(--plum);font-weight:800}.cc{grid-column:2;text-align:center;font-size:18px;color:var(--rose)}.ask{background:#fdf6ee;border-radius:12px;padding:9px 12px;margin:10px 0}.ask ul{margin:4px 0 0}.rhythm .rb{display:grid;grid-template-columns:78px 1fr 1fr;gap:6px;align-items:center;font-size:12.5px;margin:4px 0}.rb div{position:relative;height:16px;background:#f4eff7;border-radius:8px;overflow:hidden}.rb i{position:absolute;left:0;top:0;bottom:0;border-radius:8px}.rb i.a,.ka{background:#7b3fa0}.rb i.b,.kb{background:#c2366d}.rb em{position:relative;font-style:normal;font-size:11px;padding-left:5px;color:#fff;mix-blend-mode:difference}.ka,.kb{display:inline-block;width:9px;height:9px;border-radius:3px}.timeline{list-style:none;padding:0;margin:6px 0;border-left:2px solid #e4cff0}.timeline li{position:relative;padding:4px 0 10px 14px}.timeline li:before{content:"";position:absolute;left:-6px;top:9px;width:10px;height:10px;border-radius:50%;background:#7b3fa0}.timeline b{display:block;font-size:12.5px;color:var(--plum)}.timeline em{display:block;font-size:11.5px;color:var(--soft);font-style:normal}.week{background:#faf6fc;border-radius:14px;padding:10px 14px;margin:10px 0}.week small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:11px;color:var(--rose)}.week h3{margin-top:2px}table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line)}th{border-top:0;color:var(--soft);font-size:12.5px}footer{color:var(--soft);font-size:12.5px;text-align:center;margin-top:18px}.ovr{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}.ovr .tile{min-height:0}.ovr .tile b{font-size:11.5px;color:var(--soft);font-weight:700}.ovr .tile span{font-size:14px}.tile.Happier-than-you-each-think,.tile.About-right{background:#e5f4ec}.tile.Happier-than-you-each-think span,.tile.About-right span{color:var(--sage)}.tile.Worth-asking-each-other{background:#f2e9f8}.tile.Worth-asking-each-other span{color:var(--plum)}.since{border-color:#cfe8da;background:#f5fbf7}.since small{font-weight:800;letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--sage)}.mv{display:grid;grid-template-columns:1fr auto;gap:2px 10px;border-top:1px solid var(--line);padding:8px 0}.mv b{font-size:14px}.mv span{font-size:12.5px;font-weight:700;white-space:nowrap}.mv span.up{color:var(--sage)}.mv span.down{color:var(--rose)}.mv span.same{color:var(--soft)}.mv p{grid-column:1/-1;margin:2px 0 0;font-size:14px;color:var(--soft)}
 '''
 
 
@@ -1845,7 +2128,7 @@ def page(box, s):
     r, view = box.get('read') or {}, box.get('view') or {}
     names = view.get('names') or ['', '']
     fy = s.get('forYou') if isinstance(s.get('forYou'), dict) else None
-    gentle = ((s.get('answers') or {}).get('safety') or {}).get('label') in SAFETY_FLAGGED
+    gentle = is_gentle(s)
     D = lambda x: x if isinstance(x, dict) else {}
     ch = D(r.get('chapters'))
     sig = (box.get('chat') or {}).get('signals') or {}
@@ -1871,6 +2154,25 @@ def page(box, s):
                          ('<p class="soft"><b>How to raise it:</b> %s</p>' % _e(x.get('howToRaise'))) if x.get('howToRaise') and not gentle else '')
                          for x in fy.get('focus') or [] if isinstance(x, dict))
         part('foryou', 'For you', items_ + ('<p><b>This week:</b> %s</p>' % _e(fy.get('practice'))) + ('<p class="soft">%s</p>' % _e(fy.get('note')) if fy.get('note') else ''), 'mine')
+    # Four weeks on (README "Psyche Together, release 17"): each check-in again, newest first, above the read it updates.
+    arrows = {'up': '↑ up', 'down': '↓ down', 'same': '= same'}
+    for rc in reversed(rounds_in(box)):
+        nt, rv = D(rc.get('note')), D(rc.get('view'))
+        lines = {c.get('pillar'): c.get('line') for c in nt.get('changes') or [] if isinstance(c, dict)}
+        rows = ''
+        for pid in PILLAR_ORDER:
+            d = (rc.get('moved') or {}).get(pid)
+            if d:
+                rows += '<div class="mv"><b>%s</b><span class="%s">%s · %s</span>%s</div>' % (_e(PILLARS[pid]), d, _e(arrows[d]), _e((rv.get('pillars') or {}).get(pid, '')),
+                                                                                     ('<p>%s</p>' % _e(lines[pid])) if lines.get(pid) else '')
+        ov2 = rv.get('overall') or {}
+        nx = D(nt.get('next'))
+        when_ = datetime.fromtimestamp(rc.get('at') or time.time()).strftime('%-d %B %Y')
+        part('since%d' % rc.get('n', 2), '%d weeks on' % weeks_on(rc.get('n', 2)),
+             '<small>Checked in again · %s</small><p class="lede">%s</p>%s%s<p>%s</p><div class="week"><h3>%s</h3><ol>%s</ol></div>'
+             % (_e(when_), _e(nt.get('summary')), ('<div class="ovr"><span class="tile %s"><b>How satisfied you both are</b><span>%s</span></span><span class="tile %s"><b>How well you read each other</b><span>%s</span></span></div>'
+                                                    % (_e(ov2['level'].replace(' ', '-')), _e(ov2['level']), _e(ov2['reading'].replace(' ', '-')), _e(ov2['reading']))) if ov2 else '',
+                rows, _e(nt.get('held')), _e(nx.get('title')), ''.join('<li>%s</li>' % _e(x) for x in nx.get('steps') or [])), 'since')
     # At a glance: the relationship map, one numbered row per chapter, as the chapters below; then three truths.
     rows_ = ''
     for cid, num, title, pids, refs in CHAPTERS:
@@ -1885,8 +2187,15 @@ def page(box, s):
     kinds = {'strength': 'Your strength', 'edge': 'Your growth edge', 'surprise': 'The surprise'}
     truths = ''.join('<div class="truth %s"><small>%s</small><h3>%s</h3>%s%s</div>' % (_e(x.get('kind')), _e(kinds.get(x.get('kind'), '')), _e(x.get('title')), _paras(x.get('detail')), keep(x.get('evidence'), kinds.get(x.get('kind'), '')))
                      for x in r.get('truths') or [] if isinstance(x, dict))
-    part('glance', 'At a glance', '<p class="lede">%s</p><div class="map2">%s</div><p class="soft">Each tile is how you both see it: green Strong, amber Steady, purple worth attention (when either of you sees it so, never saying whose). ↑ your messages show more than you see; ↓ less; = they match.</p>%s'
-         % (_e(r.get('summary')), tiles, truths))
+    ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
+    band = ''
+    if ovv:
+        band = ('<div class="ovr"><span class="tile %s"><b>How satisfied you both are</b><span>%s</span></span><span class="tile %s"><b>How well you read each other</b><span>%s</span></span></div>'
+                % (_e(ovv['level'].replace(' ', '-')), _e(ovv['level']), _e(ovv['reading'].replace(' ', '-')), _e(ovv['reading'])))
+        if ovr.get('detail'):
+            band += '<h3>%s</h3>%s%s' % (_e(ovr.get('title')), _paras(ovr.get('detail')), _research('overall'))
+    part('glance', 'At a glance', '<p class="lede">%s</p>%s<div class="map2">%s</div><p class="soft">Each tile is how you both see it: green Strong, amber Steady, purple worth attention (when either of you sees it so, never saying whose). ↑ your messages show more than you see; ↓ less; = they match.</p>%s'
+         % (_e(r.get('summary')), band, tiles, truths))
     # Chapters.
     for cid, num, title, pids, refs in CHAPTERS:
         c = D(ch.get(cid))
@@ -1945,7 +2254,7 @@ def page(box, s):
                     % (i + 2, _e(w.get('title')), ('' if gentle else '<p><b>A conversation:</b> %s. %s</p><ol>%s</ol>' % (_e(D(w.get('conversation')).get('title')), _e(D(w.get('conversation')).get('why')),
                                                                                                          ''.join('<li>%s</li>' % _e(x) for x in D(w.get('conversation')).get('script') or []))),
                        _e(w.get('ask')), _e(w.get('doTogether'))) for i, w in enumerate(pn.get('weeks') or []) if isinstance(w, dict))
-    part('plan', '06  Your four weeks', '<div class="week"><small>Week 1, a little every day</small><h3>%s</h3><ol>%s</ol></div>%s%s<p class="soft">At four weeks, the questions again, to see what moved.</p>'
+    part('plan', '06  Your four weeks', '<div class="week"><small>Week 1, a little every day</small><h3>%s</h3><ol>%s</ol></div>%s%s<p class="soft">In four weeks, Psyche Together asks you both the same questions again, here in Muse, and shows what has moved at the top of this page.</p>'
          % (_e(w1.get('title')), ''.join('<li>%s</li>' % _e(x) for x in w1.get('days') or []), weeks, _research('lovemaps')))
     part('how', 'How this was read', '%s<p class="soft">From both your full Psyche reports, shared with your consent for this read; your conversation together, measured on the device of the one who added it; and the check-in you each did privately, the same core questions for both. '
          'The measures follow published research: how partners see the relationship (Joel et al., PNAS 2020), turning towards and repair (Gottman), responsiveness to good news (Gable et al., 2004), '
@@ -1966,17 +2275,20 @@ def show(box=None):
             return got
         if not box:
             return {'waiting': True, 'say': 'Your read isn\'t written yet.'}
-    if s.get('shown') != box.get('at'):
-        s['shown'] = box.get('at')
-        save_state(s)
+    s['shown'] = box.get('at')
+    done_ = [x.get('n') for x in rounds_in(box)]
+    if isinstance(s.get('round'), dict) and s['round'].get('n') in done_:
+        s['round'] = None
+    save_state(s)
     os.makedirs(OUT, exist_ok=True)
     names = (box.get('view') or {}).get('names') or ['', '']
     path = os.path.join(OUT, 'Psyche-Together-%s-%s.html' % tuple(re.sub(r'[^A-Za-z0-9]+', '', n) or 'Partner' for n in names))
     with open(path, 'w', encoding='utf-8') as f:
         f.write(page(box, s))
     os.chmod(path, 0o600)
-    return {'file': path, 'say': 'Your Psyche Together is ready.', 'summary': (box.get('read') or {}).get('summary'),
-            'buttons': ['End Psyche Together', 'Done'], 'asButtons': True}
+    latest = (rounds_in(box)[-1].get('note') or {}) if rounds_in(box) else {}
+    return {'file': path, 'say': 'Your Psyche Together is ready.', 'summary': latest.get('summary') or (box.get('read') or {}).get('summary'),
+            'buttons': (['Check in again'] if time.time() >= due_at(box) else []) + ['End Psyche Together', 'Done'], 'asButtons': True}
 
 
 def end():
@@ -2133,6 +2445,12 @@ def main(argv):
         out = {'widget': widget_html(s), 'say': 'Your questions, written from both your Psyches.', 'buttons': ['Submit my answers'], 'asButtons': True}
     elif cmd == 'check':
         out = check()
+    elif cmd == 'again':
+        out = again()
+    elif cmd == 'later':
+        out = later()
+    elif cmd == 'save-recheck':
+        out = save_recheck(rest[0] if rest else '')
     elif cmd == 'code':
         out = read_code(' '.join(rest))
     elif cmd == 'send':

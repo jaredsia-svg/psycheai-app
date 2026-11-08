@@ -3849,6 +3849,7 @@ elif a[0] == 'thread':
       life: { detail: para(10, 'shared the load'), evidence: EV('life'), askEachOther: ['Which chore do you mind most?'], tryThis: 'Swap one chore.' },
       future: { detail: para(10, 'talked about next year'), decisions: view.decisions.map(d => ({ topic: d.topic, line: 'A calm way in.' })), growth: { a: 'Mei backs Ana\'s projects.', b: 'Ana calms Mei\'s rush.' },
                 together: ['A cooking class', 'A new trail', 'A shared project'], evidence: EV('future') } },
+    overall: { title: 'How you feel about it all', detail: para(3, 'looked at the whole of it together') },
     intermission: { title: 'Your story in moments', lines: ['You both say goodnight twice.', 'Mei plans the trips; Ana finds the food.', 'Saturday is your day.'] },
     plan: { week1: { title: 'Small daily turns', chapter: 'close', days: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
             weeks: [0, 1, 2].map(i => ({ title: 'Week ' + (i + 2), conversation: { title: 'About ' + (worth[i] || 'us'), why: 'It matters to you both.', script: ['Pick a calm time.', 'Each says one thing.', 'Agree one step.'] }, ask: 'Ask ' + i, doTogether: 'Do ' + i })) },
@@ -3864,6 +3865,32 @@ elif a[0] == 'thread':
   tg.pageB = tg.checkB2;
   tg.checkA3 = await run.a('check');
   tg.checkB3 = await run.b('check');
+  // Four weeks on (README "Psyche Together, release 17"): the reminder asks once the time is up, both answer the same questions again, and what moved goes on top of the page.
+  const runR = async (who, ...args) => JSON.parse((await execFile('python3', [pathx.join(home[who].dir, 'bin', 'together.py'), ...args],
+    { cwd: home[who].dir, env: { ...home[who].env, PSYCHE_TOGETHER_RECHECK_DAYS: '0' }, timeout: 60000 })).stdout);
+  const roundAnswers = res => {
+    const D = JSON.parse((/<script type="application\/json" id="pt-data">([\s\S]*?)<\/script>/.exec(String(res.widget || '')) || [0, '{"items":[]}'])[1]);
+    return [D, Object.fromEntries(D.items.map(it => [it.id, it.id === 'safety' ? 'No' : it.options[0]]))];
+  };
+  tg.nudgeA = await runR('a', 'check');
+  tg.nudgeA2 = await runR('a', 'check');
+  tg.againA = await runR('a', 'again');
+  const [RW, ansA2] = roundAnswers(tg.againA);
+  tg.roundA = await runR('a', 'answers', JSON.stringify(ansA2));
+  tg.nudgeB = await runR('b', 'check');
+  tg.againB = await runR('b', 'again');
+  tg.recheck = await runR('b', 'answers', JSON.stringify(roundAnswers(tg.againB)[1]));
+  const mv = tg.recheck.moved || {};
+  const movedP = Object.keys(mv).filter(p => mv[p] !== 'same');
+  const rgood = { summary: 'Four weeks of small daily turns, and more ease between you.', changes: movedP.map(p => ({ pillar: p, line: 'The daily turns helped here.' })),
+    held: 'Your steadiness held.', next: { title: 'Keep the habit', steps: ['One thanks a day', 'A walk on Sunday', 'Ask one love-map question'] } };
+  fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-recheck.json'), JSON.stringify({ ...rgood, changes: [] }));
+  tg.recheckBad = await runR('b', 'save-recheck', '@work/together-recheck.json');
+  fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-recheck.json'), JSON.stringify(rgood));
+  tg.recheckSaved = await runR('b', 'save-recheck', '@work/together-recheck.json');
+  tg.checkA4 = await runR('a', 'check');
+  tg.checkA5 = await runR('a', 'check');
+  const htmlR = tg.checkA4.file ? fsx.readFileSync(tg.checkA4.file, 'utf8') : '';
   const htmlA = tg.pageA.file ? fsx.readFileSync(tg.pageA.file, 'utf8') : '', htmlB = tg.pageB.file ? fsx.readFileSync(tg.pageB.file, 'utf8') : '';
   const boxes = [];
   const kept = JSON.stringify(store.kvAll('together'), (k, v) => (v && typeof v === 'object' && v.v === 'e2e1' ? (boxes.push(v), '[box]') : v)) + JSON.stringify(store.kvAll('togetherof'));
@@ -3885,9 +3912,9 @@ elif a[0] == 'thread':
       /How often do you feel appreciated by Mei\?/.test(Whtml) && /Private · never shared/.test(Whtml) && /<input type="radio" name="core:appreciation" value="Often">/.test(Whtml) &&
       /name="psyche-together-answers"/.test(Whtml) && /‹ Back/.test(Whtml) && !/localStorage|sessionStorage|BroadcastChannel/.test(Whtml) &&
       JSON.stringify(tg.formB.buttons) === '["Submit my answers"]' && W.certain.length <= 4 && !Whtml.includes('Ana Lim'), Whtml.slice(0, 300));
-  check('the reminder does the work: when the partner has joined, it gives the questions to write and show ("Ana has joined Psyche Together. Here are your questions."); quiet while they answer; when the read is ready, the page itself ("Mei has finished"); done once shown',
+  check('the reminder does the work: when the partner has joined, it gives the questions to write and show ("Ana has joined Psyche Together. Here are your questions."); quiet while they answer; when the read is ready, the page itself ("Mei has finished"); then quiet, staying on for the check-in again',
     tg.checkA1.write === 'questions' && /Ana has joined Psyche Together\. Here are your questions\./.test(tg.checkA1.say || '') && tg.checkA2.quiet === true &&
-      tg.checkB2.file && /Mei has finished\. Here's your Psyche Together\./.test(tg.checkB2.say || '') && tg.checkA3.done === true && tg.checkB3.done === true,
+      tg.checkB2.file && /Mei has finished\. Here's your Psyche Together\./.test(tg.checkB2.say || '') && tg.checkA3.quiet === true && !tg.checkA3.done && tg.checkB3.quiet === true && !tg.checkB3.done,
     JSON.stringify([tg.checkA1.say, tg.checkA2, tg.checkB2.say, tg.checkA3, tg.checkB3]));
   check('each person\'s For you is written right after they submit, from their answers, their full report and their partner\'s card; the first one in then waits with a button, the last one in goes straight on to write the read, and the page follows its save',
     tg.sentB.write === 'foryou' && tg.sentB.yourReport && tg.sentB.partner && tg.sentB.partner.name === 'Mei' && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?"]' &&
@@ -3901,6 +3928,22 @@ elif a[0] == 'thread':
       tg.askedA.find(x => x.id === 'core:needs').buttons.includes('Difficult') && /in this relationship for the long run/.test(tg.askedA.find(x => x.id === 'core:security').say) &&
       tg.askedA.filter(x => x.kind === 'decision').map(x => x.id).join() === 'decide:more_children,decide:money,decide:place,decide:parents' && !tg.askedA.some(x => x.id === 'stage'),
     JSON.stringify(tg.askedA.map(x => x.id)));
+  check('two overall questions after the pillars, the same for both: how satisfied each is, and how satisfied each thinks the other is; the read gets them only as a couple (a level, and how well they read each other), and the page sets them at the top of the glance with the research behind them',
+    tg.askedA.map(x => x.id).indexOf('overall:you') > tg.askedA.map(x => x.id).indexOf('core:desire') && tg.askedA.map(x => x.id).indexOf('overall:them') < tg.askedA.map(x => x.id).indexOf('safety') &&
+      /Overall, how satisfied are you with your relationship with Ana\?/.test(tg.askedA.find(x => x.id === 'overall:you').say) && /how satisfied do you think Ana is with it\?/.test(tg.askedA.find(x => x.id === 'overall:them').say) &&
+      JSON.stringify(tg.askedA.find(x => x.id === 'overall:you').buttons) === '["Very satisfied","Satisfied","Somewhat","Not very"]' && W.items.some(x => x.id === 'overall:them') &&
+      view.overall && ['Strong', 'Steady', 'Worth attention'].includes(view.overall.level) && ['Happier than you each think', 'About right', 'Worth asking each other'].includes(view.overall.reading) &&
+      Object.keys(view.overall).sort().join() === 'level,reading' && /How well you read each other/.test(htmlA) && /How you feel about it all/.test(htmlA) && /Joel et al\., PNAS 2020/.test(tg.write.research.overall || ''),
+    JSON.stringify(view.overall));
+  check('four weeks on, the reminder asks once ("It has been 4 weeks…", Check in again / Not now), then waits a few days before asking again; the same questions come back in one widget without openers, follow-ups or decisions; the partner is told it\'s their turn; the last one in writes what moved, a line for each pillar that moved and none for the rest; it goes on top of both pages, and the other\'s reminder brings it',
+    tg.checkA3.quiet === true && /^It has been 4 weeks since your Psyche Together/.test(tg.nudgeA.say || '') && JSON.stringify(tg.nudgeA.buttons) === '["Check in again","Not now"]' && tg.nudgeA2.quiet === true &&
+      tg.againA.widget && RW.items.every(x => !/^(deep|decide):/.test(x.id)) && RW.items.some(x => x.id === 'overall:you') && RW.items.some(x => x.id === 'safety') && !/class="opener"/.test(tg.againA.widget) && /4 weeks on/.test(tg.againA.widget) &&
+      tg.roundA.waiting === true && JSON.stringify(tg.roundA.buttons) === '["Has my partner checked in?"]' && /^Mei has checked in again\. Your turn/.test(tg.nudgeB.say || '') &&
+      tg.recheck.write === 'recheck' && movedP.length > 0 && tg.recheck.before.pillars && tg.recheck.now.pillars && !/"core"|safety/.test(JSON.stringify(tg.recheck)) &&
+      tg.recheckBad.saved === false && /changes: one line for each pillar that moved/.test(JSON.stringify(tg.recheckBad.problems)) &&
+      tg.recheckSaved.file && /Ana has checked in again too\. Here's what has moved\./.test(tg.checkA4.say || '') && tg.checkA5.quiet === true &&
+      /4 weeks on/.test(htmlR) && /↑ up/.test(htmlR) && /Keep the habit/.test(htmlR) && htmlR.indexOf('4 weeks on') < htmlR.indexOf('At a glance') && /The daily turns helped here/.test(htmlR),
+    JSON.stringify([tg.nudgeA, tg.roundA.say, tg.nudgeB.say, tg.recheck.moved, tg.recheckBad.problems, tg.checkA4.say]).slice(0, 600));
   const people = tg.write.people || [];
   check('when both have answered, the read is written from both full Psyche reports, the conversation the one who started added, and the couple view, never anyone\'s own answers; the result is data only',
     tg.write.write === 'read' && Object.values(view.pillars).every(v => ['Strong', 'Steady', 'Worth attention'].includes(v)) && worth.length > 0 &&

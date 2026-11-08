@@ -112,6 +112,8 @@ Agreed 8 November 2026 (plan, fifth draft). Standalone skill in together/, off u
 - [x] The couple view, the joint read and each person's For you, with their checks; the page; End.
 - [ ] Phase 0: install fresh several times to see whether Muse's safety check passes it; counsellor review of the questions, safety wording and resources.
 - [ ] Phase 1: payment on psycheai.io/together, a one-time code in the prompt, refund if the partner never joins.
-- [ ] Phase 4: message signals (turning towards, repair, being there when it counts, who plans) and the three-view gaps.
+- [x] Phase 4: message signals (turning towards, repair, being there when it counts, who plans) and the three-view gaps.
 - [ ] The offer in PsycheAI: only when relevant, said to be paid, with price and refund terms before the link; CLAUDE.md's "nothing sold inside the host" narrowed for it.
-- [ ] The four-week re-check and the six-month redo.
+- [x] The four-week re-check (release 17): the same questions again every four weeks, what moved on top of the page.
+- [x] Overall satisfaction and how satisfied each thinks the other is (release 17), for the couple only.
+- [ ] The six-month redo.
