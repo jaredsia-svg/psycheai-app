@@ -3904,7 +3904,8 @@ elif a[0] == 'thread':
   fsx.copyFileSync(pathx.join(home.b.dir, 'bin', 'together.py'), pathx.join(lateDir, 'bin', 'together.py'));
   const runLate = async (...args) => JSON.parse((await execFile('python3', [pathx.join(lateDir, 'bin', 'together.py'), ...args], { cwd: lateDir, env: lateEnv, timeout: 60000 })).stdout);
   tg.threads = await run.a('answer', 'stage', 'Married');
-  tg.picked = await run.a('pick-thread', 'Ana Lim');
+  tg.pickRead = await run.a('pick-thread', 'Ana Lim');
+  tg.picked = await run.a('link');
   const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
   fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
   tg.waAdded = await run.a('chat-file', wa);
@@ -4110,7 +4111,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
   }
   const theCode = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, '.keys.json'), 'utf8')).code;
   check('faster from an invite: the invite says where to install from; join answers in a few hundred bytes with its writing job in a task file; the widget comes as a file too; the partner is offered the reminder once their answers are in; the bootstrap and SKILL.md say to join, with nothing that tells Muse not to search, look at the script or note things',
-    /Install the Psyche Together skill from app\.psycheai\.io\/together and join our Psyche Together: \S+\/together#/.test((tg.staged.invite || {}).invite || '') &&
+    /Install the Psyche Together skill from app\.psycheai\.io\/together and join our Psyche Together: \S+\/together#/.test((tg.staged.invite || {}).pasteLine || '') &&
       tg.join.short && JSON.stringify(tg.join.short).length < 1200 && tg.join.task === 'work/together-questions-task.json' && tg.join.short.partnerName === 'Mei' &&
       tg.formB.widgetFile === 'work/questions-widget.html' && tg.waitB.setCheck === true &&
       /join <the invite link>\\?`\. join checks for their Psyche and says if there isn't one yet\./.test(await (await fetch(base + '/together')).text()) &&
@@ -4216,6 +4217,10 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       /When the same message also asks to write the read again, run only `rewrite`/.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')) &&
       /Its results, their task files and guide\.json say everything needed, including what a save checks, and `status` says where Psyche Together stands\./.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')),
     JSON.stringify(tg.outAfter));
+  check('every question in the widget has its card: ids with two colons (mirror:appreciated:self) are found by the script, which once replaced only the first and showed question 4 empty (README "Psyche Together, release 58")',
+    !/replace\(':','-'\)/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
+      /function card\(id\)\{return document\.getElementById\('c-'\+id\.split\(':'\)\.join\('-'\)\);\}/.test(Whtml) &&
+      W.items.every(x => Whtml.includes('id="c-' + x.id.split(':').join('-') + '"')) && W.items.some(x => (x.id.match(/:/g) || []).length === 2), '');
   check('the widget reads back what Muse restores when it draws it again (ticked radios and typed words), opening on the first one still to answer; "Something else" opens a box for their own words on the deeper questions, kept as their words; no part of it scrolls on its own',
     /function restore\(\)/.test(Whtml) && /input\[type=radio\]:checked/.test(Whtml) && /setTimeout\(restore,1200\)/.test(Whtml) && /id="c-intro"/.test(Whtml) &&
       W.items.filter(x => /^deep:/.test(x.id)).every(x => x.options[x.options.length - 1] === 'Something else') && W.items.filter(x => /^core:/.test(x.id)).every(x => !x.options.includes('Something else')) &&
@@ -4237,7 +4242,7 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       tg.pendingJoin.joined === true && tg.pendingJoin.write === 'questions' && tg.pendingGone === true, JSON.stringify([tg.pending, tg.pendingJoin]));
   check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their full report and their conversation together go to their partner, locked, and nothing from other chats',
     tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report and your Psyche Card picture go to your partner's Muse, locked/.test(tg.start.consent || '') && /The one who starts it adds your conversation together/.test(tg.start.consent || '') && /Nothing from chats with anyone else is read/.test(tg.start.consent || '') &&
-      /^Mei invited you to Psyche Together, a private check-in for the two of you\. Paste the line below into your Muse app\.$/.test((tg.staged.invite || {}).lead || '') && /^Install the Psyche Together skill from app\.psycheai\.io\/together and join our Psyche Together: /.test((tg.staged.invite || {}).invite || '') && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || '') &&
+      /^Mei invited you to Psyche Together, a private check-in for the two of you\. Paste the line below into your Muse app\.$/.test((tg.staged.invite || {}).lead || '') && /^Install the Psyche Together skill from app\.psycheai\.io\/together and join our Psyche Together: /.test((tg.staged.invite || {}).pasteLine || '') && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || '') &&
       /Highly recommended while you wait/.test(tg.picked.whatsapp || '') && JSON.stringify(tg.picked.buttons) === '["Add our WhatsApp chat","Has my partner joined?","Remind me here"]' &&
       /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || ''),
     JSON.stringify([tg.start, tg.staged]).slice(0, 400));
@@ -4294,7 +4299,10 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
     JSON.stringify(view).slice(0, 400));
   check('only the one who starts adds the conversation: after the stage, their own one-to-one Instagram chats as buttons (groups left out), the one they pick read, then the invite at once, with WhatsApp highly recommended while they wait and added to it; the partner has no chat step, and both get questions with it, the partner\'s seen from their side',
     tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && tg.picked.invite && tg.picked.setCheck === true &&
-      /80 messages from your Instagram chat with Ana Lim/.test(tg.picked.read) &&
+      /80 messages from your Instagram chat with Ana Lim/.test(tg.pickRead.read) &&
+      // Reading the chat and the invite are two steps (README "Psyche Together, release 58"): the read's result carries no link and no install line.
+      JSON.stringify(tg.pickRead.buttons) === '["Show my invite"]' && !/together#|Install/.test(JSON.stringify(tg.pickRead)) && !('invite' in tg.pickRead) &&
+      /\*\*"Show my invite":\*\* `python3 bin\/together\.py link`/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.join.write === 'questions' && tg.join.yourChat && tg.join.yourChat.source === 'instagram and whatsapp' && tg.statusA.yourChat.source === 'instagram and whatsapp' &&
       tg.join.yourChat.signals.you.messages === tg.statusA.yourChat.signals.partner.messages && people.filter(p => p.chat).length === 1 && people[0].chat.signals.messages === 120,
     JSON.stringify([tg.threads, tg.picked]).slice(0, 400));
@@ -4304,7 +4312,7 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       /<h3>Your story, year by year<\/h3><svg class="story"/.test(htmlA) && /<div class="er"><b><i>A<\/i>Getting started<small>2023 to 2024<\/small><\/b><p>Plans most weeks, and quick replies\.<\/p><p class="soft">[\d,]+ messages · \d+ in 100 warm/.test(htmlA) &&
       tg.storyProblems.some(p => /^story\.eras: two to five eras/.test(p)), JSON.stringify([sig.years, sig.repair, tg.storyProblems]).slice(0, 400));
   check('Instagram\'s dates as a bundle ({user_local, user_timezone, utc}) are read, by their own wall-clock time; a chat picked before that fix is read again once, adding nothing twice',
-    /80 messages from your Instagram chat/.test(tg.picked.read) && tg.rereadState.igRetried === true && tg.rereadState.igCount === 80 && tg.rereadState.pickedThread === 'Ana Lim' &&
+    /80 messages from your Instagram chat/.test(tg.pickRead.read) && tg.rereadState.igRetried === true && tg.rereadState.igCount === 80 && tg.rereadState.pickedThread === 'Ana Lim' &&
       tg.rereadCounts[0] === tg.rereadCounts[1] && tg.rereadCounts[0] === 120, JSON.stringify([tg.rereadCounts, tg.rereadState.igCount]));
   check('the conversation is measured on the device as the research measures it: how closely the two writing styles match, "we" against "I" and "you", warm and hard words, who starts, reply times, the day\'s rhythm and messages by month',
     sig.styleMatch > 0 && sig.styleMatch <= 1 && typeof sig.you.we === 'number' && typeof sig.partner.iYou === 'number' && sig.you.positive >= 0 &&

@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 57
+RELEASE = 58
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -737,7 +737,7 @@ function shown(){var deep=0;return D.items.filter(function(it){
  if(it.follows&&D.certain.indexOf(it.pillar)<0&&!(it.follows in ans&&score(it.follows)===0))return false;
  if(it.follows){if(deep>=D.followMax)return false;deep++;}
  if(it.onlyIf&&ans['core:future']===D.talked)return false;return true;}).map(function(it){return it.id});}
-function card(id){return document.getElementById('c-'+id.replace(':','-'));}
+function card(id){return document.getElementById('c-'+id.split(':').join('-'));}
 function show(){var ids=shown(),n=ids.filter(done_).length;
  [].slice.call(document.querySelectorAll('.card')).forEach(function(c){c.hidden=true});
  document.querySelector('.prog i').style.width=Math.round(100*n/ids.length)+'%';
@@ -1562,7 +1562,11 @@ def pick_thread(label):
     s.setdefault('chatDone', []).append('instagram')
     s['pickedThread'], s['igCount'], s['igRetried'] = label, len(msgs), True
     save_state(s)
-    return dict(chat_step(s), read='%d messages from your Instagram chat with %s' % (len(msgs), label))
+    # Reading their chat and making the invite are two steps (README "Psyche Together, release 58"): one result that
+    # read a private chat, sent it out and handed back an install line for that person was stopped by Muse's safety check.
+    # Nothing leaves here until "Show my invite" (link), which counts it, locks it and sends it with their profile.
+    read = '%d messages from your Instagram chat with %s' % (len(msgs), label)
+    return {'read': read, 'say': 'Read ' + read + '.', 'buttons': ['Show my invite'], 'asButtons': True}
 
 
 def reread_instagram(s):
@@ -1859,7 +1863,7 @@ def invite():
     link = BASE + '/together#' + k['code']
     # README "Invites in two parts": the line for the partner apart from the line they paste, their own request.
     return {'url': link, 'lead': '%s invited you to Psyche Together, a private check-in for the two of you. Paste the line below into your Muse app.' % me,
-            'invite': 'Install the Psyche Together skill from app.psycheai.io/together and join our Psyche Together: %s' % link.replace('https://', ''),
+            'pasteLine': 'Install the Psyche Together skill from app.psycheai.io/together and join our Psyche Together: %s' % link.replace('https://', ''),
             'say': 'Send your partner both lines: they paste the one in the box into their Muse.'}
 
 
@@ -2910,7 +2914,7 @@ function shown(){var out=[],f=0;D.items.forEach(function(it){
  if(it.follows&&D.certain.indexOf(it.pillar)<0){if(ans[it.follows]===undefined||score(it.follows)!==0)return;}
  if(it.onlyIf){var fu=D.items.filter(function(x){return x.id==='core:future'})[0];if(fu&&ans['core:future']===0)return;}
  out.push(it.id);});return out;}
-function render(){var ids=shown(),n=0;D.items.forEach(function(it){var el=document.getElementById('q-'+it.id.replace(':','-'));if(!el)return;
+function render(){var ids=shown(),n=0;D.items.forEach(function(it){var el=document.getElementById('q-'+it.id.split(':').join('-'));if(!el)return;
  var on=ids.indexOf(it.id)>=0;el.hidden=!on;if(on&&(it.id in ans))n++;el.classList.toggle('done',it.id in ans);});
  var total=ids.length;document.querySelector('.bar i').style.width=Math.round(100*n/Math.max(1,total))+'%';
  document.querySelector('.bar span').textContent=n+' of '+total+' answered';
@@ -2921,7 +2925,7 @@ function render(){var ids=shown(),n=0;D.items.forEach(function(it){var el=docume
 document.addEventListener('click',function(e){var b=e.target.closest?e.target.closest('[data-q]'):null;
  if(b){var id=b.getAttribute('data-q');ans[id]=Number(b.getAttribute('data-i'));
   [].slice.call(b.parentNode.children).forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});render();
-  var ids=shown(),next=ids.filter(function(x){return !(x in ans)})[0];var el=next&&document.getElementById('q-'+next.replace(':','-'));
+  var ids=shown(),next=ids.filter(function(x){return !(x in ans)})[0];var el=next&&document.getElementById('q-'+next.split(':').join('-'));
   if(el&&el.getBoundingClientRect().top>innerHeight*0.7)el.scrollIntoView({behavior:'smooth',block:'center'});return;}
  var c=e.target.closest?e.target.closest('[data-code]'):null;if(!c)return;var t=c.getAttribute('data-code'),code=document.querySelector('.end code');
  function done(ok){if(!ok){var r=document.createRange();r.selectNodeContents(code);var s=getSelection();s.removeAllRanges();s.addRange(r);}
@@ -2929,7 +2933,7 @@ document.addEventListener('click',function(e){var b=e.target.closest?e.target.cl
  function fallback(){try{var a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();var ok=document.execCommand('copy');document.body.removeChild(a);done(ok)}catch(x){done(false)}}
  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){done(true)},fallback)}else fallback();});
 try{var kept=JSON.parse(localStorage.getItem('pt-'+D.form)||'{}');Object.keys(kept).forEach(function(id){ans[id]=kept[id];
- var el=document.getElementById('q-'+id.replace(':','-'));if(el){var bs=el.querySelectorAll('[data-q="'+id+'"]');[].slice.call(bs).forEach(function(x,i){x.setAttribute('aria-pressed',i===kept[id]?'true':'false')})}})}catch(e){}
+ var el=document.getElementById('q-'+id.split(':').join('-'));if(el){var bs=el.querySelectorAll('[data-q="'+id+'"]');[].slice.call(bs).forEach(function(x,i){x.setAttribute('aria-pressed',i===kept[id]?'true':'false')})}})}catch(e){}
 render();})();
 '''
 
@@ -4358,7 +4362,8 @@ def main(argv):
             label = rest[1] if len(rest) > 1 and not rest[1].startswith('--') else None
             out = answer(rest[0], label, opt('--text'), opt('--nearest'))
     elif cmd == 'link':
-        out = invite()
+        s = state()          # "Show my invite": the chat they picked is counted, locked and sent now, then the invite
+        out = finish_chat(s) if s.get('role') == 'a' and not s.get('chatFinished') and 'instagram' in (s.get('chatDone') or []) else invite()
     elif cmd == 'questions':
         out = questions_task()
     elif cmd == 'save-questions':
