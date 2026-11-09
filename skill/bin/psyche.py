@@ -49,6 +49,10 @@ What it does, in full:
   python3 bin/psyche.py check-digest           check digest/digest.md, the summary of their own
                                        words a read is written from: its size, its dates,
                                        and that no handle, link, email or number is left
+  python3 bin/psyche.py sync-with [LINK]       a Sync from a friend's link (the one sync-preview kept,
+                                       when none is given): the profiles, the facts and its save line
+  python3 bin/psyche.py let-know NAME          after a Sync from their link: who among the people they
+                                       message to send the line to, names to pick, or the line to copy
   python3 bin/psyche.py forget [--everything]  delete the working files (work/, sources/, notes/);
                                        with --everything, the digest and the report too
 
@@ -88,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 187
+RELEASE = 188
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2518,6 +2522,13 @@ def account_choice():
                             account_id=a['id'], messages_account_id=m['id'] if m and m['id'] != a['id'] else None,
                             messages_connected=bool(m and m['connected'])))
     buttons.sort(key=lambda b: not b['last'])
+    # No account read before and only one with messages connected: that one first, marked (README "The account to
+    # pick, said"): two buttons that looked alike once left someone asking which.
+    withm = [b for b in buttons if b['messages_connected']]
+    if len(buttons) > 1 and not any(b['last'] for b in buttons) and len(withm) == 1:
+        withm[0]['label'] += ' (Recommended)'
+        withm[0]['recommended'] = True
+        buttons.sort(key=lambda b: not b.get('recommended'))
     return {'question': 'Which account should I read?' if len(buttons) > 1 else None, 'buttons': buttons}
 
 
@@ -2691,16 +2702,7 @@ def healthcheck():
         # 1. This copy against the signed release PsycheAI serves.
         try:
             man = json.loads(fetch_file('/skill/files').decode())
-            sig = man.get('signature2') or ''
-            signed = isinstance(man.get('release'), int) and ed25519_verify(SKILL_PUBLIC_KEY, signed_text(man.get('version'), man.get('hashes') or {}, man['release']),
-                                                                            base64.urlsafe_b64decode(sig + '=' * (-len(sig) % 4)))
-            same = True
-            for name, want in (man.get('hashes') or {}).items():
-                try:
-                    with open(os.path.join(HERE, name), 'rb') as f:
-                        same = same and hashlib.sha256(f.read()).hexdigest() == want
-                except OSError:
-                    same = False
+            signed, same = release_check(man)
             tick(signed, 'PsycheAI\'s release %s is signed' % man.get('release'))
             tick(same and man.get('release') == RELEASE, 'This copy is release %d%s' % (RELEASE, '' if same and man.get('release') == RELEASE
                                                                                      else ', and release %s is out: say "Update PsycheAI"' % man.get('release')))
@@ -2754,6 +2756,24 @@ def healthcheck():
 
 NOT_SIGNED = "This update isn't signed by PsycheAI, so it wasn't installed. The version you have keeps working."
 OLDER = "This is an older release than the one installed, so it wasn't installed. The version you have keeps working."
+
+
+def release_check(man):
+    """(signed, same): whether a manifest's signature checks out, and whether this copy's files match its hashes."""
+    sig = str(man.get('signature2') or '')
+    try:
+        signed = isinstance(man.get('release'), int) and ed25519_verify(SKILL_PUBLIC_KEY, signed_text(man.get('version'), man.get('hashes') or {}, man['release']),
+                                                                        base64.urlsafe_b64decode(sig + '=' * (-len(sig) % 4)))
+    except (ValueError, TypeError):
+        signed = False
+    same = bool(man.get('hashes'))
+    for name, want in (man.get('hashes') or {}).items():
+        try:
+            with open(os.path.join(HERE, name), 'rb') as f:
+                same = same and hashlib.sha256(f.read()).hexdigest() == want
+        except OSError:
+            same = False
+    return bool(signed), same
 
 
 def update():
@@ -5011,6 +5031,10 @@ def local_publish(args):
     if os.path.exists(os.path.join(KEEP, 'together-pending.json')):     # they asked for Psyche Together (to start one, or a partner's invite) before they had a Psyche
         nxt['buttons'] = ['Continue Psyche Together'] + nxt['buttons']
         nxt['continueTogether'] = True     # offered first; the Together skill is theirs to install (lib/instructions.js TOGETHER)
+    friend = pending_sync()
+    if friend:     # a friend's link came with the install (README "The friend's link, kept"): their Sync first, only on a tap
+        nxt['buttons'] = [sync_label(friend.get('name'))] + nxt['buttons']
+        nxt['syncWith'] = friend.get('name')
     return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ask_ideas(card.get('patterns'))}
 
 
@@ -5362,6 +5386,7 @@ def e2e_with(post_tool, link):
     if not mine:
         return {'error': 'There\'s no Psyche Card to sync with yet. Write their Psyche first (get_report_guide, then publish_psyche).'}
     keep_e2e(code, False)
+    drop_pending_sync(code)
     done = post_tool('sync_with', {'e2e': {'id': sid, 'pair': e2e_seal({'cards': {'a': theirs, 'b': mine}, 'written': None}, e2e_key('e2e-pair', code))}})
     if not isinstance(done, dict) or done.get('error'):
         return done
@@ -5393,6 +5418,28 @@ def to_write(sid, mine_raw, theirs_raw):
     return out
 
 
+SYNC_PENDING = os.path.join(KEEP, 'sync-pending.json')
+
+
+def pending_sync():
+    """A friend's link looked at before they had a Psyche (README "The friend's link, kept"): {'link', 'name'}, or None."""
+    got = read_first([SYNC_PENDING])
+    return got if isinstance(got, dict) and SYNC_E2E.search(str(got.get('link') or '')) else None
+
+
+def drop_pending_sync(code=None):
+    got = pending_sync()
+    if got and (code is None or code in got['link']):
+        try:
+            os.remove(SYNC_PENDING)
+        except OSError:
+            pass
+
+
+def sync_label(name):
+    return 'Sync with %s' % name if name and name != 'Your friend' else 'Sync with my friend'
+
+
 def sync_preview(link):
     """A friend's Psyche link, looked at before anything is synced (README "A friend's link, named first"):
     whose it is, from their locked card, and the reply to give. Nothing is paired or sent about them."""
@@ -5412,8 +5459,11 @@ def sync_preview(link):
     card = clean_card(theirs)
     name = first_of(card)
     out = {'own': False, 'with': name, 'character': re.sub(r'\s+', ' ', _letters(str(theirs.get('character') or ''))).strip()[:40] or None, 'hasPsyche': has}
+    # Kept here (never sent), so What's next after their card starts with "Sync with <name>" by itself and
+    # sync-with needs no link: nothing to remember across a helper or a long read.
+    write_private([SYNC_PENDING], {'link': BASE + '/sync#' + code, 'name': name})
     if has:
-        label = 'Sync with %s' % name if name != 'Your friend' else 'Sync with my friend'
+        label = sync_label(name)
         out['nextStep'] = _step('%s sent you their Psyche link. You already have your Psyche, so you can sync straight away.' % (name if name != 'Your friend' else 'A friend'),
                                 [label, 'Not now'])
     return out
@@ -5467,6 +5517,66 @@ def e2e_list(out):
         out['nextStep'] = _step('%d %s%s. Which one?' % (n, 'Sync' if n == 1 else 'Syncs', ', %d new' % fresh if fresh else ''),
                                 ['Show my Sync with ' + x['label'] for x in syncs[:10]] + ['Sync with someone new'])
     return out
+
+
+LET_KNOW = 'I just synced with you on PsycheAI. Ask your Muse: Show my Syncs'
+
+
+def people_in(data):
+    """Each person in an Instagram Messages result: {'name', 'username', 'user'}, the user ID kept for sending only."""
+    found = []
+
+    def walk(v):
+        if isinstance(v, list):
+            for x in v:
+                walk(x)
+        elif isinstance(v, dict):
+            name = v.get('full_name') or v.get('name') or v.get('display_name')
+            user = v.get('username') or v.get('user_name')
+            uid = next((str(v[k]) for k in ('user_fbid', 'recipient_user_fbid', 'fbid', 'user_id', 'id') if v.get(k) not in (None, '')), None)
+            if (isinstance(name, str) or isinstance(user, str)) and uid:
+                found.append({'name': name if isinstance(name, str) else '', 'username': user if isinstance(user, str) else '', 'user': uid})
+            for k, x in v.items():
+                if k != '_meta' and isinstance(x, (list, dict)):
+                    walk(x)
+    walk(data)
+    return found
+
+
+def let_know(first):
+    """python3 bin/psyche.py let-know <first name> (README "Let them know, in one command"): one contact search and the
+    top recipients, on each account whose messages are connected, matched by first name. Gives who to send the line
+    to (to), names to pick from (pick), or the line to copy (copy). Nothing is sent, and nothing is kept."""
+    want = re.sub(r'\s+', ' ', str(first or '')).strip().lower()
+    out = {'message': LET_KNOW}
+    if not want or want == 'your friend':
+        return dict(out, copy=LET_KNOW, say='Copy this and send it to them yourself:')
+    try:
+        accounts = [a for a in instagram_accounts(ig(IGM_CLI, 'accounts'), True) if a.get('connected')]
+    except (RuntimeError, RateLimited):
+        accounts = []
+    today = datetime.now()
+    hits, seen = [], set()
+    for a in accounts:
+        for args in (('contact-search', '--query-text', first, '--max-results', '10', '--start-date', (today - timedelta(days=730)).strftime('%Y-%m-%d'), '--end-date', today.strftime('%Y-%m-%d')),
+                     ('top-recipients', '--count', '50')):
+            try:
+                got = ig(IGM_CLI, args[0], '--account-id', a['id'], *args[1:], timeout=60)
+            except (RuntimeError, RateLimited):
+                continue
+            for p in people_in(got):
+                words = (p['name'] or '').lower().split()
+                if (words and words[0] == want) or (p['username'] or '').lower().startswith(want):
+                    if (a['id'], p['user']) not in seen and p['user'] != a['id']:
+                        seen.add((a['id'], p['user']))
+                        hits.append(dict(p, account_id=a['id']))
+    if not hits:
+        return dict(out, copy=LET_KNOW, say='I couldn\'t find %s in your Instagram messages. Copy this and send it to them:' % str(first).strip()[:30])
+    for h in hits:
+        h['label'] = (h['name'] or '@' + h['username']) + (' (@%s)' % h['username'] if h['name'] and h['username'] and sum(1 for x in hits if x['name'] == h['name']) > 1 else '')
+    if len(hits) == 1:
+        return dict(out, to=hits[0])
+    return dict(out, pick=hits[:6], say='Which one is %s?' % str(first).strip()[:30])
 
 
 def e2e_check(out):
@@ -5552,8 +5662,10 @@ def e2e_save(post_tool, other, info, answer):
     for f in (SYNC_ANSWER, os.path.join(HERE, 'sync-answer.json'), os.path.join(HERE, 'sync_answer.json')):
         if os.path.exists(f):
             os.remove(f)
+    # Made from a link they sent (this side is b): telling them comes first (README "Let them know, in one command").
+    told = ['Let %s know' % first_of(them)] if role == 'b' and first_of(them) != 'Your friend' else []
     res = {'saved': True, 'name': first_of(them), 'summary': sync_plain(report['summary'], 200), 'sync': other,
-           'nextStep': _step('Your Sync with %s is ready. They\'ll see the same Sync on their side.' % first_of(them), ['Sync with someone else', 'Done'])}
+           'nextStep': _step('Your Sync with %s is ready. They\'ll see the same Sync on their side.' % first_of(them), told + ['Sync with someone else', 'Done'])}
     if path:
         res['file'] = path
     return res
@@ -5577,7 +5689,8 @@ LABELS = frozenset([
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
     'Explain why you said this', 'Correct something', 'More', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
-LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$')]
+LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
+              re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$')]
 
 
 def known_label(label):
@@ -6121,11 +6234,32 @@ def main(argv):
         # the Sync rather than a welcome and a new read (README "Already have a Psyche"). Read here, sent nowhere.
         out = {'ok': True, 'connected': True, 'version': local_version(), 'hasPsyche': bool(read_first([REPORT, REPORT_KEPT]))}
         try:
-            latest = json.loads(get('/skill/files').decode()).get('version')
+            man = json.loads(get('/skill/files').decode())
+            latest = man.get('version')
             out['update_available'] = bool(latest and latest != out['version'])
+            # verified (README "Verified in status"): this copy's three files are, byte for byte, the release PsycheAI
+            # signed, checked against the key in this script (the same key RELEASES.md on GitHub publishes).
+            signed, same = release_check(man)
+            out['verified'] = bool(signed and same)
         except (urllib.error.URLError, http.client.HTTPException, ConnectionError, ValueError):
             pass
         print(json.dumps(out))
+        return
+    if argv[0] in ('sync-with', 'let-know') and ('--help' in argv or '-h' in argv):
+        print(json.dumps({'usage': 'python3 bin/psyche.py sync-with [<link>]   (the friend\'s link sync-preview kept, when none is given)' if argv[0] == 'sync-with'
+                          else 'python3 bin/psyche.py let-know <their first name>'}, indent=1))
+        return
+    if argv[0] == 'sync-with':
+        # One command for a Sync from a friend's link (README "One command to sync"): the link given, or the one
+        # sync-preview kept. Its result has the two profiles, the facts and its save line.
+        link = argv[1] if len(argv) >= 2 else (pending_sync() or {}).get('link')
+        if not link or not SYNC_E2E.search(str(link)):
+            print(json.dumps({'error': 'No friend\'s link here: run sync-with <their link>.'}))
+            return
+        print(json.dumps(call('sync_with', {'link': link}), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'let-know' and len(argv) >= 2:
+        print(json.dumps(let_know(' '.join(argv[1:])), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'sync-preview' and len(argv) >= 2:
         print(json.dumps(sync_preview(argv[1]), ensure_ascii=False, indent=1))
@@ -6164,6 +6298,9 @@ def main(argv):
         return
     if argv[0] == 'call' and len(argv) >= 2:
         raw = argv[2] if len(argv) > 2 else '{}'
+        if raw in ('--help', '-h') or argv[1] in ('--help', '-h'):
+            print(json.dumps({'usage': 'python3 bin/psyche.py call TOOL [JSON | @FILE]: the JSON is the tool\'s arguments. A Sync from a link: sync-with.'}, indent=1))
+            return
         if raw.startswith('@'):
             with open(raw[1:]) as f:
                 raw = f.read()
@@ -6250,7 +6387,7 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT):
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING):
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))
@@ -6318,7 +6455,7 @@ def main(argv):
             write_private([REPORT], kept)
         print(json.dumps(kept, ensure_ascii=False))
         return
-    sys.exit('Usage: python3 bin/psyche.py status | update | report | republish | show PART | prep FILE... [--me NAME] [--deep] | check-digest | forget [--everything] | call TOOL [JSON | @FILE]')
+    sys.exit('Usage: python3 bin/psyche.py status | update | report | republish | show PART | prep FILE... [--me NAME] [--deep] | check-digest | forget [--everything] | sync-preview LINK | sync-with [LINK] | let-know NAME | call TOOL [JSON | @FILE]')
 
 
 if __name__ == '__main__':

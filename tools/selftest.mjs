@@ -810,7 +810,7 @@ function signup(email, d) {
     /MESSAGES FIRST then runs for "Include my messages" on an account whose messages aren't connected, and decides what comes next/.test(core) && (core.match(/Your messages are where you're most yourself/g) || []).length === 1 && /Your messages are where you're most yourself/.test(core) && !/message your matches straight from here/.test(core));
   check('Sync starts from the user\'s own link, is written from PsycheAI\'s guide, never as JSON or a score, and a No is never told',
     /up to 10 of the people they message most on Instagram, from their own messages, as buttons by name/.test(core) && /When they tap a name, send that person two Instagram messages, the lead, then the invite on its own, say in one line who it went to/.test(core) && /never send them to PsycheAI/.test(core) && /don't ask again what they just chose/.test(core) && /never retell it in the chat, never show the JSON, and no score/.test(core) && /call save_sync with it/.test(core) &&
-      /"Sync with a friend": call sync_link/.test(core) && /A Psyche link someone sent them \(app\.psycheai\.io\/sync\/…\): it never syncs on its own\..*What's next starts with one more button, "Sync with <the friend's first name>".*A Sync happens only when they choose it: on that tap, call sync_with with link\. With the skill and a link with # in it, its result also has what get_sync gives, so write the Sync from it and save it as its save line says; otherwise call get_sync with the sync id it returns/.test(core) &&
+      /"Sync with a friend": call sync_link/.test(core) && /A Psyche link someone sent them \(app\.psycheai\.io\/sync\/…\): it never syncs on its own\..*What's next starts with one more button, "Sync with <the friend's first name>".*A Sync happens only when they choose it: on that tap, call sync_with with link \(with the skill: python3 bin\/psyche\.py sync-with, which uses the link sync-preview kept, or sync-with <the link>\)\. With the skill and a link with # in it, its result also has what get_sync gives, so write the Sync from it and save it as its save line says, with nothing to look up first; otherwise call get_sync with the sync id it returns/.test(core) &&
       /Syncing is the one thing that shares, so it's said when they choose it: .*"Syncing shares your Psyche Card's few lines, motivation scores and daily rhythm \(when in the day you post and message\) with the friends you sync with, locked on your device so PsycheAI can't read them: never your report or your messages\."/.test(core) && /go straight on as below, with no question and no extra tap/.test(core) && !/with the buttons "Sync" and "Not now"/.test(core) &&
       /PsycheAI never takes a handle/.test(core) && /never dating, and nothing to do with Psyche Pair/.test(core) && /call get_syncs once/.test(core));
   check('a friend\'s Psyche link with a Psyche already kept goes straight to the Sync (no welcome, no new read), a Sync from a friend\'s link offers to let them know on Instagram, and the morning check is set with a line, not a question',
@@ -819,7 +819,8 @@ function signup(email, d) {
     /"I just synced with you on PsycheAI\. Ask your Muse: Show my Syncs"/.test(core) &&
     /A daily Sync check, set once: when sync_link says offerDailyCheck, right after its invite, set a daily reminder/.test(core) && /Say in one line, with no question first, "I'll check each morning and only tell you if a friend has synced\./.test(core) &&
     !/Want me to check each morning|"Yes, every morning"/.test(core) &&
-    /When the message carries a friend's Psyche link \(.*\/sync\/<code>\) and status says `hasPsyche`: true, their Psyche is already made, so there is no introduction and no new read: run `python3 bin\/psyche\.py sync-preview <the link>`, which looks at the link without syncing, and reply with its nextStep as it is/.test(require('../lib/skill.js').skillMd()) &&
+    /When the message carries a friend's Psyche link \(.*\/sync\/<code>\), run `python3 bin\/psyche\.py sync-preview <the link>` once it's installed, which looks at the link without syncing and keeps it here, so What's next after their card starts with "Sync with <their name>" by itself\. When status says `hasPsyche`: true, their Psyche is already made, so there is no introduction and no new read: reply with sync-preview's nextStep as it is/.test(require('../lib/skill.js').skillMd()) &&
+    /If they have no Psyche Card yet, do the first visit first[^]*let-know <their first name> does the finding in one command, and no other search is needed/.test(core) &&
     /unless it carries a friend's Psyche link and status says `hasPsyche`: true/.test(require('../lib/skill.js').skillMd()));
   check('nothing the host is handed sets its role: no "You are…" in the instructions, the guides or a tool description',
     !/\byou are (running|psycheai|an?\b)/i.test(instructions.MUSE_PROCEDURE + instructions.CHATGPT_PROCEDURE + JSON.stringify(mcp.TOOLS)) && /^PsycheAI is a personal AI coach/.test(core) && !/connector/i.test(require("../lib/skill.js").skillMd()));
@@ -977,7 +978,7 @@ function signup(email, d) {
         psyche.saveCard(user, {}).ok === false && seen.length === before && sd && sd.ok && sd.nextStep && sd.nextStep.buttons[0] === 'Ask PsycheAI questions about myself' && Array.isArray(sd.askIdeas) &&
         !/call\('publish_psyche'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
         !/call\('psyche_saved'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
-        /nxt = json\.loads\(json\.dumps\(AFTER_PUBLISH\)\)[\s\S]{0,600}'nextStep': nxt, 'askIdeas': ask_ideas\(card\.get\('patterns'\)\)/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
+        /nxt = json\.loads\(json\.dumps\(AFTER_PUBLISH\)\)[\s\S]{0,1200}'nextStep': nxt, 'askIdeas': ask_ideas\(card\.get\('patterns'\)\)/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
         /    if tool == 'sync_with':\n        kept = read_first\(\[REPORT, REPORT_KEPT\]\) or \{\}\n        if isinstance\(kept\.get\('report'\), dict\):\n            saved_card = call\('save_card', \{'card': sync_card\(kept\['report'\], kept\.get\('name'\) or ''\)\}\)/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
         (require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8').match(/call\('save_card'/g) || []).length === 1,
       JSON.stringify({ sc: { ok: sc.ok }, opened, sd: sd && Object.keys(sd) }).slice(0, 500));
@@ -1115,7 +1116,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       await psyche.publish(noKey, fakeAnswer, 'No Key');
       check('Sync: with no card key in the request, sync_link says the card is locked to their workspace', /locked to their own workspace/.test(sync.makeLink(noKey, {}).error || ''));
     }
-    check('Sync: Muse hands over the link at once and never asks for one', /call sync_link at once/.test(instructions.MUSE_PROCEDURE) && /show its lead as one line \(for the friend: who it's from and what to do\), then its invite in a code block \(three backticks\), so the chat gives it a Copy button on a phone/.test(instructions.MUSE_PROCEDURE) && !/Allow all|no need to open bin|is the go-ahead|is their yes/.test(require('../lib/skill.js').skillMd()) && !/Send this to a friend: they paste it into their Muse/.test(instructions.MUSE_PROCEDURE) && /"Send the line above and the line in the box: they paste the line in the box into their Muse\.", then what to do next as buttons: "Ask PsycheAI questions about myself", "Add WhatsApp or Facebook" and "My Syncs"/.test(instructions.MUSE_PROCEDURE) && /That line is the whole message \(the reel went with the welcome\)/.test(instructions.MUSE_PROCEDURE) && /Never ask them for a link or to paste one/.test(instructions.MUSE_PROCEDURE) && !/consent/.test(JSON.stringify(mcp.TOOLS.filter(t => /sync/.test(t.name)))));
+    check('Sync: Muse hands over the link at once and never asks for one', /call sync_link at once/.test(instructions.MUSE_PROCEDURE) && /show its lead as one line \(for the friend: who it's from and what to do\), then its invite in a code block \(three backticks\), so the chat gives it a Copy button on a phone/.test(instructions.MUSE_PROCEDURE) && !/Allow all|no need to open bin|is the go-ahead|is their yes/.test(require('../lib/skill.js').skillMd()) && !/Send this to a friend: they paste it into their Muse/.test(instructions.MUSE_PROCEDURE) && /"Send the line above and the line in the box: they paste the line in the box into their Muse\.", then what to do next as buttons: "My friend has synced", "Ask PsycheAI questions about myself" and "Add WhatsApp or Facebook"\. "My friend has synced" is "My Syncs" \(below\)/.test(instructions.MUSE_PROCEDURE) && /Attach one file, never two: its file when it has one/.test(instructions.MUSE_PROCEDURE) && /That line is the whole message \(the reel went with the welcome\)/.test(instructions.MUSE_PROCEDURE) && /Never ask them for a link or to paste one/.test(instructions.MUSE_PROCEDURE) && !/consent/.test(JSON.stringify(mcp.TOOLS.filter(t => /sync/.test(t.name)))));
     check('Sync is by link only: a handle is refused and none is kept, and the tools ask for none',
       /Sync works by link: call sync_link/.test(sync.syncWith(user, { handle: '@Jun.Lee', my_handle: 'mei.tan' }).error || '') && !('handle' in store.kvGet('synccard', user.id)) &&
       !/handle/.test(JSON.stringify(mcp.TOOLS.filter(t => ['sync_with', 'sync_link'].includes(t.name)).map(t => t.inputSchema))) &&
@@ -2957,7 +2958,7 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
       fsx.rmSync(tmp, { recursive: true, force: true });
     }
     check('first-run: the account, start and both account lists in one call: step 0\'s say (its messages question already sent), the account question with one "@name" button each, business accounts left out, each button\'s accounts as data (no instruction rides in a tool result: one did, and Muse\'s safety check flagged it), and step 1\'s line word for word; a Fresh Psyche\'s accounts put last time\'s account first, from a hash of its ID; SKILL.md opens with it, messages question first, and says how to build the collect command',
-      ((f) => f && /^I'm PsycheAI/.test(f.say || '') && f.question === 'Which account should I read?' && JSON.stringify(f.buttons.map(b => b.label)) === '["@mei.t","@mei.alt"]' &&
+      ((f) => f && /^I'm PsycheAI/.test(f.say || '') && f.question === 'Which account should I read?' && JSON.stringify(f.buttons.map(b => b.label)) === '["@mei.t (Recommended)","@mei.alt"]' &&
         JSON.stringify(f.buttons.map(b => [b.account_id, b.messages_account_id, b.messages_connected])) === '[["ACC1",null,true],["ALT1",null,false]]' && !('note' in f) &&
         !('onTap' in f) && !('then' in f) && !/\b(send|run|start|tap|end the turn|never show|MESSAGES FIRST|helper|do what)\b/i.test(JSON.stringify(Object.fromEntries(Object.entries(f).filter(([k]) => !['say', 'stepOne'].includes(k))))) &&
         f.stepOne === "On it. Reading your Instagram and writing your Psyche takes about 5 minutes. I'll show it here when it's ready.")(skillState.firstRun) &&
@@ -2993,6 +2994,46 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
     check('Messenger\'s threads refresh steps down from a year (365, 180, 90) when its day limit is lower, with no note about the refused ones, and the read goes on',
       skillState.msgrDays && JSON.stringify(skillState.msgrDays.tried) === '[365,180,90]' && !skillState.msgrDays.notes.some(n => /cannot exceed/.test(n)) && skillState.msgrDays.chats > 0,
       JSON.stringify(skillState.msgrDays).slice(0, 400));
+    {
+      // Faster after an install from a friend's link (README "The friend's link, kept", "One command to sync", "Let them know,
+      // in one command", "Verified in status"): Muse once grepped the guide, read the script and searched seven times.
+      const py = `import importlib.util, json, sys, os, tempfile
+os.environ['PSYCHEAI_HOME'] = tempfile.mkdtemp()
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+link = m.BASE + '/sync#' + 'A' * 22
+m.write_private([m.SYNC_PENDING], {'link': link, 'name': 'Kai'})
+kept = m.pending_sync()
+m.drop_pending_sync('B' * 22)
+still = m.pending_sync() is not None
+m.drop_pending_sync('A' * 22)
+gone = m.pending_sync() is None
+people = {'accounts': {'accounts': [{'username': 'me', 'user_fbid': 'ME', 'connected': True}]},
+          'contact-search': {'items': []},
+          'top-recipients': {'items': [{'full_name': 'Kai Tan', 'username': 'kait', 'user_fbid': 'U1'}, {'full_name': 'Bo Lim', 'username': 'bolim', 'user_fbid': 'U2'}]}}
+calls = []
+def fake(cli, *args, timeout=120):
+    calls.append(args[0]); return people[args[0]]
+m.ig = fake
+one = m.let_know('Kai')
+none = m.let_know('Noor')
+people['contact-search'] = {'items': [{'full_name': 'Kai Ong', 'username': 'kaiong', 'user_fbid': 'U3'}]}
+two = m.let_know('kai')
+print(json.dumps({'kept': kept, 'still': still, 'gone': gone, 'one': one, 'none': none, 'two': two, 'calls': calls,
+                  'labels': [m.known_label(x) for x in ('Let Kai know', 'Sync with Kai', 'Let http://x know')]}))`;
+      let K = null, err = '';
+      try { K = JSON.parse((await execFile('python3', ['-c', py, new URL('../skill/bin/psyche.py', import.meta.url).pathname], { timeout: 30000 })).stdout); } catch (e) { err = String(e.stderr || e.message).slice(-400); }
+      const src = fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8');
+      check('from a friend\'s link: sync-preview keeps it, What\'s next after the card starts with "Sync with <name>" by itself, sync-with uses it, and it goes once synced; after that Sync, "Let <name> know" comes first, and let-know finds them in one command (to, pick or copy), sending nothing; status says verified; call --help answers with usage',
+        K && K.kept && K.kept.name === 'Kai' && K.still === true && K.gone === true &&
+          K.one.to && K.one.to.name === 'Kai Tan' && K.one.to.user === 'U1' && K.one.message === 'I just synced with you on PsycheAI. Ask your Muse: Show my Syncs' && !K.one.copy &&
+          K.none.copy === K.none.message && /^I couldn't find Noor in your Instagram messages\./.test(K.none.say) &&
+          K.two.pick && K.two.pick.length === 2 && K.two.say === 'Which one is kai?' && !K.calls.some(c => /send/.test(c)) && JSON.stringify(K.labels) === '[true,true,false]' &&
+          /write_private\(\[SYNC_PENDING\], \{'link': BASE \+ '\/sync#' \+ code, 'name': name\}\)/.test(src) && /nxt\['buttons'\] = \[sync_label\(friend\.get\('name'\)\)\] \+ nxt\['buttons'\]/.test(src) &&
+          /keep_e2e\(code, False\)\n    drop_pending_sync\(code\)/.test(src) && /told = \['Let %s know' % first_of\(them\)\] if role == 'b'/.test(src) &&
+          /link = argv\[1\] if len\(argv\) >= 2 else \(pending_sync\(\) or \{\}\)\.get\('link'\)/.test(src) && /out\['verified'\] = bool\(signed and same\)/.test(src) && /if raw in \('--help', '-h'\)/.test(src) &&
+          /`python3 bin\/psyche\.py status` says connected\. Status also checks the files: `verified`: true/.test(skillMd) && /python3 bin\/psyche\.py let-know <first name>/.test(skillMd),
+        err || JSON.stringify(K).slice(0, 600));
+    }
     check('check it yourself: verify gives this copy\'s release and SHA-256 per file (the same numbers sha256sum gives), the public key and the GitHub list, and skill/RELEASES.md lists this release with the signed hashes and the key (README "Check it yourself")',
       ((v, sig, list) => v && v.release === sig.release && v.sha256['bin/psyche.py'] === sig.hashes['bin/psyche.py'] && v.sha256['guide.json'] === sig.hashes['guide.json'] &&
         v.publicKey === 'ff295f50202afe5313924d4ed60e397996164ad8db9aa8079d937c17d0bcbb8d' && v.compareWith === 'https://github.com/jaredsia-svg/psycheai-app/blob/main/skill/RELEASES.md' &&
@@ -3925,6 +3966,8 @@ elif a[0] == 'thread':
   tg.gentleRefused = await run.b('save-foryou', '@work/together-foryou.json');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'needs', title: 'Your needs', detail: 'They count too.' }], practice: 'An evening for you.' }));
   tg.waitB = await run.b('save-foryou', '@work/together-foryou.json');
+  tg.remindB = await run.b('remind');
+  tg.waitB2 = await run.b('status');
   // Mei's reminder: Ana has joined, so her questions come ready to write.
   tg.checkA1 = await run.a('check');
   tg.statusA = tg.checkA1;
@@ -4066,12 +4109,13 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
     store.kvDel('together', fresh);
   }
   const theCode = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, '.keys.json'), 'utf8')).code;
-  check('faster from an invite: the invite says where to install from; join answers in a few hundred bytes with its writing job in a task file; the widget comes as a file too; the partner gets the reminder once their answers are in; the bootstrap and SKILL.md say to join straight away, never to search first or open the script',
+  check('faster from an invite: the invite says where to install from; join answers in a few hundred bytes with its writing job in a task file; the widget comes as a file too; the partner is offered the reminder once their answers are in; the bootstrap and SKILL.md say to join, with nothing that tells Muse not to search, look at the script or note things',
     /Install the Psyche Together skill from app\.psycheai\.io\/together and join our Psyche Together: \S+\/together#/.test((tg.staged.invite || {}).invite || '') &&
       tg.join.short && JSON.stringify(tg.join.short).length < 1200 && tg.join.task === 'work/together-questions-task.json' && tg.join.short.partnerName === 'Mei' &&
       tg.formB.widgetFile === 'work/questions-widget.html' && tg.waitB.setCheck === true &&
-      /join <the invite link>\\?` straight away/.test(await (await fetch(base + '/together')).text()) &&
-      /no searching memory, chats or old folders/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /Never open bin\/together\.py/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
+      /join <the invite link>\\?`\. join checks for their Psyche and says if there isn't one yet\./.test(await (await fetch(base + '/together')).text()) &&
+      // Nothing that reads like keeping the assistant from looking (README "Psyche Together, release 57"): Muse's safety check stopped an install.
+      !/no searching memory|Never open bin\/together\.py|not in memory notes|Never search memory|keeps itself current|nothing for them to paste or tap/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8') + await (await fetch(base + '/together')).text()) &&
       /What save-questions checks/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec),
     JSON.stringify([tg.join.short, tg.formB.widgetFile, tg.waitB.setCheck]));
   const orderA = tg.askedA.map(x => x.id);
@@ -4165,13 +4209,12 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
 `], { env: home.a.env, maxBuffer: 1 << 26 })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
   check('physical touch, which messages can\'t show (README "Psyche Together, release 52"): someone who says a hug or touch makes them feel most appreciated has it as one of theirs, on the page and required of the read, marked as from the check-in; their partner\'s guess never sets it',
     touch.b && touch.b.length === 1 && touch.a.length === 0 && touch.shown === true && touch.notA === true, JSON.stringify(touch).slice(0, 400));
-  check('one page in out/: a page written again removes any older one beside it; a newer release runs the same command at once (status, rewrite and check), once; SKILL.md says rewrite alone when they ask for both, never to open together.py, and never to search memory for where it stands (README "Psyche Together, release 37")',
+  check('one page in out/: a page written again removes any older one beside it; a newer signed release is offered by status, once each, and installed only on "Update Psyche Together" (README "Psyche Together, release 57"); SKILL.md says rewrite alone when they ask for both, and that status says where it stands',
     tg.outAfter.length === 1 && tg.rewritten.file && tg.outAfter[0] === pathx.basename(tg.rewritten.file) &&
-      /if cmd in \('status', 'rewrite', 'check'\) and not os\.environ\.get\('PSYCHE_TOGETHER_FRESH'\)/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
-      /os\.execv\(sys\.executable/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
+      ((py) => /if cmd == 'status' and '--no-update' not in rest:/.test(py) && /'buttons': \['Update Psyche Together', 'Not now'\]/.test(py) && /state\(\)\.get\('updateDeclined'\) != rel/.test(py) && !/os\.execv/.test(py))(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
+      /\*\*"Update Psyche Together":\*\* `python3 bin\/together\.py update` \(it checks PsycheAI's signature before installing anything\), then `python3 bin\/together\.py status`\. \*\*"Not now":\*\* `python3 bin\/together\.py status --no-update`/.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')) &&
       /When the same message also asks to write the read again, run only `rewrite`/.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')) &&
-      /Never open bin\/together\.py: its results, their task files and guide\.json say everything needed/.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')) &&
-      /Never search memory for where Psyche Together stands: `status` says\./.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')),
+      /Its results, their task files and guide\.json say everything needed, including what a save checks, and `status` says where Psyche Together stands\./.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')),
     JSON.stringify(tg.outAfter));
   check('the widget reads back what Muse restores when it draws it again (ticked radios and typed words), opening on the first one still to answer; "Something else" opens a box for their own words on the deeper questions, kept as their words; no part of it scrolls on its own',
     /function restore\(\)/.test(Whtml) && /input\[type=radio\]:checked/.test(Whtml) && /setTimeout\(restore,1200\)/.test(Whtml) && /id="c-intro"/.test(Whtml) &&
@@ -4184,18 +4227,18 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       /^IG_SECONDS = 25 /m.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) &&
       typeof (((tg.write.people || [])[0] || {}).chat || { signals: { you: {} } }).signals.you.replyWithin5 === 'number' && /Replies within 5 minutes/.test(htmlA), JSON.stringify([tg.foryouA.readTask]));
   check('Psyche Together needs a Psyche first, and says how to make one',
-    tg.noPsyche.needsPsyche === true && tg.noPsyche.startPsyche === true && !tg.noPsyche.buttons && /about 5 minutes, read from your own Instagram right here/.test(tg.noPsyche.say), JSON.stringify(tg.noPsyche));
+    tg.noPsyche.needsPsyche === true && tg.noPsyche.startPsyche === true && JSON.stringify(tg.noPsyche.buttons) === '["Make my Psyche first","Not now"]' && /about 5 minutes, read from your own Instagram right here\..* Make yours now\?$/.test(tg.noPsyche.say), JSON.stringify(tg.noPsyche));
   check('the one who starts, with no Psyche yet, is taken to make theirs first and their wish to start is kept: once their Psyche is there, status starts Psyche Together by itself, with the consent and the stage question',
     tg.solo.needsPsyche === true && tg.solo.startPsyche === true && /go straight on to start your Psyche Together/.test(tg.solo.say) && tg.soloKept.start === true &&
       tg.soloStarted.id === 'stage' && /your full Psyche report/.test(tg.soloStarted.consent || '') && tg.soloGone === true, JSON.stringify([tg.solo, tg.soloStarted]).slice(0, 400));
   check('a partner\'s invite before they have a Psyche is kept, not lost: join says so, and once their Psyche is there, status takes up the invite by itself, straight to their questions, and the kept invite is gone',
-    tg.pending.needsPsyche && tg.pending.pending === true && tg.pending.startPsyche === true && !tg.pending.buttons && /Your partner's invite is kept, and once your Psyche is ready you'll go straight on to your questions/.test(tg.pending.say) && tg.pendingKept === true &&
-      /go straight into the PsycheAI skill's first run/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
+    tg.pending.needsPsyche && tg.pending.pending === true && tg.pending.startPsyche === true && JSON.stringify(tg.pending.buttons) === '["Make my Psyche first","Not now"]' && /Your partner's invite is kept, and once your Psyche is ready you'll go straight on to your questions/.test(tg.pending.say) && tg.pendingKept === true &&
+      /\*\*"Make my Psyche first":\*\* the PsycheAI skill's first run/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.pendingJoin.joined === true && tg.pendingJoin.write === 'questions' && tg.pendingGone === true, JSON.stringify([tg.pending, tg.pendingJoin]));
   check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their full report and their conversation together go to their partner, locked, and nothing from other chats',
     tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report and your Psyche Card picture go to your partner's Muse, locked/.test(tg.start.consent || '') && /The one who starts it adds your conversation together/.test(tg.start.consent || '') && /Nothing from chats with anyone else is read/.test(tg.start.consent || '') &&
       /^Mei invited you to Psyche Together, a private check-in for the two of you\. Paste the line below into your Muse app\.$/.test((tg.staged.invite || {}).lead || '') && /^Install the Psyche Together skill from app\.psycheai\.io\/together and join our Psyche Together: /.test((tg.staged.invite || {}).invite || '') && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || '') &&
-      /Highly recommended while you wait/.test(tg.picked.whatsapp || '') && JSON.stringify(tg.picked.buttons) === '["Add our WhatsApp chat","Has my partner joined?"]' &&
+      /Highly recommended while you wait/.test(tg.picked.whatsapp || '') && JSON.stringify(tg.picked.buttons) === '["Add our WhatsApp chat","Has my partner joined?","Remind me here"]' &&
       /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || ''),
     JSON.stringify([tg.start, tg.staged]).slice(0, 400));
   check('the partner joins once, sees the consent line, and goes straight to their questions: no stage question, their partner named from the other Psyche, the stage from the one who started',
@@ -4212,7 +4255,11 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       tg.checkB2.file && /Mei has finished\. Here's your Psyche Together\./.test(tg.checkB2.say || '') && tg.checkA3.quiet === true && !tg.checkA3.done && tg.checkB3.quiet === true && !tg.checkB3.done,
     JSON.stringify([tg.checkA1.say, tg.checkA2, tg.checkB2.say, tg.checkA3, tg.checkB3]));
   check('each person\'s For you is written right after they submit, from their answers, their full report and their partner\'s card; the first one in then waits with a button, the last one in goes straight on to write the read, and the page follows its save',
-    tg.sentB.write === 'foryou' && tg.sentB.yourReport && tg.sentB.partner && tg.sentB.partner.name === 'Mei' && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?"]' &&
+    tg.sentB.write === 'foryou' && tg.sentB.yourReport && tg.sentB.partner && tg.sentB.partner.name === 'Mei' && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?","Remind me here"]' &&
+      // The reminder is theirs to ask for (README "Psyche Together, release 57"): once set, it isn't offered again.
+      tg.remindB.setReminder && tg.remindB.setReminder.name === 'Psyche Together check' && tg.remindB.setReminder.task === 'In ~/workspace/skills/psyche-together, run python3 bin/together.py check and show what it gives. When it says done, remove this reminder.' &&
+      !((tg.waitB2.buttons || []).includes('Remind me here')) &&
+      /\*\*"Remind me here"\*\* \(offered while they wait for their partner\): `python3 bin\/together\.py remind`/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && !/whose task is: "In/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.foryouA.write === 'foryou' && tg.write.write === 'read' && tg.saved.file && /Psyche-Together/.test(tg.saved.file), JSON.stringify([tg.waitB, tg.foryouA.write, tg.write.write]).slice(0, 300));
   check('what Muse reads back from the widget is saved at once: an option that isn\'t one is refused, and what\'s still to answer comes back as one question with buttons, until the answers are sent',
     tg.badAnswer.saved === false && /isn't one of its options/.test(JSON.stringify(tg.badAnswer.problems)) && tg.partial.missing === true && tg.partial.next.id === 'safety' &&
@@ -4233,7 +4280,7 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
   check('four weeks on, the reminder asks once ("It has been 4 weeks…", Check in again / Not now), then waits a few days before asking again; the same questions come back in one widget without openers, follow-ups or decisions; the partner is told it\'s their turn; the last one in writes what moved, a line for each pillar that moved and none for the rest; it goes on top of both pages, and the other\'s reminder brings it',
     tg.checkA3.quiet === true && /^It has been 4 weeks since your Psyche Together/.test(tg.nudgeA.say || '') && JSON.stringify(tg.nudgeA.buttons) === '["Check in again","Not now"]' && tg.nudgeA2.quiet === true &&
       tg.againA.widget && RW.items.every(x => !/^(deep|decide):/.test(x.id)) && RW.items.some(x => x.id === 'overall:you') && RW.items.some(x => x.id === 'safety') && !/class="opener"/.test(tg.againA.widget) && /4 weeks on/.test(tg.againA.widget) &&
-      tg.roundA.waiting === true && JSON.stringify(tg.roundA.buttons) === '["Has my partner checked in?"]' && /^Mei has checked in again\. Your turn/.test(tg.nudgeB.say || '') &&
+      tg.roundA.waiting === true && JSON.stringify(tg.roundA.buttons) === '["Has my partner checked in?","Remind me here"]' && /^Mei has checked in again\. Your turn/.test(tg.nudgeB.say || '') &&
       tg.recheck.write === 'recheck' && movedP.length > 0 && tg.recheck.before.pillars && tg.recheck.now.pillars && !/"core"|safety/.test(JSON.stringify(tg.recheck)) &&
       tg.recheckBad.saved === false && /changes: one line for each pillar that moved/.test(JSON.stringify(tg.recheckBad.problems)) &&
       tg.recheckSaved.file && /Ana has checked in again too\. Here's what has moved\./.test(tg.checkA4.say || '') && tg.checkA5.quiet === true &&
@@ -4357,14 +4404,14 @@ r = json.loads(sys.stdin.read()); print(json.dumps(m.check_read(r, json.loads(${
       Object.values(blobBoxes).every(x => Object.keys(x).sort().join() === 'c,n,t,v' && x.c.length > 40) &&
       !/Mei|Ana|Mulan|Often|Married|Mostly|Loyalty|safety|achievement/.test(kept) && !kept.includes(theCode), kept.slice(0, 200));
   const psycheScript = fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8'), psycheSkillMd = await (await fetch(base + '/skill/SKILL.md')).text();
-  check('Psyche Together stands apart from the PsycheAI skill, offered from its menus: its own files, served and signed under its own name, its tools hidden from the host; PsycheAI\'s script runs none of it (no together.py, no together_ tools) and only offers it ("Psyche Together with my partner", "Continue Psyche Together" when an invite waited); PsycheAI\'s SKILL.md never installs or runs it, only offers it as the user\'s own choice to install, and says no Sync is needed; its SKILL.md keeps its answers, partner and link out of memory notes',
+  check('Psyche Together stands apart from the PsycheAI skill, offered from its menus: its own files, served and signed under its own name, its tools hidden from the host; PsycheAI\'s script runs none of it (no together.py, no together_ tools) and only offers it ("Psyche Together with my partner", "Continue Psyche Together" when an invite waited); PsycheAI\'s SKILL.md never installs or runs it, only offers it as the user\'s own choice to install, and says no Sync is needed; its SKILL.md keeps its answers, partner and link in its own files',
     !/together_|together\.py/.test(psycheScript) && /'Psyche Together with my partner'/.test(psycheScript) && /together-pending\.json/.test(psycheScript) &&
       /PSYCHE TOGETHER \("Psyche Together with my partner", "Continue Psyche Together"\)/.test(psycheSkillMd) && /When nextStep has continueTogether[^.]*, its buttons start with "Continue Psyche Together": show them as given/.test(psycheSkillMd) && /nxt\['continueTogether'\] = True/.test(psycheScript) &&
-      /this skill neither installs nor runs it/.test(psycheSkillMd) && /"Install Psyche Together from app\.psycheai\.io\/together" and "Not now"/.test(psycheSkillMd) &&
+      /this skill neither installs nor runs it/.test(psycheSkillMd) && /"Install Psyche Together from app\.psycheai\.io\/together and start it" and "Not now"[^]*then go straight on as its SKILL\.md says for starting, in the same turn, with no message about the install and no "Start Psyche Together" button to tap first/.test(psycheSkillMd) &&
       !/save its three files|with no searching first|go straight on with that skill/.test(psycheSkillMd) && /It needs only their own Psyche: no Sync/.test(psycheSkillMd) &&
       tgSkill.signedText('v', { a: 'b' }, 1).startsWith('psyche-together\n') && tgSkill.signed() !== null && hiddenTools &&
       /Psyche Together is its own skill: PsycheAI's menus offer it, but none of its code is in the PsycheAI skill/.test(await (await fetch(base + '/together')).text()) &&
-      /not in memory notes/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')), JSON.stringify({ signed: Boolean(tgSkill.signed()), hiddenTools }));
+      /Psyche Together's answers, the partner, the link and its code are private, kept in this skill's own files\./.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')), JSON.stringify({ signed: Boolean(tgSkill.signed()), hiddenTools }));
   tg.end = await run.a('end');
   tg.afterEnd = await run.b('status');
   tg.chatGoneA = !fsx.existsSync(pathx.join(home.a.dir, 'chat.json'));

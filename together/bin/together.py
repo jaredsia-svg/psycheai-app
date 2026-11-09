@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 56
+RELEASE = 57
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1686,17 +1686,45 @@ PENDING = os.path.join(KEEP, 'together-pending.json')     # a partner's invite, 
 
 def needs_psyche(link=None):
     """No Psyche yet (README "Psyche Together, release 22"): Muse goes straight on to make theirs, in the same chat, with
-    nothing more to paste or tap; a partner's invite is kept, and taken up by itself once their Psyche is ready."""
+    nothing more to paste; a partner's invite is kept, and taken up by itself once their Psyche is ready. Making it is
+    theirs to agree to (README "Psyche Together, release 57"): the reply asks, with its buttons."""
     link = link or (read_first([PENDING]) or {}).get('link')     # a kept invite always wins over a plain start
     if link:
         write_private([PENDING], {'link': link, 'at': int(time.time())})
         return {'needsPsyche': True, 'pending': True, 'startPsyche': True,
                 'say': 'Psyche Together is built on both your Psyches, so first, yours: about 5 minutes, read from your own Instagram right here. '
-                       'Your partner\'s invite is kept, and once your Psyche is ready you\'ll go straight on to your questions.'}
+                       'Your partner\'s invite is kept, and once your Psyche is ready you\'ll go straight on to your questions. Make yours now?',
+                'buttons': list(PSYCHE_FIRST), 'asButtons': True}
     write_private([PENDING], {'start': True, 'at': int(time.time())})     # they asked to start one: it starts once their Psyche is ready
     return {'needsPsyche': True, 'pending': True, 'startPsyche': True,
             'say': 'Psyche Together is built on both your Psyches, so first, yours: about 5 minutes, read from your own Instagram right here. '
-                   'Once it\'s ready, we\'ll go straight on to start your Psyche Together.'}
+                   'Once it\'s ready, we\'ll go straight on to start your Psyche Together. Make yours now?',
+            'buttons': list(PSYCHE_FIRST), 'asButtons': True}
+
+
+PSYCHE_FIRST = ('Make my Psyche first', 'Not now')
+
+
+# The "Psyche Together check" reminder is theirs to ask for (README "Psyche Together, release 57"): a result that waits
+# on the partner offers it as a button, until they've had it once, and remind gives the reminder to set.
+REMIND = 'Remind me here'
+CHECK_TASK = ('In ~/workspace/skills/psyche-together, run python3 bin/together.py check and show what it gives. '
+              'When it says done, remove this reminder.')
+
+
+def with_remind(out):
+    if isinstance(out, dict) and out.get('setCheck') and not state().get('remind'):
+        out['buttons'] = [b for b in (out.get('buttons') or []) if b != REMIND] + [REMIND]
+        out['asButtons'] = True
+    return out
+
+
+def remind():
+    s = state()
+    s['remind'] = True
+    save_state(s)
+    return {'setReminder': {'name': 'Psyche Together check', 'every': 'hour', 'task': CHECK_TASK},
+            'say': 'Done: I\'ll check every hour and tell you here when there\'s something new.'}
 
 
 CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, and the read shows the two of you together, never how one of you '
@@ -4246,6 +4274,20 @@ def signed_text(version, hashes, release):
     return 'psyche-together\nrelease: %d\nversion: %s\n' % (release, version) + ''.join('%s %s\n' % (n, hashes[n]) for n in sorted(hashes))
 
 
+def newer_release():
+    """A newer release PsycheAI has signed, or None: looked at, not installed (README "Psyche Together, release 57")."""
+    status, man = request('GET', '/together/files')
+    if status != 200 or not isinstance(man, dict):
+        return None
+    rel, sig = man.get('release'), man.get('signature') or ''
+    try:
+        good = isinstance(rel, int) and ed25519_verify(PUBLIC_KEY, signed_text(man.get('version'), man.get('hashes') or {}, rel).encode(),
+                                                       base64.urlsafe_b64decode(sig + '=' * (-len(sig) % 4)))
+    except (ValueError, binascii.Error):
+        good = False
+    return rel if good and rel > RELEASE else None
+
+
 def update():
     status, man = request('GET', '/together/files')
     if status != 200 or not isinstance(man, dict):
@@ -4281,13 +4323,25 @@ def main(argv):
         print(__doc__)
         return
     cmd, rest = argv[0], argv[1:]
-    if cmd in ('status', 'rewrite', 'check') and not os.environ.get('PSYCHE_TOGETHER_FRESH'):
-        try:                # a newer signed release, if there is one, runs this same command (README release 37)
-            if update().get('updated'):
-                os.environ['PSYCHE_TOGETHER_FRESH'] = '1'
-                os.execv(sys.executable, [sys.executable, os.path.abspath(__file__)] + list(argv))
-        except Exception:   # never in the way of the person: the command answers either way
+    if cmd == 'status' and '--no-update' not in rest:
+        try:                # a newer signed release is offered, once each, never installed unasked (README release 57)
+            rel = newer_release()
+            if rel and state().get('updateDeclined') != rel:
+                print(json.dumps({'updateAvailable': True, 'release': rel, 'say': 'There\'s a newer Psyche Together, signed by PsycheAI. Update it now?',
+                                  'buttons': ['Update Psyche Together', 'Not now'], 'asButtons': True}, ensure_ascii=False, indent=1))
+                return
+        except Exception:   # never in the way of the person: status answers either way
             pass
+    if cmd == 'status' and '--no-update' in rest:
+        rel = None
+        try:
+            rel = newer_release()
+        except Exception:
+            pass
+        if rel:
+            s = state()
+            s['updateDeclined'] = rel
+            save_state(s)
     opt = lambda name: rest[rest.index(name) + 1] if name in rest and rest.index(name) + 1 < len(rest) else None
     if cmd == 'status':
         out = status()
@@ -4355,9 +4409,11 @@ def main(argv):
         out = forget()
     elif cmd == 'update':
         out = update()
+    elif cmd == 'remind':
+        out = remind()
     else:
         out = {'error': 'Unknown command: %s' % cmd}
-    print(json.dumps(out, ensure_ascii=False, indent=1))
+    print(json.dumps(with_remind(out), ensure_ascii=False, indent=1))
 
 
 if __name__ == '__main__':
