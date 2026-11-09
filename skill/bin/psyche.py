@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 185
+RELEASE = 186
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5010,7 +5010,7 @@ def local_publish(args):
     nxt = json.loads(json.dumps(AFTER_PUBLISH))
     if os.path.exists(os.path.join(KEEP, 'together-pending.json')):     # they asked for Psyche Together (to start one, or a partner's invite) before they had a Psyche
         nxt['buttons'] = ['Continue Psyche Together'] + nxt['buttons']
-        nxt['continueTogether'] = True     # Muse carries on into it at once (lib/instructions.js TOGETHER)
+        nxt['continueTogether'] = True     # offered first; the Together skill is theirs to install (lib/instructions.js TOGETHER)
     return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ask_ideas(card.get('patterns'))}
 
 
