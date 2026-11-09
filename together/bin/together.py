@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 53
+RELEASE = 54
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2343,9 +2343,8 @@ def check_read(r, view, has_chat=False):
     need(signs_(A_('secure', 'security').get('signs')), 'chapters.secure.areas.security.signs: a and b, two or three early signs each that one of you feels unsure, under 90 characters')
     need(two_(A_('secure', 'attachment').get('reassure')), 'chapters.secure.areas.attachment.reassure: a and b, what reassures each')
     cy = A_('disagree', 'cycle')
-    need(len(L(cy.get('steps'))) == 4 and all(T(x) and len(T(x)) <= 110 for x in L(cy.get('steps'))) and two_(cy.get('under')) and signs_(cy.get('signs'))
-         and two_(cy.get('moves')),
-         'chapters.disagree.areas.cycle: steps (four, naming who, at most 110 characters), signs (a and b, two or three early signs each, under 90 characters), under (a and b, the need underneath) and moves (a and b, each one\'s move when they see the signs)')
+    need(len(L(cy.get('steps'))) == 4 and all(T(x) and len(T(x)) <= 110 for x in L(cy.get('steps'))) and all(0 < len(T(D(cy.get('plain')).get(k))) <= 320 for k in ('a', 'b')),
+         'chapters.disagree.areas.cycle: steps (four, naming who, at most 110 characters) and plain (a and b: two or three plain sentences each, by name, at most 320 characters: the sign it is starting, what they need underneath, and what to do instead)')
     im = D(r.get('intermission'))
     need(T(im.get('title')) and 3 <= len(L(im.get('lines'))) <= 5 and all(T(x) and len(T(x)) <= 220 for x in L(im.get('lines'))), 'intermission: a title and three to five short, light lines')
     pn = D(r.get('plan'))
@@ -3917,28 +3916,31 @@ def page(box, s):
                 lead = mirror_('stress')
             elif aid == 'counts':
                 gn, ht = D(x.get('goodNews')), D(x.get('hardTimes'))
-                stat = lambda d_, lbl: ('<div><small>%s</small><b>%d of %d</b><span>met with real interest or support</span></div>' % (lbl, _int(d_.get('metWell')), _int(d_.get('seen')))) if _int(d_.get('seen')) else ''
+                stat = lambda d_, lbl, how: ('<li><b>%s</b><span>The other met it %s %d of %d times in the messages read.</span></li>' % (lbl, how, _int(d_.get('metWell')), _int(d_.get('seen')))) if _int(d_.get('seen')) else ''
                 ex_ = ''.join('<p class="miss"><b>%s · %s</b> %s <span class="mt %s">%s</span></p>' % ({'good': 'Good news', 'hard': 'A hard time'}.get(D(m).get('kind'), ''), _e(D(m).get('when')), _e(D(m).get('text')),
                                                                                                     _e(D(m).get('met')), {'well': 'met well', 'flat': 'met flatly', 'missed': 'missed'}.get(D(m).get('met'), ''))
                               for m in x.get('moments') or [])
-                if stat(gn, '') or stat(ht, ''):          # findings, so under What the evidence shows (release 54)
-                    data_ += '<div class="stats3">%s%s</div>%s' % (stat(gn, 'When one of you had good news'), stat(ht, 'When one of you was having a hard time'), ex_)
+                if stat(gn, '', '') or stat(ht, '', ''):          # findings, in plain words, under What the evidence shows (release 54)
+                    data_ += '<ul class="fnd">%s%s</ul>%s' % (stat(gn, 'When one of you had good news', 'with real interest'), stat(ht, 'When one of you was having a hard time', 'with real support'), ex_)
                 lead = mirror_('stress')
             elif aid == 'disagreements':
                 rp = (sig.get('repair') or {}) if isinstance(sig.get('repair'), dict) else {}
                 rpx = D(x.get('repairs'))
-                cells = []
+                meas = []          # release 54: each figure in plain words, as a finding, never a box of numbers
                 if rp.get('medianHoursBack') is not None:
                     hb = float(rp['medianHoursBack'])
-                    cells.append(('Back to warm after friction', ('within the hour' if hb < 1 else 'in about %d hours' % round(hb) if hb < 48 else 'in about %d days' % round(hb / 24)), 'typically, after a hard message'))
-                if rp.get('backWithinDay') is not None:
-                    cells.append(('Back within a day', '%d in 100' % _int(rp['backWithinDay'], 0, 100), 'of hard messages'))
+                    when_ = 'within the hour' if hb < 1 else 'within about %d hours' % round(hb) if hb < 48 else 'after about %d days' % round(hb / 24)
+                    day_ = (' Across the whole chat, %d in 100 hard messages are followed by something warm within a day.' % _int(rp['backWithinDay'], 0, 100)) if rp.get('backWithinDay') is not None else ''
+                    meas.append(('You get back to warm ' + ('quickly' if hb < 6 else 'slowly'), 'After a hard message, one of you usually says something warm again %s.%s' % (when_, day_)))
                 if rp.get('ratioInside') is not None:
-                    cells.append(('Inside a disagreement', '%s to 1' % ('{:g}'.format(float(rp['ratioInside']))), 'positive words to each hard one (Gottman\'s mark: 5 to 1)'))
+                    ri = float(rp['ratioInside'])
+                    meas.append(('Disagreements stay mostly kind' if ri >= 5 else 'Disagreements run cooler than they could' if ri >= 1 else 'Disagreements tip into hard words',
+                                 'In the three hours after a hard message, you use about %s kind or positive words for every hard one. Gottman found couples who stay steady keep about 5 to 1.' % '{:g}'.format(ri)))
                 if rpx.get('tried'):
-                    cells.append(('Repair attempts that landed', '%d of %d' % (_int(rpx.get('landed')), _int(rpx.get('tried'))), 'in the messages read'))
-                if cells:                                     # measured, so evidence (release 54)
-                    data_ += '<div class="stats3">%s</div>' % ''.join('<div><small>%s</small><b>%s</b><span>%s</span></div>' % (_e(a_), _e(b_), _e(c_)) for a_, b_, c_ in cells)
+                    meas.append(('Your attempts to make up mostly land' if _int(rpx.get('landed')) * 4 >= _int(rpx.get('tried')) * 3 else 'Your attempts to make up often miss',
+                                 '%d of %d attempts to make up (a sorry, a joke, a softer reply) in the messages read were taken up by the other.' % (_int(rpx.get('landed')), _int(rpx.get('tried')))))
+                if meas:
+                    data_ += '<ul class="fnd">%s</ul>' % ''.join('<li><b>%s</b><span>%s</span></li>' % (_e(a_), _e(b_)) for a_, b_ in meas)
                 lead = mirror_('repair')
             elif aid == 'interests':
                 lead = cols(D(x.get('columns')) or D(c.get('enjoy')))
@@ -3991,12 +3993,10 @@ def page(box, s):
             elif aid == 'cycle':
                 cy = D(c.get('cycle'))
                 sg, und, mv = D(got(x, 'signs')), D(x.get('under')) or {'a': cy.get('a'), 'b': cy.get('b')}, D(got(x, 'moves'))
-                if sg.get('a') or mv.get('a'):
+                pl_ = D(x.get('plain'))
+                if pl_.get('a') or sg.get('a') or mv.get('a'):        # release 54: each one's part in plain words, no labels
                     extra = '<div class="who2">%s</div>' % ''.join(
-                        '<div><b><span>%s</span>%s</b>%s%s%s</div>' % (_initial(n_), _e(n_),
-                                                                     ('<p><small>Watch for</small>%s</p>' % _e('; '.join(sg.get(k_) or []))) if sg.get(k_) else '',
-                                                                     ('<p><small>Underneath</small>%s</p>' % _e(und.get(k_))) if und.get(k_) else '',
-                                                                     ('<p><small>Your move</small>%s</p>' % _e(mv.get(k_))) if mv.get(k_) else '')
+                        '<div><b><span>%s</span>%s</b><p>%s</p></div>' % (_initial(n_), _e(n_), _e(pl_.get(k_) or ' '.join(t_.strip().rstrip('.') + '.' for t_ in ['; '.join(sg.get(k_) or []), und.get(k_) or '', mv.get(k_) or ''] if t_.strip())))
                         for n_, k_ in ((names[0], 'a'), (names[1], 'b')))
             elif aid == 'know':
                 mine_k = D(view.get('knowBy')).get(s.get('role'))

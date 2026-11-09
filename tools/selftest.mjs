@@ -3957,7 +3957,8 @@ elif a[0] == 'thread':
     cycle: { status: 'one pushes, one waits', steps: ['Mei raises it, point by point', 'Ana goes quiet to think', 'Mei pushes for an answer', 'Ana withdraws further'],
              signs: { a: ['Replies get longer and numbered', 'A third question mark'], b: ['Short replies', 'Another time'] },
              under: { a: 'Mei raises things; underneath, she wants to know she matters.', b: 'Ana goes quiet; underneath, she needs room to feel safe.' },
-             moves: { a: 'Ask one question, then wait.', b: 'Say one sentence about what you need.' } } };
+             moves: { a: 'Ask one question, then wait.', b: 'Say one sentence about what you need.' },
+             plain: { a: 'When Mei starts numbering her replies, what she wants is to know she matters. Next time she asks one question, then waits.', b: 'When Ana goes quiet to think, she needs room to feel safe. Next time she says one sentence about what she needs.' } } };
   const AR = cid => Object.fromEntries(AREA_IDS[cid].filter(a => (!PILLAR_IDS.includes(a) || a in view.pillars) && (a !== 'decisions' || view.decisions.length) && (a !== 'know' || (view.know && view.know.items.length)) && (a !== 'topics' || view.topics) && (a !== 'counts' || view.chat))
     .map(a => [a, { ...(PILLAR_IDS.includes(a) ? { seen: 'You both see ' + a + ' as mostly in place.' } : {}),
                     evidence: ['interests', 'values', 'decisions', 'growth', 'know'].includes(a) ? [] : [{ insight: 'The pattern under ' + a + ' for you both.', support: 'Mei sent 42 messages about ' + a + ' and Ana 37, most of them since May 2025.' }],
@@ -4092,7 +4093,7 @@ print(json.dumps({'gentleB': {x: x in profiles['b'] for x in ('commit', 'topic')
   check('what you disagree about most and how sure you each are yourselves, the same for both (README "Psyche Together, release 48"): asked in 05 and 04, the topic in your own words if none fits; the topics side by side in 05\'s first area with whether they can be settled, the commitment as the couple\'s level beside how sure you are of each other, never whose; on the gentle path neither leaves (README "Psyche Together, release 49")',
     orderA.indexOf('topic:disagree') === orderA.indexOf('core:disagreements') + 1 + (orderA.includes('deep:disagreements') ? 1 : 0) && orderA.indexOf('commit:self') > orderA.indexOf('core:security') &&
       full.gentleB && full.gentleB.commit === false && full.gentleB.topic === false && !view.topics && !view.commitment &&
-      full.view.topics && full.view.topics.b === 'Chores and who does what' && full.view.commitment && /Your move|Watch for/.test(full.html) &&
+      full.view.topics && full.view.topics.b === 'Chores and who does what' && full.view.commitment && /When Mei starts numbering her replies/.test(full.html) &&
       /id="disagree-topics"[^]*?<div class="who2"><div><b><span>M<\/span>Mei<\/b><p><small>Disagrees with Ana most about<\/small>[^<]+<\/p>/.test(full.html) &&
       /<span class="tl (Aligned|Steady)"><small>What you disagree about<\/small><b>(Same topic|You see it differently)<\/b>/.test(full.html) &&
       /id="secure-security"[^]*?<small>How sure you are of each other<\/small>[^]*?<small>How sure you each are yourselves<\/small><b>(Strong|Steady|Worth attention)<\/b>/.test(full.html),
@@ -4117,8 +4118,8 @@ msgs = [(t0, 'me', 'I am so annoyed about tonight'), (t0 + timedelta(hours=1), '
 print(json.dumps(m.repair_signals(msgs)))
 `], { env: home.a.env })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
   check('when it counts and repair, measured (README "Psyche Together, release 51"): how good news and hard times were met, as Gable and Bodenmann measure them, with dated moments, its tile green only when most were met well; repair shows the hours back to warm, the share back within a day, the ratio inside a disagreement against Gottman\'s five to one, and the repair attempts that landed',
-    /<span class="tl Steady"><small>When it counts<\/small><b>7 of 10 met well<\/b>/.test(htmlA) && /When one of you had good news<\/small><b>5 of 6<\/b>/.test(htmlA) && /<span class="mt missed">missed<\/span>/.test(htmlA) &&
-      /id="disagree-disagreements"[^]*?<div class="stats3">[^]*?Repair attempts that landed<\/small><b>7 of 9<\/b>/.test(htmlA) &&
+    /<span class="tl Steady"><small>When it counts<\/small><b>7 of 10 met well<\/b>/.test(htmlA) && /<li><b>When one of you had good news<\/b><span>The other met it with real interest 5 of 6 times in the messages read\.<\/span>/.test(htmlA) && !/class="stats3"/.test(htmlA) && /<span class="mt missed">missed<\/span>/.test(htmlA) &&
+      /id="disagree-disagreements"[^]*?What the evidence shows<\/span><ul class="fnd"><li><b>Your attempts to make up mostly land<\/b><span>7 of 9 attempts to make up \(a sorry, a joke, a softer reply\) in the messages read were taken up by the other\./.test(htmlA) &&
       rsig.medianHoursBack === 25 && rsig.hard === 2 && rsig.backWithinDay === 50 && rsig.ratioInside > 0 && rsig.byYear['2025'] === 25,
     JSON.stringify(rsig));
   check('what you each want, three ways (README "Psyche Together, release 51"): what makes you feel appreciated, what you want when stressed and what you need after a disagreement, each asked for yourself and as a guess of your partner, in its chapter; set side by side in Love languages, When it counts and Repair with whether each guess was right; not on the gentle path',
@@ -4328,8 +4329,8 @@ r = json.loads(sys.stdin.read()); print(json.dumps(m.check_read(r, json.loads(${
       tg.ownDupProblems.some(p => /^chapters\.future\.areas\.values\.columns: shared \(2 to 5\), a and b \(1 to 3 each, more one's own, nothing also in shared\)/.test(p)) && tg.alikeProblems.some(p => /^chapters\.future\.areas\.values\.columns/.test(p)),
     JSON.stringify([tg.alikeProblems, tg.ownDupProblems]).slice(0, 300));
   check('what to do in the moment sits in its area\'s what it means: under 05\'s cycle, early signs for each of you, the need under it, each one\'s counter-move and a question to ask yourself; in 04 the signs one of you feels unsure and what reassures each; a closed chapter shows its takeaway; no thumbs, but a rewrite can carry what felt off; a long what it means is sent back',
-    /id="disagree-cycle"><div class="at">[^]*?<\/div><div class="st"><div class="cycle">[^]*?<div class="st means">[^]*?<div class="who2"><div><b><span>M<\/span>Mei<\/b><p><small>Watch for<\/small>Replies get longer and numbered; A third question mark<\/p><p><small>Underneath<\/small>Mei raises things/.test(htmlA) &&
-      /<p><small>Your move<\/small>Say one sentence about what you need\.<\/p>/.test(htmlA) && !/A question to ask yourself/.test(htmlA) && !/Early signs, for/.test(htmlA) &&
+    /id="disagree-cycle"><div class="at">[^]*?<\/div><div class="st"><div class="cycle">[^]*?<div class="st means">[^]*?<div class="who2"><div><b><span>M<\/span>Mei<\/b><p>When Mei starts numbering her replies, what she wants is to know she matters\. Next time she asks one question, then waits\.<\/p>/.test(htmlA) &&
+      !/<small>(Watch for|Underneath|Your move)<\/small>/.test(htmlA) && !/A question to ask yourself/.test(htmlA) && !/Early signs, for/.test(htmlA) &&
       /When Ana is feeling unsure<\/b><ul><li>Goes quiet/.test(htmlA) && /id="secure-attachment"><div class="at">[^]*?<\/div><div class="st"><div class="who2"><div><b><span>M<\/span>Mei<\/b><p>steady, says it plainly<\/p><p class="soft">Reassured by: Mei needs plain reassurance\.<\/p>/.test(htmlA) &&
       /id="close-loves"><div class="at">[^]*?<\/div><div class="st"><div class="flow"><div><small>Mei gives<\/small><b>Quality time<\/b><\/div><i>→<\/i><div><small>Ana feels loved by<\/small><b>Quality time<\/b><\/div><span class="ok">Quality time<\/span>/.test(htmlA) && !/What makes Mei feel cared for/.test(htmlA) &&
       /id="close-connection"[^]*?<span class="sl">What the evidence shows<\/span><div class="bids"><p><b>33 of 40<\/b> bids for attention in the messages read were turned toward \(83%\)/.test(htmlA) &&
