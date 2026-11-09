@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 50
+RELEASE = 51
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -109,6 +109,18 @@ SKIP_SEPARATED = {'desire', 'growth'}
 # README "Psyche Together, release 48": how sure you are yourself, beside how sure you are of your partner (security),
 # and what you disagree about most, the same for both. Commitment shows only as the couple's level, never whose;
 # the topic shows side by side, as the big decisions do, since naming different topics is itself the finding.
+# README "Psyche Together, release 51": three mirror pairs, what you want and what you think your partner wants, each
+# in the chapter its answer lands in; the read sets both side by side, since a guess that misses is the finding.
+MIRRORS = [('appreciated', 'appreciation', 'What makes you feel most appreciated by {p}?', 'And what do you think makes {p} feel most appreciated by you?',
+            ['Being told in words', 'Time together', 'Something done for me', 'A hug or touch']),
+           ('stress', 'connection', 'When you\'re stressed, what do you most want from {p}?', 'And when {p} is stressed, what do you think they most want from you?',
+            ['To be listened to', 'Help fixing it', 'Something to take my mind off it', 'Some space']),
+           ('repair', 'disagreements', 'After a disagreement, what do you most need from {p}?', 'And what do you think {p} most needs from you after one?',
+            ['To talk it through now', 'A little time first', 'A hug or warm gesture', 'To move on and let it go'])]
+# README "Psyche Together, release 51": an optional hope in your own words (Gottman's dreams within conflict): read by
+# your partner's Muse to write the read, which may speak of it in its own words, never quoting you.
+DREAM = ('dream:self', 'Optional: what is a hope for your life that {p} might not fully know? In your own words. Your partner\'s Muse reads it to write your read, which may mention it in its own words, never quoting you.',
+         ['Skip', 'Write my own'])
 COMMIT = ('commit:self', 'And how sure are you that you want this relationship for the long run?', [('Completely', 2), ('Mostly', 1), ('Not sure', 0)])
 COMMIT_SEPARATED = 'And how sure are you that you want to keep working together for the children?'
 TOPIC = ('topic:disagree', 'What do you and {p} disagree about most? Your answer is shown to you both, side by side.',
@@ -226,9 +238,9 @@ SCRUB = [(re.compile(r'https?://\S+|www\.\S+', re.I), '[link]'), (re.compile(r'[
          (re.compile(r'(?<!\w)@[A-Za-z0-9_.]{2,}'), '[handle]'), (re.compile(r'\+?\d[\d ()-]{6,}\d'), '[number]')]
 
 
-def clean_typed(text, names=()):
-    """A typed answer, kept in this workspace only: short, and with names, handles, numbers and links taken out."""
-    t = re.sub(r'\s+', ' ', str(text or '')).strip()[:200]
+def clean_typed(text, names=(), limit=200):
+    """A typed answer: short, and with names, handles, numbers and links taken out."""
+    t = re.sub(r'\s+', ' ', str(text or '')).strip()[:limit]
     for rx, sub in SCRUB:
         t = rx.sub(sub, t)
     for n in names:
@@ -394,11 +406,17 @@ def items(s):
                 if key != 'desire' and isinstance(f, dict) and f.get('q') and f.get('options'):
                     out.append({'id': 'deep:' + key, 'kind': 'deeper', 'pillar': key, 'opener': '', 'text': f['q'], 'follows': 'core:' + key,
                                 'options': [o for o in f['options'] if o != OTHER] + [OTHER], 'own': True})
+                if key == 'growth' or (key == 'future' and 'growth' not in core):
+                    out.append({'id': DREAM[0], 'kind': 'dream', 'pillar': 'future', 'opener': '', 'text': DREAM[1], 'options': list(DREAM[2]), 'own': True, 'ownLabel': DREAM[2][1]})
                 if key == 'security':
                     out.append({'id': COMMIT[0], 'kind': 'commit', 'pillar': 'security', 'opener': '', 'text': COMMIT_SEPARATED if stage == SEPARATED else COMMIT[1],
                                 'options': [o for o, _ in COMMIT[2]], 'scores': [sc for _, sc in COMMIT[2]]})
                 if key == 'disagreements':
                     out.append({'id': TOPIC[0], 'kind': 'topic', 'pillar': 'disagreements', 'opener': '', 'text': TOPIC[1], 'options': TOPIC[2] + [OTHER], 'own': True})
+                for mk, mp, mq, mg, mo in MIRRORS:
+                    if mp == key and stage != SEPARATED:
+                        out.append({'id': 'mirror:%s:self' % mk, 'kind': 'mirror', 'pillar': key, 'opener': '', 'text': mq, 'options': list(mo)})
+                        out.append({'id': 'mirror:%s:guess' % mk, 'kind': 'mirror', 'pillar': key, 'opener': '', 'text': mg, 'options': list(mo)})
     # how well you know your partner (README "Psyche Together, releases 40 and 47"): last, before the private one
     out += [{'id': k_['id'], 'kind': 'know', 'pillar': '', 'opener': '', 'text': k_['q'], 'options': list(k_['options'])} for k_ in q.get('know') or []]
     out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
@@ -528,11 +546,12 @@ def answer(qid, label=None, text=None, nearest=None):
         return {'error': 'There\'s no question %s right now.' % qid}
     if label not in it['options']:
         return {'error': '"%s" isn\'t one of the buttons: %s.' % (label, ', '.join(it['options']))}
-    if label == OTHER and it.get('own'):
-        words = clean_typed(text, [s.get('partner') or ''])
+    own_ = it.get('ownLabel') or OTHER
+    if label == own_ and it.get('own'):
+        words = clean_typed(text, [s.get('partner') or ''], 240 if it['kind'] == 'dream' else 200)
         if not words:
             return {'id': qid, 'needsText': True, 'say': 'In a few words, what is it for you?'}
-        ans_for(s)[qid] = {'label': OTHER, 'text': words}
+        ans_for(s)[qid] = {'label': own_, 'text': words}
     else:
         ans_for(s)[qid] = {'label': label}
     save_state(s)
@@ -562,6 +581,16 @@ def shared_profile(s, answered=True):
                decisions={k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')})
     if is_gentle(s):        # someone who said they sometimes feel unsafe: nothing more about them leaves than the pillars need
         return out
+    mir = {}
+    for mk, _, _, _, mo in MIRRORS:
+        a_, g_ = (answers.get('mirror:%s:self' % mk) or {}).get('label'), (answers.get('mirror:%s:guess' % mk) or {}).get('label')
+        if a_ in mo and g_ in mo:
+            mir[mk] = {'self': a_, 'guess': g_}
+    if mir:
+        out['mirror'] = mir
+    dr = answers.get(DREAM[0]) or {}
+    if dr.get('label') == DREAM[2][1] and dr.get('text'):
+        out['dream'] = clean_typed(dr['text'], [s.get('partner') or ''], 240)
     cm = (answers.get(COMMIT[0]) or {}).get('label')
     if cm in dict(COMMIT[2]):
         out['commit'] = dict(COMMIT[2])[cm]
@@ -600,6 +629,14 @@ def couple_view(a, b):
     if isinstance(a.get('commit'), int) and isinstance(b.get('commit'), int):
         x, y = a['commit'], b['commit']
         out['commitment'] = LEVELS[2 if x == 2 and y == 2 else 0 if 0 in (x, y) else 1]
+    out['chat'] = bool(a.get('chat') or b.get('chat'))
+    ma, mb = a.get('mirror') or {}, b.get('mirror') or {}
+    mirrors = {mk: {'a': ma[mk], 'b': mb[mk]} for mk, *_ in MIRRORS if isinstance(ma.get(mk), dict) and isinstance(mb.get(mk), dict)}
+    if mirrors:
+        out['mirrors'] = mirrors
+    dreams = {r: p_.get('dream') for r, p_ in (('a', a), ('b', b)) if p_.get('dream')}
+    if dreams:
+        out['dreams'] = dreams          # for the writer, who puts each in its own words; the page never shows these
     if a.get('topic') and b.get('topic'):
         out['topics'] = {'a': a['topic'], 'b': b['topic'], 'same': a['topic'].strip().lower() == b['topic'].strip().lower()}
     kv = know_view(a, b, out['names'])
@@ -693,7 +730,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,
 W_JS = r'''
 (function(){
 var D=JSON.parse(document.getElementById('pt-data').textContent),ans={},at=-1,field=document.getElementById('pt-answers'),OTHER=D.other;
-function done_(id){return (id in ans)&&ans[id]!==OTHER+': ';}
+function ownOf(id){var it=D.items.filter(function(x){return x.id===id})[0];return (it&&it.ownLabel)||OTHER;}
+function done_(id){return (id in ans)&&ans[id]!==ownOf(id)+': ';}
 function score(id){var it=D.items.filter(function(x){return x.id===id})[0];return it&&it.scores&&(id in ans)?it.scores[it.options.indexOf(ans[id])]:null;}
 function shown(){var deep=0;return D.items.filter(function(it){
  if(it.follows&&D.certain.indexOf(it.pillar)<0&&!(it.follows in ans&&score(it.follows)===0))return false;
@@ -713,13 +751,13 @@ function own(name){return document.querySelector('textarea[data-for="'+name+'"]'
 document.addEventListener('change',function(e){var t=e.target;if(!t||t.type!=='radio')return;
  [].slice.call(document.querySelectorAll('input[name="'+t.name+'"]')).forEach(function(x){x.parentNode.classList.toggle('on',x.checked)});
  var box=own(t.name);
- if(t.value===OTHER&&box){box.hidden=false;ans[t.name]=OTHER+': '+box.value.trim();box.focus();show();return;}
+ if(t.value===ownOf(t.name)&&box){box.hidden=false;ans[t.name]=ownOf(t.name)+': '+box.value.trim();box.focus();show();return;}
  if(box)box.hidden=true;
  ans[t.name]=t.value;
  var ids=shown();Object.keys(ans).forEach(function(k){if(ids.indexOf(k)<0)delete ans[k];});
  setTimeout(function(){at=Math.min(shown().indexOf(t.name)+1,shown().length);show();},220);});
 document.addEventListener('input',function(e){var t=e.target;if(!t||!t.getAttribute||!t.getAttribute('data-for'))return;
- ans[t.getAttribute('data-for')]=OTHER+': '+t.value.trim();field.value=JSON.stringify(ans);
+ ans[t.getAttribute('data-for')]=ownOf(t.getAttribute('data-for'))+': '+t.value.trim();field.value=JSON.stringify(ans);
  var c=t.closest('.card');if(c)c.querySelector('.next').hidden=!t.value.trim();});
 document.addEventListener('click',function(e){var b=e.target.closest?e.target.closest('button'):null;if(!b)return;
  if(b.classList.contains('start')){at=0;show();}
@@ -730,7 +768,7 @@ document.addEventListener('click',function(e){var b=e.target.closest?e.target.cl
 // the answers are read back from the ticked radios and typed words, and it opens on the first one still to answer.
 function restore(){if(Object.keys(ans).length)return;var got=false;
  [].slice.call(document.querySelectorAll('input[type=radio]:checked')).forEach(function(x){got=true;x.parentNode.classList.add('on');
-  var box=own(x.name);if(x.value===OTHER&&box){box.hidden=false;ans[x.name]=OTHER+': '+box.value.trim();}else ans[x.name]=x.value;});
+  var box=own(x.name);if(x.value===ownOf(x.name)&&box){box.hidden=false;ans[x.name]=ownOf(x.name)+': '+box.value.trim();}else ans[x.name]=x.value;});
  if(!got)return;var ids=shown(),left=ids.filter(function(i){return !done_(i);});at=left.length?ids.indexOf(left[0]):ids.length;show();}
 show();restore();setTimeout(restore,300);setTimeout(restore,1200);})();
 '''
@@ -741,11 +779,11 @@ def widget_html(s):
     p = s.get('partner') or 'your partner'
     data = {'certain': certain(s), 'followMax': FOLLOW_MAX, 'talked': 'Yes, and we\'ve talked', 'other': OTHER,
             'items': [{'id': it['id'], 'pillar': it['pillar'], 'options': it['options'], 'scores': it.get('scores'), 'follows': it.get('follows'),
-                       'onlyIf': it.get('onlyIf'), 'short': it['text'].replace('{p}', p)} for it in its]}
+                       'onlyIf': it.get('onlyIf'), 'short': it['text'].replace('{p}', p), 'ownLabel': it.get('ownLabel')} for it in its]}
     cards = []
     for it in its:
         ch_ = next((c_ for c_ in CHAPTERS if c_[0] == chapter_of(it)), None)
-        what_ = ('How well you know %s' % p if it['kind'] == 'know' else 'Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision'
+        what_ = ('How well you know %s' % p if it['kind'] == 'know' else 'A hope of yours' if it['kind'] == 'dream' else 'What you each want' if it['kind'] == 'mirror' else 'Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision'
                  else 'Overall' if it['kind'] == 'overall' else PILLARS.get(it['pillar'], ''))
         chip = ('<span class="chip lock">Private · never shared</span>' if it.get('private') else
                 '<span class="chip">%s</span>' % _e(('%s %s · %s' % (ch_[1], ch_[2], what_)) if ch_ else what_))
@@ -785,12 +823,13 @@ def take_answers(raw):
     answers = dict(ans_for(s))
     for k, v in got.items():
         it = byid.get(k)
-        if it and it.get('own') and isinstance(v, str) and v.startswith(OTHER + ':'):
-            words = clean_typed(v[len(OTHER) + 1:], [s.get('partner') or ''])
+        own_ = (it or {}).get('ownLabel') or OTHER
+        if it and it.get('own') and isinstance(v, str) and v.startswith(own_ + ':'):
+            words = clean_typed(v[len(own_) + 1:], [s.get('partner') or ''], 240 if it['kind'] == 'dream' else 200)
             if words:
-                answers[k] = {'label': OTHER, 'text': words}
+                answers[k] = {'label': own_, 'text': words}
             continue                     # "Something else" with no words: asked again in the chat
-        if it and it.get('own') and v == OTHER:
+        if it and it.get('own') and v == own_:
             continue
         if not it:
             bad.append('%s isn\'t one of the questions' % k)
@@ -1032,6 +1071,65 @@ WE = set('we us our ours ourselves'.split())
 I_YOU = set('i me my mine myself you your yours yourself'.split())
 POS = set('love glad happy great good nice thanks thank appreciate excited fun proud lovely sweet amazing awesome yay haha lol miss cute beautiful care hug'.split())
 NEG = set('sorry sad angry upset annoyed hate tired stressed worried hurt bad awful terrible ugh frustrated mad disappointed annoying'.split())
+# A hard message (README "Psyche Together, release 51"): friction between you, not tiredness or worry about the day.
+HARD = set('angry upset upsetting annoyed annoying hate hurt hurts hurtful awful terrible ugh frustrated frustrating mad disappointed disappointing whatever seriously'.split())
+REPAIR_WINDOW = 3 * 3600       # what follows a hard message, for the ratio inside a disagreement
+
+
+def repair_signals(msgs):
+    """How disagreements come back to warm, from the whole conversation (README "Psyche Together, release 51", after
+    Gottman): each hard message, the time until the next warm one from either of you, and the ratio of positive to
+    hard words in the three hours after it (Gottman's five to one is measured inside conflict, not across a chat)."""
+    toks = [(t, set(re.findall(r"[a-z']+", text.lower().replace("'", ''))), text) for t, who, text in msgs]
+    back, ins_pos, ins_neg, years = [], 0, 0, {}
+    for i, (t, w, text) in enumerate(toks):
+        if not (w & HARD):
+            continue
+        y = years.setdefault(t.year, [])
+        for t2, w2, text2 in toks[i + 1:]:
+            if (t2 - t).total_seconds() > 7 * 86400:
+                break
+            if (w2 & POS) or WARM.search(text2):
+                h = (t2 - t).total_seconds() / 3600
+                back.append(h)
+                y.append(h)
+                break
+        for t2, w2, _ in toks[i + 1:]:
+            if (t2 - t).total_seconds() > REPAIR_WINDOW:
+                break
+            ins_pos += len(w2 & POS)
+            ins_neg += len(w2 & NEG)
+    def med(xs):
+        xs = sorted(xs)
+        return round((xs[(len(xs) - 1) // 2] + xs[len(xs) // 2]) / 2, 1) if xs else None
+    hard = sum(1 for _, w, _ in toks if w & HARD)
+    return {'hard': hard, 'medianHoursBack': med(back), 'backWithinDay': round(100 * sum(1 for h in back if h <= 24) / hard) if hard else None,
+            'ratioInside': round(ins_pos / ins_neg, 1) if ins_neg else None, 'byYear': {str(k): med(v) for k, v in sorted(years.items())}}
+
+
+def year_signals(msgs):
+    """Your story in data (README "Psyche Together, release 51"): each year's messages, positive and hard words, loving
+    messages, apologies and how quickly replies came, for both of you together."""
+    out, last = {}, None
+    for t, who, text in msgs:
+        y = out.setdefault(t.year, {'year': t.year, 'messages': 0, 'positive': 0, 'hard': 0, 'warm': 0, 'sorry': 0, 'replies': 0, 'quick': 0})
+        w = set(re.findall(r"[a-z']+", text.lower().replace("'", '')))
+        y['messages'] += 1
+        y['positive'] += bool(w & POS)
+        y['hard'] += bool(w & HARD)
+        y['warm'] += bool(WARM.search(text))
+        y['sorry'] += bool(SORRY.search(text))
+        if last and last[1] != who and (t - last[0]).total_seconds() <= 86400:
+            y['replies'] += 1
+            y['quick'] += (t - last[0]).total_seconds() <= 300
+        last = (t, who)
+    rows = []
+    for y in sorted(out):
+        d = out[y]
+        rows.append({'year': y, 'messages': d['messages'], 'positivePer100': round(100 * d['positive'] / max(1, d['messages']), 1),
+                     'hardPer100': round(100 * d['hard'] / max(1, d['messages']), 1), 'warm': d['warm'], 'sorry': d['sorry'],
+                     'quickReplies': round(100 * d['quick'] / d['replies']) if d['replies'] else None})
+    return rows
 BANDS = [('late', 0, 5), ('morning', 5, 12), ('afternoon', 12, 18), ('evening', 18, 24)]
 EMOJI = re.compile('[\U0001F300-\U0001FAFF\u2600-\u27BF\u2764]')
 WARM = re.compile(r'\b(love you|miss you|luv u|love u|<3)\b|❤|🥰|😘|💕', re.I)
@@ -1250,7 +1348,8 @@ def chat_signals(msgs):
             'styleMatch': round(sum(lsm) / len(lsm), 2) if words['me'] and words['them'] else None,
             'months': [[k, by_month[k]] for k in sorted(by_month)],
             'fun': {'first': first.strftime('%-d %B %Y'), 'busiestDay': [busiest[0].strftime('%-d %B %Y'), busiest[1]] if busiest else None,
-                    'streak': best, 'daysTalking': len(days)}}
+                    'streak': best, 'daysTalking': len(days)},
+            'years': year_signals(msgs), 'repair': repair_signals(msgs)}
 
 
 # Common first names, as the PsycheAI skill keeps them (its COMMON_NAMES): taken out of the sample wherever they turn
@@ -1601,7 +1700,7 @@ def needs_psyche(link=None):
 
 
 CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, and the read shows the two of you together, never how one of you '
-           'answered, except the big decisions and what you disagree about most, which are set side by side. For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked. The one who starts it adds '
+           'answered, except the big decisions, what you disagree about most and what you each want and guess the other wants, which are set side by side. For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked. The one who starts it adds '
            'your conversation together (your Instagram chat, and your WhatsApp chat if they share it): what it shows, and a dated sample of it, go '
            'with it, locked, for your read. Nothing from chats with anyone else is read, and PsycheAI can\'t read any of it.')
 
@@ -1791,6 +1890,16 @@ def clean_profile(p):
             bd = fun.get('busiestDay')
             fun['busiestDay'] = [str(bd[0])[:20], _int(bd[1])] if isinstance(bd, (list, tuple)) and len(bd) == 2 else None
             sig['fun'] = fun
+        if isinstance(sig.get('years'), list):
+            sig['years'] = [{'year': _int(y.get('year'), 1990, 2100), 'messages': _int(y.get('messages')), 'positivePer100': min(100.0, max(0.0, float(_int(y.get('positivePer100'), 0, 100)))),
+                             'hardPer100': float(_int(y.get('hardPer100'), 0, 100)), 'warm': _int(y.get('warm')), 'sorry': _int(y.get('sorry')),
+                             'quickReplies': _int(y.get('quickReplies'), 0, 100) if y.get('quickReplies') is not None else None}
+                            for y in sig['years'] if isinstance(y, dict)][:60]
+        if isinstance(sig.get('repair'), dict):
+            rp = sig['repair']
+            num = lambda v, hi: (None if v is None else float(_int(v, 0, hi)))
+            sig['repair'] = {'hard': _int(rp.get('hard')), 'medianHoursBack': num(rp.get('medianHoursBack'), 24 * 7), 'backWithinDay': num(rp.get('backWithinDay'), 100),
+                             'ratioInside': num(rp.get('ratioInside'), 1000), 'byYear': {str(k)[:4]: num(v, 24 * 7) for k, v in (rp.get('byYear') or {}).items()} if isinstance(rp.get('byYear'), dict) else {}}
         ch['signals'] = sig
         ch['sample'] = [str(x) for x in ch.get('sample') or [] if isinstance(x, str)]
         p['chat'] = ch
@@ -1814,6 +1923,12 @@ def clean_profile(p):
             p[k] = _int(p[k], 0, 2)
     if 'topic' in p:
         p['topic'] = str(p['topic'] or '')[:60]
+    if 'dream' in p:
+        p['dream'] = str(p['dream'] or '')[:240]
+    if 'mirror' in p:
+        allowed = {mk: set(mo) for mk, _, _, _, mo in MIRRORS}
+        p['mirror'] = {mk: {'self': v['self'], 'guess': v['guess']} for mk, v in (p['mirror'] if isinstance(p['mirror'], dict) else {}).items()
+                       if mk in allowed and isinstance(v, dict) and v.get('self') in allowed[mk] and v.get('guess') in allowed[mk]}
     return p
 
 
@@ -2048,9 +2163,9 @@ CHAPTERS = [('close', '01', 'Care & Connection', ['appreciation', 'connection', 
 SUBTITLES = {'plan': 'Small steps from every chapter'}
 # Release 39: each chapter is made of named areas, the same names and order as its row in At a glance's Where you
 # stand. A pillar area carries its check-in level; the others a count, a match or a short status.
-AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages'), ('know', 'Knowing each other'), ('connection', 'Connection'), ('desire', 'Closeness')],
+AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages'), ('know', 'Knowing each other'), ('connection', 'Connection'), ('counts', 'When it counts'), ('desire', 'Closeness')],
          'life': [('needs', 'Fairness'), ('life', 'Rhythm'), ('interests', 'Interests')],
-         'future': [('values', 'Values'), ('future', 'Shared future'), ('decisions', 'Big decisions'), ('growth', 'Growth')],
+         'future': [('values', 'Values'), ('future', 'Shared future'), ('decisions', 'Big decisions'), ('growth', 'Growth'), ('dreams', 'Hopes you each carry')],
          'secure': [('security', 'Security'), ('attachment', 'Attachment')],
          'disagree': [('topics', 'What you disagree about'), ('cycle', 'Your cycle'), ('disagreements', 'Repair')]}
 PSY_AREAS = ['loves', 'connection', 'needs', 'life', 'values', 'growth', 'security', 'attachment', 'disagreements', 'cycle']
@@ -2066,7 +2181,7 @@ VERDICTS = {'matches': 'Matches how you see it', 'better': 'Better than you thin
 def areas_of(cid, view):
     """A chapter's areas that apply: a pillar area only when the couple view has it, big decisions only with decisions."""
     return [(a, n) for a, n in AREAS.get(cid, []) if (a not in PILLARS or a in (view.get('pillars') or {})) and (a != 'decisions' or view.get('decisions'))
-            and (a != 'know' or (view.get('know') or {}).get('items')) and (a != 'topics' or view.get('topics'))]
+            and (a != 'know' or (view.get('know') or {}).get('items')) and (a != 'topics' or view.get('topics')) and (a != 'counts' or view.get('chat')) and (a != 'dreams' or view.get('dreams'))]
 PLAN_TITLE = 'Your 28-day practice'
 
 
@@ -2145,6 +2260,12 @@ def check_read(r, view, has_chat=False):
                  and 0 < len(T(x.get('basis'))) <= 300,
                  'relational.%s: love languages and attachment read again from your conversation together: showsCare and feelsCared (one or two each, from %s), lean (%s), attachment (a few words, at most 80 characters) and basis (what in your messages shows it, at most 300 characters)'
                  % (k, ', '.join(LOVE_LANGS), ', '.join(LEANS)))
+    if has_chat:
+        eras = L(D(r.get('story')).get('eras'))
+        ok_ = 2 <= len(eras) <= 5 and all(isinstance(D(e).get('from'), int) and isinstance(D(e).get('to'), int) and D(e)['from'] <= D(e)['to']
+                                           and 0 < len(T(D(e).get('title'))) <= 40 and 0 < len(T(D(e).get('line'))) <= 200 for e in eras)
+        ok_ = ok_ and all(D(a).get('to') < D(b).get('from') for a, b in zip(eras, eras[1:]))
+        need(ok_, 'story.eras: two to five eras of your relationship in order, each from and to (years, not overlapping), a title (at most 40 characters) and a line on what that time was like (at most 200)')
     A_ = lambda cid, a: D(D(D(ch.get(cid)).get('areas')).get(a))
     two_ = lambda x: T(D(x).get('a')) and T(D(x).get('b'))
     signs_ = lambda x: all(2 <= len(L(D(x).get(k))) <= 3 and all(T(y) and len(T(y)) <= 90 for y in L(D(x).get(k))) for k in ('a', 'b'))
@@ -2159,6 +2280,24 @@ def check_read(r, view, has_chat=False):
     if view.get('topics'):
         need(A_('disagree', 'topics').get('type') in ('solvable', 'perpetual'),
              'chapters.disagree.areas.topics.type: solvable (it can be settled) or perpetual (it comes from a lasting difference between you, to manage, not win)')
+    if view.get('chat'):
+        cm_ = D(A_('close', 'counts'))
+        two_n = lambda x: isinstance(D(x).get('seen'), int) and isinstance(D(x).get('metWell'), int) and 0 <= D(x)['metWell'] <= D(x)['seen']
+        need(two_n(cm_.get('goodNews')) and two_n(cm_.get('hardTimes')) and len(L(cm_.get('moments'))) <= 4
+             and all(DATED.search(T(D(m).get('when'))) and D(m).get('kind') in ('good', 'hard') and D(m).get('met') in ('well', 'flat', 'missed') and 0 < len(T(D(m).get('text'))) <= 200 for m in L(cm_.get('moments'))),
+             'chapters.close.areas.counts: goodNews and hardTimes (each seen, the times one of you shared good news or a hard time in the messages read, and metWell, how many the other met with real interest or support), and up to four moments (when, kind good or hard, met well, flat or missed, text)')
+        if 'disagreements' in (view.get('pillars') or {}):
+            rp_ = D(A_('disagree', 'disagreements').get('repairs'))
+            need(isinstance(rp_.get('tried'), int) and isinstance(rp_.get('landed'), int) and 0 <= rp_['landed'] <= rp_['tried'],
+                 'chapters.disagree.areas.disagreements.repairs: tried (repair attempts you can see after friction in the messages read: a joke, a sorry, a softer reply, a change of subject to something warm) and landed (how many the other took up)')
+    if view.get('dreams'):
+        dz = D(A_('future', 'dreams'))
+        for k, raw in D(view.get('dreams')).items():
+            para_ = T(D(dz.get('hopes')).get(k))
+            words_ = re.findall(r"[a-z']+", str(raw).lower())
+            copied = any(' '.join(words_[i:i + 5]) in ' '.join(re.findall(r"[a-z']+", para_.lower())) for i in range(max(0, len(words_) - 4))) if len(words_) >= 5 else False
+            need(0 < len(para_) <= 160 and not copied,
+                 'chapters.future.areas.dreams.hopes.%s: that person\'s hope in your own words (at most 160 characters), never quoting them (no five words in a row of theirs)' % k)
     hz = D(A_('future', 'future').get('horizons'))
     if 'future' in (view.get('pillars') or {}):
         need(all(0 < len(T(hz.get(k))) <= 180 for k in ('5', '10', '15')),
@@ -2241,7 +2380,7 @@ def read_sources(profiles, view):
             'chat': {'messages': total, 'counts': chat.get('counts') or {}, 'source': chat.get('source'), 'from': sig.get('from'), 'to': sig.get('to'),
                      'sampleLines': len(sample), 'sampleChars': sum(len(x) for x in sample)} if total else None,
             'checkin': {'questions': asked, 'decisions': len(view.get('decisions') or []), 'topics': bool(view.get('topics')), 'commitment': bool(view.get('commitment')),
-                        'know': (view.get('know') or {}).get('of') or 0},
+                        'know': (view.get('know') or {}).get('of') or 0, 'mirrors': len(view.get('mirrors') or {}), 'dreams': len(view.get('dreams') or {})},
             'confidence': {'score': score, 'level': LEVEL_OF(score), 'weakest': weakest, 'talk': talk, 'checkin': checkin}}
 
 
@@ -2295,7 +2434,7 @@ def foryou_task(box=None):
     mine = {}
     for it in items(s):
         a = answers.get(it['id'])
-        if a and it['kind'] in ('core', 'deeper', 'overall', 'commit', 'topic'):
+        if a and it['kind'] in ('core', 'deeper', 'overall', 'commit', 'topic', 'mirror', 'dream'):
             mine[it['text'].replace('{p}', s.get('partner') or 'your partner')] = a.get('text') or a.get('label')
     k, got, profiles, _ = couple()
     _, theirs = mine_theirs(s, profiles) if not got.get('error') else ({}, {})
@@ -3056,6 +3195,16 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .who2 p{margin:6px 0 0;font-size:14px}.who2 small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
 @media (max-width:420px){.who2{grid-template-columns:1fr}}
 .kind2{margin:8px 0 0;font-size:13.5px;font-weight:650}.kind2.solvable{color:#2f6f53}.kind2.perpetual{color:#2b5d8f}
+.story{width:100%;height:auto;margin:6px 0}.story .era{font-size:9px;font-weight:700;fill:#7b3fa0}.story .yr{font-size:8.5px;fill:#8a7f95}
+.kb2,.kl2{display:inline-block;width:10px;height:10px;border-radius:3px;margin:0 4px 0 2px;vertical-align:middle}.kb2{background:#c9b4dc}.kl2{background:#2f6f53;height:3px}
+.eras{display:grid;gap:8px;margin-top:8px}.er{padding:10px 12px;border-radius:12px;background:#faf7fb;border:1px solid #eee6f3}.er b{display:flex;align-items:center;gap:8px;font-size:14.5px}
+.er b i{font-style:normal;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:#fff;background:#7b3fa0}
+.er b small{margin-left:auto;font-weight:600;color:var(--mute);font-size:12px}.er p{margin:4px 0 0;font-size:14px}
+.stats3{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0}.stats3>div{padding:10px 12px;border-radius:12px;background:#faf7fb;border:1px solid #eee6f3}
+.stats3 small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}.stats3 b{display:block;font-size:17px;margin:2px 0}.stats3 span{font-size:12.5px;color:var(--soft)}
+.mt{font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:4px}.mt.well{background:#eef6f1;color:#2f6f53}.mt.flat,.mt.missed{background:#eaf1f9;color:#2b5d8f}
+.mir{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0;padding:10px 12px;border-radius:12px;background:#faf7fb;border:1px solid #eee6f3}.mir small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+.mir b{font-size:14px;font-weight:650}.mir>span{grid-column:1/-1;font-size:12.5px;font-weight:700}.mir>span.ok{color:#2f6f53}.mir>span.ok:before{content:"✓ "}.mir>span.no{color:#2b5d8f}.mir>span.no:before{content:"• "}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -3152,6 +3301,45 @@ def _months_svg(months):
     return ('<figure class="chart"><svg viewBox="0 0 %d 62" role="img" aria-label="Messages by month"><defs><linearGradient id="mg" x1="0" y1="0" x2="0" y2="1">'
             '<stop offset="0" stop-color="#d1477a"/><stop offset="1" stop-color="#7b3fa0"/></linearGradient></defs>%s</svg><figcaption>Messages by %s, %s to %s</figcaption></figure>'
             % (w, bars, unit, _e(months[0][0]), _e(months[-1][0])))
+
+
+def _story(sig, story):
+    """Your story in data (README "Psyche Together, release 51"): each year's messages as bars and how warm the year
+    was as a line, the eras the read names shaded behind them, then each era with its own numbers."""
+    years = [y for y in sig.get('years') or [] if isinstance(y, dict) and isinstance(y.get('year'), int)]
+    if len(years) < 2:
+        return ''
+    eras = [e for e in (story or {}).get('eras') or [] if isinstance(e, dict) and isinstance(e.get('from'), int) and isinstance(e.get('to'), int)]
+    w, h, n = 320, 120, len(years)
+    bw = w / n
+    top = max(_int(y.get('messages')) for y in years) or 1
+    warm_top = max(float(y.get('positivePer100') or 0) for y in years) or 1
+    x_of = {y['year']: i for i, y in enumerate(years)}
+    shades = ['#f6f0fa', '#eef5f9']
+    bands = ''.join('<rect x="%.1f" y="0" width="%.1f" height="%d" fill="%s"/><text x="%.1f" y="%d" text-anchor="middle" class="era">%s</text>'
+                    % (x_of[e['from']] * bw, (x_of[e['to']] - x_of[e['from']] + 1) * bw, h, shades[k % 2], (x_of[e['from']] + (x_of[e['to']] - x_of[e['from']] + 1) / 2) * bw,
+                       h + 12, _e(str(k + 1))) for k, e in enumerate(eras) if e['from'] in x_of and e['to'] in x_of and e['to'] >= e['from'])
+    bars = ''.join('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="2" fill="#c9b4dc"><title>%d: %s messages</title></rect>'
+                   % (i * bw + bw * .18, h - 8 - (h - 20) * _int(y.get('messages')) / top, bw * .64, (h - 20) * _int(y.get('messages')) / top, y['year'], '{:,}'.format(_int(y.get('messages'))))
+                   for i, y in enumerate(years))
+    pts = ' '.join('%.1f,%.1f' % (i * bw + bw / 2, h - 8 - (h - 20) * float(y.get('positivePer100') or 0) / warm_top) for i, y in enumerate(years))
+    labels = ''.join('<text x="%.1f" y="%d" text-anchor="middle" class="yr">%s</text>' % (i * bw + bw / 2, h + 26, "'" + str(y['year'])[2:]) for i, y in enumerate(years))
+    svg = ('<svg class="story" viewBox="0 0 %d %d" role="img" aria-label="Your messages and warmth, year by year">%s%s<polyline points="%s" fill="none" stroke="#2f6f53" stroke-width="2.2"/>%s</svg>'
+           % (w, h + 30, bands, bars, pts, labels))
+    key = '<p class="soft"><span class="kb2"></span>Messages each year · <span class="kl2"></span>How warm the year was (messages with positive words, per 100)</p>'
+    by = {y['year']: y for y in years}
+    rows = ''
+    for k, e in enumerate(eras):
+        span = [by[x] for x in range(e['from'], e['to'] + 1) if x in by]
+        if not span:
+            continue
+        msgs_ = sum(_int(y.get('messages')) for y in span)
+        warm_ = round(sum(float(y.get('positivePer100') or 0) * _int(y.get('messages')) for y in span) / max(1, msgs_))
+        quick_ = [y.get('quickReplies') for y in span if isinstance(y.get('quickReplies'), (int, float))]
+        rows += ('<div class="er"><b><i>%d</i>%s<small>%s</small></b><p>%s</p><p class="soft">%s messages · %d in 100 warm%s</p></div>'
+                 % (k + 1, _e(e.get('title')), _e('%d to %d' % (e['from'], e['to']) if e['to'] != e['from'] else str(e['from'])), _e(e.get('line')),
+                    '{:,}'.format(msgs_), warm_, (' · %d in 100 replies inside five minutes' % round(sum(quick_) / len(quick_))) if quick_ else ''))
+    return '<h3>Your story, year by year</h3>' + svg + key + (('<div class="eras">%s</div>' % rows) if rows else '')
 
 
 def _talk_panel(box, names):
@@ -3413,6 +3601,8 @@ def _how(box):
         bits += ['%d big decisions side by side' % ck['decisions']] if ck.get('decisions') else []
         bits += ['what you each disagree about most, side by side'] if ck.get('topics') else []
         bits += ['%d guesses about each other' % ck['know']] if ck.get('know') else []
+        bits += ['what you each want and guess the other wants, %d ways' % ck['mirrors']] if ck.get('mirrors') else []
+        bits += ['%s hope%s in your own words' % ('two' if ck['dreams'] == 2 else 'one', '' if ck['dreams'] == 1 else 's')] if ck.get('dreams') else []
         items.append('<li><b>Your check-ins</b>: %s</li>' % _e(', '.join(bits[:-1]) + ' and ' + bits[-1]))
     return out + ('<h3>Read from</h3><ul class="srcs">%s</ul>' % ''.join(items) if items else '')
 
@@ -3543,6 +3733,14 @@ def page(box, s):
             return ' · '.join(y for y in ['<span class="lw Aligned">%d aligned</span>' % al_ if al_ else '', '<span class="lw Talk-about">%d to talk about</span>' % tk_ if tk_ else ''] if y)
         elif aid in STATUS_AREAS:
             txt = D(D(c_.get('areas')).get(aid)).get('status') or ''
+        elif aid == 'counts':
+            cm_ = D(D(D(c_.get('areas')).get('counts')))
+            seen_ = _int(D(cm_.get('goodNews')).get('seen')) + _int(D(cm_.get('hardTimes')).get('seen'))
+            well_ = _int(D(cm_.get('goodNews')).get('metWell')) + _int(D(cm_.get('hardTimes')).get('metWell'))
+            if seen_:
+                txt, cls = '%d of %d met well' % (well_, seen_), ('Aligned' if well_ * 10 >= seen_ * 8 else 'Steady')
+        elif aid == 'dreams' and view.get('dreams'):
+            txt, cls = ('Both shared one', 'Aligned') if len(view['dreams']) == 2 else ('One shared', 'Steady')
         elif aid == 'topics' and view.get('topics'):
             txt, cls = ('Same topic', 'Aligned') if view['topics'].get('same') else ('You see it differently', 'Steady')
         if not txt:
@@ -3564,7 +3762,7 @@ def page(box, s):
             great = {'loves': cls == 'Aligned', 'know': cls == 'Aligned',
                      'interests': len(D(D(D(D(ch.get(cid)).get('areas')).get(aid)).get('columns')).get('shared') or D(D(ch.get(cid)).get('enjoy')).get('shared') or []) >= 3,
                      'values': len(D(D(D(D(ch.get(cid)).get('areas')).get(aid)).get('columns')).get('shared') or D(D(ch.get(cid)).get('alike')).get('shared') or []) >= 3,
-                     'attachment': secure_(pa_) and secure_(pb_), 'topics': bool(D(view.get('topics')).get('same'))}.get(aid, False)
+                     'attachment': secure_(pa_) and secure_(pb_), 'topics': bool(D(view.get('topics')).get('same')), 'counts': cls == 'Aligned', 'dreams': cls == 'Aligned'}.get(aid, False)
             cls = 'Aligned' if great else 'Steady'
         return '<span class="tl %s"><small>%s</small><b>%s</b></span>' % (_e(cls), _e(nm), _e(txt[:1].upper() + txt[1:]))
     rows = ''
@@ -3592,6 +3790,17 @@ def page(box, s):
     cols = lambda al: (('<div class="alike"><div><small>%s</small>%s</div><div class="both"><small>Both of you</small>%s</div><div><small>%s</small>%s</div></div>%s'
                         % (_e(names[0]), chips(own(al, 'a')), chips(al.get('shared')), _e(names[1]), chips(own(al, 'b')), ('<p>%s</p>' % _e(al.get('line'))) if al.get('line') else ''))
                        if al.get('shared') else '')
+    def mirror_(mk):
+        """One mirror pair, both ways: what each wants, and what the other guessed (README "Psyche Together, release 51")."""
+        mv = D(D(view.get('mirrors')).get(mk))
+        if not (D(mv.get('a')).get('self') and D(mv.get('b')).get('self')):
+            return ''
+        row = lambda who, k_, other_, ok_: ('<div class="mir"><div><small>%s most wants</small><b>%s</b></div><div><small>%s guessed</small><b>%s</b></div><span class="%s">%s</span></div>'
+                                            % (_e(who), _e(D(mv.get(k_)).get('self')), _e(other_), _e(D(mv.get(ok_)).get('guess')),
+                                               'ok' if D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess') else 'no',
+                                               'Guessed right' if D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess') else 'Worth knowing'))
+        label = {'appreciated': 'To feel appreciated', 'stress': 'When stressed', 'repair': 'After a disagreement'}.get(mk, '')
+        return '<span class="sl" style="margin-top:10px">%s</span>' % _e(label) + row(names[0], 'a', names[1], 'b') + row(names[1], 'b', names[0], 'a')
     ICON = {'messages': ('💬', 'Messages'), 'psyches': ('🧠', 'Psyches'), 'report': ('📄', 'Reports'), 'moment': ('📅', '')}
     for cid, num, title, pids, refs in CHAPTERS:
         c = D(ch.get(cid))
@@ -3637,6 +3846,39 @@ def page(box, s):
                             '<p class="soft"><span class="kt"></span>Turned toward %d · <span class="kw"></span>Turned away %d · <span class="kg"></span>Turned against %d</p>%s</div>'
                             % (bd.get('toward') or 0, bd['seen'], pct('toward'), pct('toward'), pct('away'), pct('against'), bd.get('toward') or 0, bd.get('away') or 0, bd.get('against') or 0,
                                ''.join('<p class="miss"><b>Missed · %s</b> %s</p>' % (_e(D(m).get('when')), _e(D(m).get('text'))) for m in bd.get('missed') or [])))
+            elif aid == 'appreciation':
+                lead = mirror_('appreciated')
+            elif aid == 'dreams':
+                hp = D(x.get('hopes'))
+                lead = '<div class="who2">%s</div>' % ''.join('<div><b><span>%s</span>%s</b><p><small>Hopes</small>%s</p></div>' % (_initial(n_), _e(n_), _e(hp.get(k_)))
+                                                            for n_, k_ in ((names[0], 'a'), (names[1], 'b')) if hp.get(k_)) if hp else ''
+            elif aid == 'connection' and not view.get('chat'):
+                lead = mirror_('stress')
+            elif aid == 'counts':
+                gn, ht = D(x.get('goodNews')), D(x.get('hardTimes'))
+                stat = lambda d_, lbl: ('<div><small>%s</small><b>%d of %d</b><span>met with real interest or support</span></div>' % (lbl, _int(d_.get('metWell')), _int(d_.get('seen')))) if _int(d_.get('seen')) else ''
+                ex_ = ''.join('<p class="miss"><b>%s · %s</b> %s <span class="mt %s">%s</span></p>' % ({'good': 'Good news', 'hard': 'A hard time'}.get(D(m).get('kind'), ''), _e(D(m).get('when')), _e(D(m).get('text')),
+                                                                                                    _e(D(m).get('met')), {'well': 'met well', 'flat': 'met flatly', 'missed': 'missed'}.get(D(m).get('met'), ''))
+                              for m in x.get('moments') or [])
+                if stat(gn, '') or stat(ht, ''):
+                    lead = '<div class="stats3">%s%s</div>%s' % (stat(gn, 'When one of you had good news'), stat(ht, 'When one of you was having a hard time'), ex_)
+                lead += mirror_('stress')
+            elif aid == 'disagreements':
+                rp = (sig.get('repair') or {}) if isinstance(sig.get('repair'), dict) else {}
+                rpx = D(x.get('repairs'))
+                cells = []
+                if rp.get('medianHoursBack') is not None:
+                    hb = float(rp['medianHoursBack'])
+                    cells.append(('Back to warm after friction', ('within the hour' if hb < 1 else 'in about %d hours' % round(hb) if hb < 48 else 'in about %d days' % round(hb / 24)), 'typically, after a hard message'))
+                if rp.get('backWithinDay') is not None:
+                    cells.append(('Back within a day', '%d in 100' % _int(rp['backWithinDay'], 0, 100), 'of hard messages'))
+                if rp.get('ratioInside') is not None:
+                    cells.append(('Inside a disagreement', '%s to 1' % ('{:g}'.format(float(rp['ratioInside']))), 'positive words to each hard one (Gottman\'s mark: 5 to 1)'))
+                if rpx.get('tried'):
+                    cells.append(('Repair attempts that landed', '%d of %d' % (_int(rpx.get('landed')), _int(rpx.get('tried'))), 'in the messages read'))
+                if cells:
+                    lead = '<div class="stats3">%s</div>' % ''.join('<div><small>%s</small><b>%s</b><span>%s</span></div>' % (_e(a_), _e(b_), _e(c_)) for a_, b_, c_ in cells)
+                lead += mirror_('repair')
             elif aid == 'interests':
                 lead = cols(D(x.get('columns')) or D(c.get('enjoy')))
             elif aid == 'values':
@@ -3736,7 +3978,7 @@ def page(box, s):
     line = ''.join('<li><b>%s</b><span>%s</span><em>%s</em></li>' % (_e(w), _e(t), _e(tag)) for w, t, tag in sorted(moments, key=lambda m: _when_key(m[0])))
     inner = ('<span class="badge">Intermission</span><div class="lines" style="margin-top:12px">%s</div>%s%s%s%s'
              % (''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), ('<div class="funfacts">%s</div>' % facts_html) if facts_html else '',
-                _months_svg(sig.get('months') or []), _talk_panel(box, names), ('<h3>Your story in moments</h3><ol class="timeline">%s</ol>' % line) if line else ''))
+                (_story(sig, D(r.get('story'))) or _months_svg(sig.get('months') or [])), _talk_panel(box, names), ('<h3>Your story in moments</h3><ol class="timeline">%s</ol>' % line) if line else ''))
     part('moments', '✦', im.get('title') or 'Your story in moments', inner, 'intermission', 'A light break', False, COLOURS['moments'])
     inter, inter_nav = parts.pop(), nav.pop()
     parts[parts.index('@@INTERMISSION@@')] = inter

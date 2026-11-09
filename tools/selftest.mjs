@@ -3931,10 +3931,12 @@ elif a[0] == 'thread':
   const okPillar = Object.keys(view.pillars).filter(p => view.pillars[p] !== 'Worth attention');
   const para = (n, what) => Array.from({ length: n }, (_, i) => `In March 2025 the two of you ${what}, and it shows how your Psyches meet here in a way that is specific to you (${i}).`).join(' ');
   const EV = w => [{ when: 'June 2025', what: 'your messages after a long week, about ' + w }];
-  const AREA_IDS = { close: ['appreciation', 'loves', 'know', 'connection', 'desire'], life: ['needs', 'life', 'interests'], future: ['values', 'future', 'decisions', 'growth'], secure: ['security', 'attachment'], disagree: ['topics', 'cycle', 'disagreements'] };
+  const AREA_IDS = { close: ['appreciation', 'loves', 'know', 'connection', 'counts', 'desire'], life: ['needs', 'life', 'interests'], future: ['values', 'future', 'decisions', 'growth'], secure: ['security', 'attachment'], disagree: ['topics', 'cycle', 'disagreements'] };
   const PILLAR_IDS = ['appreciation', 'connection', 'desire', 'needs', 'life', 'future', 'growth', 'security', 'disagreements'];
   const PARTS = {
     topics: { type: 'solvable' },
+    counts: { goodNews: { seen: 6, metWell: 5 }, hardTimes: { seen: 4, metWell: 2 }, moments: [{ when: 'March 2025', kind: 'hard', met: 'missed', text: 'a long day at work met with a question about dinner' }] },
+    disagreements: { repairs: { tried: 9, landed: 7 } },
     connection: { bids: { seen: 40, toward: 33, away: 6, against: 1, missed: [{ when: 'April 2025', text: 'a photo from a walk that got no reply for a day' }] } },
     future: { horizons: { 5: 'A home of your own and a first child, from your answers and messages', 10: 'Settled near family, still travelling', 15: 'Not talked about yet' } },
     interests: { columns: { shared: ['Long dinners out'], a: ['Night runs'], b: ['Hosting'] } },
@@ -3946,13 +3948,14 @@ elif a[0] == 'thread':
              signs: { a: ['Replies get longer and numbered', 'A third question mark'], b: ['Short replies', 'Another time'] },
              under: { a: 'Mei raises things; underneath, she wants to know she matters.', b: 'Ana goes quiet; underneath, she needs room to feel safe.' },
              moves: { a: 'Ask one question, then wait.', b: 'Say one sentence about what you need.' } } };
-  const AR = cid => Object.fromEntries(AREA_IDS[cid].filter(a => (!PILLAR_IDS.includes(a) || a in view.pillars) && (a !== 'decisions' || view.decisions.length) && (a !== 'know' || (view.know && view.know.items.length)) && (a !== 'topics' || view.topics))
+  const AR = cid => Object.fromEntries(AREA_IDS[cid].filter(a => (!PILLAR_IDS.includes(a) || a in view.pillars) && (a !== 'decisions' || view.decisions.length) && (a !== 'know' || (view.know && view.know.items.length)) && (a !== 'topics' || view.topics) && (a !== 'counts' || view.chat))
     .map(a => [a, { ...(PILLAR_IDS.includes(a) ? { seen: 'You both see ' + a + ' as mostly in place.' } : {}),
                     evidence: [{ kind: 'messages', text: 'Mei sent 42 messages about ' + a + ' and Ana 37.' }, { kind: 'psyches', text: 'Your two Psyches shape ' + a + ' in your own way.' },
                                { kind: 'moment', when: 'May 2025', text: 'a moment that shows ' + a }],
                     means: 'What ' + a + ' adds up to for you both, set against how you see it, in plain words for the two of you.',
                     next: [{ do: 'One small step for ' + a + ' this week.', because: 'the 42 messages and your Psyches above point to it' }], ...(PARTS[a] || {}) }]));
   const good = { summary: 'Two people who keep showing up for each other, learning to say the hard things sooner.',
+    story: { eras: [{ from: 2023, to: 2024, title: 'Getting started', line: 'Plans most weeks, and quick replies.' }, { from: 2025, to: 2025, title: 'Settling in', line: 'Fewer messages, warmer ones.' }] },
     relational: { a: { showsCare: ['Quality time'], feelsCared: ['Words of affirmation'], lean: 'secure', attachment: 'steady, says it plainly', basis: 'Mei starts 61 of the plans and thanks Ana 40 times' },
                   b: { showsCare: ['Words of affirmation'], feelsCared: ['Quality time'], lean: 'secure', attachment: 'steady once settled', basis: 'Ana replies within minutes 80 times in 100' } },
     truths: ['strength', 'edge', 'surprise'].map((k, i) => ({ kind: k, title: 'The ' + k, detail: para(3, 'found your ' + k), chapter: ['close', 'disagree', 'secure'][i], evidence: EV(k) })),
@@ -3981,6 +3984,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
 `], { env: home.a.env, input: JSON.stringify(read) }).toString());
     tg.dupProblems = await ck({ ...good, caveats: good.truths[0].detail.split('. ')[0] + '.' });
     tg.themProblems = await ck({ ...good, caveats: 'It cannot see the days the two of them never wrote down.' });
+    tg.storyProblems = await ck({ ...good, story: { eras: [{ from: 2025, to: 2023, title: 'x', line: 'y' }] } });
     tg.longProblems = await ck({ ...good, chapters: { ...good.chapters, close: { ...good.chapters.close, areas: { ...good.chapters.close.areas, appreciation: { ...good.chapters.close.areas.appreciation, means: para(4, 'reached for each other') } } } } });
     tg.youTwoProblems = await ck({ ...good, caveats: Array.from({ length: 7 }, () => 'you two').join(' and ') + ', as the couple sees it.' });
     tg.traitsProblems = await ck({ ...good, chapters: { ...good.chapters, life: { ...good.chapters.life, areas: { ...good.chapters.life.areas, life: { ...good.chapters.life.areas.life, evidence: [{ kind: 'messages', text: 'Lots of messages.' }, { kind: 'moment', text: 'A walk.' }], next: [{ do: 'Walk.' }] } } } } });
@@ -4056,7 +4060,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
       /What save-questions checks/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec),
     JSON.stringify([tg.join.short, tg.formB.widgetFile, tg.waitB.setCheck]));
   const orderA = tg.askedA.map(x => x.id);
-  const chapterOf = id => /^overall:/.test(id) ? 0 : /^(core|deep):(appreciation|connection|desire)$/.test(id) ? 1 : /^(core|deep):(needs|life)$/.test(id) ? 2 : /^(core|deep):(future|growth)$|^decide:/.test(id) ? 3 : /^(core|deep):security$|^commit:self$/.test(id) ? 4 : /^(core|deep):disagreements$|^topic:disagree$/.test(id) ? 5 : /^know:/.test(id) ? 6 : 7;
+  const chapterOf = id => /^overall:/.test(id) ? 0 : /^(core|deep):(appreciation|connection|desire)$|^mirror:(appreciated|stress):/.test(id) ? 1 : /^(core|deep):(needs|life)$/.test(id) ? 2 : /^(core|deep):(future|growth)$|^decide:|^dream:self$/.test(id) ? 3 : /^(core|deep):security$|^commit:self$/.test(id) ? 4 : /^(core|deep):disagreements$|^topic:disagree$|^mirror:repair:/.test(id) ? 5 : /^know:/.test(id) ? 6 : 7;
   check('two questions about your partner, from their own report and never confirmed (README "Psyche Together, releases 40 and 41"); the questions in the read\'s order, overall first, then 01 to 05, the private one last, each marked with its chapter; two follow-ups at most; save-questions refuses a question without its answer; the couple total and the right answers are shared, each one\'s own count only on their own copy and never to the writer, never on the gentle path',
     tg.noKnowQ.saved === false && tg.noKnowQ.problems.some(p => /^know: exactly two questions about Mei/.test(p)) &&
       tg.askedA.some(x => x.id === 'know:1' && x.kind === 'know' && x.buttons.length === 3) && !orderA.some(id => /^me:/.test(id)) &&
@@ -4072,7 +4076,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
 import importlib.util, json
 spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 k, got, profiles, box = m.couple()
-b = dict(profiles['b'], commit=2, topic='Chores and who does what')
+b = dict(profiles['b'], commit=2, topic='Chores and who does what', dream='to run a small cafe by the sea one day', mirror={'appreciated': {'self': 'Time together', 'guess': 'Being told in words'}, 'stress': {'self': 'Some space', 'guess': 'To be listened to'}, 'repair': {'self': 'A little time first', 'guess': 'To talk it through now'}})
 view = m.couple_view(profiles['a'], b)
 print(json.dumps({'gentleB': {x: x in profiles['b'] for x in ('commit', 'topic')}, 'view': view, 'html': m.page(dict(box, view=view), m.state())}))
 `], { env: home.a.env, maxBuffer: 1 << 26 })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
@@ -4094,6 +4098,45 @@ print(json.dumps({'p': p, 'pic': bool(m.PIC.match('data:image/png;base64,AAAA" o
   check('what comes from the partner\'s device is made safe before it is drawn (README "Psyche Together, release 50"): numbers become numbers, the card\'s type and letters their expected shape, and a card picture only a plain JPEG or PNG',
     evil.p && evil.p.chat.signals.you.day.morning === 0 && evil.p.chat.signals.you.messages === 0 && evil.p.chat.signals.months[0][1] === 0 && evil.p.psyche.mbti === '' &&
       evil.p.psyche.bigFive.openness === 0 && evil.p.psyche.letters.length === 0 && evil.pic === false && evil.ok === true, JSON.stringify(evil).slice(0, 400));
+  const rsig = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
+import importlib.util, json
+from datetime import datetime, timedelta
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+t0 = datetime(2025, 3, 1, 10, 0)
+msgs = [(t0, 'me', 'I am so annoyed about tonight'), (t0 + timedelta(hours=1), 'them', 'ok'), (t0 + timedelta(hours=2), 'them', 'sorry, love you'),
+        (t0 + timedelta(days=3), 'me', 'that was frustrating'), (t0 + timedelta(days=5), 'them', 'great news, so happy')]
+print(json.dumps(m.repair_signals(msgs)))
+`], { env: home.a.env })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
+  check('when it counts and repair, measured (README "Psyche Together, release 51"): how good news and hard times were met, as Gable and Bodenmann measure them, with dated moments, its tile green only when most were met well; repair shows the hours back to warm, the share back within a day, the ratio inside a disagreement against Gottman\'s five to one, and the repair attempts that landed',
+    /<span class="tl Steady"><small>When it counts<\/small><b>7 of 10 met well<\/b>/.test(htmlA) && /When one of you had good news<\/small><b>5 of 6<\/b>/.test(htmlA) && /<span class="mt missed">missed<\/span>/.test(htmlA) &&
+      /id="disagree-disagreements"[^]*?<div class="stats3">[^]*?Repair attempts that landed<\/small><b>7 of 9<\/b>/.test(htmlA) &&
+      rsig.medianHoursBack === 25 && rsig.hard === 2 && rsig.backWithinDay === 50 && rsig.ratioInside > 0 && rsig.byYear['2025'] === 25,
+    JSON.stringify(rsig));
+  check('what you each want, three ways (README "Psyche Together, release 51"): what makes you feel appreciated, what you want when stressed and what you need after a disagreement, each asked for yourself and as a guess of your partner, in its chapter; set side by side in Appreciation, When it counts and Repair with whether each guess was right; not on the gentle path',
+    orderA.indexOf('mirror:appreciated:self') > orderA.indexOf('core:appreciation') && orderA.indexOf('mirror:appreciated:guess') === orderA.indexOf('mirror:appreciated:self') + 1 &&
+      orderA.indexOf('mirror:stress:self') > orderA.indexOf('core:connection') && orderA.indexOf('mirror:repair:self') > orderA.indexOf('topic:disagree') &&
+      !view.mirrors && full.view.mirrors && full.view.mirrors.stress.b.self === 'Some space' &&
+      /id="close-appreciation"[^]*?<div class="mir"><div><small>Mei most wants<\/small><b>Being told in words<\/b><\/div><div><small>Ana guessed<\/small><b>Being told in words<\/b><\/div><span class="ok">Guessed right<\/span>/.test(full.html) &&
+      /<div class="mir"><div><small>Ana most wants<\/small><b>Time together<\/b><\/div><div><small>Mei guessed<\/small><b>Being told in words<\/b><\/div><span class="no">Worth knowing<\/span>/.test(full.html) &&
+      /id="close-counts"[^]*?When stressed/.test(full.html) && /id="disagree-disagreements"[^]*?After a disagreement/.test(full.html),
+    JSON.stringify([orderA, full.view && full.view.mirrors]).slice(0, 600));
+  const dreamCheck = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
+import importlib.util, json
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+k, got, profiles, box = m.couple()
+view = m.couple_view(profiles['a'], dict(profiles['b'], dream='to run a small cafe by the sea one day'))
+read = dict(box['read'])
+ch = dict(read['chapters']); fu = dict(ch['future']); ar = dict(fu['areas'])
+base = {'means': 'A hope worth making room for.', 'next': [{'do': 'Ask about it this week.', 'because': 'it is one of the hopes you each carry'}]}
+ar['dreams'] = dict(base, hopes={'b': 'to run a small cafe by the sea one day'})
+copied = m.check_read(dict(read, chapters=dict(ch, future=dict(fu, areas=ar))), view, True)
+ar['dreams'] = dict(base, hopes={'b': 'A place of her own by the water, feeding people.'})
+html = m.page(dict(box, view=view, read=dict(read, chapters=dict(ch, future=dict(fu, areas=ar)))), m.state())
+print(json.dumps({'copied': [p for p in copied if 'dreams' in p], 'html': 'A place of her own by the water' in html and 'small cafe by the sea' not in html and 'Hopes you each carry' in html}))
+`], { env: home.a.env, maxBuffer: 1 << 26 })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
+  check('an optional hope in your own words (README "Psyche Together, release 51"): asked in 03 with Skip or Write my own, read by your partner\'s Muse, written in the read in its own words (five of yours in a row is sent back), and never shown as you wrote it',
+    orderA.includes('dream:self') && tg.askedA.find(x => x.id === 'dream:self').buttons.join() === 'Skip,Write my own' && dreamCheck.copied && dreamCheck.copied.length === 1 && dreamCheck.html === true,
+    JSON.stringify(dreamCheck).slice(0, 400));
   check('one page in out/: a page written again removes any older one beside it; a newer release runs the same command at once (status, rewrite and check), once; SKILL.md says rewrite alone when they ask for both, never to open together.py, and never to search memory for where it stands (README "Psyche Together, release 37")',
     tg.outAfter.length === 1 && tg.rewritten.file && tg.outAfter[0] === pathx.basename(tg.rewritten.file) &&
       /if cmd in \('status', 'rewrite', 'check'\) and not os\.environ\.get\('PSYCHE_TOGETHER_FRESH'\)/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
@@ -4181,6 +4224,10 @@ print(json.dumps({'p': p, 'pic': bool(m.PIC.match('data:image/png;base64,AAAA" o
       tg.join.yourChat.signals.you.messages === tg.statusA.yourChat.signals.partner.messages && people.filter(p => p.chat).length === 1 && people[0].chat.signals.messages === 120,
     JSON.stringify([tg.threads, tg.picked]).slice(0, 400));
   const sig = (people.find(p => p.chat) || { chat: { signals: {} } }).chat.signals;
+  check('your story in data (README "Psyche Together, release 51"): each year\'s messages, warmth, hard messages, loving messages, apologies and quick replies, and repair (hard messages, hours back to warm, the ratio inside a disagreement) are worked out on the device; the read names two to five eras, and the intermission draws the years with the eras behind them and each era\'s numbers; a read without eras is sent back',
+    Array.isArray(sig.years) && sig.years.length >= 2 && typeof sig.years[0].positivePer100 === 'number' && sig.repair && typeof sig.repair.hard === 'number' && 'ratioInside' in sig.repair &&
+      /<h3>Your story, year by year<\/h3><svg class="story"/.test(htmlA) && /<div class="er"><b><i>1<\/i>Getting started<small>2023 to 2024<\/small><\/b><p>Plans most weeks, and quick replies\.<\/p><p class="soft">[\d,]+ messages · \d+ in 100 warm/.test(htmlA) &&
+      tg.storyProblems.some(p => /^story\.eras: two to five eras/.test(p)), JSON.stringify([sig.years, sig.repair, tg.storyProblems]).slice(0, 400));
   check('Instagram\'s dates as a bundle ({user_local, user_timezone, utc}) are read, by their own wall-clock time; a chat picked before that fix is read again once, adding nothing twice',
     /80 messages from your Instagram chat/.test(tg.picked.read) && tg.rereadState.igRetried === true && tg.rereadState.igCount === 80 && tg.rereadState.pickedThread === 'Ana Lim' &&
       tg.rereadCounts[0] === tg.rereadCounts[1] && tg.rereadCounts[0] === 120, JSON.stringify([tg.rereadCounts, tg.rereadState.igCount]));
