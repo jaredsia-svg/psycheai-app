@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 52
+RELEASE = 53
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -92,7 +92,7 @@ CORE = [
     ('growth', 'Does being with {p} help you grow into who you want to be?', [('Very much', 2), ('Somewhat', 1), ('Not really', 0)]),
     ('disagreements', 'After a disagreement, how do you two usually end up?',
      [('Closer', 2), ('Back to normal soon', 2), ('It lingers', 0), ('It never quite ends', 0)]),
-    ('future', 'Do you two want the same things, and picture the same life, 5, 10 and 15 years from now?',
+    ('future', 'Do you two want the same things, and picture the same life, in the years ahead?',
      [('Yes, and we\'ve talked', 2), ('Probably, not talked', 1), ('Not sure', 0), ('No', 0)]),
     ('security', 'How sure are you that {p} is in this relationship for the long run?', [('Completely', 2), ('Mostly', 1), ('Not sure', 0)]),
     ('desire', 'Do you feel a real, particular physical attraction to {p}, and are you happy with the closeness between you? You can skip this one.',
@@ -1708,6 +1708,7 @@ CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, an
 def start():
     if not psyche() or not account():
         return needs_psyche()
+    asked = float((read_first([PENDING]) or {}).get('paidAsked') or 0)
     if (read_first([PENDING]) or {}).get('start'):
         try:
             os.remove(PENDING)
@@ -1719,7 +1720,13 @@ def start():
     code = secrets.token_urlsafe(16)
     got = tool('together_link', {'e2e': {'id': couple_id(code)}})
     if got.get('access'):         # prepared for a paid Psyche Together (PLAN.md): the server says how to get it, on the website
-        return {'needsAccess': True, 'say': got['access'].get('say') or '', 'url': got['access'].get('url')}
+        # README "Psyche Together, paid on the website": one tap once paid, never a code. A second tap before the payment
+        # has landed says so, with a fresh link in case the first has expired.
+        again_ = time.time() - asked < 3600
+        write_private([PENDING], dict(read_first([PENDING]) or {}, start=True, paidAsked=time.time()))     # "Continue Psyche Together" picks it up too
+        say_ = ('Your payment hasn\'t come through yet: it usually takes a few seconds after paying. Tap again in a moment, or open the link if you haven\'t paid.'
+                if again_ else got['access'].get('say') or '')
+        return {'needsAccess': True, 'say': say_, 'url': got['access'].get('url'), 'buttons': [PAID_BUTTON], 'asButtons': True}
     if got.get('error'):
         return got
     save_keys({'code': code, 'role': 'a'})
@@ -1752,6 +1759,7 @@ def card_pic():
         return ('data:image/png;base64,' + base64.b64encode(raw).decode()) if len(raw) <= 90000 else None
 
 
+PAID_BUTTON = 'I\'ve paid, start it'
 PROFILE_V = 2      # what a profile carries changed (2: MBTI letters with their strength): each side sends theirs again once
 
 
@@ -2170,7 +2178,12 @@ AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages')
          'disagree': [('topics', 'What you disagree about'), ('cycle', 'Your cycle'), ('disagreements', 'Repair')]}
 PSY_AREAS = ['loves', 'connection', 'needs', 'life', 'values', 'growth', 'security', 'attachment', 'disagreements', 'cycle']
 STATUS_AREAS = ['attachment', 'cycle']
-EVIDENCE_KINDS = ['messages', 'psyches', 'report', 'moment']
+EVIDENCE_KINDS = ['messages', 'psyches', 'report', 'moment']      # an older read's evidence
+# README "Psyche Together, release 54": evidence is one to three findings, each an insight from all the data with the
+# specific counts and events behind it. Where the table or chart above is the evidence, there is none.
+NO_EVIDENCE = ['interests', 'values', 'decisions', 'growth', 'know']
+EVIDENCE_NEEDED = ['appreciation', 'needs', 'life', 'security']
+LABEL_START = re.compile(r'^(strong|steady|worth attention|matches how you see it|better than you think|worth a closer look)\b', re.I)
 # README "Psyche Together, release 45": love languages and attachment are read again from the couple's own conversation,
 # and that reading replaces each card's everywhere in the read, since a Psyche is read from everyone, not this partner.
 TOUCH = 'A hug or touch'
@@ -2245,14 +2258,17 @@ def check_read(r, view, has_chat=False):
             x = D(ar.get(a))
             at = 'chapters.%s.areas.%s' % (cid, a)
             evs = L(x.get('evidence'))
-            kinds_ = [D(e).get('kind') for e in evs]
-            ok_ev = (len(evs) <= 4 and all(D(e).get('kind') in EVIDENCE_KINDS and T(D(e).get('text')) and len(T(D(e).get('text'))) <= 200 for e in evs)
-                     and all(DATED.search(T(D(e).get('when'))) for e in evs if D(e).get('kind') == 'moment'))
-            need(ok_ev, '%s.evidence: at most four pieces, only what shows this area\'s own question, each {kind: messages, psyches, report or moment, text (at most 200 characters)}, a moment with its when (a month and year)' % at)
-            need(all(re.search(r'\d', T(D(e).get('text'))) for k, e in zip(kinds_, evs) if k == 'messages'),
-                 '%s.evidence: a messages piece carries its real count (a number, never "dozens" or "thousands")' % at)
+            if a in NO_EVIDENCE:
+                need(not evs, '%s.evidence: none here: what is drawn above is the evidence, so say what it shows in means' % at)
+            else:
+                need(len(evs) <= 3 and all(0 < len(T(D(e).get('insight'))) <= 160 and 0 < len(T(D(e).get('support'))) <= 240 and re.search(r'\d', T(D(e).get('support'))) for e in evs),
+                     '%s.evidence: at most three findings, each an insight drawn from all the data (at most 160 characters) and its support: the specific counts and dated events behind it, with a number or a date (at most 240)' % at)
+                if a in EVIDENCE_NEEDED:
+                    need(len(evs) >= 1, '%s.evidence: at least one finding, an insight with the counts or events behind it' % at)
             if a in PILLARS:
-                need(0 < len(T(x.get('seen'))) <= 160, '%s: seen (how you both see it, one line, at most 160 characters, never whose)' % at)
+                need(0 < len(T(x.get('seen'))) <= 160 and not LABEL_START.match(T(x.get('seen'))),
+                     '%s: seen (how you both see it, one plain line, at most 160 characters, never whose, never opening on its level, which the badge shows)' % at)
+            need(not LABEL_START.match(T(x.get('means'))), '%s.means: say what it adds up to, never opening on a label the badge already shows' % at)
             nx = L(x.get('next'))
             need(0 < len(T(x.get('means'))) <= 320 and 1 <= len(nx) <= 3 and all(0 < len(T(D(y).get('do'))) <= 160 and 0 < len(T(D(y).get('because'))) <= 200 for y in nx),
                  '%s: means (one or two sentences, at most 320 characters) and next (one to three steps, each do, at most 160 characters, and because, at most 200: the evidence or trait it comes from)' % at)
@@ -2313,8 +2329,8 @@ def check_read(r, view, has_chat=False):
                  'chapters.future.areas.dreams.hopes.%s: that person\'s hope in your own words (at most 160 characters), never quoting them (no five words in a row of theirs)' % k)
     hz = D(A_('future', 'future').get('horizons'))
     if 'future' in (view.get('pillars') or {}):
-        need(all(0 < len(T(hz.get(k))) <= 180 for k in ('5', '10', '15')),
-             'chapters.future.areas.future.horizons: 5, 10 and 15, what you both want by then, from your answers, decisions, reports and messages (at most 180 characters each; where nothing says, say it isn\'t talked about yet)')
+        need(all(0 < len(T(hz.get(k))) <= 180 for k in ('near', 'far')),
+             'chapters.future.areas.future.horizons: near (the next few years) and far (further ahead), what you both want, from your answers, decisions, reports and messages (at most 180 characters each; where nothing says, say it isn\'t talked about yet)')
     for a_, nm_, lo_ in (('interests', 'life', 1), ('values', 'future', 2)):
         grp = D(A_(nm_, a_).get('columns'))
         dup_ = sorted((low_(grp.get('a')) | low_(grp.get('b'))) & low_(grp.get('shared')))
@@ -3220,6 +3236,8 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .mir b{font-size:14px;font-weight:650}.mir>span{grid-column:1/-1;font-size:12.5px;font-weight:700}.mir>span.ok{color:#2f6f53}.mir>span.ok:before{content:"✓ "}.mir>span.no{color:#2b5d8f}.mir>span.no:before{content:"• "}
 .flow small.src{margin-top:3px;text-transform:none;letter-spacing:0;font-weight:600;color:#7b3fa0}
 .erm{list-style:none;margin:8px 0 0;padding:8px 0 0;border-top:1px solid #eee6f3}.erm li{font-size:13.5px;margin:4px 0}.erm b{color:#7b3fa0;font-weight:650}
+.fnd{list-style:none;margin:6px 0;padding:0}.fnd li{margin:8px 0;padding-left:12px;border-left:3px solid #e6dcec}.fnd b{display:block;font-size:14.5px;line-height:1.4}.fnd span{display:block;font-size:13.5px;color:var(--soft);margin-top:2px}
+.glance-hero .exs{margin:8px 0 0;font-size:14.5px;font-weight:400;color:var(--ink);line-height:1.5}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -3333,7 +3351,7 @@ def _story(sig, story, moments=()):
     shades = ['#f6f0fa', '#eef5f9']
     bands = ''.join('<rect x="%.1f" y="0" width="%.1f" height="%d" fill="%s"/><text x="%.1f" y="%d" text-anchor="middle" class="era">%s</text>'
                     % (x_of[e['from']] * bw, (x_of[e['to']] - x_of[e['from']] + 1) * bw, h, shades[k % 2], (x_of[e['from']] + (x_of[e['to']] - x_of[e['from']] + 1) / 2) * bw,
-                       h + 12, _e(str(k + 1))) for k, e in enumerate(eras) if e['from'] in x_of and e['to'] in x_of and e['to'] >= e['from'])
+                       h + 12, chr(65 + k)) for k, e in enumerate(eras) if e['from'] in x_of and e['to'] in x_of and e['to'] >= e['from'])
     bars = ''.join('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="2" fill="#c9b4dc"><title>%d: %s messages</title></rect>'
                    % (i * bw + bw * .18, h - 8 - (h - 20) * _int(y.get('messages')) / top, bw * .64, (h - 20) * _int(y.get('messages')) / top, y['year'], '{:,}'.format(_int(y.get('messages'))))
                    for i, y in enumerate(years))
@@ -3352,10 +3370,19 @@ def _story(sig, story, moments=()):
         warm_ = round(sum(float(y.get('positivePer100') or 0) * _int(y.get('messages')) for y in span) / max(1, msgs_))
         quick_ = [y.get('quickReplies') for y in span if isinstance(y.get('quickReplies'), (int, float))]
         yr = lambda w_: int(re.search(r'(19|20)\d{2}', str(w_)).group(0)) if re.search(r'(19|20)\d{2}', str(w_)) else None
-        here = [m for m in moments if yr(m[0]) is not None and e['from'] <= yr(m[0]) <= e['to']]
+        here, seen_ = [], []
+        for m in moments:                     # one moment once, however many parts of the read cite it (release 54)
+            if yr(m[0]) is None or not e['from'] <= yr(m[0]) <= e['to']:
+                continue
+            w_ = set(re.findall(r'[a-z]{3,}', str(m[1]).lower()))
+            if any(m[0] == m2 and len(w_ & w2) * 2 >= min(len(w_), len(w2)) for m2, w2 in seen_):
+                used.add(id(m))
+                continue
+            seen_.append((m[0], w_))
+            here.append(m)
         used.update(id(m) for m in here)
-        rows += ('<div class="er"><b><i>%d</i>%s<small>%s</small></b><p>%s</p><p class="soft">%s messages · %d in 100 warm%s</p>%s</div>'
-                 % (k + 1, _e(e.get('title')), _e('%d to %d' % (e['from'], e['to']) if e['to'] != e['from'] else str(e['from'])), _e(e.get('line')),
+        rows += ('<div class="er"><b><i>%s</i>%s<small>%s</small></b><p>%s</p><p class="soft">%s messages · %d in 100 warm%s</p>%s</div>'
+                 % (chr(65 + k), _e(e.get('title')), _e('%d to %d' % (e['from'], e['to']) if e['to'] != e['from'] else str(e['from'])), _e(e.get('line')),
                     '{:,}'.format(msgs_), warm_, (' · %d in 100 replies inside five minutes' % round(sum(quick_) / len(quick_))) if quick_ else '',
                     ('<ul class="erm">%s</ul>' % ''.join('<li><b>%s</b> %s</li>' % (_e(w_), _e(t_)) for w_, t_, _ in sorted(here, key=lambda m: _when_key(m[0])))) if here else ''))
     _story.used = used            # which moments went into an era, so they aren't listed again
@@ -3563,7 +3590,7 @@ def _psy_panel(pa, pb, names):
     body += ''.join(_dual(TRAIT_LABEL[k], fa[k], fb[k]) for k in ('openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism')
                     if isinstance(fa.get(k), int) and isinstance(fb.get(k), int))
     again = ' · read again from your messages together' if pa.get('reRead') or pb.get('reRead') else ''
-    for aid, lbl in (('loves', 'Love languages' + again), ('attachment', 'Attachment' + again), ('values', '')):
+    for aid, lbl in (('loves', 'Love languages' + again), ('attachment', 'Attachment' + again)):
         part_ = _area_psy(aid, pa, pb, names, '')
         part_ = re.sub(r'<div class="pkey">.*?</div>', '', part_, count=1, flags=re.S).replace('<div class="psy"><span class="lbl">In your Psyches</span>', '', 1)
         part_ = part_[:-len('</div>')] if part_.endswith('</div>') else part_
@@ -3807,12 +3834,9 @@ def page(box, s):
             rows += ('<a class="it2 ws" href="#%s" style="--c:%s"><div class="wh"><span class="n2">%s</span><b>%s</b><i>›</i></div><div class="tiles">%s</div>%s</a>'
                      % (cid, COLOURS.get(cid, '#7b3fa0'), num, _e(title), tiles_, ('<p class="tk2">%s</p>' % _e(take_)) if take_ else ''))
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
-    summary_ = ''
-    if ovv:
-        summary_ = ('<p class="sat">How satisfied you both are: %s · How well you read each other: %s</p>%s'
-                    % (word(ovv['level']), word(ovv['reading']), ('<p>%s</p>' % _e(ovr.get('detail'))) if ovr.get('detail') else ''))
-    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>You both, in one line</small><b>%s</b></div>%s%s%s'
-         % (_e(r.get('summary')), ('<h3>Executive summary</h3>' + summary_) if summary_ else '',
+    # One executive summary (release 54): the line, then how satisfied you are and how well you read each other, in words.
+    part('glance', '★', 'At a glance', '<div class="hero glance-hero"><small>Executive summary</small><b>%s</b>%s</div>%s%s'
+         % (_e(r.get('summary')), ('<p class="exs">%s</p>' % _e(ovr.get('detail'))) if ovr.get('detail') else '',
             ('<h3>Where you stand</h3><div class="map">%s</div>' % rows) if rows else '',
             ('<h3>Three things that stand out about you both</h3>' + stands) if stands else '') + _psy_panel(pa_, pb_, names),
          '', 'The whole read on one screen', True)
@@ -3850,12 +3874,14 @@ def page(box, s):
             st1 = ('<div class="st"><span class="sl">How you see it</span><p>%s</p></div>' % _e(seen)) if seen else ''
             # 2. What the evidence shows: each piece tagged with its source, then the area's own data
             evs = [e for e in x.get('evidence') or [] if isinstance(e, dict)]
-            if evs and not any(e.get('kind') for e in evs):        # an older read: its message line, Psyches line and moments
+            if evs and not any(e.get('kind') or e.get('insight') for e in evs):        # an older read: its message line, Psyches line and moments
                 evs = ([{'kind': 'messages', 'text': pv['messages']}] if pv.get('messages') else []) + ([{'kind': 'psyches', 'text': x['psyches']}] if x.get('psyches') else []) \
                       + [{'kind': 'moment', 'when': e.get('when'), 'text': e.get('what')} for e in evs]
             for e in evs:
                 if e.get('kind') == 'moment':
                     keep([{'when': e.get('when'), 'what': e.get('text')}], '%s · %s' % (title, nm))
+            fins = ''.join('<li><b>%s</b><span>%s</span></li>' % (_e(e.get('insight')), _e(e.get('support'))) for e in evs if e.get('insight'))
+            evs = [e for e in evs if not e.get('insight')]
             lis = ''.join('<li><i title="%s">%s</i><span>%s%s</span></li>' % (_e(ICON.get(e.get('kind'), ('•', ''))[1]), ICON.get(e.get('kind'), ('•', ''))[0],
                                                                          ('<b>%s</b> · ' % _e(e.get('when'))) if e.get('kind') == 'moment' and e.get('when') else '', _e(e.get('text')))
                           for e in evs)
@@ -3876,12 +3902,13 @@ def page(box, s):
                 lead += mirror_('appreciated')
             elif aid == 'connection':
                 bd = D(x.get('bids'))
-                if bd.get('seen'):
+                if bd.get('seen'):          # evidence, not a result (release 54): drawn under What the evidence shows
                     pct = lambda k: int(100.0 * (bd.get(k) or 0) / bd['seen'] + 0.5)
                     lead = ('<div class="bids"><p><b>%d of %d</b> bids for attention in the messages read were turned toward (%d%%)</p><div class="bar"><i class="t" style="width:%d%%"></i><i class="w" style="width:%d%%"></i><i class="g" style="width:%d%%"></i></div>'
                             '<p class="soft"><span class="kt"></span>Turned toward %d · <span class="kw"></span>Turned away %d · <span class="kg"></span>Turned against %d</p>%s</div>'
                             % (bd.get('toward') or 0, bd['seen'], pct('toward'), pct('toward'), pct('away'), pct('against'), bd.get('toward') or 0, bd.get('away') or 0, bd.get('against') or 0,
                                ''.join('<p class="miss"><b>Missed · %s</b> %s</p>' % (_e(D(m).get('when')), _e(D(m).get('text'))) for m in bd.get('missed') or [])))
+                    data_, lead = lead + data_, ''
             elif aid == 'dreams':
                 hp = D(x.get('hopes'))
                 lead = '<div class="who2">%s</div>' % ''.join('<div><b><span>%s</span>%s</b><p><small>Hopes</small>%s</p></div>' % (_initial(n_), _e(n_), _e(hp.get(k_)))
@@ -3894,9 +3921,9 @@ def page(box, s):
                 ex_ = ''.join('<p class="miss"><b>%s · %s</b> %s <span class="mt %s">%s</span></p>' % ({'good': 'Good news', 'hard': 'A hard time'}.get(D(m).get('kind'), ''), _e(D(m).get('when')), _e(D(m).get('text')),
                                                                                                     _e(D(m).get('met')), {'well': 'met well', 'flat': 'met flatly', 'missed': 'missed'}.get(D(m).get('met'), ''))
                               for m in x.get('moments') or [])
-                if stat(gn, '') or stat(ht, ''):
-                    lead = '<div class="stats3">%s%s</div>%s' % (stat(gn, 'When one of you had good news'), stat(ht, 'When one of you was having a hard time'), ex_)
-                lead += mirror_('stress')
+                if stat(gn, '') or stat(ht, ''):          # findings, so under What the evidence shows (release 54)
+                    data_ += '<div class="stats3">%s%s</div>%s' % (stat(gn, 'When one of you had good news'), stat(ht, 'When one of you was having a hard time'), ex_)
+                lead = mirror_('stress')
             elif aid == 'disagreements':
                 rp = (sig.get('repair') or {}) if isinstance(sig.get('repair'), dict) else {}
                 rpx = D(x.get('repairs'))
@@ -3910,9 +3937,9 @@ def page(box, s):
                     cells.append(('Inside a disagreement', '%s to 1' % ('{:g}'.format(float(rp['ratioInside']))), 'positive words to each hard one (Gottman\'s mark: 5 to 1)'))
                 if rpx.get('tried'):
                     cells.append(('Repair attempts that landed', '%d of %d' % (_int(rpx.get('landed')), _int(rpx.get('tried'))), 'in the messages read'))
-                if cells:
-                    lead = '<div class="stats3">%s</div>' % ''.join('<div><small>%s</small><b>%s</b><span>%s</span></div>' % (_e(a_), _e(b_), _e(c_)) for a_, b_, c_ in cells)
-                lead += mirror_('repair')
+                if cells:                                     # measured, so evidence (release 54)
+                    data_ += '<div class="stats3">%s</div>' % ''.join('<div><small>%s</small><b>%s</b><span>%s</span></div>' % (_e(a_), _e(b_), _e(c_)) for a_, b_, c_ in cells)
+                lead = mirror_('repair')
             elif aid == 'interests':
                 lead = cols(D(x.get('columns')) or D(c.get('enjoy')))
             elif aid == 'values':
@@ -3920,7 +3947,10 @@ def page(box, s):
             elif aid == 'future':
                 hz = D(x.get('horizons'))
                 if hz:
-                    lead = '<div class="hz">%s</div>' % ''.join('<div><b>In %s years</b><p>%s</p></div>' % (k, _e(hz.get(k))) for k in ('5', '10', '15') if hz.get(k))
+                    lead = '<div class="hz">%s</div>' % ''.join('<div><b>%s</b><p>%s</p></div>' % (lb_, _e(hz.get(k))) for k, lb_ in
+                                                                (('near', 'In the next few years'), ('far', 'Further ahead'), ('5', 'In 5 years'), ('10', 'In 10 years'), ('15', 'In 15 years')) if hz.get(k))
+            elif aid == 'growth':
+                lead = _area_psy('values', pa_, pb_, names, '').replace('<span class="lbl">In your Psyches</span>', '', 1)
             elif aid == 'decisions':
                 lines = D(x.get('lines')) or {y.get('topic'): y.get('line') for y in c.get('decisions') or [] if isinstance(y, dict)}
                 lead = ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p>%s</div>'
@@ -3949,7 +3979,8 @@ def page(box, s):
                 lead = ('<div class="tiles"><span class="tl %s"><small>How sure you are of each other</small><b>%s</b></span><span class="tl %s"><small>How sure you each are yourselves</small><b>%s</b></span></div>'
                         % (_e(view['pillars']['security'].replace(' ', '-')), _e(view['pillars']['security']), _e(view['commitment'].replace(' ', '-')), _e(view['commitment'])))
             st_lead = ('<div class="st">%s</div>' % lead) if lead else ''
-            st2 = ('<div class="st"><span class="sl">What the evidence shows</span>%s%s</div>' % (('<ul class="evd">%s</ul>' % lis) if lis else '', data_)) if (lis or data_) else ''
+            body_ = data_ + (('<ul class="fnd">%s</ul>' % fins) if fins else '') + (('<ul class="evd">%s</ul>' % lis) if lis else '')
+            st2 = ('<div class="st"><span class="sl">What the evidence shows</span>%s</div>' % body_) if (aid not in NO_EVIDENCE or data_ or lis) and body_.strip() else ''
             # 3. What it means, and what to do about it (no verdict tag: the area's own badge already says it)
             means = x.get('means') or x.get('meaning') or pv.get('headline')
             extra = ''
