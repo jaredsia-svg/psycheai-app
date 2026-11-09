@@ -4112,13 +4112,13 @@ print(json.dumps(m.repair_signals(msgs)))
       /id="disagree-disagreements"[^]*?<div class="stats3">[^]*?Repair attempts that landed<\/small><b>7 of 9<\/b>/.test(htmlA) &&
       rsig.medianHoursBack === 25 && rsig.hard === 2 && rsig.backWithinDay === 50 && rsig.ratioInside > 0 && rsig.byYear['2025'] === 25,
     JSON.stringify(rsig));
-  check('what you each want, three ways (README "Psyche Together, release 51"): what makes you feel appreciated, what you want when stressed and what you need after a disagreement, each asked for yourself and as a guess of your partner, in its chapter; set side by side in Appreciation, When it counts and Repair with whether each guess was right; not on the gentle path',
+  check('what you each want, three ways (README "Psyche Together, release 51"): what makes you feel appreciated, what you want when stressed and what you need after a disagreement, each asked for yourself and as a guess of your partner, in its chapter; set side by side in Love languages, When it counts and Repair with whether each guess was right; not on the gentle path',
     orderA.indexOf('mirror:appreciated:self') > orderA.indexOf('core:appreciation') && orderA.indexOf('mirror:appreciated:guess') === orderA.indexOf('mirror:appreciated:self') + 1 &&
       orderA.indexOf('mirror:stress:self') > orderA.indexOf('core:connection') && orderA.indexOf('mirror:repair:self') > orderA.indexOf('topic:disagree') &&
       !view.mirrors && full.view.mirrors && full.view.mirrors.stress.b.self === 'Some space' &&
-      /id="close-appreciation"[^]*?<div class="mir"><div><small>Mei most wants<\/small><b>Being told in words<\/b><\/div><div><small>Ana guessed<\/small><b>Being told in words<\/b><\/div><span class="ok">Guessed right<\/span>/.test(full.html) &&
+      !/id="close-appreciation"(?:(?!id="close-loves")[^])*<div class="mir">/.test(full.html) && /id="close-loves"[^]*?What you said makes you feel most appreciated<\/span><div class="mir"><div><small>Mei most wants<\/small><b>Being told in words<\/b><\/div><div><small>Ana guessed<\/small><b>Being told in words<\/b><\/div><span class="ok">Guessed right<\/span>/.test(full.html) &&
       /<div class="mir"><div><small>Ana most wants<\/small><b>Time together<\/b><\/div><div><small>Mei guessed<\/small><b>Being told in words<\/b><\/div><span class="no">Worth knowing<\/span>/.test(full.html) &&
-      /id="close-counts"[^]*?When stressed/.test(full.html) && /id="disagree-disagreements"[^]*?After a disagreement/.test(full.html),
+      /id="close-counts"[^]*?What you said you want when stressed/.test(full.html) && /id="disagree-disagreements"[^]*?What you said you need after a disagreement/.test(full.html),
     JSON.stringify([orderA, full.view && full.view.mirrors]).slice(0, 600));
   const dreamCheck = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
 import importlib.util, json
@@ -4137,6 +4137,19 @@ print(json.dumps({'copied': [p for p in copied if 'dreams' in p], 'html': 'A pla
   check('an optional hope in your own words (README "Psyche Together, release 51"): asked in 03 with Skip or Write my own, read by your partner\'s Muse, written in the read in its own words (five of yours in a row is sent back), and never shown as you wrote it',
     orderA.includes('dream:self') && tg.askedA.find(x => x.id === 'dream:self').buttons.join() === 'Skip,Write my own' && dreamCheck.copied && dreamCheck.copied.length === 1 && dreamCheck.html === true,
     JSON.stringify(dreamCheck).slice(0, 400));
+  const touch = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
+import importlib.util, json
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+k, got, profiles, box = m.couple()
+mir = {'appreciated': {'a': {'self': 'Time together', 'guess': 'A hug or touch'}, 'b': {'self': 'A hug or touch', 'guess': 'Time together'}}}
+view = dict(box['view'], mirrors=mir)
+problems = m.check_read(box['read'], view, True)
+html = m.page(dict(box, view=view), m.state())
+print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsCared')], 'a': [p for p in problems if p.startswith('relational.a.feelsCared')],
+                  'shown': 'Ana feels loved by</small><b>Physical touch' in html and 'Physical touch · from the check-in' in html, 'notA': 'Mei feels loved by</small><b>Physical touch' not in html}))
+`], { env: home.a.env, maxBuffer: 1 << 26 })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
+  check('physical touch, which messages can\'t show (README "Psyche Together, release 52"): someone who says a hug or touch makes them feel most appreciated has it as one of theirs, on the page and required of the read, marked as from the check-in; their partner\'s guess never sets it',
+    touch.b && touch.b.length === 1 && touch.a.length === 0 && touch.shown === true && touch.notA === true, JSON.stringify(touch).slice(0, 400));
   check('one page in out/: a page written again removes any older one beside it; a newer release runs the same command at once (status, rewrite and check), once; SKILL.md says rewrite alone when they ask for both, never to open together.py, and never to search memory for where it stands (README "Psyche Together, release 37")',
     tg.outAfter.length === 1 && tg.rewritten.file && tg.outAfter[0] === pathx.basename(tg.rewritten.file) &&
       /if cmd in \('status', 'rewrite', 'check'\) and not os\.environ\.get\('PSYCHE_TOGETHER_FRESH'\)/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
@@ -4240,7 +4253,7 @@ print(json.dumps({'copied': [p for p in copied if 'dreams' in p], 'html': 'A pla
       tg.shallow.saved === false && tg.shallow.problems.some(p => /^truths: exactly three/.test(p)) && tg.shallow.problems.some(p => /^chapters\.close\.areas\.appreciation\.evidence/.test(p) === false), JSON.stringify([tg.bad, tg.shallow]).slice(0, 500));
   check('someone who said they feel unsafe gets a gentle For you, with support first, no "how to raise it" and no conversation scripts in the plan on their copy; the page has the relationship map, the cycle and the story in moments',
     tg.saved.saved && tg.foryouA.gentle === false && tg.sentB.gentle === true &&
-      /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map"/.test(htmlA) && /class="it2 ws"/.test(htmlA) && /class="timeline"/.test(htmlA) && /class="cycle"/.test(htmlA) && /id="moments"/.test(htmlA) &&
+      /no howToRaise/.test(JSON.stringify(tg.gentleRefused.problems)) && /For you first/.test(htmlB) && !/A conversation:/.test(htmlB) && /A conversation:/.test(htmlA) && /class="map"/.test(htmlA) && /class="it2 ws"/.test(htmlA) && /class="(timeline|erm)"/.test(htmlA) && !/<h3>Your story in moments<\/h3>/.test(htmlA) && /class="cycle"/.test(htmlA) && /id="moments"/.test(htmlA) &&
       /Your busiest day/.test(htmlA) && htmlA.indexOf('id="future"') < htmlA.indexOf('id="moments"') && htmlA.indexOf('id="moments"') < htmlA.indexOf('id="secure"') && htmlA.indexOf('id="secure"') < htmlA.indexOf('id="disagree"') && /<span class="num">06<\/span><span class="ttl">Your 28-day practice/.test(htmlA),
     JSON.stringify([tg.foryouA.gentle, tg.sentB.gentle]));
   check('the top of the page shows both Psyche Cards leaning in with a heart between them, each person\'s own card sent once, locked, in its own box; one without a card picture shows their letter instead',

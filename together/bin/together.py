@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 51
+RELEASE = 52
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2165,7 +2165,7 @@ SUBTITLES = {'plan': 'Small steps from every chapter'}
 # stand. A pillar area carries its check-in level; the others a count, a match or a short status.
 AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages'), ('know', 'Knowing each other'), ('connection', 'Connection'), ('counts', 'When it counts'), ('desire', 'Closeness')],
          'life': [('needs', 'Fairness'), ('life', 'Rhythm'), ('interests', 'Interests')],
-         'future': [('values', 'Values'), ('future', 'Shared future'), ('decisions', 'Big decisions'), ('growth', 'Growth'), ('dreams', 'Hopes you each carry')],
+         'future': [('values', 'Values'), ('future', 'Shared future'), ('dreams', 'Hopes you each carry'), ('decisions', 'Big decisions'), ('growth', 'Growth')],
          'secure': [('security', 'Security'), ('attachment', 'Attachment')],
          'disagree': [('topics', 'What you disagree about'), ('cycle', 'Your cycle'), ('disagreements', 'Repair')]}
 PSY_AREAS = ['loves', 'connection', 'needs', 'life', 'values', 'growth', 'security', 'attachment', 'disagreements', 'cycle']
@@ -2173,6 +2173,15 @@ STATUS_AREAS = ['attachment', 'cycle']
 EVIDENCE_KINDS = ['messages', 'psyches', 'report', 'moment']
 # README "Psyche Together, release 45": love languages and attachment are read again from the couple's own conversation,
 # and that reading replaces each card's everywhere in the read, since a Psyche is read from everyone, not this partner.
+TOUCH = 'A hug or touch'
+
+
+def stated_touch(view, k):
+    """Whether this one said a hug or touch makes them feel most appreciated: their own answer, never the other's guess."""
+    m = ((view.get('mirrors') or {}).get('appreciated') or {}).get(k) or {}
+    return isinstance(m, dict) and m.get('self') == TOUCH
+
+
 LOVE_LANGS = ['Words of affirmation', 'Quality time', 'Acts of service', 'Physical touch', 'Receiving gifts']
 LEANS = ['secure', 'anxious', 'avoidant', 'mixed']
 VERDICTS = {'matches': 'Matches how you see it', 'better': 'Better than you think', 'closer': 'Worth a closer look'}
@@ -2266,6 +2275,10 @@ def check_read(r, view, has_chat=False):
                                            and 0 < len(T(D(e).get('title'))) <= 40 and 0 < len(T(D(e).get('line'))) <= 200 for e in eras)
         ok_ = ok_ and all(D(a).get('to') < D(b).get('from') for a, b in zip(eras, eras[1:]))
         need(ok_, 'story.eras: two to five eras of your relationship in order, each from and to (years, not overlapping), a title (at most 40 characters) and a line on what that time was like (at most 200)')
+    for k in ('a', 'b'):            # stated wins (release 52): "A hug or touch" for yourself makes Physical touch one of yours
+        if stated_touch(view, k) and (has_chat or rel):
+            need('Physical touch' in L(D(rel.get(k)).get('feelsCared')),
+                 'relational.%s.feelsCared: they said a hug or touch makes them feel most appreciated, so Physical touch is one of theirs, whatever the messages show' % k)
     A_ = lambda cid, a: D(D(D(ch.get(cid)).get('areas')).get(a))
     two_ = lambda x: T(D(x).get('a')) and T(D(x).get('b'))
     signs_ = lambda x: all(2 <= len(L(D(x).get(k))) <= 3 and all(T(y) and len(T(y)) <= 90 for y in L(D(x).get(k))) for k in ('a', 'b'))
@@ -3205,6 +3218,8 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .mt{font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:4px}.mt.well{background:#eef6f1;color:#2f6f53}.mt.flat,.mt.missed{background:#eaf1f9;color:#2b5d8f}
 .mir{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0;padding:10px 12px;border-radius:12px;background:#faf7fb;border:1px solid #eee6f3}.mir small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
 .mir b{font-size:14px;font-weight:650}.mir>span{grid-column:1/-1;font-size:12.5px;font-weight:700}.mir>span.ok{color:#2f6f53}.mir>span.ok:before{content:"✓ "}.mir>span.no{color:#2b5d8f}.mir>span.no:before{content:"• "}
+.flow small.src{margin-top:3px;text-transform:none;letter-spacing:0;font-weight:600;color:#7b3fa0}
+.erm{list-style:none;margin:8px 0 0;padding:8px 0 0;border-top:1px solid #eee6f3}.erm li{font-size:13.5px;margin:4px 0}.erm b{color:#7b3fa0;font-weight:650}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -3303,7 +3318,7 @@ def _months_svg(months):
             % (w, bars, unit, _e(months[0][0]), _e(months[-1][0])))
 
 
-def _story(sig, story):
+def _story(sig, story, moments=()):
     """Your story in data (README "Psyche Together, release 51"): each year's messages as bars and how warm the year
     was as a line, the eras the read names shaded behind them, then each era with its own numbers."""
     years = [y for y in sig.get('years') or [] if isinstance(y, dict) and isinstance(y.get('year'), int)]
@@ -3328,7 +3343,7 @@ def _story(sig, story):
            % (w, h + 30, bands, bars, pts, labels))
     key = '<p class="soft"><span class="kb2"></span>Messages each year · <span class="kl2"></span>How warm the year was (messages with positive words, per 100)</p>'
     by = {y['year']: y for y in years}
-    rows = ''
+    rows, used = '', set()
     for k, e in enumerate(eras):
         span = [by[x] for x in range(e['from'], e['to'] + 1) if x in by]
         if not span:
@@ -3336,9 +3351,14 @@ def _story(sig, story):
         msgs_ = sum(_int(y.get('messages')) for y in span)
         warm_ = round(sum(float(y.get('positivePer100') or 0) * _int(y.get('messages')) for y in span) / max(1, msgs_))
         quick_ = [y.get('quickReplies') for y in span if isinstance(y.get('quickReplies'), (int, float))]
-        rows += ('<div class="er"><b><i>%d</i>%s<small>%s</small></b><p>%s</p><p class="soft">%s messages · %d in 100 warm%s</p></div>'
+        yr = lambda w_: int(re.search(r'(19|20)\d{2}', str(w_)).group(0)) if re.search(r'(19|20)\d{2}', str(w_)) else None
+        here = [m for m in moments if yr(m[0]) is not None and e['from'] <= yr(m[0]) <= e['to']]
+        used.update(id(m) for m in here)
+        rows += ('<div class="er"><b><i>%d</i>%s<small>%s</small></b><p>%s</p><p class="soft">%s messages · %d in 100 warm%s</p>%s</div>'
                  % (k + 1, _e(e.get('title')), _e('%d to %d' % (e['from'], e['to']) if e['to'] != e['from'] else str(e['from'])), _e(e.get('line')),
-                    '{:,}'.format(msgs_), warm_, (' · %d in 100 replies inside five minutes' % round(sum(quick_) / len(quick_))) if quick_ else ''))
+                    '{:,}'.format(msgs_), warm_, (' · %d in 100 replies inside five minutes' % round(sum(quick_) / len(quick_))) if quick_ else '',
+                    ('<ul class="erm">%s</ul>' % ''.join('<li><b>%s</b> %s</li>' % (_e(w_), _e(t_)) for w_, t_, _ in sorted(here, key=lambda m: _when_key(m[0])))) if here else ''))
+    _story.used = used            # which moments went into an era, so they aren't listed again
     return '<h3>Your story, year by year</h3>' + svg + key + (('<div class="eras">%s</div>' % rows) if rows else '')
 
 
@@ -3354,7 +3374,7 @@ def _talk_panel(box, names):
     rows = [('Messages', v(you, 'messages'), v(them, 'messages')), ('Conversations started', v(you, 'starts'), v(them, 'starts')),
             ('Typical reply', rep_(you), rep_(them)), ('Replies within 5 minutes', v(you, 'replyWithin5', '%'), v(them, 'replyWithin5', '%')), ('Questions asked', v(you, 'questions'), v(them, 'questions')),
             ('Thanks', v(you, 'thanks'), v(them, 'thanks')), ('Sorry and repair', v(you, 'sorry'), v(them, 'sorry')),
-            ('Positive words : hard words', pos(you), pos(them)), ('"We" per 100 words', v(you, 'we'), v(them, 'we')), ('"I" and "you" per 100 words', v(you, 'iYou'), v(them, 'iYou'))]
+            ('Positive words : negative words', pos(you), pos(them)), ('"We" per 100 words', v(you, 'we'), v(them, 'we')), ('"I" and "you" per 100 words', v(you, 'iYou'), v(them, 'iYou'))]
     table = '<table><tr><th></th><th>%s</th><th>%s</th></tr>%s</table>' % (_e(who[0]), _e(who[1]), ''.join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % tuple(_e(c) for c in r) for r in rows))
     match = ('<div class="big"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>%s' % (round(100 * sig['styleMatch']), _research('styleMatch'))
              if sig.get('styleMatch') is not None else '')
@@ -3701,6 +3721,20 @@ def page(box, s):
                 pa_ = new_
             else:
                 pb_ = new_
+    for k_ in ('a', 'b'):              # stated wins (release 52): their own "A hug or touch", never the other's guess
+        p_ = pa_ if k_ == 'a' else pb_
+        if stated_touch(view, k_) and 'Physical touch' not in (p_.get('feelsCaredForBy') or []):
+            p_ = dict(p_, feelsCaredForBy=['Physical touch'] + list(p_.get('feelsCaredForBy') or [])[:1], touchStated=True)
+            if k_ == 'a':
+                pa_ = p_
+            else:
+                pb_ = p_
+        elif stated_touch(view, k_):
+            p_ = dict(p_, touchStated=True)
+            if k_ == 'a':
+                pa_ = p_
+            else:
+                pb_ = p_
     stands = ''
     for i, x in enumerate(x for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds):
         home = x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close')
@@ -3799,7 +3833,7 @@ def page(box, s):
                                             % (_e(who), _e(D(mv.get(k_)).get('self')), _e(other_), _e(D(mv.get(ok_)).get('guess')),
                                                'ok' if D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess') else 'no',
                                                'Guessed right' if D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess') else 'Worth knowing'))
-        label = {'appreciated': 'To feel appreciated', 'stress': 'When stressed', 'repair': 'After a disagreement'}.get(mk, '')
+        label = {'appreciated': 'What you said makes you feel most appreciated', 'stress': 'What you said you want when stressed', 'repair': 'What you said you need after a disagreement'}.get(mk, '')
         return '<span class="sl" style="margin-top:10px">%s</span>' % _e(label) + row(names[0], 'a', names[1], 'b') + row(names[1], 'b', names[0], 'a')
     ICON = {'messages': ('💬', 'Messages'), 'psyches': ('🧠', 'Psyches'), 'report': ('📄', 'Reports'), 'moment': ('📅', '')}
     for cid, num, title, pids, refs in CHAPTERS:
@@ -3832,12 +3866,14 @@ def page(box, s):
             elif aid == 'loves':
                 gv = lambda p_: [str(y) for y in p_.get('caresBy') or []]
                 rv = lambda p_: [str(y) for y in p_.get('feelsCaredForBy') or []]
-                flow = lambda giver, gp, taker, tp: ('<div class="flow"><div><small>%s gives</small><b>%s</b></div><i>→</i><div><small>%s feels loved by</small><b>%s</b></div><span class="%s">%s</span></div>'
+                flow = lambda giver, gp, taker, tp: ('<div class="flow"><div><small>%s gives</small><b>%s</b></div><i>→</i><div><small>%s feels loved by</small><b>%s</b>%s</div><span class="%s">%s</span></div>'
                                                      % (_e(giver), _e(', '.join(gv(gp)) or '–'), _e(taker), _e(', '.join(rv(tp)) or '–'),
+                                                        '<small class="src">Physical touch · from the check-in</small>' if tp.get('touchStated') else '',
                                                         'ok' if set(y.lower() for y in gv(gp)) & set(y.lower() for y in rv(tp)) else 'no',
                                                         _e(', '.join(y for y in gv(gp) if y.lower() in set(z.lower() for z in rv(tp)))) or 'Different'))
                 if gv(pa_) or gv(pb_):
                     lead = flow(names[0], pa_, names[1], pb_) + flow(names[1], pb_, names[0], pa_)
+                lead += mirror_('appreciated')
             elif aid == 'connection':
                 bd = D(x.get('bids'))
                 if bd.get('seen'):
@@ -3846,8 +3882,6 @@ def page(box, s):
                             '<p class="soft"><span class="kt"></span>Turned toward %d · <span class="kw"></span>Turned away %d · <span class="kg"></span>Turned against %d</p>%s</div>'
                             % (bd.get('toward') or 0, bd['seen'], pct('toward'), pct('toward'), pct('away'), pct('against'), bd.get('toward') or 0, bd.get('away') or 0, bd.get('against') or 0,
                                ''.join('<p class="miss"><b>Missed · %s</b> %s</p>' % (_e(D(m).get('when')), _e(D(m).get('text'))) for m in bd.get('missed') or [])))
-            elif aid == 'appreciation':
-                lead = mirror_('appreciated')
             elif aid == 'dreams':
                 hp = D(x.get('hopes'))
                 lead = '<div class="who2">%s</div>' % ''.join('<div><b><span>%s</span>%s</b><p><small>Hopes</small>%s</p></div>' % (_initial(n_), _e(n_), _e(hp.get(k_)))
@@ -3975,10 +4009,16 @@ def page(box, s):
         if em:
             facts.append((em[0], '%s\'s favourite emoji' % nm, ' '.join(em)))
     facts_html = ''.join('<div class="fact"><em>%s</em><small>%s</small><b>%s</b></div>' % (_e(i_), _e(a_), _e(b_)) for i_, a_, b_ in facts)
-    line = ''.join('<li><b>%s</b><span>%s</span><em>%s</em></li>' % (_e(w), _e(t), _e(tag)) for w, t, tag in sorted(moments, key=lambda m: _when_key(m[0])))
+    # One story (release 52): each dated moment sits in its era's card; only moments outside every era, or a read
+    # without eras, keep the list of their own.
+    _story.used = set()
+    story_ = _story(sig, D(r.get('story')), moments)
+    rest = [m for m in moments if id(m) not in _story.used]
+    line = ''.join('<li><b>%s</b><span>%s</span><em>%s</em></li>' % (_e(w), _e(t), _e(tag)) for w, t, tag in sorted(rest, key=lambda m: _when_key(m[0])))
     inner = ('<span class="badge">Intermission</span><div class="lines" style="margin-top:12px">%s</div>%s%s%s%s'
              % (''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), ('<div class="funfacts">%s</div>' % facts_html) if facts_html else '',
-                (_story(sig, D(r.get('story'))) or _months_svg(sig.get('months') or [])), _talk_panel(box, names), ('<h3>Your story in moments</h3><ol class="timeline">%s</ol>' % line) if line else ''))
+                (story_ or _months_svg(sig.get('months') or [])), _talk_panel(box, names),
+                ('<h3>%s</h3><ol class="timeline">%s</ol>' % ('More moments' if story_ else 'Your story in moments', line)) if line else ''))
     part('moments', '✦', im.get('title') or 'Your story in moments', inner, 'intermission', 'A light break', False, COLOURS['moments'])
     inter, inter_nav = parts.pop(), nav.pop()
     parts[parts.index('@@INTERMISSION@@')] = inter
