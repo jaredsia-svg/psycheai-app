@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 54
+RELEASE = 55
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1716,6 +1716,9 @@ def start():
             pass
     s = state()
     if s.get('role'):
+        couple()                     # one that has ended is cleared here first (release 55)
+        s = state()
+    if s.get('role'):
         return {'error': 'There\'s a Psyche Together here already: "Continue Psyche Together", or "End Psyche Together" first.'}
     code = secrets.token_urlsafe(16)
     got = tool('together_link', {'e2e': {'id': couple_id(code)}})
@@ -1799,6 +1802,9 @@ def join(link):
         return needs_psyche(link)
     s = state()
     if s.get('role'):
+        couple()                     # one that has ended is cleared here first, so a new invite can be joined
+        s = state()
+    if s.get('role'):
         return {'error': 'There\'s a Psyche Together here already: "End Psyche Together" first to join a new one.'}
     try:
         os.remove(PENDING)
@@ -1834,7 +1840,11 @@ def couple():
         return k, {'error': 'There\'s no Psyche Together here.'}, {}, None
     got = tool('together_get', {})
     if got.get('error') or got.get('none'):
-        return k, got if got.get('error') else {'error': 'This Psyche Together has ended.', 'ended': True}, {}, None
+        if got.get('none'):          # ended (by either of you) or swept: nothing is kept here either (release 55)
+            forget()
+            return k, {'error': 'This Psyche Together has ended, so it was cleared here too. You can start a new one any time.', 'ended': True,
+                       'buttons': ['Start Psyche Together'], 'asButtons': True}, {}, None
+        return k, got, {}, None
     e = got.get('e2e') or {}
     key = key_for('together-box', k['code'])
     profiles = {r: unseal((e.get('profiles') or {}).get(r), key) for r in ('a', 'b')}
@@ -3402,11 +3412,13 @@ def _talk_panel(box, names):
             ('Thanks', v(you, 'thanks'), v(them, 'thanks')), ('Sorry and repair', v(you, 'sorry'), v(them, 'sorry')),
             ('Positive words : negative words', pos(you), pos(them)), ('"We" per 100 words', v(you, 'we'), v(them, 'we')), ('"I" and "you" per 100 words', v(you, 'iYou'), v(them, 'iYou'))]
     table = '<table><tr><th></th><th>%s</th><th>%s</th></tr>%s</table>' % (_e(who[0]), _e(who[1]), ''.join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % tuple(_e(c) for c in r) for r in rows))
-    match = ('<div class="big"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>%s' % (round(100 * sig['styleMatch']), _research('styleMatch'))
-             if sig.get('styleMatch') is not None else '')
+    match = ('<div class="big"><b>%d</b><span>out of 100: how closely your writing styles match</span></div>'
+             '<p class="soft">How it\'s worked out: from every message, the share of the small words each of you uses (I, you and we; the, a; in, on, to; is, was, will; and, but, if; '
+             'not and never; very, just, really; all, some, more), in nine groups. For each group, the closer your two shares, the nearer it is to 100. The score is the average '
+             'of the nine. People who are in tune tend to fall into each other\'s way of writing without noticing, so it is a measure of attunement, not of what you write about.</p>'
+             % round(100 * sig['styleMatch'])) if sig.get('styleMatch') is not None else ''
     return ('<h3>You both, in numbers</h3>' + match + table
-            + '<p class="soft">%s messages from %s to %s, about %s a month, %s.</p>' % (_e(sig.get('messages')), _e(sig.get('from')), _e(sig.get('to')), _e(sig.get('perMonth')), _e(sig.get('trend')))
-            + _research('we'))
+            + '<p class="soft">%s messages from %s to %s, about %s a month, %s.</p>' % (_e(sig.get('messages')), _e(sig.get('from')), _e(sig.get('to')), _e(sig.get('perMonth')), _e(sig.get('trend'))))
 
 
 MONTHS = {m: i + 1 for i, m in enumerate(['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])}
@@ -4049,7 +4061,8 @@ def page(box, s):
     inner = ('<span class="badge">Intermission</span><div class="lines" style="margin-top:12px">%s</div>%s%s%s%s'
              % (''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), ('<div class="funfacts">%s</div>' % facts_html) if facts_html else '',
                 (story_ or _months_svg(sig.get('months') or [])), _talk_panel(box, names),
-                ('<h3>%s</h3><ol class="timeline">%s</ol>' % ('More moments' if story_ else 'Your story in moments', line)) if line else ''))
+                ('<h3>%s</h3><ol class="timeline">%s</ol>' % ('More moments' if story_ else 'Your story in moments', line)) if line else '')) \
+        + (_science(['styleMatch', 'we'], folded=True) if sig.get('you') and sig.get('partner') else '')        # release 56: folded, at the end
     part('moments', '✦', im.get('title') or 'Your story in moments', inner, 'intermission', 'A light break', False, COLOURS['moments'])
     inter, inter_nav = parts.pop(), nav.pop()
     parts[parts.index('@@INTERMISSION@@')] = inter
@@ -4093,8 +4106,8 @@ def page(box, s):
     banner = ('<header class="banner love" id="top">%s%s<div class="facts">%s</div><div class="couple">%s<div class="heart"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1">'
               '<stop offset="0" stop-color="#ff7aa2"/><stop offset="1" stop-color="#c2366d"/></linearGradient></defs><path fill="url(#hg)" d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.6 1.1 4.6 2.6l1 1.4 1-1.4C14 6.1 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg></div>%s</div>'
               '<h1>%s <i>&amp;</i> %s</h1><p class="lede">The two of you, read together: how you love, how you disagree and how you grow, from both your Psyches and your own words.</p><div class="sub">%s</div></header>'
-              % (LOGO, hearts, _e(' · '.join(x for x in ['Psyche Together', view.get('stage') or '', ('%d%% confidence' % conf_h) if conf_h is not None else '', ('%s\'s copy' % mine_name) if mine_name else ''] if x)), card('a', names[0], 'l'), card('b', names[1], 'r'), _e(names[0]), _e(names[1]),
-                 _e(' · '.join(x for x in [('Talking since ' + since) if since else '', when] if x))))
+              % (LOGO, hearts, _e(' · '.join(x for x in ['Psyche Together', view.get('stage') or '', ('%s\'s copy' % mine_name) if mine_name else ''] if x)), card('a', names[0], 'l'), card('b', names[1], 'r'), _e(names[0]), _e(names[1]),
+                 _e(' · '.join(x for x in [('%d%% confidence' % conf_h) if conf_h is not None else '', ('Talking since ' + since) if since else '', when] if x))))
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>' if pics else ''
     bar = '<nav aria-label="Sections">%s<button type="button" data-fold>Close all ▲</button></nav>' % ''.join(nav)
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
@@ -4151,7 +4164,7 @@ def end():
 
 
 def forget():
-    for path in (STATE, STATE_KEPT, KEYS, KEYS_KEPT, PENDING):
+    for path in (STATE, STATE_KEPT, KEYS, KEYS_KEPT, PENDING, CHAT_FILE):       # the kept conversation too (release 55)
         try:
             os.remove(path)
         except OSError:
