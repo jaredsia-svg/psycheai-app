@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 55
+RELEASE = 56
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1829,8 +1829,10 @@ def invite():
         return {'error': 'Only the one who started it has the invite.'}
     me = psyche_profile(psyche() or {}).get('name') or 'Your partner'
     link = BASE + '/together#' + k['code']
-    return {'url': link, 'invite': '%s invited you to Psyche Together, a private check-in for the two of you. Paste this into your Muse app: Install the Psyche Together skill from app.psycheai.io/together and join our Psyche Together: %s'
-            % (me, link.replace('https://', '')), 'say': 'Send this to your partner: they paste it into their Muse.'}
+    # README "Invites in two parts": the line for the partner apart from the line they paste, their own request.
+    return {'url': link, 'lead': '%s invited you to Psyche Together, a private check-in for the two of you. Paste the line below into your Muse app.' % me,
+            'invite': 'Install the Psyche Together skill from app.psycheai.io/together and join our Psyche Together: %s' % link.replace('https://', ''),
+            'say': 'Send your partner both lines: they paste the one in the box into their Muse.'}
 
 
 def couple():

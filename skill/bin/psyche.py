@@ -88,7 +88,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 186
+RELEASE = 187
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5304,15 +5304,24 @@ def _my_sync_card():
     return sync_card(kept['report'], kept.get('name') or '') if isinstance(kept.get('report'), dict) else None
 
 
-def invite_text(link, character, name=''):
-    """The invite a friend pastes, as lib/skill.js installPrompt words it, with the locked link. It names
-    the sender ("Jeff got Baymax"), never "I": pasted by the friend, "I got Baymax" read as the friend's
-    own card (README "Invites that name the sender"). The name twice, never a pronoun, since none is asked."""
+def invite_lead(character, name=''):
+    """The line for the friend, as lib/skill.js inviteLead words it (README "Invites in two parts"): who it's from and what
+    to do. It names the sender, never "I", and it isn't pasted: the invite below it is."""
     who = re.sub(r'\s+', ' ', _letters(str(character or '')).strip())[:40]
     nm = re.sub(r'\s+', ' ', _letters(str(name or '')).strip())[:30]
-    lead = ('%s got %s. Get your own Psyche Card and sync with %s by pasting this into your Muse app: ' % (nm, who, nm)) if who and nm else \
-        ('I got %s for my Psyche Card. Get yours now and sync with me by pasting this into your Muse app: ' % who) if who else ''
-    return lead + 'Install %s and generate my Psyche.' % re.sub(r'^https?://', '', link)
+    if who and nm:
+        return '%s got %s on PsycheAI. To make your own Psyche Card and sync with %s, paste the line below into your Muse app.' % (nm, who, nm)
+    return ('A friend got %s on PsycheAI. To make your own Psyche Card and sync, paste the line below into your Muse app.' % who) if who else ''
+
+
+def invite_text(link, character, name=''):
+    """The line a friend pastes, as lib/skill.js installPrompt words it, with the locked link: only their own request,
+    from the familiar install link, then the sync (README "Invites in two parts")."""
+    bare = re.sub(r'^https?://', '', link)
+    host_ = bare.split('/')[0]
+    short = 'psycheai.io/skill' if host_ == 'app.psycheai.io' else host_ + '/install'
+    nm = re.sub(r'\s+', ' ', _letters(str(name or '')).strip())[:30]
+    return 'Install %s and generate my Psyche, then sync with %s: %s' % (short, nm or 'my friend', bare)
 
 
 def e2e_link(post_tool):
@@ -5331,7 +5340,7 @@ def e2e_link(post_tool):
         keep_e2e(code, True)
     build_book()        # My Syncs, empty until a friend syncs, so it's in their Library from the first link
     link = BASE + '/sync#' + code
-    res = {'url': link, 'invite': invite_text(link, card.get('character'), card.get('firstName')), 'note': out.get('note'),
+    res = {'url': link, 'lead': invite_lead(card.get('character'), card.get('firstName')), 'invite': invite_text(link, card.get('character'), card.get('firstName')), 'note': out.get('note'),
            'nextStep': _step('Here\'s your Psyche link and invite: one paste in a friend\'s Muse sets up PsycheAI, makes their Psyche and syncs you. Who should I send it to?',
                              ['Someone else', 'I\'ll share it myself'])}
     if out.get('offerDailyCheck'):
