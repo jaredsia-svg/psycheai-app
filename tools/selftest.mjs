@@ -3891,9 +3891,7 @@ elif a[0] == 'thread':
   // What Muse writes for each person: an opener and a follow-up per pillar, from both Psyches.
   const questionsFor = (task, named) => ({
     openers: Object.fromEntries(task.pillars.map(p => [p, named ? `${task.partner.name} and you meet ${p} in your own ways: ${task.partner.caresBy[0] || 'care'} on one side.` : `About ${p}, in your own ways.`])),
-    followUps: Object.fromEntries(task.pillars.map(p => [p, { q: `When ${p} feels thin, what do you do?`, options: ['I say so', 'I wait', 'I pull back'] }])),
-    know: [{ q: `What does ${task.partner.name} reach for first after a hard week?`, options: ['A long run', 'A quiet book', 'Calling a friend'], answer: 'A quiet book', basis: 'How they recharge, in their report' },
-           { q: `How does ${task.partner.name} most like to spend a Sunday?`, options: ['Out with friends', 'At home, slowly', 'Somewhere new'], answer: 'At home, slowly', basis: 'Their weekends, in their report' }] });
+    followUps: Object.fromEntries(task.pillars.map(p => [p, { q: `When ${p} feels thin, what do you do?`, options: ['I say so', 'I wait', 'I pull back'] }])) });
   tg.noPsyche = JSON.parse((await execFile('python3', [pathx.join(home.a.dir, 'bin', 'together.py'), 'status'], { env: { ...home.a.env,
     PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tg-none-')), PSYCHEAI_SKILL_DIR: '/nonexistent' } })).stdout);
   // Paid (README "Psyche Together, paid on the website"): one tap once paid, never a code.
@@ -3915,22 +3913,13 @@ elif a[0] == 'thread':
   fsx.copyFileSync(pathx.join(home.b.dir, 'bin', 'together.py'), pathx.join(lateDir, 'bin', 'together.py'));
   const runLate = async (...args) => JSON.parse((await execFile('python3', [pathx.join(lateDir, 'bin', 'together.py'), ...args], { cwd: lateDir, env: lateEnv, timeout: 60000 })).stdout);
   tg.invited = await run.a('answer', 'stage', 'Married');
-  tg.threads = await run.a('threads');
-  tg.pickRead = await run.a('pick-thread', 'Ana Lim');
+  // Mei's questions straight away (README "Psyche Together, release 61"): from her own Psyche, before Ana has joined.
+  tg.questionsA = await run.a('questions');
+  tg.statusA = tg.questionsA;
+  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.questionsA, false)));
+  tg.formA = await run.a('save-questions', '@work/together-questions.json');
   tg.linkAgain = await run.a('link');
   tg.picked = tg.invited;
-  const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
-  fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
-  tg.waAdded = await run.a('chat-file', wa);
-  // A Psyche Together picked before release 21 (no igRetried): status reads the Instagram chat again once, adding nothing twice.
-  const stA = pathx.join(home.a.dir, 'state.json'), chatA = pathx.join(home.a.dir, 'chat.json');
-  const before = JSON.parse(fsx.readFileSync(chatA, 'utf8')).messages.length;
-  const old = JSON.parse(fsx.readFileSync(stA, 'utf8'));
-  delete old.igRetried; delete old.pickedThread; delete old.igCount;
-  fsx.writeFileSync(stA, JSON.stringify(old));
-  tg.reread = await run.a('status');
-  tg.rereadState = JSON.parse(fsx.readFileSync(stA, 'utf8'));
-  tg.rereadCounts = [before, JSON.parse(fsx.readFileSync(chatA, 'utf8')).messages.length];
   tg.staged = tg.picked;
   tg.join = await run.b('join', tg.picked.invite.url);
   tg.joinAgain = await run.b('join', tg.picked.invite.url);
@@ -3957,8 +3946,6 @@ elif a[0] == 'thread':
   await runSolo('end');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, false)));
   tg.badQ = await run.b('save-questions', '@work/together-questions.json');
-  fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify({ ...questionsFor(tg.join, true), know: [{ q: 'What does Mei like most?', options: ['Tea', 'Coffee', 'Juice'], answer: 'Water', basis: 'x' }] }));
-  tg.noKnowQ = await run.b('save-questions', '@work/together-questions.json');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.join, true)));
   tg.formB = await run.b('save-questions', '@work/together-questions.json');
   const Whtml = String(tg.formB.widget || '');
@@ -3980,14 +3967,12 @@ elif a[0] == 'thread':
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'needs', title: 'Your needs', detail: 'They count too.', howToRaise: 'Can we talk?' }], practice: 'An evening for you.' }));
   tg.gentleRefused = await run.b('save-foryou', '@work/together-foryou.json');
   fsx.writeFileSync(pathx.join(home.b.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'needs', title: 'Your needs', detail: 'They count too.' }], practice: 'An evening for you.' }));
-  tg.waitB = await run.b('save-foryou', '@work/together-foryou.json');
+  tg.offerB = await run.b('save-foryou', '@work/together-foryou.json');
+  tg.waitB = await run.b('skip-chat');
   tg.remindB = await run.b('remind');
   tg.waitB2 = await run.b('status');
   // Mei's reminder: Ana has joined, so her questions come ready to write.
   tg.checkA1 = await run.a('check');
-  tg.statusA = tg.checkA1;
-  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-questions.json'), JSON.stringify(questionsFor(tg.checkA1, true)));
-  tg.formA = await run.a('save-questions', '@work/together-questions.json');
   tg.checkA2 = await run.a('check');
   tg.askedA = [];
   let q = await run.a('next');
@@ -3997,7 +3982,23 @@ elif a[0] == 'thread':
   }
   tg.foryouA = q;
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'disagreements', title: 'One question first', detail: 'You argue a case.', howToRaise: 'I want to hear you out first.' }], practice: 'Ask before you answer.' }));
-  tg.write = await run.a('save-foryou', '@work/together-foryou.json');
+  // Ana skipped the chat, so Mei is offered it after her check-in; she adds Instagram, then WhatsApp, and the read follows.
+  tg.offerA = await run.a('save-foryou', '@work/together-foryou.json');
+  tg.threads = await run.a('threads');
+  tg.pickRead = await run.a('pick-thread', 'Ana Lim');
+  const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
+  fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
+  tg.waAdded = await run.a('chat-file', wa);
+  // A Psyche Together picked before release 21 (no igRetried): status reads the Instagram chat again once, adding nothing twice.
+  const stA = pathx.join(home.a.dir, 'state.json'), chatA = pathx.join(home.a.dir, 'chat.json');
+  const before = JSON.parse(fsx.readFileSync(chatA, 'utf8')).messages.length;
+  const old = JSON.parse(fsx.readFileSync(stA, 'utf8'));
+  delete old.igRetried; delete old.pickedThread; delete old.igCount;
+  fsx.writeFileSync(stA, JSON.stringify(old));
+  tg.reread = await run.a('status');
+  tg.rereadState = JSON.parse(fsx.readFileSync(stA, 'utf8'));
+  tg.rereadCounts = [before, JSON.parse(fsx.readFileSync(chatA, 'utf8')).messages.length];
+  tg.write = tg.reread;
   const stateA = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'state.json'), 'utf8'));
   const view = tg.write.coupleView || { pillars: {}, decisions: [] };
   const worth = Object.keys(view.pillars).filter(p => view.pillars[p] === 'Worth attention');
@@ -4136,16 +4137,14 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
     JSON.stringify([tg.join.short, tg.formB.widgetFile, tg.waitB.setCheck]));
   const orderA = tg.askedA.map(x => x.id);
   const chapterOf = id => /^overall:/.test(id) ? 0 : /^(core|deep):(appreciation|connection|desire)$|^mirror:(appreciated|stress):/.test(id) ? 1 : /^(core|deep):(needs|life)$/.test(id) ? 2 : /^(core|deep):(future|growth)$|^decide:|^dream:self$/.test(id) ? 3 : /^(core|deep):security$|^commit:self$/.test(id) ? 4 : /^(core|deep):disagreements$|^topic:disagree$|^mirror:repair:/.test(id) ? 5 : /^know:/.test(id) ? 6 : 7;
-  check('two questions about your partner, from their own report and never confirmed (README "Psyche Together, releases 40 and 41"); the questions in the read\'s order, overall first, then 01 to 05, the private one last, each marked with its chapter; two follow-ups at most; save-questions refuses a question without its answer; the couple total and the right answers are shared, each one\'s own count only on their own copy and never to the writer, never on the gentle path',
-    tg.noKnowQ.saved === false && tg.noKnowQ.problems.some(p => /^know: exactly two questions about Mei/.test(p)) &&
-      tg.askedA.some(x => x.id === 'know:1' && x.kind === 'know' && x.buttons.length === 3) && !orderA.some(id => /^me:/.test(id)) &&
-      orderA[0] === 'overall:you' && orderA[orderA.length - 1] === 'safety' && orderA[orderA.length - 2] === 'know:2' && orderA[orderA.length - 3] === 'know:1' && orderA.every((id, n) => n === 0 || chapterOf(orderA[n - 1]) <= chapterOf(id)) &&
+  check('no questions testing how well they know each other (README "Psyche Together, release 61": they needed the partner\'s report, so the one who starts had to wait); the questions in the read\'s order, overall first, then 01 to 05, the private one last, each marked with its chapter; two follow-ups at most; the read has no Knowing each other area',
+    !orderA.some(id => /^know:|^me:/.test(id)) && tg.askedA.every(x => x.kind !== 'know') &&
+      orderA[0] === 'overall:you' && orderA[orderA.length - 1] === 'safety' && orderA.every((id, n) => n === 0 || chapterOf(orderA[n - 1]) <= chapterOf(id)) &&
       orderA.indexOf('core:future') < orderA.indexOf('decide:money') && orderA.filter(id => /^deep:/.test(id)).length <= 2 &&
-      /<span class="chip">01 Care &amp; Connection · How well you know Ana<\/span>/.test(String(tg.formA.widget || '')) && /<span class="chip">05 Conflict &amp; Repair · /.test(String(tg.formA.widget || '')) && /"followMax": 2/.test(String(tg.formA.widget || '')) &&
-      view.know && view.know.items.length === 4 && view.know.of === 2 && !('knowBy' in view) && view.know.items.some(x => x.about === 'Mei' && x.answer === 'A quiet book') &&
-      /<div class="area" id="close-know"><div class="at"><b>Knowing each other<\/b><span class="lv (Aligned|Steady|Talk-about)">[012] of 2<\/span>/.test(htmlA) && /Worth knowing about each other/.test(htmlA) && /You knew [012] of 2 about Ana\./.test(htmlA) &&
-      /<span class="tl (Aligned|Steady)"><small>Knowing each other<\/small><b>[012] of 2<\/b><\/span>/.test(htmlA) && !/You knew/.test(htmlB) && /id="close-know"/.test(htmlB),
-    JSON.stringify([tg.noKnowQ.problems, view.know, orderA]).slice(0, 900));
+      /<span class="chip">05 Conflict &amp; Repair · /.test(String(tg.formA.widget || '')) && /"followMax": 2/.test(String(tg.formA.widget || '')) && !/How well you know/.test(String(tg.formA.widget || '')) &&
+      !(view.know && (view.know.items || []).length) && !/id="close-know"/.test(htmlA) && !/You knew/.test(htmlA + htmlB) &&
+      !/know/.test(JSON.stringify(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSchema)) && !/`know`/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec),
+    JSON.stringify([view.know, orderA]).slice(0, 900));
   // The same couple as if Ana hadn't taken the gentle path: her topic and how sure she is go too (README "Psyche Together, release 48").
   const full = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
 import importlib.util, json
@@ -4240,8 +4239,9 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
     /function restore\(\)/.test(Whtml) && /input\[type=radio\]:checked/.test(Whtml) && /setTimeout\(restore,1200\)/.test(Whtml) && /id="c-intro"/.test(Whtml) &&
       W.items.filter(x => /^deep:/.test(x.id)).every(x => x.options[x.options.length - 1] === 'Something else') && W.items.filter(x => /^core:/.test(x.id)).every(x => !x.options.includes('Something else')) &&
       /<textarea class="own" data-for="deep:/.test(Whtml) && !/overflow:auto/.test(Whtml), '');
-  check('the last one in gets the read\'s task beside For you\'s, so both are written at once; the guide lists what For you\'s and the read\'s saves check; Instagram is read for 25 seconds at most; replies are shown as a share within 5 minutes',
-    tg.foryouA.readTask === 'work/together-read-task.json' && !tg.sentB.readTask &&
+  check('the last one in gets the read\'s task beside For you\'s, so both are written at once, unless their conversation is still to be offered (the read waits for that); the guide lists what For you\'s and the read\'s saves check; Instagram is read for 25 seconds at most; replies are shown as a share within 5 minutes',
+    !tg.foryouA.readTask && !tg.sentB.readTask && /out\['readTask'\] = write_task\(profiles\)\.get\('task'\)/.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) &&
+      /and not chat_offer_due\(s, profiles\)\):\n\s+out\['readTask'\]/.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) &&
       /What save-foryou checks/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).forYouSpec) &&
       /What save checks/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).readSpec) &&
       /^IG_SECONDS = 25 /m.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) &&
@@ -4256,26 +4256,35 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       /\*\*"Make my Psyche first":\*\* the PsycheAI skill's first run/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.pendingJoin.joined === true && tg.pendingJoin.write === 'questions' && tg.pendingGone === true, JSON.stringify([tg.pending, tg.pendingJoin]));
   check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their full report and their conversation together go to their partner, locked, and nothing from other chats',
-    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report and your Psyche Card picture go to your partner's Muse, locked/.test(tg.start.consent || '') && /The one who starts it adds your conversation together/.test(tg.start.consent || '') && /Nothing from chats with anyone else is read/.test(tg.start.consent || '') &&
+    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report and your Psyche Card picture go to your partner's Muse, locked/.test(tg.start.consent || '') && /After your check-in, either of you can add your conversation together/.test(tg.start.consent || '') && /Nothing from chats with anyone else is read/.test(tg.start.consent || '') &&
       /"<the invite's from> invited you to Psyche Together, a private check-in for the two of you\. Paste the line below into your Muse app\."/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).url || '') &&
-      /Highly recommended while you wait/.test(tg.pickRead.whatsapp || '') && JSON.stringify(tg.pickRead.buttons) === '["Add our WhatsApp chat","Has my partner joined?","Remind me here"]' &&
       /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || ''),
     JSON.stringify([tg.start, tg.staged]).slice(0, 400));
   check('the partner joins once, sees the consent line, and goes straight to their questions: no stage question, their partner named from the other Psyche, the stage from the one who started',
     tg.join.joined && tg.join.write === 'questions' && tg.join.partner.name === 'Mei' && tg.join.stage === 'Married' && tg.join.pillars.length === 8 &&
-      /already/.test(tg.joinAgain.error || '') && tg.statusA.write === 'questions' && tg.statusA.partner.name === 'Ana', JSON.stringify(tg.join).slice(0, 300));
+      /already/.test(tg.joinAgain.error || '') &&
+      // The one who starts gets their questions at once (README "Psyche Together, release 61"): from their own Psyche, before the partner has joined.
+      tg.invited.questionsNext === true && tg.statusA.write === 'questions' && tg.statusA.partner === null && tg.statusA.partnerReport === null && tg.statusA.yourReport &&
+      /written from your Psyche/.test(tg.formA.say || '') && /You &amp; your partner/.test(String(tg.formA.widget || '')) && /How often do you feel appreciated by your partner\?/.test(String(tg.formA.widget || '')) &&
+      /If it has `questionsNext`, their questions come next, in the same turn: `python3 bin\/together\.py questions`/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
+      /When `partner` is null \(they haven't joined yet/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec), JSON.stringify(tg.join).slice(0, 300));
   check('Muse\'s openers must name the partner in at least half, and each pillar needs an opener and a follow-up; then the questions come back as ONE widget built here, on its own white, one question at a time with Back and a progress bar, the opener and the question in the same ink, the private question marked, real radio buttons and one answers field, no storage, and "Submit my answers" as a button under it',
     tg.badQ.saved === false && tg.badQ.problems.some(p => /name Mei/.test(p)) && W.items.length >= 10 && /You &amp; Mei/.test(Whtml) &&
       /html,body\{margin:0;padding:0;background:#fff\}/.test(Whtml) && /\.opener\{[^}]*color:var\(--ink\)/.test(Whtml) && /Mei and you meet appreciation/.test(Whtml) &&
       /How often do you feel appreciated by Mei\?/.test(Whtml) && /Private · never shared/.test(Whtml) && /<input type="radio" name="core:appreciation" value="Often">/.test(Whtml) &&
       /name="psyche-together-answers"/.test(Whtml) && /‹ Back/.test(Whtml) && !/localStorage|sessionStorage|BroadcastChannel/.test(Whtml) &&
       JSON.stringify(tg.formB.buttons) === '["Submit my answers"]' && W.certain.length <= 4 && !Whtml.includes('Ana Lim'), Whtml.slice(0, 300));
-  check('the reminder does the work: when the partner has joined, it gives the questions to write and show ("Ana has joined Psyche Together. Here are your questions."); quiet while they answer; when the read is ready, the page itself ("Mei has finished"); then quiet, staying on for the check-in again',
-    tg.checkA1.write === 'questions' && /Ana has joined Psyche Together\. Here are your questions\./.test(tg.checkA1.say || '') && tg.checkA2.quiet === true &&
+  check('the reminder does the work: quiet while they answer (the questions came at once), and the partner\'s name used once they\'ve joined; when the read is ready, the page itself ("Mei has finished"); then quiet, staying on for the check-in again',
+    tg.checkA1.quiet === true && tg.checkA2.quiet === true && /How often do you feel appreciated by Ana\?$/.test(tg.askedA[2].say) &&
       tg.checkB2.file && /Mei has finished\. Here's your Psyche Together\./.test(tg.checkB2.say || '') && tg.checkA3.quiet === true && !tg.checkA3.done && tg.checkB3.quiet === true && !tg.checkB3.done,
     JSON.stringify([tg.checkA1.say, tg.checkA2, tg.checkB2.say, tg.checkA3, tg.checkB3]));
-  check('each person\'s For you is written right after they submit, from their answers, their full report and their partner\'s card; the first one in then waits with a button, the last one in goes straight on to write the read, and the page follows its save',
-    tg.sentB.write === 'foryou' && tg.sentB.yourReport && tg.sentB.partner && tg.sentB.partner.name === 'Mei' && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?","Remind me here"]' &&
+  check('each person\'s For you is written right after they submit, from their answers, their full report and their partner\'s card; then their conversation is offered (Instagram, WhatsApp or Skip) until one of them adds it, and the read waits for that answer; the first one in then waits with a button, the last one in goes on to write the read, and the page follows its save (README "Psyche Together, release 61")',
+    tg.sentB.write === 'foryou' && tg.sentB.yourReport && tg.sentB.partner && tg.sentB.partner.name === 'Mei' &&
+      // Ana is on the gentle path (she said she sometimes feels unsafe): she isn't asked for their conversation; Mei is.
+      !tg.offerB.chatOffer && tg.offerB.waiting === true && tg.offerA.chatOffer === true && JSON.stringify(tg.offerA.buttons) === '["Add our Instagram chat","Add our WhatsApp chat","Skip"]' &&
+      /and not is_gentle\(s\)/.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) &&
+      tg.pickRead.write === 'read' && /^Added\./.test(tg.pickRead.say || '') && tg.waAdded.write === 'read' && /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || '') &&
+      /\*\*When a result has `chatOffer`\*\*/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?","Remind me here"]' &&
       // The reminder is theirs to ask for (README "Psyche Together, release 57"): once set, it isn't offered again.
       tg.remindB.setReminder && tg.remindB.setReminder.name === 'Psyche Together check' && tg.remindB.setReminder.task === 'In ~/workspace/skills/psyche-together, run python3 bin/together.py check and show what it gives. When it says done, remove this reminder.' &&
       !((tg.waitB2.buttons || []).includes('Remind me here')) &&
@@ -4285,7 +4294,7 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
     tg.badAnswer.saved === false && /isn't one of its options/.test(JSON.stringify(tg.badAnswer.problems)) && tg.partial.missing === true && tg.partial.next.id === 'safety' &&
       tg.partial.next.private === true && tg.sentB.write === 'foryou' && /another set of questions/.test(tg.wrongForm.error || ''), JSON.stringify([tg.partial, tg.sentB]).slice(0, 400));
   check('in the chat the same questions come one at a time, each pillar\'s opener first, the core question\'s options fixed, a follow-up only where it helps (two at most), "Difficult" for needs, "this relationship" for security',
-    tg.askedA[2].id === 'core:appreciation' && /^Ana and you meet appreciation/.test(tg.askedA[2].say) && /How often do you feel appreciated by Ana\?$/.test(tg.askedA[2].say) &&
+    tg.askedA[2].id === 'core:appreciation' && /^About appreciation, in your own ways\./.test(tg.askedA[2].say) && /How often do you feel appreciated by Ana\?$/.test(tg.askedA[2].say) &&
       tg.askedA.filter(x => x.kind === 'deeper').length <= 2 && tg.askedA.some(x => x.id === 'safety' && x.private) &&
       tg.askedA.find(x => x.id === 'core:needs').buttons.includes('Difficult') && /in this relationship for the long run/.test(tg.askedA.find(x => x.id === 'core:security').say) &&
       tg.askedA.filter(x => x.kind === 'decision').map(x => x.id).join() === 'decide:more_children,decide:money,decide:place,decide:parents' && !tg.askedA.some(x => x.id === 'stage'),
@@ -4312,14 +4321,11 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       people.length === 2 && people.every(p => p.report && p.report.attachment) && people[0].chat && people[0].chat.sample.length > 10 &&
       !/"core"|safety|deep:/.test(JSON.stringify(tg.write)) && view.decisions.length === 4 && !('spec' in tg.write) && tg.write.saveTo === 'work/together-read.json',
     JSON.stringify(view).slice(0, 400));
-  check('the invite comes first, then the conversation (README "Psyche Together, release 59"): answering the stage gives the invite and, in the same reply, their own one-to-one Instagram chats as buttons (groups left out), before any message is read; picking one reads it and adds it, locked, with a short reply that has no link, no install line and no count; the partner has no chat step, and neither person\'s questions use the conversation, only the two reports; the read still has it',
-    tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && /^Which of your Instagram chats is with your partner\?/.test(tg.threads.ask || '') &&
-      // The invite and the list of their chats are never in one result (README "Psyche Together, release 60"): the stage gives the invite alone, and threads the chats.
-      tg.invited.invite && tg.invited.invite.from === 'Mei' && tg.invited.chatNext === true && !('buttons' in tg.invited) && !('pickThread' in tg.invited) && !('say' in tg.invited.invite) && !('invite' in tg.threads) &&
-      /If it has `chatNext`, run `python3 bin\/together\.py threads` in the same turn and end that same message with its `ask` and its buttons/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
-      tg.pickRead.setCheck === true && /^Added\. I'll tell you here when your partner joins/.test(tg.pickRead.say || '') && !/together#|Install|messages from/.test(JSON.stringify(tg.pickRead)) && !('invite' in tg.pickRead) &&
-      tg.linkAgain.from === 'Mei' && !('setCheck' in tg.linkAgain) &&
-      !/Show my invite/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
+  check('the invite first, the questions straight after, the conversation after the check-in (README "Psyche Together, releases 60 and 61"): answering the stage gives the invite alone, with no list of people; the chat is offered only once their own check-in is done, as their own Instagram chats from threads, and picking one reads it and adds it, locked, with no link, no install line and no count in the result; neither person\'s questions use the conversation, only the reports; the read has it',
+    tg.invited.invite && tg.invited.invite.from === 'Mei' && tg.invited.questionsNext === true && !('buttons' in tg.invited) && !('pickThread' in tg.invited) && !('say' in tg.invited.invite) && !('chatNext' in tg.invited) &&
+      tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && /^Which of your Instagram chats is with your partner\?/.test(tg.threads.ask || '') && !('invite' in tg.threads) &&
+      !/together#|Install|messages from/.test(JSON.stringify(tg.pickRead.short || tg.pickRead)) && !('invite' in tg.pickRead) && tg.linkAgain.from === 'Mei' &&
+      !/Show my invite|chatNext/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.join.write === 'questions' && !('yourChat' in tg.join) && !('yourChat' in tg.statusA) && tg.questionTaskB && !('yourChat' in tg.questionTaskB) && 'partnerReport' in tg.questionTaskB && !/yourChat/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       /Openers and follow-ups come from the two Psyche reports only/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec) &&
       people.filter(p => p.chat).length === 1 && people[0].chat.signals.messages === 120,
@@ -4360,8 +4366,8 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
     JSON.stringify([tg.rewrite.say, tg.rewritten.summary, tg.checkBagain.say]));
   check('how this was read states every source with its count (each Psyche and what it was read from, the conversation by source with its dates and how much was read in full, the check-ins) and a confidence score worked out here, as the Psyche Report and Sync show one: half the weaker Psyche, half the couple\'s own evidence, at most 90',
     /class="conf2"/.test(htmlA) && /confidence · (high|moderate|low|very low)/.test(htmlA) && /Mei's Psyche Report<\/b>: read from 200 posts and stories, 900 own messages/.test(htmlA) &&
-      /Your conversation together<\/b>: 120 messages \(Instagram 80 · WhatsApp 40\)/.test(htmlA) && /of them, about [\d,]+ characters, read in full/.test(htmlA) && /Your check-ins<\/b>: the same 8 questions on your relationship for each of you, answered privately, how satisfied you each are and think the other is, 4 big decisions side by side and 2 guesses about each other/.test(htmlA) &&
-      /<span>Your conversation<\/span>/.test(htmlA), (htmlA.match(/<div class="conf2">[\s\S]{0,900}/) || [''])[0]);
+      /Your conversation together<\/b>: 120 messages \(Instagram 80 · WhatsApp 40\)/.test(htmlA) && /of them, about [\d,]+ characters, read in full/.test(htmlA) && /Your check-ins<\/b>: the same 8 questions on your relationship for each of you, answered privately, how satisfied you each are and think the other is(,| and) 4 big decisions side by side/.test(htmlA) && !/guesses about each other/.test(htmlA) &&
+      /<span>Your conversation<\/span>/.test(htmlA), (htmlA.match(/Your check-ins<\/b>[^<]*/) || [''])[0]);
   check('the page\'s buttons never offer to end it (Ask about our read, Our 28-day practice, Write our read again, Done); the page says how, with "End Psyche Together" to copy',
     JSON.stringify(tg.saved.buttons) === '["Ask about our read","Our 28-day practice","Write our read again","Done"]' && /<code>End Psyche Together<\/code><button type="button" data-copy="End Psyche Together">Copy<\/button>/.test(htmlA) &&
       /End is never offered as a button/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')), JSON.stringify(tg.saved.buttons));
