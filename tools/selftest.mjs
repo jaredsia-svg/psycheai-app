@@ -810,7 +810,7 @@ function signup(email, d) {
     /MESSAGES FIRST then runs for "Include my messages" on an account whose messages aren't connected, and decides what comes next/.test(core) && (core.match(/Your messages are where you're most yourself/g) || []).length === 1 && /Your messages are where you're most yourself/.test(core) && !/message your matches straight from here/.test(core));
   check('Sync starts from the user\'s own link, is written from PsycheAI\'s guide, never as JSON or a score, and a No is never told',
     /up to 10 of the people they message most on Instagram, from their own messages, as buttons by name/.test(core) && /When they tap a name, send that person two Instagram messages, the lead, then the invite on its own, say in one line who it went to/.test(core) && /never send them to PsycheAI/.test(core) && /don't ask again what they just chose/.test(core) && /never retell it in the chat, never show the JSON, and no score/.test(core) && /call save_sync with it/.test(core) &&
-      /"Sync with a friend": call sync_link/.test(core) && /A Psyche link someone sent them \(app\.psycheai\.io\/sync\/…\): it never syncs on its own\..*What's next starts with one more button, "Sync with <the friend's first name>".*A Sync happens only when they choose it: on that tap, call sync_with with link \(with the skill: python3 bin\/psyche\.py sync-with, which uses the link sync-preview kept, or sync-with <the link>\)\. With the skill and a link with # in it, its result also has what get_sync gives, so write the Sync from it and save it as its save line says, with nothing to look up first; otherwise call get_sync with the sync id it returns/.test(core) &&
+      /"Sync with a friend": call sync_link/.test(core) && /A Psyche link someone sent them \(app\.psycheai\.io\/sync\/…\): it never syncs on its own\..*What's next starts with one more button, "Sync with <the friend's first name>".*A Sync happens only when they choose it: on that tap, call sync_with with link \(with the skill: python3 bin\/psyche\.py sync-with, which uses the link sync-preview kept, or sync-with <the link>\)\. With the skill and a link with # in it, its result also has what get_sync gives \(write: "sync" and its task file\), so write the Sync from it and save it as the skill says, with nothing to look up first; otherwise call get_sync with the sync id it returns/.test(core) &&
       /Syncing is the one thing that shares, so it's said when they choose it: .*"Syncing shares your Psyche Card's few lines, motivation scores and daily rhythm \(when in the day you post and message\) with the friends you sync with, locked on your device so PsycheAI can't read them: never your report or your messages\."/.test(core) && /go straight on as below, with no question and no extra tap/.test(core) && !/with the buttons "Sync" and "Not now"/.test(core) &&
       /PsycheAI never takes a handle/.test(core) && /never dating, and nothing to do with Psyche Pair/.test(core) && /call get_syncs once/.test(core));
   check('a friend\'s Psyche link with a Psyche already kept goes straight to the Sync (no welcome, no new read), a Sync from a friend\'s link offers to let them know on Instagram, and the morning check is set with a line, not a question',
@@ -2124,7 +2124,9 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         E.ownPreview = await mei('sync-preview', E.link.url);
         E.listBefore = await mei('call', 'get_syncs', '{}');
         E.joined = await ana('call', 'sync_with', JSON.stringify({ link: E.invite = E.link.invite }));
+        E.joinedTask = (f => fsx.existsSync(f) ? JSON.parse(fsx.readFileSync(f, 'utf8')) : null)(pathx.join(ana.dir, 'work', 'sync-task.json'));
         E.toWrite = await ana('call', 'get_sync', JSON.stringify({ sync: E.joined.sync }));
+        E.toWriteTask = (f => fsx.existsSync(f) ? JSON.parse(fsx.readFileSync(f, 'utf8')) : null)(pathx.join(ana.dir, 'work', 'sync-task.json'));
         const syncAnswer = { mode: 'platonic', summary: 'Mei plans and Ana sparks: weekends you both remember.',
           align: [{ title: 'Care by doing', detail: 'Mei hosts and Ana fixes.', evidence: ['Mei: Craft'] }, { title: 'A small circle', detail: 'Both keep old friends close.', evidence: [] }],
           differ: [{ title: 'Different paces', detail: 'Mei plans early and Ana late.', evidence: [] }],
@@ -2134,7 +2136,7 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         fsx.mkdirSync(pathx.join(ana.dir, 'work'), { recursive: true });
         fsx.writeFileSync(pathx.join(ana.dir, 'work', 'sync-answer.json'), JSON.stringify({ sync: E.joined.sync, answer: syncAnswer }));
         E.saved = await ana('call', 'save_sync', '@' + pathx.join(ana.dir, 'work', 'sync-answer.json'));
-        E.answerGone = !fsx.existsSync(pathx.join(ana.dir, 'work', 'sync-answer.json'));
+        E.answerGone = !fsx.existsSync(pathx.join(ana.dir, 'work', 'sync-answer.json')) && !fsx.existsSync(pathx.join(ana.dir, 'work', 'sync-task.json'));
         E.bad = await ana('call', 'save_sync', JSON.stringify({ sync: E.joined.sync, answer: { ...syncAnswer, summary: 'A clash of styles.' } }));
         E.check = await mei('call', 'get_syncs', JSON.stringify({ check: true }));
         E.checkPage = E.check.file && fsx.existsSync(E.check.file) ? fsx.readFileSync(E.check.file, 'utf8') : '';
@@ -2282,12 +2284,17 @@ print(json.dumps({'fine': m.answer_problems(fine),
     open(d + '/sources/whatsapp.txt', 'w').write('> Friend: dinner at 7?\\n2024-02-02 19:00 On my way\\n'), m.drop_context(),
     [open(d + '/digest/digest.md').read(), open(d + '/sources/whatsapp.txt').read(), oct(os.stat(d + '/digest/digest.md').st_mode & 0o777)])[-1])(tempfile.mkdtemp()),
   'rhythm': [m.rhythm([('2025-06-0%d' % (1 + i % 7), [23, 0, 22, 13][i % 4]) for i in range(40)]), m.rhythm([('2025-06-01', 9)] * 10)],
-  'conf': (lambda d: (setattr(m, 'DIGEST', d + '/digest.md'), setattr(m, 'SOURCES', d + '/sources'), os.makedirs(d + '/sources'),
-    open(d + '/digest.md', 'w').write('# Psyche digest\\nbuilt: 2026-10-30 · messages: included · sources: instagram · last: 2026-10-29\\n'),
+  'conf': (lambda d, own=''.join('2025-01-%02d 10:00 [post] a caption of my own words long enough to count for something here\\n' % (1 + k % 28) for k in range(40)): (setattr(m, 'DIGEST', d + '/digest.md'), setattr(m, 'SOURCES', d + '/sources'), os.makedirs(d + '/sources'),
+    open(d + '/digest.md', 'w').write('# Psyche digest\\nbuilt: 2026-10-30 · messages: included · sources: instagram · last: 2026-10-29\\n' + own),
     [m.confidence_problems({'confidence': {'score': 82, 'level': 'high'}}), m.confidence_problems({'confidence': {'score': 79, 'level': 'high'}}),
      m.confidence_problems({'confidence': {'score': 72, 'level': 'high'}})] +
-    [open(d + '/digest.md', 'w').write('# Psyche digest\\nsources: instagram, facebook, messenger · last: 2026-10-29\\n') and m.confidence_problems({'confidence': {'score': 84, 'level': 'high'}})] +
-    [open(d + '/sources/whatsapp.txt', 'w').write('x') and m.confidence_problems({'confidence': {'score': 90, 'level': 'high'}}), m.confidence_problems({'confidence': {'score': 91, 'level': 'high'}})])[-1])(tempfile.mkdtemp()),
+    [open(d + '/digest.md', 'w').write('# Psyche digest\\nsources: instagram, facebook, messenger · last: 2026-10-29\\n' + own) and m.confidence_problems({'confidence': {'score': 84, 'level': 'high'}})] +
+    [open(d + '/sources/whatsapp.txt', 'w').write('# Chat 1: a one-to-one chat\\n') and m.confidence_problems({'confidence': {'score': 90, 'level': 'high'}}), m.confidence_problems({'confidence': {'score': 91, 'level': 'high'}})] +
+    # README "Confidence counts what was read": a post and a few messages of their own don't make Instagram a source.
+    [open(d + '/digest.md', 'w').write('# Psyche digest\\nsources: instagram\\n2025-01-01 10:00 [post] one post\\n') and m.confidence_problems({'confidence': {'score': 80, 'level': 'high'}}),
+     m.confidence_problems({'confidence': {'score': 64, 'level': 'moderate'}}),
+     open(d + '/digest.md', 'w').write('# Psyche digest\\nsources: instagram\\n' + own) and m.confidence_problems({'confidence': {'score': 84, 'level': 'high'}}),
+     open(d + '/sources/whatsapp.txt', 'w').write('# Chat 1: a one-to-one chat\\n\\n# Chat 2: a one-to-one chat\\n') and m.confidence_problems({'confidence': {'score': 86, 'level': 'high'}})])[-1])(tempfile.mkdtemp()),
   'fetch': (lambda: (setattr(m, 'BASE', 'https://app.psycheai.io'), [m.fetchable(u) for u in ['https://psycheai.io/report-pdf?m=a#k', 'https://app.psycheai.io/card/x.png', 'https://evil.example/x.png', 'http://psycheai.io/x', 'file:///etc/passwd', 'https://psycheai.io.evil.example/x']])[-1])()}))`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...process.env, PSYCHEAI_BASE: base, PSYCHEAI_HOME: keep, NO_PROXY: '*', no_proxy: '*' }, timeout: 30000 })).stdout);
       skillState.forgetAll = await run('forget', '--everything');
       skillState.keysGone = !fsx.existsSync(pathx.join(dir, '.keys.json')) && !fsx.existsSync(pathx.join(keep, 'keys.json'));
@@ -2438,8 +2445,11 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
       ((E) => E && E.preview && E.preview.own === false && E.preview.with === 'Mei' && E.preview.character === 'Mulan' && E.preview.hasPsyche === true &&
         E.preview.nextStep && E.preview.nextStep.say === 'Mei sent you their Psyche link. You already have your Psyche, so you can sync straight away.' && JSON.stringify(E.preview.nextStep.buttons) === '["Sync with Mei","Not now"]' &&
         E.ownPreview && E.ownPreview.own === true && /your own Psyche link/.test(E.ownPreview.nextStep.say) && !(E.listBefore.syncs || []).length &&
-        E.joined.status === 'synced' && E.joined.with === 'Mei' && E.joined.personA && E.joined.personB && E.joined.derivedFacts && E.joined.schema && !('next' in E.joined) &&
-        /call save_sync @work\/sync-answer\.json/.test(E.joined.save || '') && /incompatible/.test(E.joined.save) && E.answerGone &&
+        // A Sync's data in a file (README "A Sync's data in a file"): the result is as small as sync-preview's, with no guide, task or save command.
+        E.joined.status === 'synced' && E.joined.with === 'Mei' && E.joined.write === 'sync' && E.joined.task === 'work/sync-task.json' && JSON.stringify(E.joined).length < 300 &&
+        !['personA', 'personB', 'derivedFacts', 'schema', 'spec', 'save', 'next'].some(k => k in E.joined) && !/save_sync|python3|Write the Sync/.test(JSON.stringify(E.joined)) &&
+        E.joinedTask && E.joinedTask.personA && E.joinedTask.personB && E.joinedTask.derivedFacts && E.joinedTask.sync === E.joined.sync && !/save_sync|python3/.test(JSON.stringify(E.joinedTask)) &&
+        /\*\*Writing a Sync\*\*[^\n]*then run `python3 bin\/psyche\.py call save_sync @work\/sync-answer\.json`[^\n]*incompatible/.test(skillMd) && E.answerGone &&
         E.check.quiet === false && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.check.file || '') && JSON.stringify(E.check.buttons) === '["Sync with someone new","Done"]' && E.check.sync === E.list.syncs[0].sync &&
         /Mei plans and Ana sparks/.test(E.checkPage) &&
         E.early.length === 1 && /<b>No Syncs yet\.<\/b> When a friend syncs with you, they'll appear here\./.test(E.early[0]) && !/class="sbk"/.test(E.early[0]) && E.anaEarly === 0 &&
@@ -2525,8 +2535,8 @@ print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'say': m.THIN_SAY, 'li
     }
     check('Sync, locked on the device (README "Sync, locked on the device"): a link made here carries its code after "#", a friend syncs, writes and saves, the other side reads it by name with the tips the right way round and a page of its own, the morning check names them, a banned word comes back to fix, and nothing readable (no name, card text, summary or code) is kept on the server',
       ((E) => E && E.code && /^http:\/\/127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.url) && /^([^.]{1,30}) got Mulan on PsycheAI\. To make your own Psyche Card and sync with \1, paste the line below into your Muse app\.$/.test(E.link.lead) && /^Install 127\.0\.0\.1:\d+\/install and generate my Psyche, then sync with [^:]{1,30}: 127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.invite) &&
-        E.link.offerDailyCheck === true && E.link.nextStep && E.joined.status === 'synced' && E.joined.with === 'Mei' && E.toWrite.spec && E.toWrite.personB.name === 'Mei' && E.toWrite.personA.name === 'Ana' &&
-        !('motives' in E.toWrite.personA) && /Interests in common \(exact matches only\): Reading/.test(E.toWrite.derivedFacts) && /save_sync gives back its page/.test(E.toWrite.task) &&
+        E.link.offerDailyCheck === true && E.link.nextStep && E.joined.status === 'synced' && E.joined.with === 'Mei' && E.toWrite.write === 'sync' && E.toWriteTask && E.toWriteTask.personB.name === 'Mei' && E.toWriteTask.personA.name === 'Ana' &&
+        !('motives' in E.toWriteTask.personA) && /Interests in common \(exact matches only\): Reading/.test(E.toWriteTask.derivedFacts) && /guide\.json's `sync` \(its spec, brief and schema\)/.test(skillMd) &&
         E.saved.saved && E.saved.name === 'Mei' && /Racquet sports/.test(E.anaPage) && !/Skydiving/.test(E.anaPage) && E.bad.saved === false && /clash/.test(E.bad.problems.join(' ')) &&
         E.list.syncs.length === 1 && E.list.syncs[0].name === 'Ana' && E.list.syncs[0].label === 'Ana' && E.list.syncs[0].summary === 'Mei plans and Ana sparks: weekends you both remember.' && !('e2e' in E.list.syncs[0]) &&
         JSON.stringify(E.list.nextStep.buttons) === '["Show my Sync with Ana","Sync with someone new"]' && E.check.say === 'Ana synced with you: your Sync is ready.' &&
@@ -2876,9 +2886,10 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
       /shutil\.rmtree\(WORK, ignore_errors=True\)\n\s+drop_context\(\)/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
       /Once the report is published, bin\/psyche\.py takes the context \("> " lines, what others wrote\) out of it and out of sources\/whatsapp\.txt: only their own words stay/.test(skillMd),
       JSON.stringify(skillState.leaving && skillState.leaving.context));
-    check('the skill holds a Psyche whose confidence is above psycheai.io\'s rubric for what was read: Instagram alone at most 79, 86 with Facebook or WhatsApp, 90 with both, and its level matching the score',
-      ((c) => Array.isArray(c) && c.length === 6 && /at most 79/.test(c[0].join(' ')) && c[1].length === 0 && /"moderate"/.test(c[2].join(' ')) && c[3].length === 0 && c[4].length === 0 && /at most 90/.test(c[5].join(' ')))(skillState.leaving && skillState.leaving.conf) &&
-      /Instagram, its messages included: 65 to 79\. With Facebook or WhatsApp chats, 72 to 86; with both, 76 to 90; never above 90/.test(require('../skill/guide.json').read.spec), JSON.stringify(skillState.leaving && skillState.leaving.conf));
+    check('the skill holds a Psyche whose confidence is above what was read (README "Confidence counts what was read"): Instagram alone at most 79, 82 with one WhatsApp chat, 86 with two, 90 with all three; an Instagram with next to nothing of their own doesn\'t count, so one WhatsApp chat beside it is at most 65; and the level matches the score',
+      ((c) => Array.isArray(c) && c.length === 10 && /at most 79/.test(c[0].join(' ')) && c[1].length === 0 && /"moderate"/.test(c[2].join(' ')) && /from Instagram and Facebook it is at most 82/.test(c[3].join(' ')) && c[4].length === 0 && /at most 90/.test(c[5].join(' ')) &&
+        /from 1 WhatsApp chat, with next to nothing of their own on Instagram it is at most 65/.test(c[6].join(' ')) && c[7].length === 0 && /from Instagram and 1 WhatsApp chat it is at most 82/.test(c[8].join(' ')) && c[9].length === 0)(skillState.leaving && skillState.leaving.conf) &&
+      /Instagram, its messages included: 65 to 79\. With Facebook or WhatsApp chats, 72 to 86; with both, 76 to 90; never above 90/.test(require('../skill/guide.json').read.spec) && /\*\*Confidence counts what was read\.\*\* A source counts only for their own words in it/.test(skillMd), JSON.stringify(skillState.leaving && skillState.leaving.conf));
     {
       const pinned = JSON.parse(fsx.readFileSync(pathx.join(dir, 'guide.json'), 'utf8'));
       const G = skillState.guides;
@@ -3903,10 +3914,11 @@ elif a[0] == 'thread':
   fsx.mkdirSync(pathx.join(lateDir, 'bin'));
   fsx.copyFileSync(pathx.join(home.b.dir, 'bin', 'together.py'), pathx.join(lateDir, 'bin', 'together.py'));
   const runLate = async (...args) => JSON.parse((await execFile('python3', [pathx.join(lateDir, 'bin', 'together.py'), ...args], { cwd: lateDir, env: lateEnv, timeout: 60000 })).stdout);
-  tg.threads = await run.a('answer', 'stage', 'Married');
+  tg.invited = await run.a('answer', 'stage', 'Married');
+  tg.threads = await run.a('threads');
   tg.pickRead = await run.a('pick-thread', 'Ana Lim');
   tg.linkAgain = await run.a('link');
-  tg.picked = tg.threads;
+  tg.picked = tg.invited;
   const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
   fsx.writeFileSync(wa, Array.from({ length: 40 }, (_, i) => `[${String(1 + i % 28).padStart(2, '0')}/0${1 + i % 9}/2025, 21:${String(i).padStart(2, '0')}:00] ${i % 2 ? 'Ana Lim' : 'Mei Tan'}: ${['are you free saturday? we could go', 'thanks for listening to me', 'sorry, long day for us', 'miss you'][i % 4]}`).join('\n'));
   tg.waAdded = await run.a('chat-file', wa);
@@ -4301,10 +4313,13 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       !/"core"|safety|deep:/.test(JSON.stringify(tg.write)) && view.decisions.length === 4 && !('spec' in tg.write) && tg.write.saveTo === 'work/together-read.json',
     JSON.stringify(view).slice(0, 400));
   check('the invite comes first, then the conversation (README "Psyche Together, release 59"): answering the stage gives the invite and, in the same reply, their own one-to-one Instagram chats as buttons (groups left out), before any message is read; picking one reads it and adds it, locked, with a short reply that has no link, no install line and no count; the partner has no chat step, and neither person\'s questions use the conversation, only the two reports; the read still has it',
-    tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && tg.threads.invite && tg.threads.invite.from === 'Mei' && /^Which of your Instagram chats is with your partner\?/.test(tg.threads.ask || '') &&
+    tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && /^Which of your Instagram chats is with your partner\?/.test(tg.threads.ask || '') &&
+      // The invite and the list of their chats are never in one result (README "Psyche Together, release 60"): the stage gives the invite alone, and threads the chats.
+      tg.invited.invite && tg.invited.invite.from === 'Mei' && tg.invited.chatNext === true && !('buttons' in tg.invited) && !('pickThread' in tg.invited) && !('say' in tg.invited.invite) && !('invite' in tg.threads) &&
+      /If it has `chatNext`, run `python3 bin\/together\.py threads` in the same turn and end that same message with its `ask` and its buttons/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.pickRead.setCheck === true && /^Added\. I'll tell you here when your partner joins/.test(tg.pickRead.say || '') && !/together#|Install|messages from/.test(JSON.stringify(tg.pickRead)) && !('invite' in tg.pickRead) &&
       tg.linkAgain.from === 'Mei' && !('setCheck' in tg.linkAgain) &&
-      /then, when it has `pickThread`, its `ask` with its buttons/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && !/Show my invite/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
+      !/Show my invite/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.join.write === 'questions' && !('yourChat' in tg.join) && !('yourChat' in tg.statusA) && tg.questionTaskB && !('yourChat' in tg.questionTaskB) && 'partnerReport' in tg.questionTaskB && !/yourChat/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       /Openers and follow-ups come from the two Psyche reports only/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec) &&
       people.filter(p => p.chat).length === 1 && people[0].chat.signals.messages === 120,

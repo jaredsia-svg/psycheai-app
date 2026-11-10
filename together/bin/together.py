@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 59
+RELEASE = 60
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1540,12 +1540,17 @@ def chat_step(s):
     reads that one chat and adds it, locked, with its own short reply. Reading a chat and giving the invite are never
     in one result: one that did both was stopped by Muse's safety check."""
     head = {}
+    chat_left = not s.get('chatFinished') and 'instagram' not in s.get('chatDone', []) and 'instagram' not in s.get('chatSkipped', [])
     if not s.get('invited'):
         got = put_profile(s, False)
         if got.get('error'):
             return got
         s['invited'] = True
         save_state(s)
+        # The invite alone (README "Psyche Together, release 60"): their chats come from `threads`, run next in the same
+        # turn, so no one result holds both a link to pass on and a list of people.
+        if chat_left:
+            return {'invite': invite(), 'chatNext': True}
         head = {'invite': invite()}
     if not s.get('chatFinished') and 'instagram' not in s.get('chatDone', []) and 'instagram' not in s.get('chatSkipped', []):
         ths = instagram_threads()
@@ -1869,8 +1874,7 @@ def invite():
     # Data only (README "Psyche Together, release 59"): the invite's two lines are written in SKILL.md around this link and
     # name. A result carrying "Install the … skill … and join" and "Paste the line below into your Muse app" was stopped
     # by Muse's safety check: words telling someone to install software, inside a tool result.
-    return {'url': link, 'link': re.sub(r'^https?://', '', link), 'from': me,
-            'say': 'Send your partner both lines: they paste the one in the box into their Muse.'}
+    return {'url': link, 'link': re.sub(r'^https?://', '', link), 'from': me}
 
 
 def couple():
@@ -4367,6 +4371,8 @@ def main(argv):
             out = answer(rest[0], label, opt('--text'), opt('--nearest'))
     elif cmd == 'link':
         out = invite()
+    elif cmd == 'threads':
+        out = chat_step(state())
     elif cmd == 'questions':
         out = questions_task()
     elif cmd == 'save-questions':
