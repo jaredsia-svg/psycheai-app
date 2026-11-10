@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 63
+RELEASE = 64
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -3326,6 +3326,13 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .nx2{counter-reset:s;list-style:none;margin:0;padding:0}.nx2 li{counter-increment:s;position:relative;padding-left:36px;margin:10px 0;min-height:26px}
 .nx2 li:before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--c,#7b3fa0);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
 .nx2 b{display:block;font-size:14.5px;line-height:1.4}.nx2 span{display:block;font-size:13px;color:var(--soft);margin-top:2px;line-height:1.4}
+.st.found>.sl,.st.means>.sl,.st.steps>.sl{background:none!important;padding:0}
+.st.means{background:#fff!important;border:1px solid #e6dfeb!important}
+.nums>div{background:#faf7fb;border:1px solid #eee6f3}.nums b{color:var(--ink)}
+.psy.bare{background:none;border:0;padding:0;margin:8px 0 0}.psy.bare .pair2{display:block}.psy.bare .pair2>div{background:none;border:0;padding:0;margin:6px 0;font-size:15px}.psy.bare .pair2 b{display:inline;font-weight:750}.psy.bare .pair2 b:after{content:" · "}.psy.bare .pair2 span{display:inline}
+.fp2{margin:6px 0;font-size:15px;line-height:1.55}.fp2 b{font-weight:750}
+.mir3{display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;gap:4px;margin:8px 0}.mir3 small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--soft)}
+.mir3 b{font-size:14.5px;font-weight:650}.mir3 .g{text-align:right}.mir3>span{text-align:center;font-size:17px;font-weight:800}.mir3>span.ok{color:#2f6f53}.mir3>span.no{color:#2b5d8f}
 ul.how{margin:4px 0 8px;padding-left:18px}.how li{font-size:13.5px;color:var(--soft);margin:4px 0;line-height:1.45}.how li::marker{color:var(--c,#7b3fa0)}
 .day2{margin:6px 0}.d2{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center;margin:5px 0;font-size:12.5px;font-weight:650}
 .d2>div{display:flex;height:16px;border-radius:8px;overflow:hidden;background:#f1eef6}.d2 i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:700;color:#fff}
@@ -3621,6 +3628,12 @@ def _thumbs(cid, num, title):
             '<div class="fbx" hidden><textarea maxlength="300" rows="2" placeholder="What\'s off? A few words"></textarea>'
             '<div class="sayrow"><code></code><button type="button" data-copy="">Copy</button></div><p class="soft">Say this in your Psyche Together chat, and your read is written again with it in mind.</p></div>'
             '<p class="fbok" hidden>Thanks: glad it landed.</p></div>' % (_e(num), _e(title)))
+
+
+def _mid(t):
+    """A short phrase set mid-sentence: its first letter lower-case unless it starts a name or an acronym, no full stop."""
+    t = str(t or '').strip().rstrip('.')
+    return t[:1].lower() + t[1:] if t[:1].isupper() and not t[1:2].isupper() and t.split(' ', 1)[0] not in ('I',) else t
 
 
 def _area_psy(aid, pa, pb, names, line):
@@ -3950,11 +3963,12 @@ def page(box, s):
         mv = D(D(view.get('mirrors')).get(mk))
         if not (D(mv.get('a')).get('self') and D(mv.get('b')).get('self')):
             return ''
-        row = lambda who, k_, other_, ok_: ('<div class="mir"><div><small>%s most wants</small><b>%s</b></div><div><small>%s guessed</small><b>%s</b></div><span class="%s">%s</span></div>'
-                                            % (_e(who), _e(D(mv.get(k_)).get('self')), _e(other_), _e(D(mv.get(ok_)).get('guess')),
-                                               'ok' if D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess') else 'no',
-                                               'Guessed right' if D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess') else 'Worth knowing'))
-        label = {'appreciated': 'What you said makes you feel most appreciated', 'stress': 'What you said you want when stressed', 'repair': 'What you said you need after a disagreement'}.get(mk, '')
+        # Release 64: face to face, no boxes: what one wants on the left, what the other guessed on the right, = or ≠ between.
+        same_ = lambda k_, ok_: D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess')
+        row = lambda who, k_, other_, ok_: ('<div class="mir3"><div><small>%s wants</small><b>%s</b></div><span class="%s" title="%s">%s</span><div class="g"><small>%s guessed</small><b>%s</b></div></div>'
+                                            % (_e(who), _e(D(mv.get(k_)).get('self')), 'ok' if same_(k_, ok_) else 'no', 'Guessed right' if same_(k_, ok_) else 'Worth knowing',
+                                               '=' if same_(k_, ok_) else '≠', _e(other_), _e(D(mv.get(ok_)).get('guess'))))
+        label = {'appreciated': 'What makes you each feel most appreciated', 'stress': 'When you\'re stressed', 'repair': 'After a disagreement'}.get(mk, '')
         return '<p class="ml">%s</p>' % _e(label) + row(names[0], 'a', names[1], 'b') + row(names[1], 'b', names[0], 'a')
     ICON = {'messages': ('💬', 'Messages'), 'psyches': ('🧠', 'Psyches'), 'report': ('📄', 'Reports'), 'moment': ('📅', '')}
     for cid, num, title, pids, refs in CHAPTERS:
@@ -4011,12 +4025,11 @@ def page(box, s):
                     lead = ('<div class="bids"><p><b>%d of %d</b> bids for attention in the messages read were turned toward (%d%%)</p><div class="bar"><i class="t" style="width:%d%%"></i><i class="w" style="width:%d%%"></i><i class="g" style="width:%d%%"></i></div>'
                             '<p class="soft"><span class="kt"></span>Turned toward %d · <span class="kw"></span>Turned away %d · <span class="kg"></span>Turned against %d</p>%s</div>'
                             % (bd.get('toward') or 0, bd['seen'], pct('toward'), pct('toward'), pct('away'), pct('against'), bd.get('toward') or 0, bd.get('away') or 0, bd.get('against') or 0,
-                               ''.join('<p class="miss"><b>Missed · %s</b> %s</p>' % (_e(D(m).get('when')), _e(D(m).get('text'))) for m in bd.get('missed') or [])))
+                               ('<ul class="how">%s</ul>' % ''.join('<li><b>Missed · %s:</b> %s</li>' % (_e(D(m).get('when')), _e(D(m).get('text'))) for m in bd.get('missed'))) if bd.get('missed') else ''))
                     data_, lead = lead + data_, ''
             elif aid == 'dreams':
                 hp = D(x.get('hopes'))
-                lead = '<div class="who2">%s</div>' % ''.join('<div><b><span>%s</span>%s</b><p><small>Hopes</small>%s</p></div>' % (_initial(n_), _e(n_), _e(hp.get(k_)))
-                                                            for n_, k_ in ((names[0], 'a'), (names[1], 'b')) if hp.get(k_)) if hp else ''
+                lead = ''.join('<p class="fp2"><b>%s</b> · %s</p>' % (_e(n_), _e(hp.get(k_))) for n_, k_ in ((names[0], 'a'), (names[1], 'b')) if hp.get(k_)) if hp else ''
             elif aid == 'connection' and not view.get('chat'):
                 lead = mirror_('stress')
             elif aid == 'counts':
@@ -4048,10 +4061,10 @@ def page(box, s):
             elif aid == 'future':
                 hz = D(x.get('horizons'))
                 if hz:
-                    lead = '<div class="hz">%s</div>' % ''.join('<div><b>%s</b><p>%s</p></div>' % (lb_, _e(hz.get(k))) for k, lb_ in
-                                                                (('near', 'In the next few years'), ('far', 'Further ahead'), ('5', 'In 5 years'), ('10', 'In 10 years'), ('15', 'In 15 years')) if hz.get(k))
+                    lead = ''.join('<p class="fp2"><b>%s</b> · %s</p>' % (lb_, _e(hz.get(k))) for k, lb_ in
+                                   (('near', 'In the next few years'), ('far', 'Further ahead'), ('5', 'In 5 years'), ('10', 'In 10 years'), ('15', 'In 15 years')) if hz.get(k))
             elif aid == 'growth':
-                lead = _area_psy('values', pa_, pb_, names, '').replace('<span class="lbl">In your Psyches</span>', '', 1)
+                lead = _area_psy('values', pa_, pb_, names, '').replace('<span class="lbl">In your Psyches</span>', '', 1).replace('<div class="psy">', '<div class="psy bare">', 1)
             elif aid == 'decisions':
                 lines = D(x.get('lines')) or {y.get('topic'): y.get('line') for y in c.get('decisions') or [] if isinstance(y, dict)}
                 lead = ''.join('<div class="row"><b>%s</b>%s<p>%s: %s · %s: %s</p>%s</div>'
@@ -4062,20 +4075,19 @@ def page(box, s):
                 lead = '<p class="lbl" style="margin-top:6px">Worth knowing about each other</p>' + ''.join('<div class="row"><b>About %s</b><p>%s</p><p><span>%s</span></p></div>' % (_e(y.get('about')), _e(y.get('q')), _e(y.get('answer'))) for y in kw.get('items') or [])
             elif aid == 'attachment':
                 rs = D(x.get('reassure')) or {'a': c.get('a'), 'b': c.get('b')}
-                lead = '<div class="who2">%s</div>' % ''.join('<div><b><span>%s</span>%s</b><p>%s</p>%s</div>' % (_initial(n_), _e(n_), _e(p_.get('attachment') or '–'),
-                                                                                                              ('<p class="soft">Reassured by: %s</p>' % _e(rs.get(k_))) if rs.get(k_) else '')
-                                                                for n_, p_, k_ in ((names[0], pa_, 'a'), (names[1], pb_, 'b')))
+                lead = ''.join('<p class="fp2"><b>%s</b> · %s%s</p>' % (_e(n_), _e(str(p_.get('attachment') or '–').strip().rstrip('.') + '.'), (' %s' % _e(str(rs.get(k_)).strip())) if rs.get(k_) else '')
+                               for n_, p_, k_ in ((names[0], pa_, 'a'), (names[1], pb_, 'b')))
             elif aid == 'cycle':
                 cy = D(c.get('cycle'))
                 steps_ = x.get('steps') or cy.get('steps')
                 lead = _cycle({'steps': steps_}, names) if steps_ else ''
             elif aid == 'topics':
                 tv = D(view.get('topics'))
-                lead = ('<div class="who2">%s</div>' % ''.join('<div><b><span>%s</span>%s</b><p><small>Disagrees with %s most about</small>%s</p></div>'
-                                                               % (_initial(n_), _e(n_), _e(o_), _e(tv.get(k_))) for n_, o_, k_ in ((names[0], names[1], 'a'), (names[1], names[0], 'b'))))
-                if x.get('type') in ('solvable', 'perpetual'):
-                    lead += ('<p class="kind2 %s">%s</p>' % (x['type'], 'Solvable: this one can be settled' if x['type'] == 'solvable'
-                                                              else 'Lasting: it comes from a difference between you, so the aim is to handle it well, not to win it'))
+                lead = ''.join('<p class="fp2"><b>%s</b> · disagrees with %s most about %s</p>' % (_e(n_), _e(o_), _e(_mid(tv.get(k_))))
+                               for n_, o_, k_ in ((names[0], names[1], 'a'), (names[1], names[0], 'b')) if tv.get(k_))
+                if x.get('type') in ('solvable', 'perpetual'):          # release 64: in plain words, in the text
+                    lead += '<p class="fp2">%s</p>' % ('This one can be settled. Agree on a plan together and it can be put to rest.' if x['type'] == 'solvable'
+                                                        else 'This one comes from a real difference between you, so it may never fully go away, and that\'s normal: most couples have a few of these. The aim is to talk about it kindly, not to win it.')
             elif aid == 'security' and view.get('commitment') and 'security' in (view.get('pillars') or {}):
                 lead = ('<div class="tiles"><span class="tl %s"><small>How sure you are of each other</small><b>%s</b></span><span class="tl %s"><small>How sure you each are yourselves</small><b>%s</b></span></div>'
                         % (_e(view['pillars']['security'].replace(' ', '-')), _e(view['pillars']['security']), _e(view['commitment'].replace(' ', '-')), _e(view['commitment'])))
@@ -4085,8 +4097,10 @@ def page(box, s):
             pp_ = ('<p class="fp">%s</p>' % _e(para_)) if para_ else ''
             # What each finding rests on, shown under the paragraph as short bullets with no heading of their own (release 63)
             how_ = ('<ul class="how">%s%s</ul>' % (''.join('<li>%s</li>' % _e(h_) for h_ in hows_), lis)) if (hows_ or lis) else ''
-            found_ = (lead + pp_ if aid == 'growth' else pp_ + lead) + data_ + how_          # Growth: the radar first
-            st_found = ('<div class="st found">%s%s</div>' % ('' if aid == 'growth' else '<span class="sl">🔍 What we found</span>', found_)) if found_.strip() else ''
+            if aid == 'counts':          # its two number tiles are the evidence (release 64): no sentences under them
+                how_ = ''
+            found_ = pp_ + lead + data_ + how_          # release 64: the paragraph first everywhere, Growth's radar after it, unboxed
+            st_found = ('<div class="st found"><span class="sl">🔍 What we found</span>%s</div>' % found_) if found_.strip() else ''
             # 3. What it means, and what to do about it (no verdict tag: the area's own badge already says it)
             means = x.get('means') or x.get('meaning') or pv.get('headline')
             extra = ''
@@ -4099,8 +4113,8 @@ def page(box, s):
                 sg, und, mv = D(got(x, 'signs')), D(x.get('under')) or {'a': cy.get('a'), 'b': cy.get('b')}, D(got(x, 'moves'))
                 pl_ = D(x.get('plain'))
                 if pl_.get('a') or sg.get('a') or mv.get('a'):        # release 54: each one's part in plain words, no labels
-                    extra = '<div class="who2">%s</div>' % ''.join(
-                        '<div><b><span>%s</span>%s</b><p>%s</p></div>' % (_initial(n_), _e(n_), _e(pl_.get(k_) or ' '.join(t_.strip().rstrip('.') + '.' for t_ in ['; '.join(sg.get(k_) or []), und.get(k_) or '', mv.get(k_) or ''] if t_.strip())))
+                    extra = ''.join(
+                        '<p class="fp2"><b>%s</b> · %s</p>' % (_e(n_), _e(pl_.get(k_) or ' '.join(t_.strip().rstrip('.') + '.' for t_ in ['; '.join(sg.get(k_) or []), und.get(k_) or '', mv.get(k_) or ''] if t_.strip())))
                         for n_, k_ in ((names[0], 'a'), (names[1], 'b')))
             elif aid == 'know':
                 mine_k = D(view.get('knowBy')).get(s.get('role'))
@@ -4126,7 +4140,9 @@ def page(box, s):
         inner += private(mine_by.get(cid, []))
         inner += _science(refs, folded=True)
         part(cid, num, title, inner, 'chapter', SUBTITLES.get(cid, ''), teaser=take)
-        if cid == 'future':             # the breather comes between the everyday and the deeper chapters
+        if cid == 'life':               # release 64: the numbers after 02, the story after 04
+            parts.append('@@NUMBERS@@')
+        if cid == 'secure':
             parts.append('@@INTERMISSION@@')
     # The intermission (README "Psyche Together, release 16"): a light breather after the heaviest chapter.
     fun = sig.get('fun') or {}
@@ -4149,15 +4165,22 @@ def page(box, s):
     story_ = _story(sig, D(r.get('story')), moments)
     rest = [m for m in moments if id(m) not in _story.used]
     line = ''.join('<li><b>%s</b><span>%s</span><em>%s</em></li>' % (_e(w), _e(t), _e(tag)) for w, t, tag in sorted(rest, key=lambda m: _when_key(m[0])))
-    inner = ('<span class="badge">Intermission</span><div class="lines" style="margin-top:12px">%s</div>%s%s%s%s'
-             % (''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), ('<div class="funfacts">%s</div>' % facts_html) if facts_html else '',
-                (story_ or _months_svg(sig.get('months') or [])), _talk_panel(box, names),
-                ('<h3>%s</h3><ol class="timeline">%s</ol>' % ('More moments' if story_ else 'Your story in moments', line)) if line else '')) \
+    numbers_ = (('<div class="funfacts">%s</div>' % facts_html) if facts_html else '') + _talk_panel(box, names).replace('<h3>You both, in numbers</h3>', '', 1) \
         + (_science(['styleMatch', 'we'], folded=True) if sig.get('you') and sig.get('partner') else '')        # release 56: folded, at the end
+    inner = ('<span class="badge">Intermission</span><div class="lines" style="margin-top:12px">%s</div>%s%s'
+             % (''.join('<p>%s</p>' % _e(x) for x in im.get('lines') or []), (story_ or _months_svg(sig.get('months') or [])),
+                ('<h3>%s</h3><ol class="timeline">%s</ol>' % ('More moments' if story_ else 'Your story in moments', line)) if line else ''))
+    if numbers_.strip():
+        part('numbers', '✦', 'You both, in numbers', '<span class="badge">Intermission</span>' + numbers_, 'intermission', 'A light break', False, COLOURS['moments'])
+        num_, num_nav = parts.pop(), nav.pop()
+        parts[parts.index('@@NUMBERS@@')] = num_
+        nav.insert(next((i for i, n in enumerate(nav) if '#future' in n), len(nav)), num_nav)
+    else:
+        parts.remove('@@NUMBERS@@')
     part('moments', '✦', im.get('title') or 'Your story in moments', inner, 'intermission', 'A light break', False, COLOURS['moments'])
     inter, inter_nav = parts.pop(), nav.pop()
     parts[parts.index('@@INTERMISSION@@')] = inter
-    nav.insert(next((i for i, n in enumerate(nav) if '#secure' in n), len(nav)), inter_nav)
+    nav.insert(next((i for i, n in enumerate(nav) if '#disagree' in n), len(nav)), inter_nav)
     # One practice.
     pn = D(r.get('plan'))
     w1 = D(pn.get('week1'))
