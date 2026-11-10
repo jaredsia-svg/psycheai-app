@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 62
+RELEASE = 63
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -3320,6 +3320,16 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .nums b{display:block;font-size:19px;font-weight:800;color:#2b5d8f;line-height:1.2}.nums span{display:block;font-size:12.5px;color:var(--soft);margin-top:3px;line-height:1.35}
 .ml{margin:12px 0 4px;font-size:13px;font-weight:700;color:var(--ink)}
 .lv.Not-decided-yet{background:#eaf1f9;color:#2b5d8f}.lv.Talk-about{background:#fbeeed;color:#a8322a}
+.st.found>.sl,.st.means>.sl,.st.steps>.sl{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;letter-spacing:.06em;margin-bottom:8px;background:#f3ecf8;color:#7b3fa0;background:color-mix(in srgb,var(--c,#7b3fa0) 11%,#fff);color:var(--c,#7b3fa0)}
+.st.found .fp{margin:0 0 8px;font-size:15.5px;line-height:1.6}
+.st.means{border-top:0;padding:12px 14px;border-radius:14px;background:#faf7fb;background:color-mix(in srgb,var(--c,#7b3fa0) 6%,#fff);border:1px solid #efe7f4;border:1px solid color-mix(in srgb,var(--c,#7b3fa0) 16%,#fff)}.st.means p{margin:0;font-size:15px;line-height:1.55}
+.nx2{counter-reset:s;list-style:none;margin:0;padding:0}.nx2 li{counter-increment:s;position:relative;padding-left:36px;margin:10px 0;min-height:26px}
+.nx2 li:before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--c,#7b3fa0);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+.nx2 b{display:block;font-size:14.5px;line-height:1.4}.nx2 span{display:block;font-size:13px;color:var(--soft);margin-top:2px;line-height:1.4}
+ul.how{margin:4px 0 8px;padding-left:18px}.how li{font-size:13.5px;color:var(--soft);margin:4px 0;line-height:1.45}.how li::marker{color:var(--c,#7b3fa0)}
+.day2{margin:6px 0}.d2{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center;margin:5px 0;font-size:12.5px;font-weight:650}
+.d2>div{display:flex;height:16px;border-radius:8px;overflow:hidden;background:#f1eef6}.d2 i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:700;color:#fff}
+.day2 .key{margin:4px 0 0;font-size:11.5px;color:var(--soft)}.day2 .key span{margin-right:10px;white-space:nowrap}.day2 .key i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -3539,14 +3549,17 @@ def _cycle(cy, names):
 
 
 def _rhythm(sig, who):
+    """When each of you writes (README "Psyche Together, release 63"): one slim strip each, split into the day's four parts."""
     you, them = sig.get('you') or {}, sig.get('partner') or {}
     if not (you.get('day') and them.get('day')):
         return ''
-    rows = ''.join('<div class="rb"><span>%s</span><div><i class="a" style="width:%d%%"></i><em>%d%%</em></div><div><i class="b" style="width:%d%%"></i><em>%d%%</em></div></div>'
-                   % (lbl, _int(you['day'].get(k), 0, 100), _int(you['day'].get(k), 0, 100), _int(them['day'].get(k), 0, 100), _int(them['day'].get(k), 0, 100))
-                   for k, lbl in (('morning', 'Morning'), ('afternoon', 'Afternoon'), ('evening', 'Evening'), ('late', 'Late night')))
-    return ('<h3>Your day, side by side</h3><div class="rhythm"><p class="soft">When each of you writes: <span class="ka"></span> %s · <span class="kb"></span> %s.</p>%s</div>'
-            % (_e(who[0]), _e(who[1]), rows))
+    parts_ = (('morning', 'Morning', '#f2c14e'), ('afternoon', 'Afternoon', '#e8833a'), ('evening', 'Evening', '#7b3fa0'), ('late', 'Late night', '#2b3a67'))
+    strip = lambda d: ''.join('<i style="width:%d%%;background:%s" title="%s %d%%">%s</i>' % (_int(d.get(k), 0, 100), c_, lb_, _int(d.get(k), 0, 100),
+                                                                                            ('%d%%' % _int(d.get(k), 0, 100)) if _int(d.get(k), 0, 100) >= 12 else '')
+                              for k, lb_, c_ in parts_)
+    return ('<div class="day2"><p class="ml">When you each write</p>%s<p class="key">%s</p></div>'
+            % (''.join('<div class="d2"><span>%s</span><div>%s</div></div>' % (_e(n_), strip(d_)) for n_, d_ in ((who[0], you['day']), (who[1], them['day']))),
+               ' '.join('<span><i style="background:%s"></i>%s</span>' % (c_, lb_) for _, lb_, c_ in parts_)))
 
 
 # Your two Psyches, woven into the chapters (README "Psyche Together, release 26"): what a Sync compares, each where it
@@ -3957,7 +3970,7 @@ def page(box, s):
             seen = x.get('seen') or pv.get('seeIt')
             # Release 63: How you see it and What the evidence shows are one block, What we found: their own view as a tinted
             # card, each finding from the evidence as a card of its own, measured figures as number tiles.
-            seen_ = ('<div class="fc ans"><span class="src">🗣 How you see it</span><p>%s</p></div>' % _e(seen)) if seen else ''
+            seen_ = ''          # release 64: said in the paragraph below
             # 2. What the evidence shows: each piece tagged with its source, then the area's own data
             evs = [e for e in x.get('evidence') or [] if isinstance(e, dict)]
             if evs and not any(e.get('kind') or e.get('insight') for e in evs):        # an older read: its message line, Psyches line and moments
@@ -3966,7 +3979,12 @@ def page(box, s):
             for e in evs:
                 if e.get('kind') == 'moment':
                     keep([{'when': e.get('when'), 'what': e.get('text')}], '%s · %s' % (title, nm))
-            fins = ''.join('<div class="fc ev"><span class="src">🔎 What the evidence shows</span><b>%s</b><span class="t">%s</span></div>' % (_e(e.get('insight')), _e(e.get('support'))) for e in evs if e.get('insight'))
+            # Release 64: what they found is one paragraph in plain words (their view, then each finding), and what each rests
+            # on is under one small How we know, closed.
+            ins_ = [e for e in evs if e.get('insight')]
+            para_ = ' '.join(t_.strip() for t_ in [seen or ''] + [str(e.get('insight') or '') for e in ins_] if t_ and t_.strip())
+            fins = ''
+            hows_ = [str(e.get('support')) for e in ins_ if e.get('support')]
             evs = [e for e in evs if not e.get('insight')]
             lis = ''.join('<li><i title="%s">%s</i><span>%s%s</span></li>' % (_e(ICON.get(e.get('kind'), ('•', ''))[1]), ICON.get(e.get('kind'), ('•', ''))[0],
                                                                          ('<b>%s</b> · ' % _e(e.get('when'))) if e.get('kind') == 'moment' and e.get('when') else '', _e(e.get('text')))
@@ -3974,7 +3992,7 @@ def page(box, s):
             # The area's own result first (README "Psyche Together, release 46"): what it is, before the evidence for it.
             lead, data_ = '', ''
             if aid == 'life':
-                data_ += _rhythm(sig, who).replace('<h3>Your day, side by side</h3>', '<p class="lbl" style="margin-top:10px">Your day, side by side</p>')
+                data_ += _rhythm(sig, who)
             elif aid == 'loves':
                 gv = lambda p_: [str(y) for y in p_.get('caresBy') or []]
                 rv = lambda p_: [str(y) for y in p_.get('feelsCaredForBy') or []]
@@ -4061,9 +4079,14 @@ def page(box, s):
             elif aid == 'security' and view.get('commitment') and 'security' in (view.get('pillars') or {}):
                 lead = ('<div class="tiles"><span class="tl %s"><small>How sure you are of each other</small><b>%s</b></span><span class="tl %s"><small>How sure you each are yourselves</small><b>%s</b></span></div>'
                         % (_e(view['pillars']['security'].replace(' ', '-')), _e(view['pillars']['security']), _e(view['commitment'].replace(' ', '-')), _e(view['commitment'])))
-            ev_ = data_ + (fins if aid not in NO_EVIDENCE or data_ or lis else '') + (('<ul class="evd">%s</ul>' % lis) if lis else '')
-            found_ = (lead + seen_ if aid == 'growth' else seen_ + lead) + ev_          # Growth: the radar first, with no heading over it
-            st_found = ('<div class="st found">%s%s</div>' % ('' if aid == 'growth' else '<span class="sl">What we found</span>', found_)) if found_.strip() else ''
+            if aid in NO_EVIDENCE and not (data_ or lis):          # these read from the Psyches and answers alone
+                para_ = seen or ''
+                hows_ = []
+            pp_ = ('<p class="fp">%s</p>' % _e(para_)) if para_ else ''
+            # What each finding rests on, shown under the paragraph as short bullets with no heading of their own (release 63)
+            how_ = ('<ul class="how">%s%s</ul>' % (''.join('<li>%s</li>' % _e(h_) for h_ in hows_), lis)) if (hows_ or lis) else ''
+            found_ = (lead + pp_ if aid == 'growth' else pp_ + lead) + data_ + how_          # Growth: the radar first
+            st_found = ('<div class="st found">%s%s</div>' % ('' if aid == 'growth' else '<span class="sl">🔍 What we found</span>', found_)) if found_.strip() else ''
             # 3. What it means, and what to do about it (no verdict tag: the area's own badge already says it)
             means = x.get('means') or x.get('meaning') or pv.get('headline')
             extra = ''
@@ -4091,9 +4114,8 @@ def page(box, s):
                 return t if keep_ or not t else t[0].lower() + t[1:]
             nx = ''.join('<li><b>%s</b><span>Because %s</span></li>' % (_e(D(y).get('do')), _e(because_(D(y).get('because'))))
                          for y in x.get('next') or [] if D(y).get('do'))
-            st3 = ('<div class="st means"><span class="sl">What it means</span>%s%s%s</div>'
-                   % (('<p>%s</p>' % _e(means)) if means else '', extra,
-                      ('<span class="sl" style="margin-top:12px">Next steps</span><ul class="nx">%s</ul>' % nx) if nx else '')) if (means or extra or nx) else ''
+            st3 = (('<div class="st means"><span class="sl">💡 What it means</span>%s%s</div>' % (('<p>%s</p>' % _e(means)) if means else '', extra)) if (means or extra) else '') + \
+                  (('<div class="st steps"><span class="sl">👣 Next steps</span><ol class="nx2">%s</ol></div>' % nx) if nx else '')
             if st_found or st3:
                 tm_ = re.search(r'class="tl ([\w-]+)"><small>.*?</small><b>(.*?)</b>', tile(cid, aid, nm))
                 pill_ = ('<span class="lv %s">%s</span>' % (tm_.group(1), tm_.group(2))) if tm_ else ''       # the same words and colour as its tile at a glance
