@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 61
+RELEASE = 62
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -115,7 +115,7 @@ MIRRORS = [('appreciated', 'appreciation', 'What makes you feel most appreciated
             ['Being told in words', 'Time together', 'Something done for me', 'A hug or touch']),
            ('stress', 'connection', 'When you\'re stressed, what do you most want from {p}?', 'And when {p} is stressed, what do you think they most want from you?',
             ['To be listened to', 'Help fixing it', 'Something to take my mind off it', 'Some space']),
-           ('repair', 'disagreements', 'After a disagreement, what do you most need from {p}?', 'And what do you think {p} most needs from you after one?',
+           ('repair', 'disagreements', 'After a disagreement, what do you most need from {p}?', 'And after a disagreement, what do you think {p} most needs from you?',
             ['To talk it through now', 'A little time first', 'A hug or warm gesture', 'To move on and let it go'])]
 # README "Psyche Together, release 51": an optional hope in your own words (Gottman's dreams within conflict): read by
 # your partner's Muse to write the read, which may speak of it in its own words, never quoting you.
@@ -162,13 +162,14 @@ DECISIONS = {
     'new_partners': ('New partners and the children:', ['We agree', 'We mostly agree', 'We don\'t agree yet']),
     'handovers': ('Handovers between your homes:', ['We agree', 'We mostly agree', 'We don\'t agree yet']),
 }
-DECISION_LABELS = {
-    'hope': 'What this becomes', 'children': 'Children', 'more_children': 'More children', 'marriage': 'Marriage', 'money': 'Money',
-    'place': 'Where to live', 'faith': 'Faith', 'parents': 'Parents', 'kids_routine': 'The children\'s routines',
-    'kids_money': 'Money for the children', 'new_partners': 'New partners', 'handovers': 'Handovers',
+DECISION_LABELS = {          # release 63: each named as the decision it is, not one word
+    'hope': 'Where this is heading', 'children': 'Whether to have children', 'more_children': 'Whether to have more children',
+    'marriage': 'Whether to get married', 'money': 'How to handle money', 'place': 'Where to live in five years',
+    'faith': 'How much faith shapes your life', 'parents': 'How involved your parents are', 'kids_routine': 'The children\'s routines between homes',
+    'kids_money': 'Money for the children', 'new_partners': 'New partners and the children', 'handovers': 'Handovers between your homes',
 }
 BY_STAGE = {
-    'Dating': ['hope', 'children'],
+    'Dating': ['children'],          # "What do you hope this becomes?" went (README "Psyche Together, release 62"): commit:self asks it
     'Living together': ['children', 'marriage', 'money', 'place', 'faith'],
     'Engaged': ['children', 'money', 'place', 'faith', 'parents'],
     'Married': ['more_children', 'money', 'place', 'parents'],
@@ -397,7 +398,7 @@ def items(s):
         for key in keys:
             if key == 'decisions':
                 out += [{'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': DECISIONS[t][1],
-                         'onlyIf': 'hope' if t in ('hope', 'children') and stage == 'Dating' else None} for t in BY_STAGE.get(stage) or []]
+                         'onlyIf': 'hope' if t == 'children' and stage == 'Dating' else None} for t in BY_STAGE.get(stage) or []]
             elif key in core:
                 text, opts = core[key]
                 out.append({'id': 'core:' + key, 'kind': 'core', 'pillar': key, 'opener': (q.get('openers') or {}).get(key, '') if key != 'desire' else '',
@@ -796,7 +797,7 @@ def widget_html(s):
                         _e(it['text'].replace('{p}', p)), opts))
     return ('<div class="pt"><style>%s</style><div class="top"><small>Psyche Together%s</small><b>You &amp; %s</b><div class="prog"><i></i></div>'
             '<div class="count"></div></div><form id="pt-form" onsubmit="return false">'
-            '<section class="card intro" id="c-intro"><span class="chip">Your questions</span><p class="question">Written from both your Psyches, for the two of you.</p>'
+            '<section class="card intro" id="c-intro"><span class="chip">Your check-in</span><p class="question">How things feel for you right now. There are no right answers, and your partner never sees yours: your read shows the two of you together.</p>'
             '<p class="how">Tap an answer and it moves on, with Back to change one. Some let you answer in your own words. At the end, tap <b>Submit my answers</b> just under this box.</p>'
             '<button type="button" class="start">Start ›</button><p class="small">Already tapped Submit my answers? Then yours are sent, and you can ignore this box.</p></section>%s'
             '<section class="card done" id="c-done" hidden><div class="big">✓</div><h3>All answered</h3><p>To check or change one, tap Change an answer and go through them again.</p><div class="go">Now tap Submit my answers, just below ↓</div>'
@@ -1559,7 +1560,8 @@ def chat_offer_due(s, profiles):
 
 CHAT_OFFER = {'chatOffer': True, 'asButtons': True, 'buttons': ['Add our Instagram chat', 'Add our WhatsApp chat', 'Skip'],
               'say': 'One more thing, optional: your conversation together makes your read far more specific to the two of you. '
-                     'Only that one chat is read, and what it shows goes with your read, locked. Whichever of you adds it, it counts for both.'}
+                     'Only that one chat is read, and it\'s de-identified here first: other people\'s names, handles, links, emails and phone '
+                     'numbers are taken out before it goes with your read, locked. Whichever of you adds it, it counts for both.'}
 
 
 def chat_offer(s):
@@ -1764,10 +1766,18 @@ def remind():
             'say': 'Done: I\'ll check every hour and tell you here when there\'s something new.'}
 
 
-CONSENT = ('Psyche Together: each of you answers privately, in your own Muse, and the read shows the two of you together, never how one of you '
-           'answered, except the big decisions, what you disagree about most and what you each want and guess the other wants, which are set side by side. For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked. After your check-in, either of you '
-           'can add your conversation together (your Instagram chat or your WhatsApp chat): what it shows, and a dated sample of it, go '
-           'with it, locked, for your read. Nothing from chats with anyone else is read, and PsycheAI can\'t read any of it.')
+# The welcome to Psyche Together (README "Psyche Together, release 62"), in the PsycheAI welcome's shape: what it is, then
+# what happens to what's theirs, one line each. Every line is what the code does: keep them literally true.
+CONSENT = ('Psyche Together is a private check-in for the two of you, built on both your Psyches. You each answer about 25 questions '
+           'in your own Muse, about 5 minutes, and then you both get the same read of the two of you: how you care and connect, live '
+           'together, share meaning, feel secure and work through disagreements, with next steps for the weeks ahead.\n\n'
+           '🔒 You each answer privately. The read shows the two of you together, never how one of you answered, except your big '
+           'decisions, what you disagree about most and what you each want and think the other wants, which are set side by side.\n'
+           '📄 For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked.\n'
+           '💬 After your check-in, either of you can add your chat together (Instagram or WhatsApp). It\'s de-identified here first: '
+           'other people\'s names, handles, links, emails and phone numbers are taken out. Nothing from any other chat is read.\n'
+           '🙈 Everything is locked before it leaves your Muse, so PsycheAI can\'t read any of it. End it any time, and what PsycheAI '
+           'keeps is deleted for both of you.')
 
 
 def start():
@@ -2030,7 +2040,7 @@ def task_file(d):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(d, f, ensure_ascii=False)
     os.chmod(path, 0o600)
-    short = {k: v for k, v in d.items() if k in ('write', 'saveTo', 'stage', 'pillars', 'gentle')}
+    short = {k: v for k, v in d.items() if k in ('write', 'say', 'saveTo', 'stage', 'pillars', 'gentle')}
     if isinstance(d.get('partner'), dict):
         short['partnerName'] = d['partner'].get('name')
     return dict(short, task='work/together-%s-task.json' % d['write'])
@@ -2070,9 +2080,20 @@ def questions_task():
     stage = s['stage']
     pillars = [p for p in FLOW if p in dict((pid, 1) for pid, _, _ in core_for(stage))]
     focus = {p: n for p, n in base_priority(s).items() if p in pillars}
-    return task_file({'write': 'questions', 'you': psyche_profile(psyche() or {}), 'partner': theirs.get('psyche'), 'stage': stage,
+    return task_file({'write': 'questions', 'say': questions_intro(bool(theirs.get('psyche'))), 'you': psyche_profile(psyche() or {}), 'partner': theirs.get('psyche'), 'stage': stage,
                       'yourReport': (psyche() or {}).get('report'), 'partnerReport': theirs.get('report'),
                       'pillars': pillars, 'focus': focus, 'saveTo': 'work/together-questions.json'})
+
+
+# What the questions are for, said before they're written (README "Psyche Together, release 62"), and how to answer them.
+WIDGET_SAY = 'Tap through at your own pace, about 5 minutes. When you\'re done, tap Submit my answers below.'
+
+
+def questions_intro(joined):
+    return (('Now your check-in. ' if joined else 'Now your own check-in, while your partner joins. ')
+            + 'I\'m writing about 25 quick questions from %s, on how things feel for you right now: feeling appreciated, '
+              'time together, stress, what you each want ahead, and how disagreements go. Your partner never sees your answers: '
+              'your read shows the two of you together.' % ('both your Psyches' if joined else 'your Psyche'))
 
 
 def check_questions(q, partner, pillars):
@@ -2122,7 +2143,7 @@ def save_questions(path):
         os.remove(str(path).lstrip('@'))
     except OSError:
         pass
-    return widget_out(s, 'Your questions, written from %s.' % ('both your Psyches' if s.get('partner') else 'your Psyche'))
+    return widget_out(s, WIDGET_SAY)
 
 
 def form():
@@ -2235,7 +2256,7 @@ SUBTITLES = {'plan': 'Small steps from every chapter'}
 AREAS = {'close': [('appreciation', 'Appreciation'), ('loves', 'Love languages'), ('know', 'Knowing each other'), ('connection', 'Connection'), ('counts', 'When it counts'), ('desire', 'Closeness')],
          'life': [('needs', 'Fairness'), ('life', 'Rhythm'), ('interests', 'Interests')],
          'future': [('values', 'Values'), ('future', 'Shared future'), ('dreams', 'Hopes you each carry'), ('decisions', 'Big decisions'), ('growth', 'Growth')],
-         'secure': [('security', 'Security'), ('attachment', 'Attachment')],
+         'secure': [('attachment', 'Attachment'), ('security', 'Security')],          # release 63: how each attaches, then how sure
          'disagree': [('topics', 'What you disagree about'), ('cycle', 'Your cycle'), ('disagreements', 'Repair')]}
 PSY_AREAS = ['loves', 'connection', 'needs', 'life', 'values', 'growth', 'security', 'attachment', 'disagreements', 'cycle']
 STATUS_AREAS = ['attachment', 'cycle']
@@ -2819,7 +2840,7 @@ def status():
     if not s.get('sent'):
         if not s.get('questions'):
             return questions_task()
-        return widget_out(s, 'Your questions.')
+        return widget_out(s, 'Your check-in, where you left it. ' + WIDGET_SAY)
     if not s.get('forYou'):
         return foryou_task()          # their own For you is written first, whatever the partner has done
     k, got, profiles, box = couple()
@@ -3292,6 +3313,13 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .erm{list-style:none;margin:8px 0 0;padding:8px 0 0;border-top:1px solid #eee6f3}.erm li{font-size:13.5px;margin:4px 0}.erm b{color:#7b3fa0;font-weight:650}
 .fnd{list-style:none;margin:6px 0;padding:0}.fnd li{margin:8px 0;padding-left:12px;border-left:3px solid #e6dcec}.fnd b{display:block;font-size:14.5px;line-height:1.4}.fnd span{display:block;font-size:13.5px;color:var(--soft);margin-top:2px}
 .glance-hero .exs{margin:8px 0 0;font-size:14.5px;font-weight:400;color:var(--ink);line-height:1.5}
+.fc{margin:8px 0;padding:10px 12px;border-radius:12px}.fc .src{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.fc.ans{background:#f7f2fa;background:color-mix(in srgb,var(--c,#7b3fa0) 8%,#fff)}.fc.ans .src{color:var(--c,#7b3fa0)}.fc.ans p{margin:0;font-size:15px;line-height:1.5}
+.fc.ev{background:#fff;border:1px solid #e4ebf3}.fc.ev .src{color:#2b5d8f}.fc.ev b{display:block;font-size:14.5px;line-height:1.4}.fc.ev .t{display:block;font-size:13.5px;color:var(--soft);margin-top:3px;line-height:1.45}
+.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}.nums>div{padding:10px 12px;border-radius:12px;background:#f4f8fc;border:1px solid #e3ecf6}
+.nums b{display:block;font-size:19px;font-weight:800;color:#2b5d8f;line-height:1.2}.nums span{display:block;font-size:12.5px;color:var(--soft);margin-top:3px;line-height:1.35}
+.ml{margin:12px 0 4px;font-size:13px;font-weight:700;color:var(--ink)}
+.lv.Not-decided-yet{background:#eaf1f9;color:#2b5d8f}.lv.Talk-about{background:#fbeeed;color:#a8322a}
 '''.replace('__FONT__', FONT)
 
 JS = r'''
@@ -3868,7 +3896,7 @@ def page(box, s):
         if aid in (view.get('pillars') or {}):
             txt, cls = view['pillars'][aid], view['pillars'][aid].replace(' ', '-')
         elif aid == 'decisions' and dec:
-            txt, cls = '%d of %d aligned' % (al_, len(dec)), ('Aligned' if al_ == len(dec) else 'Steady')
+            txt, cls = '%d of %d aligned' % (al_, len(dec)), ('Aligned' if al_ == len(dec) else 'Worth-attention' if not al_ else 'Steady')
         else:
             m_ = re.search(r'<span class="l[vw] ([\w-]+)">([^<]*)</span>', badge(cid, aid, True) or '')
             if not m_:
@@ -3914,7 +3942,7 @@ def page(box, s):
                                                'ok' if D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess') else 'no',
                                                'Guessed right' if D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess') else 'Worth knowing'))
         label = {'appreciated': 'What you said makes you feel most appreciated', 'stress': 'What you said you want when stressed', 'repair': 'What you said you need after a disagreement'}.get(mk, '')
-        return '<span class="sl" style="margin-top:10px">%s</span>' % _e(label) + row(names[0], 'a', names[1], 'b') + row(names[1], 'b', names[0], 'a')
+        return '<p class="ml">%s</p>' % _e(label) + row(names[0], 'a', names[1], 'b') + row(names[1], 'b', names[0], 'a')
     ICON = {'messages': ('💬', 'Messages'), 'psyches': ('🧠', 'Psyches'), 'report': ('📄', 'Reports'), 'moment': ('📅', '')}
     for cid, num, title, pids, refs in CHAPTERS:
         c = D(ch.get(cid))
@@ -3927,7 +3955,9 @@ def page(box, s):
             pv = D(D(r.get('pillars')).get(aid))
             # 1. How you see it
             seen = x.get('seen') or pv.get('seeIt')
-            st1 = ('<div class="st"><span class="sl">How you see it</span><p>%s</p></div>' % _e(seen)) if seen else ''
+            # Release 63: How you see it and What the evidence shows are one block, What we found: their own view as a tinted
+            # card, each finding from the evidence as a card of its own, measured figures as number tiles.
+            seen_ = ('<div class="fc ans"><span class="src">🗣 How you see it</span><p>%s</p></div>' % _e(seen)) if seen else ''
             # 2. What the evidence shows: each piece tagged with its source, then the area's own data
             evs = [e for e in x.get('evidence') or [] if isinstance(e, dict)]
             if evs and not any(e.get('kind') or e.get('insight') for e in evs):        # an older read: its message line, Psyches line and moments
@@ -3936,7 +3966,7 @@ def page(box, s):
             for e in evs:
                 if e.get('kind') == 'moment':
                     keep([{'when': e.get('when'), 'what': e.get('text')}], '%s · %s' % (title, nm))
-            fins = ''.join('<li><b>%s</b><span>%s</span></li>' % (_e(e.get('insight')), _e(e.get('support'))) for e in evs if e.get('insight'))
+            fins = ''.join('<div class="fc ev"><span class="src">🔎 What the evidence shows</span><b>%s</b><span class="t">%s</span></div>' % (_e(e.get('insight')), _e(e.get('support'))) for e in evs if e.get('insight'))
             evs = [e for e in evs if not e.get('insight')]
             lis = ''.join('<li><i title="%s">%s</i><span>%s%s</span></li>' % (_e(ICON.get(e.get('kind'), ('•', ''))[1]), ICON.get(e.get('kind'), ('•', ''))[0],
                                                                          ('<b>%s</b> · ' % _e(e.get('when'))) if e.get('kind') == 'moment' and e.get('when') else '', _e(e.get('text')))
@@ -3973,31 +4003,25 @@ def page(box, s):
                 lead = mirror_('stress')
             elif aid == 'counts':
                 gn, ht = D(x.get('goodNews')), D(x.get('hardTimes'))
-                stat = lambda d_, lbl, how: ('<li><b>%s</b><span>The other met it %s %d of %d times in the messages read.</span></li>' % (lbl, how, _int(d_.get('metWell')), _int(d_.get('seen')))) if _int(d_.get('seen')) else ''
-                ex_ = ''.join('<p class="miss"><b>%s · %s</b> %s <span class="mt %s">%s</span></p>' % ({'good': 'Good news', 'hard': 'A hard time'}.get(D(m).get('kind'), ''), _e(D(m).get('when')), _e(D(m).get('text')),
-                                                                                                    _e(D(m).get('met')), {'well': 'met well', 'flat': 'met flatly', 'missed': 'missed'}.get(D(m).get('met'), ''))
-                              for m in x.get('moments') or [])
-                if stat(gn, '', '') or stat(ht, '', ''):          # findings, in plain words, under What the evidence shows (release 54)
-                    data_ += '<ul class="fnd">%s%s</ul>%s' % (stat(gn, 'When one of you had good news', 'with real interest'), stat(ht, 'When one of you was having a hard time', 'with real support'), ex_)
+                stat = lambda d_, lbl: ('<div><b>%d of %d</b><span>%s</span></div>' % (_int(d_.get('metWell')), _int(d_.get('seen')), lbl)) if _int(d_.get('seen')) else ''
+                if stat(gn, '') or stat(ht, ''):          # release 63: two numbers, not sentences of them
+                    data_ += '<div class="nums">%s%s</div>' % (stat(gn, 'times good news was met with real interest'), stat(ht, 'times a hard time was met with real support'))
                 lead = mirror_('stress')
             elif aid == 'disagreements':
                 rp = (sig.get('repair') or {}) if isinstance(sig.get('repair'), dict) else {}
                 rpx = D(x.get('repairs'))
-                meas = []          # release 54: each figure in plain words, as a finding, never a box of numbers
+                meas = []          # release 63: each figure as a number tile, with what it counts in a few words
                 if rp.get('medianHoursBack') is not None:
                     hb = float(rp['medianHoursBack'])
-                    when_ = 'within the hour' if hb < 1 else 'within about %d hours' % round(hb) if hb < 48 else 'after about %d days' % round(hb / 24)
-                    day_ = (' Across the whole chat, %d in 100 hard messages are followed by something warm within a day.' % _int(rp['backWithinDay'], 0, 100)) if rp.get('backWithinDay') is not None else ''
-                    meas.append(('You get back to warm ' + ('quickly' if hb < 6 else 'slowly'), 'After a hard message, one of you usually says something warm again %s.%s' % (when_, day_)))
+                    meas.append(('Under an hour' if hb < 1 else 'About %d hours' % round(hb) if hb < 48 else 'About %d days' % round(hb / 24), 'to something warm again after a hard message'))
+                if rp.get('backWithinDay') is not None:
+                    meas.append(('%d in 100' % _int(rp['backWithinDay'], 0, 100), 'hard messages followed by something warm within a day'))
                 if rp.get('ratioInside') is not None:
-                    ri = float(rp['ratioInside'])
-                    meas.append(('Disagreements stay mostly kind' if ri >= 5 else 'Disagreements run cooler than they could' if ri >= 1 else 'Disagreements tip into hard words',
-                                 'In the three hours after a hard message, you use about %s kind or positive words for every hard one. Gottman found couples who stay steady keep about 5 to 1.' % '{:g}'.format(ri)))
+                    meas.append(('%s to 1' % '{:g}'.format(float(rp['ratioInside'])), 'kind words for each hard one in a disagreement (steady couples: about 5 to 1)'))
                 if rpx.get('tried'):
-                    meas.append(('Your attempts to make up mostly land' if _int(rpx.get('landed')) * 4 >= _int(rpx.get('tried')) * 3 else 'Your attempts to make up often miss',
-                                 '%d of %d attempts to make up (a sorry, a joke, a softer reply) in the messages read were taken up by the other.' % (_int(rpx.get('landed')), _int(rpx.get('tried')))))
+                    meas.append(('%d of %d' % (_int(rpx.get('landed')), _int(rpx.get('tried'))), 'attempts to make up that the other took up'))
                 if meas:
-                    data_ += '<ul class="fnd">%s</ul>' % ''.join('<li><b>%s</b><span>%s</span></li>' % (_e(a_), _e(b_)) for a_, b_ in meas)
+                    data_ += '<div class="nums">%s</div>' % ''.join('<div><b>%s</b><span>%s</span></div>' % (_e(a_), _e(b_)) for a_, b_ in meas)
                 lead = mirror_('repair')
             elif aid == 'interests':
                 lead = cols(D(x.get('columns')) or D(c.get('enjoy')))
@@ -4037,9 +4061,9 @@ def page(box, s):
             elif aid == 'security' and view.get('commitment') and 'security' in (view.get('pillars') or {}):
                 lead = ('<div class="tiles"><span class="tl %s"><small>How sure you are of each other</small><b>%s</b></span><span class="tl %s"><small>How sure you each are yourselves</small><b>%s</b></span></div>'
                         % (_e(view['pillars']['security'].replace(' ', '-')), _e(view['pillars']['security']), _e(view['commitment'].replace(' ', '-')), _e(view['commitment'])))
-            st_lead = ('<div class="st">%s</div>' % lead) if lead else ''
-            body_ = data_ + (('<ul class="fnd">%s</ul>' % fins) if fins else '') + (('<ul class="evd">%s</ul>' % lis) if lis else '')
-            st2 = ('<div class="st"><span class="sl">What the evidence shows</span>%s</div>' % body_) if (aid not in NO_EVIDENCE or data_ or lis) and body_.strip() else ''
+            ev_ = data_ + (fins if aid not in NO_EVIDENCE or data_ or lis else '') + (('<ul class="evd">%s</ul>' % lis) if lis else '')
+            found_ = (lead + seen_ if aid == 'growth' else seen_ + lead) + ev_          # Growth: the radar first, with no heading over it
+            st_found = ('<div class="st found">%s%s</div>' % ('' if aid == 'growth' else '<span class="sl">What we found</span>', found_)) if found_.strip() else ''
             # 3. What it means, and what to do about it (no verdict tag: the area's own badge already says it)
             means = x.get('means') or x.get('meaning') or pv.get('headline')
             extra = ''
@@ -4070,10 +4094,10 @@ def page(box, s):
             st3 = ('<div class="st means"><span class="sl">What it means</span>%s%s%s</div>'
                    % (('<p>%s</p>' % _e(means)) if means else '', extra,
                       ('<span class="sl" style="margin-top:12px">Next steps</span><ul class="nx">%s</ul>' % nx) if nx else '')) if (means or extra or nx) else ''
-            if st1 or st_lead or st2 or st3:
+            if st_found or st3:
                 tm_ = re.search(r'class="tl ([\w-]+)"><small>.*?</small><b>(.*?)</b>', tile(cid, aid, nm))
                 pill_ = ('<span class="lv %s">%s</span>' % (tm_.group(1), tm_.group(2))) if tm_ else ''       # the same words and colour as its tile at a glance
-                inner += '<div class="area" id="%s-%s"><div class="at"><b>%s</b>%s</div>%s%s%s%s</div>' % (cid, aid, _e(nm), pill_, st1, st_lead, st2, st3)
+                inner += '<div class="area" id="%s-%s"><div class="at"><b>%s</b>%s</div>%s%s</div>' % (cid, aid, _e(nm), pill_, st_found, st3)
         if not ar and (c.get('askEachOther') or c.get('tryThis')):          # an older read's chapter-wide steps
             inner += ('<div class="callout ask"><span class="lbl">Try together</span>%s%s</div>'
                       % (''.join('<p class="q">%s</p>' % _e(y) for y in c.get('askEachOther') or []), ('<p><b>This week:</b> %s</p>' % _e(c.get('tryThis'))) if c.get('tryThis') else ''))
@@ -4386,7 +4410,7 @@ def main(argv):
         out = take_answers(' '.join(rest))
     elif cmd == 'widget':
         s = state()
-        out = widget_out(s, 'Your questions, written from both your Psyches.')
+        out = widget_out(s, WIDGET_SAY)
     elif cmd == 'check':
         out = check()
     elif cmd == 'again':
