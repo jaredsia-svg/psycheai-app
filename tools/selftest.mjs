@@ -2602,7 +2602,13 @@ print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'say': m.THIN_SAY, 'li
         JSON.stringify(c[0].calls.filter(x => / thread /.test(x)).map(x => x.match(/T\d/)[0]).filter((x, i, a) => a.indexOf(x) === i).sort()) === '["T0","T1","T2"]' &&
         c[0].calls.findIndex(x => /^M top-recipients/.test(x)) < c[0].calls.findIndex(x => / thread /.test(x)) &&
         !/Kai|Ana|Jun|Mei|mei\.t|@|U\d|I\d/.test(c[0].digest) && /^### Conversation 1: one-to-one, .*\(whole thread\)$/m.test(c[0].digest) && /^## Interests\n- Distance running$/m.test(c[0].digest) && !/INTERESTED/.test(c[0].digest) &&
-        /^counts: 15 posts and stories .* 3 conversations read \(the busiest\) · 48 own messages read · 440 followers · 636 following · 10 saved$/m.test(c[0].digest) &&
+        /^counts: 15 posts and stories .* 3 conversations read \(the busiest\) · 48 own messages read · 440 followers · 636 following · 86 saved · 780 liked$/m.test(c[0].digest) &&
+        // Likes and saves (README "Likes and saves in Muse"): topics, short scrubbed captions and small accounts against public pages, never who posted them.
+        /^### What they like \(other people's posts: the latest 10 of 780\)\nhashtags: #dogrescue \d+ · #tennis \d+|^### What they like \(other people's posts: the latest 10 of 780\)\nhashtags: #tennis \d+ · #dogrescue \d+/m.test(c[0].digest) &&
+        /^### What they save \(other people's posts: the latest 10 of 86\)$/m.test(c[0].digest) && /^from small accounts \(under 2,000 followers, often people they know\): 4 · from public pages: 6$/m.test(c[0].digest) &&
+        /^- Three drills for a steadier backhand, from coach \[handle\]/m.test(c[0].digest) && /^- Adopted! Biscuit went home today after 40 days with us \d$/m.test(c[0].digest) &&
+        // Calls to action and PsycheAI's own posts never reach the digest Muse's safety check reads.
+        !/kim\.coach|someone\d|x\.example|Comment BISCUIT|DM you|psycheai\.io\/skill|Always allow|Install/.test(c[0].digest) && c[0].calls.some(l => /recently-liked-posts/.test(l)) &&
         c[1].r.ok === true && /too many requests/.test(c[1].r.stopped) && (c[1].calls.some(x => /^M thread /.test(x)) && !c[1].calls.some(x => /^M thread .* --after /.test(x)) && c[1].calls.filter(x => /^M thread /.test(x)).length <= 3 && c[1].calls.length < c[0].calls.length) && c[1].r.read.threads === 0 &&
         c[2].r.ok === true && !c[2].calls.some(x => /^M /.test(x)) && /^--account-id must be/.test(c[3].r.problems[0]) && c[3].calls.length === 0 &&
         c[4].r.ok === true && c[4].r.read.threads === 3 && /^## Posts and stories/m.test(c[4].digest) && /reads: 1/.test(c[4].digest))(skillState.leaving && skillState.leaving.collect) &&
@@ -3985,6 +3991,13 @@ elif a[0] == 'thread':
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'disagreements', title: 'One question first', detail: 'You argue a case.', howToRaise: 'I want to hear you out first.' }], practice: 'Ask before you answer.' }));
   // Ana skipped the chat, so Mei is offered it after her check-in; she adds Instagram, then WhatsApp, and the read follows.
   tg.offerA = await run.a('save-foryou', '@work/together-foryou.json');
+  tg.chatRules = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
+import importlib.util, json
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+due = [m.chat_offer_due({}, {}), m.chat_offer_due({'chatDone': ['instagram']}, {}), m.chat_offer_due({'chatDone': ['instagram'], 'secondOffered': True}, {}),
+       m.chat_offer_due({}, {'b': {'chat': {'source': 'whatsapp'}}}), m.chat_offer_due({'chatDone': ['instagram', 'whatsapp']}, {})]
+print(json.dumps({'due': due, 'firstNoSkip': 'Skip' not in m.chat_offer({})['buttons']}))
+`], { env: home.a.env })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
   tg.threads = await run.a('threads');
   tg.pickRead = await run.a('pick-thread', 'Ana Lim');
   const wa = pathx.join(home.a.root, 'WhatsApp Chat with Ana.txt');
@@ -4292,7 +4305,7 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       /\*\*"Make my Psyche first":\*\* the PsycheAI skill's first run/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.pendingJoin.joined === true && tg.pendingJoin.write === 'questions' && tg.pendingGone === true, JSON.stringify([tg.pending, tg.pendingJoin]));
   check('the one who starts is asked only the stage before the invite (no age question, no name: it comes from the partner\'s Psyche), with the consent line saying their full report and their conversation together go to their partner, locked, and nothing from other chats',
-    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report and your Psyche Card picture go to your partner's Muse, locked/.test(tg.start.consent || '') && /After your questions, either of you can add your chat together \(Instagram or WhatsApp\)\. It's de-identified here first: other people's names, handles, links, emails and phone numbers are taken out\. Nothing from any other chat is read\./.test(tg.start.consent || '') &&
+    tg.start.id === 'stage' && /Which stage of a relationship are you two at right now\?/.test(tg.start.say) && /your full Psyche report and your Psyche Card picture go to your partner's Muse, locked/.test(tg.start.consent || '') && /After your questions, one of you adds your chat together \(Instagram, WhatsApp or both\): your read is built on it\. It's de-identified here first: other people's names, handles, links, emails and phone numbers are taken out\. Nothing from any other chat is read\./.test(tg.start.consent || '') &&
       // In the PsycheAI welcome's shape (README "Psyche Together, release 62"): what it is, then a line each, every one true of the code.
       /^Psyche Together is a private read of the two of you, built on both your Psyches\./.test(tg.start.consent || '') && (tg.start.consent.match(/\n(🔒|📄|💬|🙈) /g) || []).length === 4 &&
       /\[name\]/.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) && /de-identified here first/.test(tg.offerA.say || '') &&
@@ -4325,9 +4338,11 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
   check('each person\'s For you is written right after they submit, from their answers, their full report and their partner\'s card; then their conversation is offered (Instagram, WhatsApp or Skip) until one of them adds it, and the read waits for that answer; the first one in then waits with a button, the last one in goes on to write the read, and the page follows its save (README "Psyche Together, release 61")',
     tg.sentB.write === 'foryou' && tg.sentB.yourReport && tg.sentB.partner && tg.sentB.partner.name === 'Mei' &&
       // Ana is on the gentle path (she said she sometimes feels unsafe): she isn't asked for their conversation; Mei is.
-      !tg.offerB.chatOffer && tg.offerB.waiting === true && tg.offerA.chatOffer === true && JSON.stringify(tg.offerA.buttons) === '["Add our Instagram chat","Add our WhatsApp chat","Skip"]' &&
-      /and not is_gentle\(s\)/.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) &&
-      tg.pickRead.write === 'read' && /^Added\./.test(tg.pickRead.say || '') && tg.waAdded.write === 'read' && /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || '') &&
+      !tg.offerB.chatOffer && tg.offerB.waiting === true && tg.offerA.chatOffer === true && JSON.stringify(tg.offerA.buttons) === '["Add our Instagram chat","Add our WhatsApp chat"]' && /so one chat is needed, and you can add both/.test(tg.offerA.say || '') &&
+      /if is_gentle\(s\):\n\s+return False/.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) &&
+      // Release 68: one chat is needed, both can be added: after Instagram, WhatsApp is offered once, with Skip.
+      tg.pickRead.chatOffer === true && JSON.stringify(tg.pickRead.buttons) === '["Add our WhatsApp chat","Skip"]' && /^Added\. Want to add your WhatsApp chat together too\?/.test(tg.pickRead.say || '') &&
+      tg.chatRules.firstNoSkip === true && tg.chatRules.due.join() === 'true,true,false,false,false' && tg.waAdded.write === 'read' && /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || '') &&
       /\*\*When a result has `chatOffer`\*\*/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?","Remind me here"]' &&
       // The reminder is theirs to ask for (README "Psyche Together, release 57"): once set, it isn't offered again.
       tg.remindB.setReminder && tg.remindB.setReminder.name === 'Psyche Together check' && tg.remindB.setReminder.task === 'In ~/workspace/skills/psyche-together, run python3 bin/together.py check and show what it gives. When it says done, remove this reminder.' &&
@@ -4483,7 +4498,10 @@ r = json.loads(sys.stdin.read()); print(json.dumps(m.check_read(r, json.loads(${
   check('Psyche Together stands apart from the PsycheAI skill, offered from its menus: its own files, served and signed under its own name, its tools hidden from the host; PsycheAI\'s script runs none of it (no together.py, no together_ tools) and only offers it ("Psyche Together with my partner", "Continue Psyche Together" when an invite waited); PsycheAI\'s SKILL.md never installs or runs it, only offers it as the user\'s own choice to install, and says no Sync is needed; its SKILL.md keeps its answers, partner and link in its own files',
     !/together_|together\.py/.test(psycheScript) && /'Psyche Together with my partner'/.test(psycheScript) && /together-pending\.json/.test(psycheScript) &&
       /PSYCHE TOGETHER \("Psyche Together with my partner", "Continue Psyche Together"\)/.test(psycheSkillMd) && /When nextStep has continueTogether[^.]*, its buttons start with "Continue Psyche Together": show them as given/.test(psycheSkillMd) && /nxt\['continueTogether'\] = True/.test(psycheScript) &&
-      /this skill neither installs nor runs it/.test(psycheSkillMd) && /"Install Psyche Together from app\.psycheai\.io\/together and start it" and "Not now"[^]*then go straight on as its SKILL\.md says for starting, in the same turn, with no message about the install and no "Start Psyche Together" button to tap first/.test(psycheSkillMd) &&
+      /this skill neither installs nor runs it/.test(psycheSkillMd) && /"Install Psyche Together from app\.psycheai\.io\/together and start it" and "Not now"[^]*then go straight on as its SKILL\.md says for starting, in the same turn, with no message about the install, no "Start Psyche Together" button to tap first and the intro not said again/.test(psycheSkillMd) &&
+      // Release 68: what it is comes first, in the same words as its own consent, then whether to install it.
+      psycheSkillMd.includes(instructions.TOGETHER_INTRO) && instructions.TOGETHER_INTRO === tg.start.consent &&
+      /PsycheAI showed the `consent` just before they chose to install, so this message is only its question \(the stage\)/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       !/save its three files|with no searching first|go straight on with that skill/.test(psycheSkillMd) && /It needs only their own Psyche: no Sync/.test(psycheSkillMd) &&
       tgSkill.signedText('v', { a: 'b' }, 1).startsWith('psyche-together\n') && tgSkill.signed() !== null && hiddenTools &&
       /Psyche Together is its own skill: PsycheAI's menus offer it, but none of its code is in the PsycheAI skill/.test(await (await fetch(base + '/together')).text()) &&

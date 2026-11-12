@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 191
+RELEASE = 192
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -3069,7 +3069,7 @@ def build_digest(given=None, given_meta=None):
     every = [x['t'] for x in items]
     counts = meta.get('counts') or {}
     head_counts = ['%d posts and stories' % (all_posts + sum(no_words.values())), '%d with words' % words, '%d comments' % len(comments)]
-    for k in ('conversations', 'followers', 'following', 'saved'):
+    for k in ('conversations', 'followers', 'following', 'saved', 'liked'):
         if isinstance(counts.get(k), int):
             # collect counts the conversations it read, not the inbox: said so, or a read takes the
             # sample for their life ("you keep 15 conversations").
@@ -3092,6 +3092,22 @@ def build_digest(given=None, given_meta=None):
         out += ['## Comments'] + comments
     if convo_blocks:
         out += ['## Messages'] + convo_blocks
+    # What they save and like (README "Likes and saves in Muse"): other people's posts, so topics and short scrubbed
+    # captions, never who posted them.
+    for key, what in (('saved', 'What they save'), ('liked', 'What they like')):
+        tv = meta.get(key) if isinstance(meta.get(key), dict) else None
+        if not tv or not tv.get('read'):
+            continue
+        block = ['### %s (other people\'s posts: the latest %d of %s)' % (what, tv['read'], '{:,}'.format(tv.get('total') or tv['read']))]
+        tags = [(scrub(str(k), people=False), n) for k, n in tv.get('tags') or []]
+        tags = [(k, n) for k, n in tags if re.search(r'\w', re.sub(r'\[(handle|link|email|number|name)\]', '', k))]
+        if tags:
+            block.append('hashtags: ' + ' · '.join('#%s %d' % (k, n) for k, n in tags))
+        if tv.get('small') or tv.get('public'):
+            block.append('from small accounts (under 2,000 followers, often people they know): %d · from public pages: %d' % (tv.get('small') or 0, tv.get('public') or 0))
+        caps = [scrub(str(c)) for c in tv.get('captions') or []]
+        block += ['- ' + c for c in caps if len(re.sub(r'\[(handle|link|email|number|name)\]', '', c).strip()) >= 12]
+        interests.extend(block)
     if interests:
         out += ['## Interests'] + interests
     os.makedirs(os.path.dirname(DIGEST), exist_ok=True)
@@ -3182,6 +3198,50 @@ def caption_of(p):
         if isinstance(v, str) and v.strip():
             return v
     return ''
+
+
+TASTE_CAPTIONS, TASTE_CAPTION_CHARS, TASTE_TAGS, SMALL_ACCOUNT = 15, 100, 20, 2000
+# A caption that tells the reader to do something is left out (README "Likes and saves in Muse"): Muse's safety check
+# reads the digest, and other people's calls to action (install, paste, tap, comment, DM, follow, link in bio, a web
+# address) read as instructions. PsycheAI's own posts are skipped for the same reason: they carry its install line.
+TASTE_SKIP_ACCOUNTS = {'psycheai.io'}
+TASTE_CTA = re.compile(r'\b(install|paste|tap|click|allow|comment|dm|direct message|message me|follow|share|tag|repost|link in (my |the )?bio|giveaway|'
+                       r'sign ?up|register|download|subscribe|swipe|use (my |the )?code|promo|discount|order now|shop now|buy now|ignore|instructions?|prompt)\b'
+                       r'|https?://|www\.|\b[\w-]+\.(com|io|ai|co|net|org|app|me|sg|ly|gg|xyz)(/|\b)', re.I)
+
+
+def taste(page_list):
+    """What a list of saved or liked posts says, without who posted them (README "Likes and saves in Muse"): its
+    total, how many were read, the commonest hashtags, the first few captions (cut short) and how many came from
+    small accounts (under 2,000 followers, not verified) rather than public pages."""
+    out = {'total': None, 'read': 0, 'tags': {}, 'captions': [], 'small': 0, 'public': 0}
+    for page in page_list:
+        if isinstance(page.get('total_count'), int):
+            out['total'] = page['total_count']
+        for p in page.get('posts') or page.get('items') or []:
+            if not isinstance(p, dict):
+                continue
+            out['read'] += 1
+            for h in p.get('hashtags') or []:
+                tag = str(h).lstrip('#').strip().lower()
+                if 1 < len(tag) <= 40:
+                    out['tags'][tag] = out['tags'].get(tag, 0) + 1
+            ai = p.get('author_info') if isinstance(p.get('author_info'), dict) else {}
+            if str(ai.get('username') or '').lower() in TASTE_SKIP_ACCOUNTS:
+                continue
+            words = str(p.get('post_caption_text') or caption_of(p) or '')
+            if TASTE_CTA.search(words):
+                words = ''
+            words = re.sub(r'\s+', ' ', re.sub(r'#\w+', '', words)).strip()
+            words = words if len(words) <= TASTE_CAPTION_CHARS else words[:TASTE_CAPTION_CHARS].rsplit(' ', 1)[0] + ' …'
+            if len(words) >= 12 and len(out['captions']) < TASTE_CAPTIONS and words not in out['captions']:
+                out['captions'].append(words)
+            if isinstance(ai.get('follower_count'), int):
+                out['small' if ai['follower_count'] < SMALL_ACCOUNT and not ai.get('is_verified') else 'public'] += 1
+    if out['total'] is None:
+        out['total'] = out['read']
+    out['tags'] = sorted(out['tags'].items(), key=lambda kv: (-kv[1], kv[0]))[:TASTE_TAGS]
+    return out
 
 
 SEEN_OFFSET = [None]   # the user's minutes from UTC, as their Instagram times showed it in this run
@@ -3312,16 +3372,7 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                                     read['comments'] += 1
                 except RuntimeError as err:
                     note('comments', err)
-                # Saved (a count) and their interests (topics only).
-                try:
-                    n = 0
-                    for page in pages(lambda after: igc(IG_CLI, 'saved-posts', '--account-id', account, '--limit', 50, *(('--after', after) if after else ())),
-                                      lambda p: (p.get('end_cursor') or p.get('next_cursor') or (p.get('page_info') or {}).get('end_cursor'))
-                                      if (p.get('has_next_page') or (p.get('page_info') or {}).get('has_next_page')) else None, limit=10):
-                        n += len(page.get('posts') or page.get('items') or [])
-                    meta['counts']['saved'] = n
-                except RuntimeError as err:
-                    note('saved', err)
+                # Their interests (topics only); then what they save and like, below.
                 try:
                     got = igc(IG_CLI, 'current-interests', '--account-id', account)
                     found = []
@@ -3344,6 +3395,18 @@ def collect(account, messages_account=None, me=None, threads=COLLECT_THREADS, wi
                     meta['interests'] = list(dict.fromkeys(found))[:40]
                 except RuntimeError as err:
                     note('interests', err)
+                # What they save and what they like (README "Likes and saves in Muse"), the latest 500 of each: the
+                # total, the hashtags, a few short captions (other people's words, scrubbed when the digest is built)
+                # and how many are from small accounts rather than public pages. Never who posted them.
+                # Saved: up to 500, as the count always was; liked: the latest 250, enough for what they like now, in 5 calls.
+                for cmd, key, most in (('saved-posts', 'saved', 10), ('recently-liked-posts', 'liked', 5)):
+                    try:
+                        meta[key] = taste(pages(lambda after, cmd=cmd: igc(IG_CLI, cmd, '--account-id', account, '--limit', 50, *(('--after', after) if after else ())),
+                                                lambda p: (p.get('end_cursor') or p.get('next_cursor') or (p.get('page_info') or {}).get('end_cursor'))
+                                                if (p.get('has_next_page') or (p.get('page_info') or {}).get('has_next_page')) else None, limit=most))
+                        meta['counts'][key] = meta[key]['total']
+                    except RuntimeError as err:
+                        note(key, err)
         except RateLimited:
             halt.set()
 

@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 67
+RELEASE = 68
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1556,21 +1556,37 @@ def chat_done(profiles):
     return any((profiles.get(r) or {}).get('chat') for r in ('a', 'b'))
 
 
+CHAT_SOURCES = {'instagram': 'Add our Instagram chat', 'whatsapp': 'Add our WhatsApp chat'}
+
+
 def chat_offer_due(s, profiles):
-    # Never to someone on the gentle path (they said they sometimes feel unsafe): the other one may add it.
-    return not s.get('chatOffered') and not s.get('chat') and not chat_done(profiles) and not is_gentle(s)
+    """Release 68: a chat is needed. Until one of you has added one, it is offered every time, with no Skip; once you
+    have added one source, the other is offered once, with Skip. Never to someone on the gentle path (they said they
+    sometimes feel unsafe): the other one adds it."""
+    if is_gentle(s):
+        return False
+    done = set(s.get('chatDone') or [])
+    if not done:
+        return not chat_done(profiles)
+    return len(done) == 1 and not s.get('secondOffered') and not s.get('readAt')
 
 
-CHAT_OFFER = {'chatOffer': True, 'asButtons': True, 'buttons': ['Add our Instagram chat', 'Add our WhatsApp chat', 'Skip'],
-              'say': 'One more thing, optional: your conversation together makes your read far more specific to the two of you. '
-                     'Only that one chat is read, and it\'s de-identified here first: other people\'s names, handles, links, emails and phone '
+CHAT_OFFER = {'chatOffer': True, 'asButtons': True, 'buttons': ['Add our Instagram chat', 'Add our WhatsApp chat'],
+              'say': 'Next, your conversation together: your read is built on it, so one chat is needed, and you can add both. '
+                     'Only your chat together is read, and it\'s de-identified here first: other people\'s names, handles, links, emails and phone '
                      'numbers are taken out before it goes with your read, locked. Whichever of you adds it, it counts for both.'}
 
 
-def chat_offer(s):
-    s['chatOffered'] = True
+def chat_offer(s, said=''):
+    done = [x for x in s.get('chatDone') or [] if x in CHAT_SOURCES]
+    if not done:
+        return dict(CHAT_OFFER, say=(said + ' ' if said else '') + CHAT_OFFER['say'])
+    other = next(k for k in CHAT_SOURCES if k not in done)
+    s['secondOffered'] = True
     save_state(s)
-    return dict(CHAT_OFFER)
+    return {'chatOffer': True, 'asButtons': True, 'buttons': [CHAT_SOURCES[other], 'Skip'],
+            'say': (said + ' ' if said else '') + 'Want to add your %s chat together too? More of your conversation makes your read more specific.'
+                   % ('WhatsApp' if other == 'whatsapp' else 'Instagram')}
 
 
 def chat_threads(s):
@@ -1579,7 +1595,7 @@ def chat_threads(s):
     s['threads'] = ths
     save_state(s)
     if not ths:
-        return {'say': 'I couldn\'t find a one-to-one chat on your Instagram.', 'buttons': ['Add our WhatsApp chat', 'Skip'], 'asButtons': True}
+        return {'say': 'I couldn\'t find a one-to-one chat on your Instagram.', 'buttons': ['Add our WhatsApp chat'] + (['Skip'] if s.get('chatDone') else []), 'asButtons': True}
     return {'pickThread': True, 'ask': 'Which of your Instagram chats is with your partner? Only that one chat is read, for your read together.',
             'buttons': [t['label'] for t in ths] + ['Not on Instagram'], 'asButtons': True}
 
@@ -1589,6 +1605,8 @@ def after_chat(s, said=''):
     k, got, profiles, box = couple()
     if got.get('error'):
         return got
+    if not box and chat_offer_due(s, profiles):          # release 68: the other source, or a chat still needed
+        return chat_offer(s, said)
     if box:
         out = show(box)
     elif all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
@@ -1606,7 +1624,7 @@ def pick_thread(label):
     if label == 'Not on Instagram':
         s.setdefault('chatSkipped', []).append('instagram')
         save_state(s)
-        return {'say': 'No problem.', 'buttons': ['Add our WhatsApp chat', 'Skip'], 'asButtons': True}
+        return {'say': 'No problem.' if s.get('chatDone') else 'Then your WhatsApp chat together.', 'buttons': ['Add our WhatsApp chat'] + (['Skip'] if s.get('chatDone') else []), 'asButtons': True}
     th = next((t for t in s.get('threads') or [] if t['label'] == label), None)
     if not th:
         return {'error': '"%s" isn\'t one of the chats listed.' % label}
@@ -1777,7 +1795,7 @@ CONSENT = ('Psyche Together is a private read of the two of you, built on both y
            '🔒 You each answer privately. The read shows the two of you together, never how one of you answered, except your big '
            'decisions, what you disagree about most and what you each want and think the other wants, which are set side by side.\n'
            '📄 For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked.\n'
-           '💬 After your questions, either of you can add your chat together (Instagram or WhatsApp). It\'s de-identified here first: '
+           '💬 After your questions, one of you adds your chat together (Instagram, WhatsApp or both): your read is built on it. It\'s de-identified here first: '
            'other people\'s names, handles, links, emails and phone numbers are taken out. Nothing from any other chat is read.\n'
            '🙈 Everything is locked before it leaves your Muse, so PsycheAI can\'t read any of it. End it any time, and what PsycheAI '
            'keeps is deleted for both of you.')
@@ -2909,8 +2927,8 @@ def check():
             return dict(show(box) if s.get('forYou') else foryou_task(),
                         say='Your Psyche Together has been written again, from the same answers and conversation. Here it is.' if again_ else '%s has finished. Here\'s your Psyche Together.' % name)
         return nudge(s, box, profiles, name) or {'quiet': True}
-    if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
-        # The last one in writes the read (their send gave them the task); the other waits for it, and writes it only
+    if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')) and (chat_done(profiles) or is_gentle(s)):
+        # Release 68: never before a chat is in. The last one in writes the read (their send gave them the task); the other waits for it, and writes it only
         # if three hours pass without it (README "Psyche Together, release 49"), so two Muses never write it at once.
         theirs_at = int(theirs.get('sentAt') or 0)
         if theirs_at >= int(mine.get('sentAt') or s.get('sent') or 0) and time.time() - theirs_at < WRITER_GRACE:
@@ -4524,9 +4542,14 @@ def main(argv):
         out = pick_thread(' '.join(rest))
     elif cmd == 'skip-chat':
         s = state()
-        s.setdefault('chatSkipped', []).append('all')
-        save_state(s)
-        out = after_chat(s)
+        if s.get('chatDone') or is_gentle(s):          # release 68: only the second chat can be skipped
+            s.setdefault('chatSkipped', []).append('all')
+            s['secondOffered'] = True
+            save_state(s)
+            out = after_chat(s)
+        else:
+            k, got, profiles, box = couple()
+            out = got if got.get('error') else after_chat(s) if chat_done(profiles) else chat_offer(s, 'Your read needs one chat together.')
     elif cmd == 'write':
         out = write_task()
     elif cmd == 'save':
