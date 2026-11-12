@@ -4260,6 +4260,30 @@ print(json.dumps({'named': 'Ana shared one' in html and 'One shared' not in html
                   'decisions': 'A calm way in for' not in d_ and '<div class="row">' in d_}))
 `], { env: home.a.env, maxBuffer: 1 << 26 })).stdout); } catch (e) { return { error: String(e).slice(0, 300) }; } })();
   // Release 69: guesses worked out here, a sketched Psyche, the confidence cap, children for a dating couple, the pill.
+  // The Muse safety check (CLAUDE.md "Muse safety check: never trip it"): trigger-shaped phrases are counted in every shipped
+  // file and may never grow past this baseline, and every line that sends a message waits for their Send.
+  {
+    const root_ = pathx.join(pathx.dirname(new URL(import.meta.url).pathname), '..');
+    const shipped = { 'skill/SKILL.md': require('../lib/skill.js').skillMd(), 'together/SKILL.md': fsx.readFileSync(pathx.join(root_, 'together', 'SKILL.md'), 'utf8'),
+      'skill/bin/psyche.py': fsx.readFileSync(pathx.join(root_, 'skill', 'bin', 'psyche.py'), 'utf8'), 'together/bin/together.py': fsx.readFileSync(pathx.join(root_, 'together', 'bin', 'together.py'), 'utf8'),
+      'skill/guide.json': fsx.readFileSync(pathx.join(root_, 'skill', 'guide.json'), 'utf8'), 'together/guide.json': fsx.readFileSync(pathx.join(root_, 'together', 'guide.json'), 'utf8') };
+    const TRIGGERS = { wordForWord: /word for word/gi, exactlyAsGiven: /exactly as given/gi, unchanged: /\bunchanged\b/gi, runsOnYou: /runs on you/gi,
+      precedence: /takes? precedence|follow this file/gi, whoseTask: /whose task is/gi, automatically: /automatically/gi, ignoreInstr: /ignore (previous|your|any|all) instructions/gi,
+      dontTell: /(don't|do not|never) (tell|mention)[^.\n]{0,40}(check|verif|review|audit)/gi, withoutTelling: /without (telling|asking) (them|the user)/gi };
+    const BASELINE = { 'skill/SKILL.md': { wordForWord: 10, exactlyAsGiven: 1, precedence: 1 }, 'together/SKILL.md': { exactlyAsGiven: 2 },
+      'skill/bin/psyche.py': { wordForWord: 4, unchanged: 1 }, 'together/bin/together.py': {}, 'skill/guide.json': { wordForWord: 6, automatically: 1 }, 'together/guide.json': {} };
+    const grown = [];
+    for (const [f, text] of Object.entries(shipped)) for (const [k, rx] of Object.entries(TRIGGERS)) {
+      const n = (text.match(rx) || []).length;
+      if (n > ((BASELINE[f] || {})[k] || 0)) grown.push(`${f} ${k} ${n} > ${(BASELINE[f] || {})[k] || 0}`);
+    }
+    const unguarded = [];
+    for (const f of ['skill/SKILL.md', 'together/SKILL.md']) shipped[f].split('\n').forEach((l, i) => {
+      if (/\bsend\b[^.]{0,60}(Instagram|WhatsApp|Messenger) message/i.test(l) && !/after they tap|only after|they tap Send/i.test(l)) unguarded.push(`${f}:${i + 1}`);
+    });
+    check('no new safety-check trigger (CLAUDE.md "Muse safety check: never trip it"): no trigger-shaped phrase grows past its baseline in any shipped file, and every line that sends a message waits for their Send',
+      !grown.length && !unguarded.length, JSON.stringify({ grown, unguarded }));
+  }
   // PsycheAI skill release 194: sync_link brings the people to offer, found on the device, so Sync needs nothing looked up.
   const r194 = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
 import importlib.util, json, os
