@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 68
+RELEASE = 69
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -111,11 +111,11 @@ SKIP_SEPARATED = {'desire', 'growth'}
 # the topic shows side by side, as the big decisions do, since naming different topics is itself the finding.
 # README "Psyche Together, release 51": three mirror pairs, what you want and what you think your partner wants, each
 # in the chapter its answer lands in; the read sets both side by side, since a guess that misses is the finding.
-MIRRORS = [('appreciated', 'appreciation', 'What makes you feel most appreciated by {p}?', 'And what do you think makes {p} feel most appreciated by you?',
+MIRRORS = [('appreciated', 'appreciation', 'What makes you feel most appreciated by {p}?', 'Now your guess: what do you think makes {p} feel most appreciated by you?',
             ['Being told in words', 'Time together', 'Something done for me', 'A hug or touch']),
-           ('stress', 'connection', 'When you\'re stressed, what do you most want from {p}?', 'And when {p} is stressed, what do you think they most want from you?',
+           ('stress', 'connection', 'When you\'re stressed, what do you most want from {p}?', 'Now your guess: when {p} is stressed, what do you think they most want from you?',
             ['To be listened to', 'Help fixing it', 'Something to take my mind off it', 'Some space']),
-           ('repair', 'disagreements', 'After a disagreement, what do you most need from {p}?', 'And after a disagreement, what do you think {p} most needs from you?',
+           ('repair', 'disagreements', 'After a disagreement, what do you most need from {p}?', 'Now your guess: after a disagreement, what do you think {p} most needs from you?',
             ['To talk it through now', 'A little time first', 'A hug or warm gesture', 'To move on and let it go'])]
 # README "Psyche Together, release 51": an optional hope in your own words (Gottman's dreams within conflict): read by
 # your partner's Muse to write the read, which may speak of it in its own words, never quoting you.
@@ -363,6 +363,15 @@ def core_for(stage):
     return out
 
 
+def decision_options(topic, stage):
+    """A decision's buttons. Release 69: a dating couple doesn't have children together, so "We have them already" is
+    "I have children already" for them."""
+    opts = list(DECISIONS[topic][1])
+    if topic == 'children' and stage == 'Dating':
+        opts = ['I have children already' if o == 'We have them already' else o for o in opts]
+    return opts
+
+
 def decisions_for(stage, answers):
     topics = list(BY_STAGE.get(stage) or [])
     future = (answers.get('core:future') or {}).get('label')
@@ -397,7 +406,7 @@ def items(s):
     for cid, keys in QUESTION_CHAPTERS:
         for key in keys:
             if key == 'decisions':
-                out += [{'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': DECISIONS[t][1],
+                out += [{'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': decision_options(t, stage),
                          'onlyIf': 'hope' if t == 'children' and stage == 'Dating' else None} for t in BY_STAGE.get(stage) or []]
             elif key in core:
                 text, opts = core[key]
@@ -569,6 +578,8 @@ def shared_profile(s, answered=True):
            'report': (kept or {}).get('report'), 'fullName': str((kept or {}).get('name') or '')[:60]}
     if s.get('chat'):
         out['chat'] = {k: v for k, v in s['chat'].items() if k != 'sample'}     # the sample goes in its own box
+    if (s.get('igSelf') or {}).get('names') or (s.get('igSelf') or {}).get('ids'):
+        out['ig'] = s['igSelf']          # release 69: so the partner's Muse can find your chat together for certain; never in the read
     know_ = (s.get('questions') or {}).get('know') or []
     if not answered:
         return out
@@ -634,7 +645,13 @@ def couple_view(a, b):
     ma, mb = a.get('mirror') or {}, b.get('mirror') or {}
     mirrors = {mk: {'a': ma[mk], 'b': mb[mk]} for mk, *_ in MIRRORS if isinstance(ma.get(mk), dict) and isinstance(mb.get(mk), dict)}
     if mirrors:
+        # Release 69: whether each guess was right is worked out here, never by the writer, which once read "all
+        # matched" off pairs that were all different: aGuessedRight is a's guess of what b wants, against b's answer.
+        for mv in mirrors.values():
+            mv['aGuessedRight'] = mv['a'].get('guess') == mv['b'].get('self')
+            mv['bGuessedRight'] = mv['b'].get('guess') == mv['a'].get('self')
         out['mirrors'] = mirrors
+        out['guessedRight'] = {'right': sum(int(mv['aGuessedRight']) + int(mv['bGuessedRight']) for mv in mirrors.values()), 'of': 2 * len(mirrors)}
     dreams = {r: p_.get('dream') for r, p_ in (('a', a), ('b', b)) if p_.get('dream')}
     if dreams:
         out['dreams'] = dreams          # for the writer, who puts each in its own words; the page never shows these
@@ -784,7 +801,7 @@ def widget_html(s):
     cards = []
     for it in its:
         ch_ = next((c_ for c_ in CHAPTERS if c_[0] == chapter_of(it)), None)
-        what_ = ('How well you know %s' % p if it['kind'] == 'know' else 'A hope of yours' if it['kind'] == 'dream' else 'What you each want' if it['kind'] == 'mirror' else 'Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision'
+        what_ = ('How well you know %s' % p if it['kind'] == 'know' else 'A hope of yours' if it['kind'] == 'dream' else ('Your guess about %s' % p if it['id'].endswith(':guess') else 'What you want') if it['kind'] == 'mirror' else 'Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision'
                  else 'Overall' if it['kind'] == 'overall' else PILLARS.get(it['pillar'], ''))
         chip = ('<span class="chip lock">Private · never shared</span>' if it.get('private') else
                 '<span class="chip">%s</span>' % _e(('%s %s · %s' % (ch_[1], ch_[2], what_)) if ch_ else what_))
@@ -1191,22 +1208,33 @@ def _when(v):
             return None
 
 
-def instagram_threads():
-    """The initiator's one-to-one Instagram chats, busiest first: [{label, account, fbid, them}], or []."""
+def instagram_threads(partner=None):
+    """Their one-to-one Instagram chats: [{label, account, fbid, them, match}], or []. Release 69: the 30 busiest are
+    searched, and the chat with the partner comes first: matched for certain by their own Instagram account (sent
+    locked in their profile), or else by a word of their name; then the busiest others, eight in all."""
     if not os.path.exists(IGM_CLI):
         return []
+    partner = partner or {}
+    ig = partner.get('ig') or {}
+    ids, names = set(ig.get('ids') or []), set(ig.get('names') or [])
+    words = {w for w in re.findall(r'[a-z]{3,}', ' '.join([str((partner.get('psyche') or {}).get('name') or ''), str(partner.get('fullName') or '')]).lower())}
     out = []
     for acct in _accounts(_cli(IGM_CLI, 'accounts') or {}):
-        got = _cli(IGM_CLI, 'top-recipients', '--account-id', acct['id'], '--count', 12) or {}
+        got = _cli(IGM_CLI, 'top-recipients', '--account-id', acct['id'], '--count', 30) or {}
         for th in (got.get('entities') or {}).get('thread') or []:
             others = [u for u in th.get('users') or [] if str(u.get('id')) != acct['id']]
             if len(others) != 1 or not th.get('thread_fbid'):
                 continue
             u = others[0]
             label = str(u.get('full_name') or u.get('username') or '').strip()[:40]
+            uname = str(u.get('username') or '').lower().lstrip('@')
+            them = sorted({str(v) for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v})
+            match = ('exact' if (uname and uname in names) or (ids & set(them)) else
+                     'name' if words & set(re.findall(r'[a-z]{3,}', (label + ' ' + uname).lower())) else None)
             if label and label not in [x['label'] for x in out]:
-                out.append({'label': label, 'account': acct['id'], 'fbid': th['thread_fbid'],
-                            'them': sorted({str(v) for v in (u.get('id'), u.get('interop_messaging_user_fbid')) if v})})
+                out.append({'label': label, 'account': acct['id'], 'fbid': th['thread_fbid'], 'them': them, 'match': match})
+    rank = {'exact': 0, 'name': 1, None: 2}
+    out = sorted(out, key=lambda x: rank[x.get('match')])          # stable: busiest first within each group
     return out[:8]
 
 
@@ -1584,19 +1612,35 @@ def chat_offer(s, said=''):
     other = next(k for k in CHAT_SOURCES if k not in done)
     s['secondOffered'] = True
     save_state(s)
-    return {'chatOffer': True, 'asButtons': True, 'buttons': [CHAT_SOURCES[other], 'Skip'],
+    return {'chatOffer': True, 'asButtons': True, 'buttons': [CHAT_SOURCES[other], 'Skip', 'Use a different chat'],
             'say': (said + ' ' if said else '') + 'Want to add your %s chat together too? More of your conversation makes your read more specific.'
                    % ('WhatsApp' if other == 'whatsapp' else 'Instagram')}
 
 
+def partner_added(s, profiles):
+    """Release 69: their partner already added your chat together (after this offer was shown): nothing to add here."""
+    if s.get('chatDone') or not chat_done(profiles):
+        return None
+    return after_chat(s, '%s already added your chat together.' % (s.get('partner') or 'Your partner'))
+
+
 def chat_threads(s):
     """"Add our Instagram chat": their own one-to-one Instagram chats, busiest first, as buttons."""
-    ths = instagram_threads()
+    k, got, profiles, box = couple()
+    if not got.get('error') and partner_added(s, profiles):
+        return partner_added(s, profiles)
+    partner = {} if got.get('error') else (profiles.get('b' if s.get('role') == 'a' else 'a') or {})
+    ths = instagram_threads(partner)
     s['threads'] = ths
+    s.pop('confirming', None)
     save_state(s)
     if not ths:
         return {'say': 'I couldn\'t find a one-to-one chat on your Instagram.', 'buttons': ['Add our WhatsApp chat'] + (['Skip'] if s.get('chatDone') else []), 'asButtons': True}
-    return {'pickThread': True, 'ask': 'Which of your Instagram chats is with your partner? Only that one chat is read, for your read together.',
+    who = s.get('partner') or 'your partner'
+    if ths[0].get('match') == 'exact':
+        return {'pickThread': True, 'ask': 'Your chat with %s is first. Only that one chat is read, for your read together.' % who,
+                'buttons': [t['label'] for t in ths] + ['Not on Instagram'], 'asButtons': True}
+    return {'pickThread': True, 'ask': 'Which of your Instagram chats is with %s? Only that one chat is read, for your read together.' % who,
             'buttons': [t['label'] for t in ths] + ['Not on Instagram'], 'asButtons': True}
 
 
@@ -1619,8 +1663,10 @@ def after_chat(s, said=''):
     return out
 
 
-def pick_thread(label):
+def pick_thread(label, sure=False):
     s = state()
+    if sure:          # "Yes, it's our chat": the one they were asked about
+        label = s.get('confirming') or label
     if label == 'Not on Instagram':
         s.setdefault('chatSkipped', []).append('instagram')
         save_state(s)
@@ -1628,6 +1674,15 @@ def pick_thread(label):
     th = next((t for t in s.get('threads') or [] if t['label'] == label), None)
     if not th:
         return {'error': '"%s" isn\'t one of the chats listed.' % label}
+    if th.get('match') != 'exact' and not sure:
+        # Release 69: a chat that isn't their partner's account for certain is read only once they say it is: a chat with
+        # anyone else must never become their read together.
+        s['confirming'] = label
+        save_state(s)
+        who = s.get('partner') or 'your partner'
+        return {'confirmThread': True, 'asButtons': True, 'buttons': ['Yes, it\'s our chat', 'Pick again'],
+                'say': 'Is %s %s? Only your chat with %s is read: a chat with anyone else stays out of your read.' % (label, who, who)}
+    s.pop('confirming', None)
     msgs = instagram_thread(th)
     old, sources, partner = kept_messages()
     keep_messages(old + msgs, sources + ['instagram'], partner or label)
@@ -1668,6 +1723,28 @@ def reread_instagram(s):
     return len(new)
 
 
+def reset_chat():
+    """"Use a different chat" (README "Psyche Together, release 69"): before the read is written, the chat added here is
+    removed, here and in the locked copy your partner's Muse would read, and the chat is offered again."""
+    s = state()
+    if s.get('readAt'):
+        return {'error': 'Your read is already written from that chat. To use a different one, end this Psyche Together and start again.'}
+    try:
+        os.remove(CHAT_FILE)
+    except OSError:
+        pass
+    for k_ in ('chat', 'chatDone', 'secondOffered', 'chatSkipped', 'pickedThread', 'igCount', 'waCount', 'igRetried', 'chatSent', 'confirming'):
+        s.pop(k_, None)
+    save_state(s)
+    got = put_profile(s, bool(s.get('sent')))
+    if not got.get('error'):
+        k = keys()
+        got = tool('together_put', {'e2e': {'chat': seal({'sample': []}, key_for('together-box', k['code']))}})
+    if got.get('error'):
+        return got
+    return chat_offer(s, 'Removed: that chat isn\'t part of your read.')
+
+
 WHATSAPP_HOW = 'in WhatsApp, open your chat with your partner, tap ⋮ or their name, then More, Export chat, Without media, and share the .zip here'
 
 
@@ -1677,6 +1754,9 @@ def add_chat_file(paths):
     s = state()
     if s.get('readAt'):
         return {'error': 'Your read is already written, so the WhatsApp chat can\'t be added to it now.'}
+    k, got, profiles, box = couple()
+    if not got.get('error') and partner_added(s, profiles):
+        return partner_added(s, profiles)
     old, sources, partner = kept_messages()
     partner = partner or s.get('partner') or ''
     me = psyche() or {}
@@ -1794,7 +1874,7 @@ CONSENT = ('Psyche Together is a private read of the two of you, built on both y
            'together, share meaning, feel secure and work through disagreements, with next steps for the weeks ahead.\n\n'
            '🔒 You each answer privately. The read shows the two of you together, never how one of you answered, except your big '
            'decisions, what you disagree about most and what you each want and think the other wants, which are set side by side.\n'
-           '📄 For a read this deep, your full Psyche report and your Psyche Card picture go to your partner\'s Muse, locked.\n'
+           '📄 For a read this deep, your full Psyche report, your Psyche Card picture and which Instagram account is yours (so your chat together is found for certain) go to your partner\'s Muse, locked.\n'
            '💬 After your questions, one of you adds your chat together (Instagram, WhatsApp or both): your read is built on it. It\'s de-identified here first: '
            'other people\'s names, handles, links, emails and phone numbers are taken out. Nothing from any other chat is read.\n'
            '🙈 Everything is locked before it leaves your Muse, so PsycheAI can\'t read any of it. End it any time, and what PsycheAI '
@@ -1862,7 +1942,23 @@ PAID_BUTTON = 'I\'ve paid, start it'
 PROFILE_V = 2      # what a profile carries changed (2: MBTI letters with their strength): each side sends theirs again once
 
 
+def my_instagram(s):
+    """This person's own Instagram accounts (ids and usernames), from Muse's messages tool, looked up once (README
+    "Psyche Together, release 69"): sent locked in their profile so their partner's chat list puts their chat together
+    first, whatever name it shows."""
+    if s.get('igSelf') is None:
+        ids, names = [], []
+        if os.path.exists(IGM_CLI):
+            for a in _accounts(_cli(IGM_CLI, 'accounts') or {}):
+                ids.append(a['id'])
+                names.append(a['username'].lower())
+        s['igSelf'] = {'ids': ids[:4], 'names': names[:4]}
+        save_state(s)
+    return s['igSelf']
+
+
 def put_profile(s, answered):
+    my_instagram(s)
     k = keys()
     e2e = {'profile': seal(shared_profile(s, answered), key_for('together-box', k['code']))}
     pic = None if s.get('picSent') else card_pic()
@@ -1976,6 +2072,8 @@ def clean_profile(p):
     every number that is drawn into the page is made a number, and the card's few fields their expected shape, before
     anything reads it. Text is escaped where it's shown; this keeps numbers and attributes honest."""
     p = dict(p)
+    ig = p.get('ig') if isinstance(p.get('ig'), dict) else {}
+    p['ig'] = {k: [str(x).lower().lstrip('@')[:60] for x in ig.get(k) or [] if isinstance(x, (str, int))][:4] for k in ('ids', 'names')} if ig else {}
     ch = p.get('chat') if isinstance(p.get('chat'), dict) else None
     if ch:
         ch = dict(ch)
@@ -2229,11 +2327,16 @@ def write_task(profiles=None):
     for r in ('a', 'b'):
         pr = profiles[r]
         other = profiles['b' if r == 'a' else 'a']
+        cf = _conf(pr.get('report'))[0]
         people.append({'name': (pr.get('psyche') or {}).get('name'), 'card': pr.get('psyche') or {}, 'report': pr.get('report'),
+                       'sketch': isinstance(cf, int) and cf < SKETCH_BELOW,          # release 69: under 50%, write about them from the chat and answers
                        'chat': named_chat(pr.get('chat'), (pr.get('psyche') or {}).get('name'), (other.get('psyche') or {}).get('name'))})
     return task_file({'write': 'read', 'coupleView': {k: v for k, v in view.items() if k != 'knowBy'}, 'people': people, 'research': RESEARCH, 'saveTo': 'work/together-read.json'})
 
 
+ALL_WELL = re.compile(r'\b(suits you both|works (well )?for (you )?both|works well|nothing to (worry|fix)|no (concern|problem)s?)\b', re.I)
+GUESSED_ALL = re.compile(r'\b(all|each|every) (of your |your )?guess(es)? (all )?(matched|were right|landed)|guess(es)? (about each other )?all (matched|landed|were right)|you both guessed (right|correctly)|read each other better than', re.I)
+GUESSED_ANY = re.compile(r'\bguess(es|ed)? (matched|landed|(was|were) right)|guessed (right|correctly)', re.I)
 BANNED = re.compile(r'\b(score[sd]?|percent\w*|compatib\w*|incompatib\w*|divorc\w*|predict\w*|toxic|contempt\w*|stonewall\w*|narcissis\w*|'
                     r'diagnos\w*|therap\w*|treatment|disorder\w*|abus\w*|red flags?|verdict)\b|%', re.I)
 WHO_ANSWERED = re.compile(r'\b(rated|answered|ticked)\b|\bin (the|your|their|his|her) check-?in\b', re.I)
@@ -2347,6 +2450,15 @@ def check_read(r, view, has_chat=False):
     if view.get('overall'):
         ov = D(r.get('overall'))
         need(T(ov.get('title')) and 0 < len(T(ov.get('detail'))) <= 400, 'overall: a title and a detail of one or two sentences, at most 400 characters, for the couple, never whose')
+    # Release 69: whether each guess was right is worked out on the device (view guessedRight); a read that says
+    # more of them matched than did is sent back.
+    gr = D(view.get('guessedRight'))
+    if gr.get('of'):
+        all_text = ' '.join(s_ for _, s_ in _texts(r))
+        if gr.get('right', 0) < gr['of'] and GUESSED_ALL.search(all_text):
+            problems.append('Your guesses: %d of %d were right (guessedRight in the couple view), so never say they all matched or that you both guessed right' % (gr.get('right', 0), gr['of']))
+        elif not gr.get('right') and GUESSED_ANY.search(all_text):
+            problems.append('Your guesses: none of the %d were right (guessedRight in the couple view), so never say a guess matched or was right' % gr['of'])
     tr = L(r.get('truths'))
     # Release 66: each about three sentences, with its three dated moments as pills beside it, not a paragraph of counts.
     sents = lambda s: len([y for y in re.split(r'(?<=[.!?])\s+', s) if y.strip()])
@@ -2374,6 +2486,10 @@ def check_read(r, view, has_chat=False):
                      '%s.evidence: at most three findings, each an insight drawn from all the data (at most 160 characters) and its support: the specific counts and dated events behind it, with a number or a date (at most 240)' % at)
                 if a in EVIDENCE_NEEDED:
                     need(len(evs) >= 1, '%s.evidence: at least one finding, an insight with the counts or events behind it' % at)
+            if a in PILLARS and (view.get('pillars') or {}).get(a) in ('Worth attention', 'Talk about'):
+                # Release 69: the pill comes from their answers; what we found says why, never that all is well.
+                said_ = ' '.join([T(x.get('seen'))] + [T(D(e).get('insight')) for e in evs] + [T(x.get('means'))])
+                need(not ALL_WELL.search(said_), '%s: its pill says %s, from your answers: say why from those answers, never that it suits you both or works well' % (at, view['pillars'][a]))
             if a in PILLARS:
                 need(0 < len(T(x.get('seen'))) <= 160 and not LABEL_START.match(T(x.get('seen'))),
                      '%s: seen (how you both see it, one plain line, at most 160 characters, never whose, never opening on its level, which the badge shows)' % at)
@@ -2512,7 +2628,8 @@ def read_sources(profiles, view):
     checkin = 40 if asked and all(answered[r] >= asked for r in ('a', 'b')) else 25
     own = talk + checkin
     weakest = min([p['confidence'] for p in people if p['confidence'] is not None] or [own])
-    score = min(90, round((weakest + own) / 2))
+    # Release 69: never more than 20 above the weaker Psyche, so one sketched from very little keeps the read low.
+    score = min(90, round((weakest + own) / 2), weakest + 20)
     return {'people': people,
             'chat': {'messages': total, 'counts': chat.get('counts') or {}, 'source': chat.get('source'), 'from': sig.get('from'), 'to': sig.get('to'),
                      'sampleLines': len(sample), 'sampleChars': sum(len(x) for x in sample)} if total else None,
@@ -3355,6 +3472,7 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .nx2 b{display:block;font-size:14.5px;line-height:1.4}.nx2 span{display:block;font-size:13px;color:var(--soft);margin-top:2px;line-height:1.4}
 .st.found>.sl,.st.means>.sl,.st.steps>.sl{background:none!important;padding:0}
 .st.means{background:#fff!important;border:1px solid #e6dfeb!important}
+.st.means{background:none!important;border:0!important;padding:0!important;border-radius:0!important}.st.means p b.lead{font-weight:750;color:var(--ink)}
 .nums>div{background:#faf7fb;border:1px solid #eee6f3}.nums b{color:var(--ink)}
 .psy.bare{background:none;border:0;padding:0;margin:8px 0 0}.psy.bare .pair2{display:block}.psy.bare .pair2>div{background:none;border:0;padding:0;margin:6px 0;font-size:15px}.psy.bare .pair2 b{display:inline;font-weight:750}.psy.bare .pair2 b:after{content:" · "}.psy.bare .pair2 span{display:inline}
 .fp2{margin:6px 0;font-size:15px;line-height:1.55}.fp2 b{font-weight:750}
@@ -3720,6 +3838,26 @@ def _area_psy(aid, pa, pb, names, line):
     return '<div class="psy"><span class="lbl">In your Psyches</span>%s%s%s</div>' % (key, body, ('<p class="pline">%s</p>' % _e(line)) if line else '')
 
 
+SKETCH_BELOW = 50
+
+
+def _lead(text):
+    """What it means with no box (README "Psyche Together, release 69"): its first sentence in bold, in the body ink,
+    the rest as it is."""
+    m_ = re.match(r'\s*(.+?[.!?])(\s+.+)?\s*$', str(text or ''), re.S)
+    if not m_:
+        return _e(text)
+    return '<b class="lead">%s</b>%s' % (_e(m_.group(1)), _e(m_.group(2) or ''))
+
+
+def _sketch_note(pa, pb, names, what):
+    who = [n for n, p in zip(names, (pa, pb)) if p.get('sketch') is not None]
+    if not who:
+        return ''
+    return '<p class="soft">%s left out: %s Psyche %s a sketch, read from very little, so its numbers aren\'t reliable yet.</p>' % (
+        _e(what), _e(' and '.join('%s\'s' % n for n in who)), 'is' if len(who) == 1 else 'are each')
+
+
 def _psy_panel(pa, pb, names):
     """Your two Psyches side by side, once, at a glance (README "Psyche Together, release 42"): the four MBTI axes,
     the Big Five, love languages, attachment, conflict styles and the ten motivations. The areas cite a trait in words."""
@@ -3727,8 +3865,11 @@ def _psy_panel(pa, pb, names):
     if not (pa or pb):
         return ''
     body = ''.join(_axis(i, pa, pb, names) for i in range(4))
-    body += ''.join(_dual(TRAIT_LABEL[k], fa[k], fb[k]) for k in ('openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism')
-                    if isinstance(fa.get(k), int) and isinstance(fb.get(k), int))
+    if pa.get('sketch') is not None or pb.get('sketch') is not None:
+        body += _sketch_note(pa, pb, names, 'The Big Five numbers are')
+    else:
+        body += ''.join(_dual(TRAIT_LABEL[k], fa[k], fb[k]) for k in ('openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism')
+                        if isinstance(fa.get(k), int) and isinstance(fb.get(k), int))
     again = ' · read again from your messages together' if pa.get('reRead') or pb.get('reRead') else ''
     # Release 66: love languages and attachment as lines of text, one per person, no boxes.
     g = lambda p_, k: ', '.join(_mid(y) for y in p_.get(k) or []) or '–'
@@ -3743,8 +3884,9 @@ def _psy_panel(pa, pb, names):
     ta, tb = str(pa.get('mbti') or ''), str(pb.get('mbti') or '')
     key = '<div class="pkey"><span><i class="a"></i>%s%s</span><span><i class="b"></i>%s%s</span></div>' % (
         _e(names[0]), (' · ' + _e(ta)) if ta else '', _e(names[1]), (' · ' + _e(tb)) if tb else '')
+    sk = lambda p_: ' · a sketch' if p_.get('sketch') is not None else ''
     return ('<details class="psyd"><summary>Your two Psyches, side by side <span class="soft">%s · %s</span></summary><div class="psy">%s%s</div></details>'
-            % (_e(names[0] + (' · ' + ta if ta else '')), _e(names[1] + (' · ' + tb if tb else '')), key, body))
+            % (_e(names[0] + (' · ' + ta if ta else '') + sk(pa)), _e(names[1] + (' · ' + tb if tb else '') + sk(pb)), key, body))
 
 
 def _loves_match(pa, pb):
@@ -3905,6 +4047,15 @@ def page(box, s):
                 pa_ = p_
             else:
                 pb_ = p_
+    # Release 69: a Psyche under 50% confidence is a sketch, from very little: its numbers aren't drawn.
+    sp_ = (box.get('sources') or {}).get('people') or []
+    for i_, k_ in enumerate(('a', 'b')):
+        cf_ = D(sp_[i_] if i_ < len(sp_) else {}).get('confidence')
+        if isinstance(cf_, int) and cf_ < SKETCH_BELOW:
+            if k_ == 'a':
+                pa_ = dict(pa_, sketch=cf_)
+            else:
+                pb_ = dict(pb_, sketch=cf_)
     stands = ''
     for i, x in enumerate(x for x in r.get('truths') or [] if isinstance(x, dict) and x.get('kind') in kinds):
         home = x.get('chapter') if x.get('chapter') in CHAPTER_IDS else TRUTH_HOME.get(x.get('kind'), 'close')
@@ -4119,6 +4270,8 @@ def page(box, s):
                 if hz:
                     lead = ''.join('<p class="fp2"><b>%s</b> · %s</p>' % (lb_, _e(hz.get(k))) for k, lb_ in
                                    (('near', 'In the next few years'), ('far', 'Further ahead'), ('5', 'In 5 years'), ('10', 'In 10 years'), ('15', 'In 15 years')) if hz.get(k))
+            elif aid == 'growth' and (pa_.get('sketch') is not None or pb_.get('sketch') is not None):
+                lead = _sketch_note(pa_, pb_, names, 'Your ten motivations are')
             elif aid == 'growth':
                 lead = _area_psy('values', pa_, pb_, names, '').replace('<span class="lbl">In your Psyches</span>', '', 1).replace('<div class="psy">', '<div class="psy bare">', 1)
             elif aid == 'decisions':
@@ -4194,7 +4347,7 @@ def page(box, s):
                 return t if keep_ or not t else t[0].lower() + t[1:]
             nx = ''.join('<li><b>%s</b><span>Because %s</span></li>' % (_e(D(y).get('do')), _e(because_(D(y).get('because'))))
                          for y in x.get('next') or [] if D(y).get('do'))
-            st3 = (('<div class="st means"><span class="sl">💡 What it means</span>%s%s</div>' % (('<p>%s</p>' % _e(means)) if means else '', extra)) if (means or extra) else '') + \
+            st3 = (('<div class="st means"><span class="sl">💡 What it means</span>%s%s</div>' % (('<p>%s</p>' % _lead(means)) if means else '', extra)) if (means or extra) else '') + \
                   (('<div class="st steps"><span class="sl">👣 Next steps</span><ol class="nx2">%s</ol></div>' % nx) if nx else '')
             if st_found or st3:
                 tm_ = re.search(r'class="tl ([\w-]+)"><small>.*?</small><b>(.*?)</b>', tile(cid, aid, nm))
@@ -4539,7 +4692,9 @@ def main(argv):
     elif cmd == 'chat-file':
         out = add_chat_file(rest)
     elif cmd == 'pick-thread':
-        out = pick_thread(' '.join(rest))
+        out = pick_thread(' '.join(x for x in rest if x != '--sure'), sure='--sure' in rest)
+    elif cmd == 'reset-chat':
+        out = reset_chat()
     elif cmd == 'skip-chat':
         s = state()
         if s.get('chatDone') or is_gentle(s):          # release 68: only the second chat can be skipped

@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 192
+RELEASE = 193
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5092,7 +5092,9 @@ def local_publish(args):
     args['answer'] = answer
     nxt = json.loads(json.dumps(AFTER_PUBLISH))
     if os.path.exists(os.path.join(KEEP, 'together-pending.json')):     # they asked for Psyche Together (to start one, or a partner's invite) before they had a Psyche
-        nxt['buttons'] = ['Continue Psyche Together'] + nxt['buttons']
+        # Release 193: the one way on, first and alone of its kind ("Psyche Together with my partner" beside it went to the same place).
+        nxt['buttons'] = ['Continue Psyche Together'] + [b for b in nxt['buttons'] if b != 'Psyche Together with my partner']
+        nxt['say'] = 'Next, your Psyche Together: your partner\'s invite is waiting. Tap Continue Psyche Together to go on.'
         nxt['continueTogether'] = True     # offered first; the Together skill is theirs to install (lib/instructions.js TOGETHER)
     friend = pending_sync()
     if friend:     # a friend's link came with the install (README "The friend's link, kept"): their Sync first, only on a tap
