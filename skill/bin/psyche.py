@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 194
+RELEASE = 195
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -273,6 +273,13 @@ body{font-family:__FONT__;color:var(--ink);font-size:15px;line-height:1.55;-webk
 .banner .row{position:relative}
 .banner h1{margin:10px 0 2px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
 .banner .sub{margin-top:8px;font-size:12.5px;opacity:.75}
+.prompts{margin:6px 0 14px}.prompts h2{margin:0 0 2px;font-size:20px;letter-spacing:-.01em}.prompts>.soft{margin:0 0 12px;font-size:13.5px}
+.pmenu{background:#fff;border:1px solid #ece4f1;border-radius:18px;overflow:hidden}.pmenu .pr:last-child{border-bottom:0}
+.pr{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #f3eef6}
+.pr .pi{flex:none;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;background:#f4edf8;background:color-mix(in srgb,var(--k) 13%,#fff)}
+.pr .pt{flex:1;min-width:0;display:flex;flex-direction:column}.pr code{font-family:inherit;font-weight:700;font-size:14.5px;line-height:1.3;color:var(--ink);background:none;border:0;padding:0;user-select:all;-webkit-user-select:all}
+.pr small{font-size:12px;color:var(--soft);line-height:1.35}
+.pr button{flex:none;padding:6px 12px;border-radius:999px;border:1px solid var(--k);background:#fff;color:var(--k);font:700 12.5px/1 inherit;cursor:pointer}
 .saycopy{margin-top:14px;padding:12px 14px;border-radius:12px;background:#f4edf8;border:1px solid var(--line)}
 .saycopy p{margin:0 0 8px;font-size:13.5px;color:var(--soft)}
 .sayrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -437,6 +444,26 @@ footer b{color:var(--ink)}
 # all" closes every section and goes back to the top. Printing opens everything.
 # A line to say in the PsycheAI chat, with a Copy button: a file can't send anything to the chat, so the page says what
 # to type and copies it (README "Say it in the chat").
+# What to do next, at the end of the report (README "The report ends in prompts to copy"): each a card with what it
+# does and the line to paste in their PsycheAI chat. Each line is one the chat already answers. Nothing sold here.
+PROMPTS = [
+    ('💬', '#7b3fa0', 'Hard questions, answered from your data', 'Ask PsycheAI questions about myself'),
+    ('🤝', '#2d5fa8', 'Where you click, and where you differ', 'Sync with a friend'),
+    ('💞', '#c2366d', 'One private read of the two of you', 'Psyche Together with my partner'),
+    ('➕', '#2f7d5b', 'More of you, for a sharper Psyche', 'Add WhatsApp or Facebook'),
+    ('📅', '#c2571a', 'A nudge on your plan each week', 'Weekly check-ins on my plan'),
+    ('🔄', '#6a4bb5', 'Rewritten from your Instagram today', 'Fresh Psyche'),
+    ('🔒', '#5a4f66', 'What\'s kept, and deleting it all', 'My data and privacy'),
+]
+
+
+def prompt_catalogue():
+    rows = ''.join('<div class="pr" style="--k:%s"><span class="pi">%s</span><div class="pt"><code>%s</code><small>%s</small></div>'
+                   '<button type="button" data-copy="%s">Copy</button></div>' % (k, ic, _e(ph), _e(tag), _e(ph)) for ic, k, tag, ph in PROMPTS)
+    return ('<section class="prompts" id="next"><h2>What to do next</h2><p class="soft">Copy one into your PsycheAI chat.</p>'
+            '<div class="pmenu">' + rows + '</div></section>')
+
+
 def say_copy(lead, phrase):
     return ('<div class="saycopy"><p>' + _e(lead) + '</p><div class="sayrow"><code>' + _e(phrase) + '</code>'
             '<button type="button" data-copy="' + _e(phrase) + '">Copy</button></div></div>')
@@ -838,15 +865,9 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
                      % (score, (' · ' + _e(c.get('level'))) if c.get('level') else '', score) if score is not None else '')
                   + ('<p>' + _e(m.get('rationale')) + '</p>' if m.get('rationale') else '')
                   + _ev(c.get('basedOn'))
-                  + say_copy('To add your WhatsApp chats or Facebook and write your Psyche again from more of you, say this in your PsycheAI chat:', 'Add WhatsApp or Facebook')
                   + '</div>')
-    # Psyche Together, offered once the Psyche is done (README "Psyche Together, from the Psyche Report"): what it is, and
-    # the line to say to start one. Not in a sample, and nothing sold here: if it is paid, starting it says where.
-    together = '' if sample else ('<div class="method together" style="--c:#c2366d"><h3 style="margin-top:0">Read the two of you together</h3>'
-                                  '<p>Psyche Together puts your Psyche beside your partner\'s. Each of you answers about twenty private questions in your own Muse, '
-                                  'and you both get one read of the two of you: how you care and connect, live together, share meaning, feel secure and work through '
-                                  'disagreements, from both your Psyches and your conversation together, with next steps drawn from the evidence and four weeks of small things to do.</p>'
-                                  + say_copy('To start one with your partner, say this in your PsycheAI chat:', 'Psyche Together with my partner') + '</div>')
+    # Release 195: the closing prompts as one catalogue (Psyche Together among them), never in a sample.
+    together = '' if sample else prompt_catalogue()
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
     facts = ' · '.join(x for x in ['%d parts' % i, ('%d pages' % pages) if pages else '', ('%d%% signal strength' % score) if score is not None else ''] if x)
@@ -5098,7 +5119,10 @@ def local_publish(args):
         nxt['continueTogether'] = True     # offered first; the Together skill is theirs to install (lib/instructions.js TOGETHER)
     friend = pending_sync()
     if friend:     # a friend's link came with the install (README "The friend's link, kept"): their Sync first, only on a tap
-        nxt['buttons'] = [sync_label(friend.get('name'))] + nxt['buttons']
+        # Release 195: the one way on, first and alone of its kind ("Sync with a friend" beside it made a new link of their own instead).
+        nxt['buttons'] = [sync_label(friend.get('name'))] + [b for b in nxt['buttons'] if b != 'Sync with a friend']
+        nm_ = friend.get('name') if friend.get('name') and friend.get('name') != 'Your friend' else ''
+        nxt['say'] = ('Next, your Sync with %s: their link is waiting.' % nm_) if nm_ else 'Next, your Sync: your friend\'s link is waiting.'
         nxt['syncWith'] = friend.get('name')
     return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ask_ideas(card.get('patterns'))}
 
