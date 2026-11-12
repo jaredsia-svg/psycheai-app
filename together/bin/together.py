@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 70
+RELEASE = 71
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2824,7 +2824,7 @@ def later():
     s = state()
     s['snoozeUntil'] = int(time.time() + NUDGE_DAYS * 86400)
     save_state(s)
-    return {'say': 'I\'ll ask again in a few days.', 'buttons': ['Done'], 'asButtons': True}
+    return {'say': 'I\'ll ask again in a few days.', 'buttons': ['Back to the menu'], 'asButtons': True}
 
 
 def round_send(s):
@@ -4489,7 +4489,7 @@ def show(box=None):
                 pass
     latest = (rounds_in(box)[-1].get('note') or {}) if rounds_in(box) else {}
     return {'file': path, 'say': 'Your Psyche Together is ready.', 'summary': latest.get('summary') or (box.get('read') or {}).get('summary'),
-            'buttons': (['Check in again'] if time.time() >= due_at(box) else []) + ['Ask about our read', 'Our 28-day practice', 'Write our read again', 'Done'], 'asButtons': True}
+            'buttons': (['Check in again'] if time.time() >= due_at(box) else []) + ['Ask about our read', 'Our 28-day practice', 'Write our read again', 'Back to the menu'], 'asButtons': True}
 
 
 def end():

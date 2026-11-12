@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 196
+RELEASE = 197
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5437,6 +5437,9 @@ def invite_text(link, character, name=''):
     return 'Install %s and generate my Psyche, then sync with %s: %s' % (short, nm or 'my friend', bare)
 
 
+LINK_SAY = 'Here\'s your Psyche link and invite: one paste in a friend\'s Muse sets up PsycheAI, makes their Psyche and syncs you. Send it to a friend, then tap below once you have.'
+
+
 def e2e_link(post_tool):
     card = _my_sync_card()
     if not card:
@@ -5453,43 +5456,13 @@ def e2e_link(post_tool):
         keep_e2e(code, True)
     build_book()        # My Syncs, empty until a friend syncs, so it's in their Library from the first link
     link = BASE + '/sync#' + code
-    res = {'url': link, 'lead': invite_lead(card.get('character'), card.get('firstName')), 'invite': invite_text(link, card.get('character'), card.get('firstName')), 'note': out.get('note'),
-           'nextStep': _step('Here\'s your Psyche link and invite: one paste in a friend\'s Muse sets up PsycheAI, makes their Psyche and syncs you. Who should I send it to?',
-                             [SHARED, 'I\'ll share it myself'] + (['Check daily for me'] if out.get('offerDailyCheck') else []))}
-    # Release 194: the people they message most, found here, so the step needs nothing looked up: names as buttons,
-    # sent only after they tap Send. They stay in this chat and are never sent to PsycheAI.
-    people = top_people()
-    if people:
-        res['people'] = people[:3]          # release 196: the top 3 only, and no "Someone else"
-    if out.get('offerDailyCheck'):
-        res['offerDailyCheck'] = True
-    return res
-
-
-def top_people(n=10):
-    """The people they message most on Instagram, one-to-one, busiest first: [{name, username, user, account_id}]
-    (README "Sync with a friend, in one result"). Read on this device from Muse's messages tool; nothing is kept."""
-    try:
-        accounts = [a for a in instagram_accounts(ig(IGM_CLI, 'accounts'), True) if a.get('connected')]
-    except (RuntimeError, RateLimited, OSError):
-        return []
-    out, seen = [], set()
-    for a in accounts:
-        try:
-            got = ig(IGM_CLI, 'top-recipients', '--account-id', a['id'], '--count', '20', timeout=60)
-        except (RuntimeError, RateLimited, OSError):
-            continue
-        for th in ((got or {}).get('entities') or {}).get('thread') or []:
-            others = [u for u in th.get('users') or [] if str(u.get('id')) != str(a['id'])]
-            if len(others) != 1:
-                continue
-            ps = people_in([others[0]])
-            if not ps or (a['id'], ps[0]['user']) in seen:
-                continue
-            seen.add((a['id'], ps[0]['user']))
-            p_ = ps[0]
-            out.append({'name': (p_['name'] or '@' + p_['username'])[:40], 'username': p_['username'], 'user': p_['user'], 'account_id': a['id']})
-    return out[:n]
+    lead = invite_lead(card.get('character'), card.get('firstName'))
+    invite = invite_text(link, card.get('character'), card.get('firstName'))
+    # Release 197 (README "Sync, shared by them"): one message, laid out here (the lead, then the invite alone in a code
+    # block, so it copies and isn't previewed as a link), sent by them wherever they like. Nothing is sent from Muse.
+    return {'url': link, 'lead': lead, 'invite': invite, 'note': out.get('note'),
+            'message': (lead + '\n\n' if lead else '') + '```\n' + invite + '\n```',
+            'nextStep': _step(LINK_SAY, [SHARED, 'Back to the menu'])}
 
 
 def e2e_with(post_tool, link):
@@ -5585,7 +5558,7 @@ def sync_preview(link):
     code = m.group(1)
     has = bool(read_first([REPORT, REPORT_KEPT]))
     if any(x.get('code') == code and x.get('own') for x in e2e_codes()):
-        return {'own': True, 'hasPsyche': has, 'nextStep': _step('That\'s your own Psyche link: it\'s for sending to friends, who paste it into their Muse.', ['Sync with a friend', 'Done'])}
+        return {'own': True, 'hasPsyche': has, 'nextStep': _step('That\'s your own Psyche link: it\'s for sending to friends, who paste it into their Muse.', ['Sync with a friend', 'Back to the menu'])}
     first = post_tool('sync_with', {'e2e': {'id': sync_id(code)}})
     if not isinstance(first, dict) or first.get('error'):
         return first if isinstance(first, dict) else {'error': 'PsycheAI could not look at that link.'}
@@ -5658,7 +5631,7 @@ def e2e_list(out):
             others = ['Show my Sync with ' + x['label'] for x in syncs[:10] if x.get('sync') != shown]
             out['nextStep'] = _step(head + (' Which one next?' if others else ' What\'s next?'), others + after_sync())
         else:
-            out['nextStep'] = _step(head + ' Which one?', ['Show my Sync with ' + x['label'] for x in syncs[:10]] + ['Sync with someone new'])
+            out['nextStep'] = _step(head + ' Which one?', ['Show my Sync with ' + x['label'] for x in syncs[:10]] + ['Sync with someone new', 'Back to the menu'])
     return out
 
 
@@ -5666,7 +5639,7 @@ def after_sync():
     """What's next once a new Sync is open (README "After a new Sync, what's next"): another Sync, Psyche Together
     (Continue, when their partner's invite waits) and another source."""
     together = 'Continue Psyche Together' if os.path.exists(os.path.join(KEEP, 'together-pending.json')) else 'Psyche Together with my partner'
-    return ['Sync with someone new', together, 'Add WhatsApp or Facebook']
+    return ['Sync with someone new', together, 'Add WhatsApp or Facebook', 'Back to the menu']
 
 
 # News on every command (README "News on every command", release 196): after the commands they tap through, a new
@@ -5761,67 +5734,18 @@ def sync_ready(name=''):
                 return dict(call('get_sync', {'sync': x.get('sync')}), ready=True)
     who = nm.split(' ')[0] if nm else 'Your friend'
     return {'ready': False, 'say': '%s hasn\'t finished the Sync yet. Tap Show our results again when they\'re done.' % who,
-            'buttons': [SHOW_RESULTS, 'Ask PsycheAI questions about myself', 'Add WhatsApp or Facebook'], 'asButtons': True}
+            'buttons': [SHOW_RESULTS, 'Back to the menu'], 'asButtons': True}
 
 
 LET_KNOW = 'I just synced with you on PsycheAI. Ask your Muse: Show my Syncs'
 
 
-def people_in(data):
-    """Each person in an Instagram Messages result: {'name', 'username', 'user'}, the user ID kept for sending only."""
-    found = []
-
-    def walk(v):
-        if isinstance(v, list):
-            for x in v:
-                walk(x)
-        elif isinstance(v, dict):
-            name = v.get('full_name') or v.get('name') or v.get('display_name')
-            user = v.get('username') or v.get('user_name')
-            uid = next((str(v[k]) for k in ('user_fbid', 'recipient_user_fbid', 'fbid', 'user_id', 'id') if v.get(k) not in (None, '')), None)
-            if (isinstance(name, str) or isinstance(user, str)) and uid:
-                found.append({'name': name if isinstance(name, str) else '', 'username': user if isinstance(user, str) else '', 'user': uid})
-            for k, x in v.items():
-                if k != '_meta' and isinstance(x, (list, dict)):
-                    walk(x)
-    walk(data)
-    return found
-
-
 def let_know(first):
-    """python3 bin/psyche.py let-know <first name> (README "Let them know, in one command"): one contact search and the
-    top recipients, on each account whose messages are connected, matched by first name. Gives who to send the line
-    to (to), names to pick from (pick), or the line to copy (copy). Nothing is sent, and nothing is kept."""
-    want = re.sub(r'\s+', ' ', str(first or '')).strip().lower()
-    out = {'message': LET_KNOW}
-    if not want or want == 'your friend':
-        return dict(out, copy=LET_KNOW, say='Copy this and send it to them yourself:')
-    try:
-        accounts = [a for a in instagram_accounts(ig(IGM_CLI, 'accounts'), True) if a.get('connected')]
-    except (RuntimeError, RateLimited):
-        accounts = []
-    today = datetime.now()
-    hits, seen = [], set()
-    for a in accounts:
-        for args in (('contact-search', '--query-text', first, '--max-results', '10', '--start-date', (today - timedelta(days=730)).strftime('%Y-%m-%d'), '--end-date', today.strftime('%Y-%m-%d')),
-                     ('top-recipients', '--count', '50')):
-            try:
-                got = ig(IGM_CLI, args[0], '--account-id', a['id'], *args[1:], timeout=60)
-            except (RuntimeError, RateLimited):
-                continue
-            for p in people_in(got):
-                words = (p['name'] or '').lower().split()
-                if (words and words[0] == want) or (p['username'] or '').lower().startswith(want):
-                    if (a['id'], p['user']) not in seen and p['user'] != a['id']:
-                        seen.add((a['id'], p['user']))
-                        hits.append(dict(p, account_id=a['id']))
-    if not hits:
-        return dict(out, copy=LET_KNOW, say='I couldn\'t find %s in your Instagram messages. Copy this and send it to them:' % str(first).strip()[:30])
-    for h in hits:
-        h['label'] = (h['name'] or '@' + h['username']) + (' (@%s)' % h['username'] if h['name'] and h['username'] and sum(1 for x in hits if x['name'] == h['name']) > 1 else '')
-    if len(hits) == 1:
-        return dict(out, to=hits[0])
-    return dict(out, pick=hits[:6], say='Which one is %s?' % str(first).strip()[:30])
+    """python3 bin/psyche.py let-know <first name> (README "Sync, shared by them"): the line to copy and send them
+    themselves. Nothing is looked up, sent or kept."""
+    nm = re.sub(r'\s+', ' ', _letters(str(first or '')).strip())[:30]
+    who = nm.split(' ')[0] if nm and nm.lower() != 'your friend' else 'them'
+    return {'message': LET_KNOW, 'copy': LET_KNOW, 'say': 'Copy this and send it to %s:' % who}
 
 
 def e2e_check(out):
@@ -5847,9 +5771,9 @@ def e2e_check(out):
     # The new Sync as its own page, the same one the friend got (README "A new Sync, as its own page").
     if page and len(names) == 1:
         out['file'], out['sync'] = page[0], page[2]
-        out['buttons'] = after_sync() + ['Done']
+        out['buttons'] = after_sync()
     else:
-        out['buttons'] = ['Show my Syncs']
+        out['buttons'] = ['Show my Syncs', 'Back to the menu']
     return out
 
 
@@ -5876,7 +5800,7 @@ def e2e_get(post_tool, other, info, rewrite=False):
     if written:
         path = save_sync_page({'report': written, 'at': (data.get('written') or {}).get('at'), 'cards': {'me': me, 'them': them}}, other)
         res = {'written': True, 'name': first_of(them), 'summary': sync_plain(written.get('summary'), 200), 'sync': other,
-               'nextStep': _step('Your Sync with %s.' % first_of(them), ['Sync with someone else', 'Write it again', 'Done'])}
+               'nextStep': _step('Your Sync with %s.' % first_of(them), ['Sync with someone else', 'Write it again', 'Back to the menu'])}
         if path:
             res['file'] = path
         return res
@@ -5910,7 +5834,7 @@ def e2e_save(post_tool, other, info, answer):
     # Made from a link they sent (this side is b): telling them comes first (README "Let them know, in one command").
     told = ['Let %s know' % first_of(them)] if role == 'b' and first_of(them) != 'Your friend' else []
     res = {'saved': True, 'name': first_of(them), 'summary': sync_plain(report['summary'], 200), 'sync': other,
-           'nextStep': _step('Your Sync with %s is ready. They\'ll see the same Sync on their side.' % first_of(them), told + ['Sync with someone else', 'Done'])}
+           'nextStep': _step('Your Sync with %s is ready. They\'ll see the same Sync on their side.' % first_of(them), told + ['Sync with someone else', 'Back to the menu'])}
     if path:
         res['file'] = path
     return res
@@ -5932,7 +5856,7 @@ LABELS = frozenset([
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
-    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
+    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
               re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$')]
