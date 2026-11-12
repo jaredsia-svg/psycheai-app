@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 64
+RELEASE = 65
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -3331,6 +3331,9 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .nums>div{background:#faf7fb;border:1px solid #eee6f3}.nums b{color:var(--ink)}
 .psy.bare{background:none;border:0;padding:0;margin:8px 0 0}.psy.bare .pair2{display:block}.psy.bare .pair2>div{background:none;border:0;padding:0;margin:6px 0;font-size:15px}.psy.bare .pair2 b{display:inline;font-weight:750}.psy.bare .pair2 b:after{content:" · "}.psy.bare .pair2 span{display:inline}
 .fp2{margin:6px 0;font-size:15px;line-height:1.55}.fp2 b{font-weight:750}
+.cks{margin:6px 0 2px}.ck{display:flex;align-items:baseline;gap:8px;font-size:14px;margin:5px 0;line-height:1.35}.ck em{font-style:normal;font-weight:800;width:16px;flex:none;text-align:center}
+.ck span{color:var(--ink)}.ck small{margin-left:auto;padding-left:10px;font-size:12.5px;color:var(--soft);text-align:right}.ck.g em{color:#2f7d5b}.ck.b em{color:#2b5d8f}.ck.r em{color:#b3261e}
+.ck.b em{font-size:0;line-height:0}.ck.b em:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;border:2px solid #2b5d8f;background:linear-gradient(90deg,#2b5d8f 50%,transparent 50%);vertical-align:-1px}
 .mir3{display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;gap:4px;margin:8px 0}.mir3 small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--soft)}
 .mir3 b{font-size:14.5px;font-weight:650}.mir3 .g{text-align:right}.mir3>span{text-align:center;font-size:17px;font-weight:800}.mir3>span.ok{color:#2f6f53}.mir3>span.no{color:#2b5d8f}
 ul.how{margin:4px 0 8px;padding-left:18px}.how li{font-size:13.5px;color:var(--soft);margin:4px 0;line-height:1.45}.how li::marker{color:var(--c,#7b3fa0)}
@@ -3936,12 +3939,23 @@ def page(box, s):
                      'attachment': secure_(pa_) and secure_(pb_), 'topics': bool(D(view.get('topics')).get('same')), 'counts': cls == 'Aligned', 'dreams': cls == 'Aligned'}.get(aid, False)
             cls = 'Aligned' if great else 'Steady'
         return '<span class="tl %s"><small>%s</small><b>%s</b></span>' % (_e(cls), _e(nm), _e(txt[:1].upper() + txt[1:]))
+    CK = {'Strong': ('✓', 'g'), 'Aligned': ('✓', 'g'), 'Happier-than-you-each-think': ('✓', 'g'), 'About-right': ('✓', 'g'),
+          'Worth-attention': ('!', 'r'), 'Talk-about': ('!', 'r'), 'Worth-asking-each-other': ('!', 'r')}
+
+    def check_row(cid, aid, nm):
+        """One area as a line of the checklist at a glance (README "Psyche Together, release 65"): ✓ going well, ◐ worth
+        talking about, ! needs attention, its name, and its result on the right; the same result and colour as its pill."""
+        m_ = re.search(r'class="tl ([\w-]+)"><small>(.*?)</small><b>(.*?)</b>', tile(cid, aid, nm))
+        if not m_:
+            return ''
+        sym, k_ = CK.get(m_.group(1), ('◐', 'b'))
+        return '<div class="ck %s"><em>%s</em><span>%s</span><small>%s</small></div>' % (k_, sym, m_.group(2), m_.group(3))
     rows = ''
     for cid, num, title, pids, refs in CHAPTERS:
-        tiles_ = ''.join(tile(cid, aid, nm) for aid, nm in areas_of(cid, view))
+        tiles_ = ''.join(check_row(cid, aid, nm) for aid, nm in areas_of(cid, view))
         take_ = D(ch.get(cid)).get('takeaway')
         if tiles_:
-            rows += ('<a class="it2 ws" href="#%s" style="--c:%s"><div class="wh"><span class="n2">%s</span><b>%s</b><i>›</i></div><div class="tiles">%s</div>%s</a>'
+            rows += ('<a class="it2 ws" href="#%s" style="--c:%s"><div class="wh"><span class="n2">%s</span><b>%s</b><i>›</i></div><div class="cks">%s</div>%s</a>'
                      % (cid, COLOURS.get(cid, '#7b3fa0'), num, _e(title), tiles_, ('<p class="tk2">%s</p>' % _e(take_)) if take_ else ''))
     ovv, ovr = view.get('overall') or {}, D(r.get('overall'))
     # One executive summary (release 54): the line, then how satisfied you are and how well you read each other, in words.
@@ -4089,8 +4103,8 @@ def page(box, s):
                     lead += '<p class="fp2">%s</p>' % ('This one can be settled. Agree on a plan together and it can be put to rest.' if x['type'] == 'solvable'
                                                         else 'This one comes from a real difference between you, so it may never fully go away, and that\'s normal: most couples have a few of these. The aim is to talk about it kindly, not to win it.')
             elif aid == 'security' and view.get('commitment') and 'security' in (view.get('pillars') or {}):
-                lead = ('<div class="tiles"><span class="tl %s"><small>How sure you are of each other</small><b>%s</b></span><span class="tl %s"><small>How sure you each are yourselves</small><b>%s</b></span></div>'
-                        % (_e(view['pillars']['security'].replace(' ', '-')), _e(view['pillars']['security']), _e(view['commitment'].replace(' ', '-')), _e(view['commitment'])))
+                # release 65: one line of text, no boxes (the area's own pill already says how sure you are of each other)
+                lead = '<p class="fp2"><b>How sure you each are yourselves</b> · %s</p>' % _e({'Strong': 'Both sure', 'Steady': 'Fairly sure', 'Worth attention': 'One or both of you less sure'}.get(view['commitment'], view['commitment']))
             if aid in NO_EVIDENCE and not (data_ or lis):          # these read from the Psyches and answers alone
                 para_ = seen or ''
                 hows_ = []

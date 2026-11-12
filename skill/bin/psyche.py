@@ -61,7 +61,7 @@ PsycheAI for one and keeps its keys in .account.json next to this folder's
 SKILL.md, with a spare copy in ~/.psycheai/, so deleting or reinstalling the
 skill keeps the same account. Both are readable only by this workspace.
 Never print or send either.
-Standard library only.
+Standard library only, plus Pillow (already in Muse) to draw the card picture.
 """
 import base64
 import binascii
@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 189
+RELEASE = 190
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
