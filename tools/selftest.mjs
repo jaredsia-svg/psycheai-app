@@ -809,7 +809,7 @@ function signup(email, d) {
     /"Posts only" reads posts and stories only \(with the skill, collect --no-messages\) and nothing more is asked about messages/.test(core) && /from the lists of accounts on Muse's two Instagram connections \(no message is read\)/.test(core) &&
     /MESSAGES FIRST then runs for "Include my messages" on an account whose messages aren't connected, and decides what comes next/.test(core) && (core.match(/Your messages are where you're most yourself/g) || []).length === 1 && /Your messages are where you're most yourself/.test(core) && !/message your matches straight from here/.test(core));
   check('Sync starts from the user\'s own link, is written from PsycheAI\'s guide, never as JSON or a score, and a No is never told',
-    /a name for each person in its people \(the people they message most, found on their own device\)/.test(core) && /Tapping a name sends nothing: it asks once, "Send your invite to <name> on Instagram\?", with "Send" and "Not now", and only after they tap Send do you send that person two Instagram messages from their account, the lead, then the invite on its own; then say in one line who it went to/.test(core) && /The names stay in this chat and never go to PsycheAI/.test(core) && /don't ask again what they just chose/.test(core) && /never retell it in the chat, never show the JSON, and no score/.test(core) && /call save_sync with it/.test(core) &&
+    /a name for each person in its people \(the 3 people they message most, found on their own device\)/.test(core) && /Tapping a name sends nothing: it asks once, "Send your invite to <name> on Instagram\?", with "Send" and "Not now", and only after they tap Send do you send that person two Instagram messages from their account, the lead, then the invite on its own; then say in one line who it went to/.test(core) && /The names stay in this chat and never go to PsycheAI/.test(core) && /don't ask again what they just chose/.test(core) && /never retell it in the chat, never show the JSON, and no score/.test(core) && /call save_sync with it/.test(core) &&
       /"Sync with a friend": call sync_link/.test(core) && /A Psyche link someone sent them \(app\.psycheai\.io\/sync\/…\): it never syncs on its own\..*What's next starts with one more button, "Sync with <the friend's first name>".*A Sync happens only when they choose it: on that tap, call sync_with with link \(with the skill: python3 bin\/psyche\.py sync-with, which uses the link sync-preview kept, or sync-with <the link>\)\. With the skill and a link with # in it, its result also has what get_sync gives \(write: "sync" and its task file\), so write the Sync from it and save it as the skill says, with nothing to look up first; otherwise call get_sync with the sync id it returns/.test(core) &&
       /Syncing is the one thing that shares, so it's said when they choose it: .*"Psyche Sync compares your Psyche with a friend's to show how you get along: what you have in common, where you differ, and tips to get on even better\." then "To make it, your Psyche Card, plus your motivation scores and when in the day you're active, is shared with your friend, locked so PsycheAI can't read it\. A Sync never sends your report or your messages to your friend or anyone else\."/.test(core) && /go straight on as below, with no question and no extra tap/.test(core) && !/with the buttons "Sync" and "Not now"/.test(core) &&
       /PsycheAI never takes a handle/.test(core) && /never dating, and nothing to do with Psyche Pair/.test(core) && /call get_syncs once/.test(core));
@@ -1116,7 +1116,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       await psyche.publish(noKey, fakeAnswer, 'No Key');
       check('Sync: with no card key in the request, sync_link says the card is locked to their workspace', /locked to their own workspace/.test(sync.makeLink(noKey, {}).error || ''));
     }
-    check('Sync: Muse hands over the link at once and never asks for one', /call sync_link at once/.test(instructions.MUSE_PROCEDURE) && /ONE message: its lead as one line, then its invite in a code block \(three backticks\) as given, alone in the block/.test(instructions.MUSE_PROCEDURE) && !/Allow all|no need to open bin|is the go-ahead|is their yes/.test(require('../lib/skill.js').skillMd()) && !/Send this to a friend: they paste it into their Muse/.test(instructions.MUSE_PROCEDURE) && /"Send the line above and the line in the box: they paste the line in the box into their Muse\.", with "My friend has synced", "Ask PsycheAI questions about myself" and "Add WhatsApp or Facebook"\. "My friend has synced" is "My Syncs" \(below\)/.test(instructions.MUSE_PROCEDURE) && /Attach one file, never two: its file when it has one/.test(instructions.MUSE_PROCEDURE) && /That line is the whole message \(the reel went with the welcome\)/.test(instructions.MUSE_PROCEDURE) && /Never ask them for a link or to paste one/.test(instructions.MUSE_PROCEDURE) && !/consent/.test(JSON.stringify(mcp.TOOLS.filter(t => /sync/.test(t.name)))));
+    check('Sync: Muse hands over the link at once and never asks for one', /call sync_link at once/.test(instructions.MUSE_PROCEDURE) && /ONE message: its lead as one line, then its invite in a code block \(three backticks\) as given, alone in the block/.test(instructions.MUSE_PROCEDURE) && !/Allow all|no need to open bin|is the go-ahead|is their yes/.test(require('../lib/skill.js').skillMd()) && !/Send this to a friend: they paste it into their Muse/.test(instructions.MUSE_PROCEDURE) && /"Send the line above and the line in the box: they paste the line in the box into their Muse\.", with "I've shared it\. Show our results", "Ask PsycheAI questions about myself" and "Add WhatsApp or Facebook"\. "I've shared it\. Show our results", "Show our results" or "My friend has synced": with the skill, run python3 bin\/psyche\.py sync-ready/.test(instructions.MUSE_PROCEDURE) && !/"Someone else"/.test(instructions.MUSE_PROCEDURE) && /hasn't finished the Sync yet\. Tap Show our results again when they're done\.", with "Show our results"/.test(instructions.MUSE_PROCEDURE) && /Attach one file, never two: its file when it has one/.test(instructions.MUSE_PROCEDURE) && /That line is the whole message \(the reel went with the welcome\)/.test(instructions.MUSE_PROCEDURE) && /Never ask them for a link or to paste one/.test(instructions.MUSE_PROCEDURE) && !/consent/.test(JSON.stringify(mcp.TOOLS.filter(t => /sync/.test(t.name)))));
     check('Sync is by link only: a handle is refused and none is kept, and the tools ask for none',
       /Sync works by link: call sync_link/.test(sync.syncWith(user, { handle: '@Jun.Lee', my_handle: 'mei.tan' }).error || '') && !('handle' in store.kvGet('synccard', user.id)) &&
       !/handle/.test(JSON.stringify(mcp.TOOLS.filter(t => ['sync_with', 'sync_link'].includes(t.name)).map(t => t.inputSchema))) &&
@@ -2135,8 +2135,15 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         // Saved the way sync_with's save line says, from work/sync-answer.json, which goes once it's saved.
         fsx.mkdirSync(pathx.join(ana.dir, 'work'), { recursive: true });
         fsx.writeFileSync(pathx.join(ana.dir, 'work', 'sync-answer.json'), JSON.stringify({ sync: E.joined.sync, answer: syncAnswer }));
+        E.newsEarly = await mei('status');
+        E.readyEarly = await mei('sync-ready', 'Ana');
         E.saved = await ana('call', 'save_sync', '@' + pathx.join(ana.dir, 'work', 'sync-answer.json'));
         E.answerGone = !fsx.existsSync(pathx.join(ana.dir, 'work', 'sync-answer.json')) && !fsx.existsSync(pathx.join(ana.dir, 'work', 'sync-task.json'));
+        // News on every command (README "News on every command"): nothing while the Sync isn't written, then one line, said once.
+        E.newsReady = await mei('status');
+        E.readyNow = await mei('sync-ready', 'Ana');
+        E.newsAgain = await mei('status');
+        E.newsAna = await ana('status');
         E.bad = await ana('call', 'save_sync', JSON.stringify({ sync: E.joined.sync, answer: { ...syncAnswer, summary: 'A clash of styles.' } }));
         E.check = await mei('call', 'get_syncs', JSON.stringify({ check: true }));
         E.checkPage = E.check.file && fsx.existsSync(E.check.file) ? fsx.readFileSync(E.check.file, 'utf8') : '';
@@ -2450,7 +2457,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
         !['personA', 'personB', 'derivedFacts', 'schema', 'spec', 'save', 'next'].some(k => k in E.joined) && !/save_sync|python3|Write the Sync/.test(JSON.stringify(E.joined)) &&
         E.joinedTask && E.joinedTask.personA && E.joinedTask.personB && E.joinedTask.derivedFacts && E.joinedTask.sync === E.joined.sync && !/save_sync|python3/.test(JSON.stringify(E.joinedTask)) &&
         /\*\*Writing a Sync\*\*[^\n]*then run `python3 bin\/psyche\.py call save_sync @work\/sync-answer\.json`[^\n]*incompatible/.test(skillMd) && E.answerGone &&
-        E.check.quiet === false && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.check.file || '') && JSON.stringify(E.check.buttons) === '["Sync with someone new","Done"]' && E.check.sync === E.list.syncs[0].sync &&
+        E.check.quiet === false && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.check.file || '') && JSON.stringify(E.check.buttons) === '["Sync with someone new","Psyche Together with my partner","Add WhatsApp or Facebook","Done"]' && E.check.sync === E.list.syncs[0].sync &&
         /Mei plans and Ana sparks/.test(E.checkPage) &&
         E.early.length === 1 && /<b>No Syncs yet\.<\/b> When a friend syncs with you, they'll appear here\./.test(E.early[0]) && !/class="sbk"/.test(E.early[0]) && E.anaEarly === 0 &&
         // Both cards at phone width (README "Sync pages Muse can show"): the page well under the report's size, each card small, and a fallback to the initial.
@@ -2533,13 +2540,22 @@ print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'say': m.THIN_SAY, 'li
         /and its thinLine, when it has one, right under it/.test(instructions.MUSE_PROCEDURE) &&
         /if out\.get\('ok'\) and own < MIN_OWN_WRITING:\n            # Too little to read well[^\n]*\n            out\['tooThin'\] = \{'ownWriting': own, 'say': THIN_SAY, 'buttons': \['Add WhatsApp or Facebook', 'Make it anyway'\], 'anyway': ANYWAY_LINE\}/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')), JSON.stringify(T));
     }
+    check('Show our results (README "Show our results"): the link\'s buttons are "I\'ve shared it. Show our results" and "I\'ll share it myself" (no "Someone else", 3 names at most); sync-ready says the friend hasn\'t finished yet, with "Show our results" to tap again, then gives the Sync\'s page once it\'s written',
+      ((E) => E && E.link.nextStep.buttons[0] === "I've shared it. Show our results" && E.link.nextStep.buttons.includes("I'll share it myself") && !E.link.nextStep.buttons.includes('Someone else') && (E.link.people || []).length <= 3 &&
+        E.readyEarly.ready === false && E.readyEarly.say === "Ana hasn't finished the Sync yet. Tap Show our results again when they're done." && E.readyEarly.buttons[0] === 'Show our results' &&
+        E.readyNow.ready === true && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.readyNow.file || '') && E.readyNow.nextStep.buttons.includes('Sync with someone new'))(skillState.e2e),
+      JSON.stringify(((E) => E && [E.link && E.link.nextStep, E.readyEarly, E.readyNow && { ready: E.readyNow.ready, file: E.readyNow.file, nextStep: E.readyNow.nextStep }])(skillState.e2e)).slice(0, 900));
+    check('News on every command (README "News on every command"): status says nothing while a friend\'s Sync isn\'t written, then "Ana synced with you: your Sync is ready." with "Show my Syncs", once; the one who wrote it hears nothing',
+      ((E) => E && !('news' in E.newsEarly) && JSON.stringify(E.newsReady.news) === '["Ana synced with you: your Sync is ready."]' && JSON.stringify(E.newsReady.newsButtons) === '["Show my Syncs"]' &&
+        E.newsReady.connected === true && !('news' in E.newsAgain) && !('news' in E.newsAna))(skillState.e2e),
+      JSON.stringify(((E) => E && [E.newsEarly, E.newsReady, E.newsAgain, E.newsAna])(skillState.e2e)).slice(0, 800));
     check('Sync, locked on the device (README "Sync, locked on the device"): a link made here carries its code after "#", a friend syncs, writes and saves, the other side reads it by name with the tips the right way round and a page of its own, the morning check names them, a banned word comes back to fix, and nothing readable (no name, card text, summary or code) is kept on the server',
       ((E) => E && E.code && /^http:\/\/127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.url) && /^([^.]{1,30}) got Mulan on PsycheAI\. To make your own Psyche Card and sync with \1, paste the line below into your Muse app\.$/.test(E.link.lead) && /^Install 127\.0\.0\.1:\d+\/install and generate my Psyche, then sync with [^:]{1,30}: 127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.invite) &&
         E.link.offerDailyCheck === true && E.link.nextStep && E.joined.status === 'synced' && E.joined.with === 'Mei' && E.toWrite.write === 'sync' && E.toWriteTask && E.toWriteTask.personB.name === 'Mei' && E.toWriteTask.personA.name === 'Ana' &&
         !('motives' in E.toWriteTask.personA) && /Interests in common \(exact matches only\): Reading/.test(E.toWriteTask.derivedFacts) && /guide\.json's `sync` \(its spec, brief and schema\)/.test(skillMd) &&
         E.saved.saved && E.saved.name === 'Mei' && /Racquet sports/.test(E.anaPage) && !/Skydiving/.test(E.anaPage) && E.bad.saved === false && /clash/.test(E.bad.problems.join(' ')) &&
         E.list.syncs.length === 1 && E.list.syncs[0].name === 'Ana' && E.list.syncs[0].label === 'Ana' && E.list.syncs[0].summary === 'Mei plans and Ana sparks: weekends you both remember.' && !('e2e' in E.list.syncs[0]) &&
-        JSON.stringify(E.list.nextStep.buttons) === '["Show my Sync with Ana","Sync with someone new"]' && E.check.say === 'Ana synced with you: your Sync is ready.' &&
+        JSON.stringify(E.list.nextStep.buttons) === '["Sync with someone new","Psyche Together with my partner","Add WhatsApp or Facebook"]' && E.list.nextStep.say === "1 Sync, 1 new. What's next?" && E.check.say === 'Ana synced with you: your Sync is ready.' &&
         E.meiSees.written && E.meiSees.name === 'Ana' && /For you, Mei<\/h4><ul><li>Mei tip 1/.test(E.meiPage) && /For you, Ana<\/h4><ul><li>Ana tip 1/.test(E.anaPage) &&
         /<b>Racquet sports<\/b><span><i class="ia">Mei<\/i> Pickleball<\/span><span><i class="ib">Ana<\/i> Tennis/.test(E.meiPage) && /<svg class="radar2"/.test(E.meiPage) &&
         /\/syncs\/Psyche-Syncs-Mei-Tan-\d{8}-\d{4}(-\d+)?\.html$/.test(E.list.book || '') && /<details class="sbk" data-name="ana">/.test(E.book) && /weekends you both remember/.test(E.book) && (E.book.match(/id="mecard"/g) || []).length <= 1 &&
@@ -3592,6 +3608,27 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       if (wasTg === undefined) delete process.env.PSYCHE_TOGETHER; else process.env.PSYCHE_TOGETHER = wasTg;
     }
     {
+      // News on every command (README "News on every command"): a read the partner wrote is news for the other one only, until they open it.
+      const tgLib = require('../lib/together.js'), wasTg = process.env.PSYCHE_TOGETHER;
+      process.env.PSYCHE_TOGETHER = '1';
+      const A = { id: 'tn_a', via: 'skill' }, B = { id: 'tn_b', via: 'skill' }, id = 'd'.repeat(64);
+      const bx = { v: 'e2e1', n: 'n'.repeat(22), c: 'abc', t: 't'.repeat(43) };
+      await tgLib.link(A, { e2e: { id } }); await tgLib.join(B, { e2e: { id } });
+      await tgLib.put(A, { e2e: { profile: bx } }); await tgLib.put(B, { e2e: { profile: bx } });
+      const before = [tgLib.news(A), tgLib.news(B)];
+      await tgLib.put(B, { e2e: { read: bx } });
+      const ready = [tgLib.news(A), tgLib.news(B)];
+      const tool = await mcp.TOOLS.find(t => t.name === 'get_news').run(A);
+      await tgLib.get(A);
+      const opened = tgLib.news(A);
+      await tgLib.end(A);
+      check('News on every command: get_news says a Psyche Together read waits only to the partner who didn\'t write it, as a yes or no, until they open it; it is hidden from Muse\'s tool list',
+        JSON.stringify(before) === '[false,false]' && JSON.stringify(ready) === '[true,false]' && tool.together === true && Array.isArray(tool.syncs) &&
+          Object.keys(tool).sort().join() === 'syncs,together' && opened === false && /const HIDDEN = new Set\(\[[^\]]*'get_news'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8')),
+        JSON.stringify([before, ready, tool, opened]));
+      if (wasTg === undefined) delete process.env.PSYCHE_TOGETHER; else process.env.PSYCHE_TOGETHER = wasTg;
+    }
+    {
       const setPrefs = mcp.TOOLS.find(t => t.name === 'set_preferences').run;
       const qa = questions.addQuestion({ key: 'reptiles_ok', text: 'Would you be okay with a partner who keeps pet reptiles?' });
       const qb = questions.addQuestion({ key: 'night_owl_ok', text: 'Would you be okay with a partner who stays up past 2am most nights?' });
@@ -4427,7 +4464,9 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       tg.chatRules.firstNoSkip === true && tg.chatRules.due.join() === 'true,true,false,false,false' && tg.waAdded.write === 'read' && /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || '') &&
       /\*\*When a result has `chatOffer`\*\*/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?","Remind me here"]' &&
       // The reminder is theirs to ask for (README "Psyche Together, release 57"): once set, it isn't offered again.
-      tg.remindB.setReminder && tg.remindB.setReminder.name === 'Psyche Together check' && tg.remindB.setReminder.task === 'In ~/workspace/skills/psyche-together, run python3 bin/together.py check and show what it gives. When it says done, remove this reminder.' &&
+      tg.remindB.setReminder && tg.remindB.setReminder.name === 'Psyche Together check' && tg.remindB.setReminder.task === 'python3 bin/together.py check' && tg.remindB.setReminder.folder === '~/workspace/skills/psyche-together' &&
+      // Release 70: the reminder is one command; when it ends comes from check's result, never the reminder's text.
+      /When `check` gives `removeReminder`, delete the reminder it names\./.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       !((tg.waitB2.buttons || []).includes('Remind me here')) &&
       /\*\*"Remind me here"\*\* \(offered while they wait for their partner\): `python3 bin\/together\.py remind`/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && !/whose task is: "In/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.foryouA.write === 'foryou' && tg.write.write === 'read' && tg.saved.file && /Psyche-Together/.test(tg.saved.file), JSON.stringify([tg.waitB, tg.foryouA.write, tg.write.write]).slice(0, 300));
@@ -4601,6 +4640,15 @@ r = json.loads(sys.stdin.read()); print(json.dumps(m.check_read(r, json.loads(${
   tg.afterEnd2 = await run.b('status');
   tg.blobsAfterEnd = (await Promise.all(['profile:a', 'profile:b', 'chat:a', 'pic:a', 'read'].map(k => store.getBlob(tgLib.blobKey(tgId, ...k.split(':')))))).filter(Boolean).length;
   // The sample's budget (README "Psyche Together, release 21"): a long conversation fills up to 120,000 characters, over its whole span.
+  // Show our results, for Psyche Together (README "Show our results"): every wait has "Is our read ready?" to tap again.
+  tg.waits = JSON.parse((await execFile('python3', ['-c', `
+import importlib.util, json
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(json.dumps(m.write_task({'a': {}, 'b': {}})))`], { env: { ...process.env, PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tw-')) } })).stdout);
+  check('Psyche Together: every wait carries "Is our read ready?" to tap again (README "Show our results")',
+    tg.waits.waiting === true && JSON.stringify(tg.waits.buttons) === '["Is our read ready?"]' && /Tap Is our read ready\? again when they're done\./.test(tg.waits.say) &&
+      (fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8').match(/'waiting': True(?![^\n]*'buttons')[^\n]*\n(?![^\n]*'buttons')/g) || []).length === 0,
+    JSON.stringify(tg.waits));
   tg.big = JSON.parse((await execFile('python3', ['-c', `
 import importlib.util, json, datetime
 spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)

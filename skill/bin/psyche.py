@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 195
+RELEASE = 196
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5455,12 +5455,12 @@ def e2e_link(post_tool):
     link = BASE + '/sync#' + code
     res = {'url': link, 'lead': invite_lead(card.get('character'), card.get('firstName')), 'invite': invite_text(link, card.get('character'), card.get('firstName')), 'note': out.get('note'),
            'nextStep': _step('Here\'s your Psyche link and invite: one paste in a friend\'s Muse sets up PsycheAI, makes their Psyche and syncs you. Who should I send it to?',
-                             ['Someone else', 'I\'ll share it myself'] + (['Check daily for me'] if out.get('offerDailyCheck') else []))}
+                             [SHARED, 'I\'ll share it myself'] + (['Check daily for me'] if out.get('offerDailyCheck') else []))}
     # Release 194: the people they message most, found here, so the step needs nothing looked up: names as buttons,
     # sent only after they tap Send. They stay in this chat and are never sent to PsycheAI.
     people = top_people()
     if people:
-        res['people'] = people
+        res['people'] = people[:3]          # release 196: the top 3 only, and no "Someone else"
     if out.get('offerDailyCheck'):
         res['offerDailyCheck'] = True
     return res
@@ -5614,6 +5614,7 @@ def _open_pair(info):
 def e2e_list(out):
     """get_syncs with its locked Syncs opened here: their names and summaries, labels and buttons, as the server makes them."""
     syncs = out.get('syncs') if isinstance(out.get('syncs'), list) else []
+    shown = None     # the Sync whose page is attached
     for x in syncs:
         info = x.pop('e2e', None) if isinstance(x, dict) else None
         if info is None:
@@ -5635,7 +5636,7 @@ def e2e_list(out):
             if x.get('new') and 'file' not in out:
                 path = save_sync_page(content, x.get('sync'))
                 if path:
-                    out['file'] = path
+                    out['file'], shown = path, x.get('sync')
             else:
                 keep_sync(x.get('sync'), content)
     seen, used = {}, set()
@@ -5650,9 +5651,117 @@ def e2e_list(out):
         x['label'] = label
     if syncs:
         n, fresh = len(syncs), sum(1 for x in syncs if x.get('new'))
-        out['nextStep'] = _step('%d %s%s. Which one?' % (n, 'Sync' if n == 1 else 'Syncs', ', %d new' % fresh if fresh else ''),
-                                ['Show my Sync with ' + x['label'] for x in syncs[:10]] + ['Sync with someone new'])
+        head = '%d %s%s.' % (n, 'Sync' if n == 1 else 'Syncs', ', %d new' % fresh if fresh else '')
+        if 'file' in out:
+            # Release 196 (README "After a new Sync, what's next"): the Sync whose page is attached has no button of
+            # its own (it's already open); the rest of What's next follows instead.
+            others = ['Show my Sync with ' + x['label'] for x in syncs[:10] if x.get('sync') != shown]
+            out['nextStep'] = _step(head + (' Which one next?' if others else ' What\'s next?'), others + after_sync())
+        else:
+            out['nextStep'] = _step(head + ' Which one?', ['Show my Sync with ' + x['label'] for x in syncs[:10]] + ['Sync with someone new'])
     return out
+
+
+def after_sync():
+    """What's next once a new Sync is open (README "After a new Sync, what's next"): another Sync, Psyche Together
+    (Continue, when their partner's invite waits) and another source."""
+    together = 'Continue Psyche Together' if os.path.exists(os.path.join(KEEP, 'together-pending.json')) else 'Psyche Together with my partner'
+    return ['Sync with someone new', together, 'Add WhatsApp or Facebook']
+
+
+# News on every command (README "News on every command", release 196): after the commands they tap through, a new
+# Sync or a Psyche Together read their partner wrote is said in one line, with its button, once each. At most one
+# check every few minutes; a check that fails says nothing. Kept here only: when it last looked and what was said.
+NEWS = os.path.join(KEEP, 'news.json')
+NEWS_EVERY = 300
+NEWS_ON = ('status', 'show', 'why', 'correct', 'checkin', 'report', 'republish')
+
+
+def news_for(force=False):
+    """{'news': [lines], 'newsButtons': [labels]} when something waits that hasn't been said, else None."""
+    if not read_first([REPORT, REPORT_KEPT]):
+        return None
+    kept = read_first([NEWS]) or {}
+    now = int(time.time())
+    if not force and now - int(kept.get('at') or 0) < NEWS_EVERY:
+        return None
+    kept['at'] = now
+    try:
+        got = post_tool('get_news', {})
+    except Exception:
+        got = {}
+    if not isinstance(got, dict) or got.get('error'):
+        write_private([NEWS], kept)
+        return None
+    said = set(kept.get('syncs') or [])
+    names = []
+    for x in got.get('syncs') or []:
+        if not isinstance(x, dict) or not x.get('sync') or x['sync'] in said:
+            continue
+        if isinstance(x.get('e2e'), dict):
+            code, data = _open_pair(x['e2e'])
+            if data is None or not data.get('written'):
+                continue          # not written yet: said once it is
+            role = x['e2e'].get('role')
+            names.append(first_of(clean_card((data.get('cards') or {}).get('b' if role == 'a' else 'a'))))
+        elif x.get('written'):
+            names.append(str(x.get('name') or 'A friend')[:40])
+        else:
+            continue
+        said.add(x['sync'])
+    lines, buttons = [], []
+    if names:
+        who = ' and '.join(names) if len(names) < 3 else '%s and %d more' % (', '.join(names[:2]), len(names) - 2)
+        lines.append('%s synced with you: %s ready.' % (who, 'your Sync is' if len(names) == 1 else 'your Syncs are'))
+        buttons.append('Show my Syncs')
+    if got.get('together') and not kept.get('together'):
+        lines.append('Your Psyche Together read is ready.')
+        buttons.append('Show our Psyche Together')
+    kept.update(syncs=sorted(said)[-200:], together=bool(got.get('together')))
+    write_private([NEWS], kept)
+    return {'news': lines, 'newsButtons': buttons} if lines else None
+
+
+def with_news(argv, text):
+    """A command's printed result with news_for's lines added, when it's one JSON object without an error."""
+    if not argv or not (argv[0] in NEWS_ON or argv[:2] == ['call', 'start']):
+        return text
+    try:
+        out = json.loads(text)
+    except ValueError:
+        return text
+    if not isinstance(out, dict) or out.get('error') or out.get('saved') is False:
+        return text
+    got = news_for(force=argv[0] == 'status')
+    if not got:
+        return text
+    out.update(got)
+    return json.dumps(out, ensure_ascii=False, indent=1) + '\n'
+
+
+# Show our results (README "Show our results", release 196): one tap, after sharing a link, to see whether the friend has
+# synced: the Sync if they have, otherwise a line saying they haven't finished yet, with the button to tap again.
+SHARED = 'I\'ve shared it. Show our results'
+SHOW_RESULTS = 'Show our results'
+
+
+def sync_ready(name=''):
+    """python3 bin/psyche.py sync-ready [<their first name>]: a new Sync that's written (its page, as get_syncs gives it),
+    else one with that friend already opened (get_sync), else that they haven't finished yet."""
+    nm = re.sub(r'\s+', ' ', _letters(str(name or '')).strip())[:30]
+    out = call('get_syncs', {})
+    if not isinstance(out, dict) or out.get('error'):
+        return out
+    if out.get('file'):
+        return dict(out, ready=True)
+    if nm:
+        first = nm.split(' ')[0].lower()
+        for x in out.get('syncs') or []:
+            if x.get('summary') and str(x.get('name') or '').split(' ')[0].lower() == first:
+                return dict(call('get_sync', {'sync': x.get('sync')}), ready=True)
+    who = nm.split(' ')[0] if nm else 'Your friend'
+    return {'ready': False, 'say': '%s hasn\'t finished the Sync yet. Tap Show our results again when they\'re done.' % who,
+            'buttons': [SHOW_RESULTS, 'Ask PsycheAI questions about myself', 'Add WhatsApp or Facebook'], 'asButtons': True}
 
 
 LET_KNOW = 'I just synced with you on PsycheAI. Ask your Muse: Show my Syncs'
@@ -5738,7 +5847,7 @@ def e2e_check(out):
     # The new Sync as its own page, the same one the friend got (README "A new Sync, as its own page").
     if page and len(names) == 1:
         out['file'], out['sync'] = page[0], page[2]
-        out['buttons'] = ['Sync with someone new', 'Done']
+        out['buttons'] = after_sync() + ['Done']
     else:
         out['buttons'] = ['Show my Syncs']
     return out
@@ -5819,11 +5928,11 @@ LABELS = frozenset([
     'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
     'WhatsApp, Facebook and Messenger', 'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
-    'Done', 'Yes', 'No thanks', 'Show my Syncs', 'Check daily for me', 'Someone else', 'I\'ll share it myself', 'Sync with someone else', 'Sync with someone new', 'Write it again',
+    'Done', 'Yes', 'No thanks', 'Show my Syncs', 'Check daily for me', 'Someone else', 'I\'ll share it myself', 'I\'ve shared it. Show our results', 'Show our results', 'My friend has synced', 'Sync with someone else', 'Sync with someone new', 'Write it again',
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
-    'Explain why you said this', 'Correct something', 'More', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
+    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
               re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$')]
@@ -6435,6 +6544,9 @@ def main(argv):
     if argv[0] == 'sync-check':          # release 194: the daily Sync check is this one command, nothing more
         print(json.dumps(call('get_syncs', {'check': True}), ensure_ascii=False, indent=1))
         return
+    if argv[0] == 'sync-ready':
+        print(json.dumps(sync_ready(' '.join(argv[1:])), ensure_ascii=False, indent=1))
+        return
     if argv[0] == 'let-know' and len(argv) >= 2:
         print(json.dumps(let_know(' '.join(argv[1:])), ensure_ascii=False, indent=1))
         return
@@ -6632,12 +6744,24 @@ def main(argv):
             write_private([REPORT], kept)
         print(json.dumps(kept, ensure_ascii=False))
         return
-    sys.exit('Usage: python3 bin/psyche.py status | update | report | republish | show PART | prep FILE... [--me NAME] [--deep] | check-digest | forget [--everything] | sync-preview LINK | sync-with [LINK] | let-know NAME | call TOOL [JSON | @FILE]')
+    sys.exit('Usage: python3 bin/psyche.py status | update | report | republish | show PART | prep FILE... [--me NAME] [--deep] | check-digest | forget [--everything] | sync-preview LINK | sync-with [LINK] | sync-ready [NAME] | let-know NAME | call TOOL [JSON | @FILE]')
 
 
 if __name__ == '__main__':
     try:
-        main(sys.argv[1:])
+        if sys.argv[1:2] and (sys.argv[1] in NEWS_ON or sys.argv[1:3] == ['call', 'start']):
+            real, sys.stdout = sys.stdout, io.StringIO()
+            try:
+                main(sys.argv[1:])
+            finally:
+                text, sys.stdout = sys.stdout.getvalue(), real
+                try:
+                    text = with_news(sys.argv[1:], text)
+                except Exception:
+                    pass
+                sys.stdout.write(text)
+        else:
+            main(sys.argv[1:])
     finally:
         # The Library's copies follow out/ after every command (README "In Muse's Library").
         try:

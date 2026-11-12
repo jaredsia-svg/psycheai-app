@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 69
+RELEASE = 70
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1848,8 +1848,10 @@ PSYCHE_FIRST = ('Make my Psyche first', 'Not now')
 # The "Psyche Together check" reminder is theirs to ask for (README "Psyche Together, release 57"): a result that waits
 # on the partner offers it as a button, until they've had it once, and remind gives the reminder to set.
 REMIND = 'Remind me here'
-CHECK_TASK = ('In ~/workspace/skills/psyche-together, run python3 bin/together.py check and show what it gives. '
-              'When it says done, remove this reminder.')
+# Release 70: the reminder runs one command and nothing else (CLAUDE.md, "Standing tasks with instructions inside"). What it
+# shows and when it ends come from check's own result (removeReminder), never from the reminder's text.
+CHECK_TASK = 'python3 bin/together.py check'
+CHECK_FOLDER = '~/workspace/skills/psyche-together'
 
 
 def with_remind(out):
@@ -1863,7 +1865,7 @@ def remind():
     s = state()
     s['remind'] = True
     save_state(s)
-    return {'setReminder': {'name': 'Psyche Together check', 'every': 'hour', 'task': CHECK_TASK},
+    return {'setReminder': {'name': 'Psyche Together check', 'every': 'hour', 'folder': CHECK_FOLDER, 'task': CHECK_TASK},
             'say': 'Done: I\'ll check every hour and tell you here when there\'s something new.'}
 
 
@@ -2321,7 +2323,8 @@ def write_task(profiles=None):
         if got.get('error'):
             return got
     if not all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
-        return {'waiting': True, 'say': 'Still waiting for your partner\'s answers.'}
+        return {'waiting': True, 'say': 'Still waiting for your partner\'s answers. Tap Is our read ready? again when they\'re done.',
+                'buttons': ['Is our read ready?'], 'asButtons': True}
     view = couple_view(profiles['a'], profiles['b'])
     people = []
     for r in ('a', 'b'):
@@ -2994,7 +2997,7 @@ def status():
         return chat_offer(s)
     if not box:
         return write_task(profiles) if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')) else {
-            'waiting': True, 'setCheck': True, 'say': '%s hasn\'t finished theirs yet.' % (s.get('partner') or 'Your partner'), 'buttons': ['Is our read ready?'], 'asButtons': True}
+            'waiting': True, 'setCheck': True, 'say': '%s hasn\'t finished theirs yet. Tap Is our read ready? again when they\'re done.' % (s.get('partner') or 'Your partner'), 'buttons': ['Is our read ready?'], 'asButtons': True}
     if not s.get('forYou'):
         return foryou_task(box)
     if live_round(s):
@@ -4463,7 +4466,8 @@ def show(box=None):
             return got
         box = box if box is not None else box_
         if not box:
-            return {'waiting': True, 'say': 'Your read isn\'t written yet.'}
+            return {'waiting': True, 'say': 'Your read isn\'t written yet. Tap Is our read ready? again in a little while.',
+                    'buttons': ['Is our read ready?'], 'asButtons': True}
     s['shown'] = box.get('at')
     done_ = [x.get('n') for x in rounds_in(box)]
     if isinstance(s.get('round'), dict) and s['round'].get('n') in done_:
@@ -4677,6 +4681,8 @@ def main(argv):
         out = widget_out(s, WIDGET_SAY)
     elif cmd == 'check':
         out = check()
+        if isinstance(out, dict) and out.get('done'):
+            out['removeReminder'] = 'Psyche Together check'
     elif cmd == 'again':
         out = again()
     elif cmd == 'later':
