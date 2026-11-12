@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 193
+RELEASE = 194
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5431,10 +5431,41 @@ def e2e_link(post_tool):
     link = BASE + '/sync#' + code
     res = {'url': link, 'lead': invite_lead(card.get('character'), card.get('firstName')), 'invite': invite_text(link, card.get('character'), card.get('firstName')), 'note': out.get('note'),
            'nextStep': _step('Here\'s your Psyche link and invite: one paste in a friend\'s Muse sets up PsycheAI, makes their Psyche and syncs you. Who should I send it to?',
-                             ['Someone else', 'I\'ll share it myself'])}
+                             ['Someone else', 'I\'ll share it myself'] + (['Check daily for me'] if out.get('offerDailyCheck') else []))}
+    # Release 194: the people they message most, found here, so the step needs nothing looked up: names as buttons,
+    # sent only after they tap Send. They stay in this chat and are never sent to PsycheAI.
+    people = top_people()
+    if people:
+        res['people'] = people
     if out.get('offerDailyCheck'):
         res['offerDailyCheck'] = True
     return res
+
+
+def top_people(n=10):
+    """The people they message most on Instagram, one-to-one, busiest first: [{name, username, user, account_id}]
+    (README "Sync with a friend, in one result"). Read on this device from Muse's messages tool; nothing is kept."""
+    try:
+        accounts = [a for a in instagram_accounts(ig(IGM_CLI, 'accounts'), True) if a.get('connected')]
+    except (RuntimeError, RateLimited, OSError):
+        return []
+    out, seen = [], set()
+    for a in accounts:
+        try:
+            got = ig(IGM_CLI, 'top-recipients', '--account-id', a['id'], '--count', '20', timeout=60)
+        except (RuntimeError, RateLimited, OSError):
+            continue
+        for th in ((got or {}).get('entities') or {}).get('thread') or []:
+            others = [u for u in th.get('users') or [] if str(u.get('id')) != str(a['id'])]
+            if len(others) != 1:
+                continue
+            ps = people_in([others[0]])
+            if not ps or (a['id'], ps[0]['user']) in seen:
+                continue
+            seen.add((a['id'], ps[0]['user']))
+            p_ = ps[0]
+            out.append({'name': (p_['name'] or '@' + p_['username'])[:40], 'username': p_['username'], 'user': p_['user'], 'account_id': a['id']})
+    return out[:n]
 
 
 def e2e_with(post_tool, link):
@@ -5764,7 +5795,7 @@ LABELS = frozenset([
     'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
     'WhatsApp, Facebook and Messenger', 'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
-    'Done', 'Yes', 'No thanks', 'Show my Syncs', 'Someone else', 'I\'ll share it myself', 'Sync with someone else', 'Sync with someone new', 'Write it again',
+    'Done', 'Yes', 'No thanks', 'Show my Syncs', 'Check daily for me', 'Someone else', 'I\'ll share it myself', 'Sync with someone else', 'Sync with someone new', 'Write it again',
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
@@ -6376,6 +6407,9 @@ def main(argv):
             print(json.dumps({'error': 'No friend\'s link here: run sync-with <their link>.'}))
             return
         print(json.dumps(call('sync_with', {'link': link}), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'sync-check':          # release 194: the daily Sync check is this one command, nothing more
+        print(json.dumps(call('get_syncs', {'check': True}), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'let-know' and len(argv) >= 2:
         print(json.dumps(let_know(' '.join(argv[1:])), ensure_ascii=False, indent=1))
