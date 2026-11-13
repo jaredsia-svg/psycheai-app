@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 72
+RELEASE = 74
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2317,7 +2317,7 @@ def send(no_chat=False):
             'say': 'Your answers are locked and sent. When %s has done theirs, your read is written: you\'ll both get the same one.' % (s.get('partner') or 'your partner')}
 
 
-def write_task(profiles=None):
+def write_task(profiles=None, again=False):
     """What Muse needs to write the joint read: both Psyches at card level and the couple view, never either
     person's own answers. Data only."""
     if profiles is None:
@@ -2327,6 +2327,16 @@ def write_task(profiles=None):
     if not all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
         return {'waiting': True, 'say': 'Still waiting for your partner\'s answers. Tap Is our read ready? again when they\'re done.',
                 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True}
+    # Release 73 (README "One writer"): one read, written once. Both Muses once wrote it within a minute of each other,
+    # each the "last one in" by its own step, and the two copies differed. The server gives the writing to whoever claims
+    # it first; the other waits for it (or takes over if that claim is 20 minutes old with no read).
+    claimed = tool('together_claim', {'again': True} if again else {})
+    if claimed.get('writer'):
+        return {'waiting': True, 'writing': True, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
+                'say': '%s\'s Muse is writing your read now. Tap Is our read ready? in a few minutes.' % (state().get('partner') or 'Your partner')}
+    if claimed.get('written'):
+        return {'waiting': True, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
+                'say': 'Your read has just been saved. Tap Is our read ready? to see it.'}
     view = couple_view(profiles['a'], profiles['b'])
     people = []
     for r in ('a', 'b'):
@@ -2336,11 +2346,27 @@ def write_task(profiles=None):
         people.append({'name': (pr.get('psyche') or {}).get('name'), 'card': pr.get('psyche') or {}, 'report': pr.get('report'),
                        'sketch': isinstance(cf, int) and cf < SKETCH_BELOW,          # release 69: under 50%, write about them from the chat and answers
                        'chat': named_chat(pr.get('chat'), (pr.get('psyche') or {}).get('name'), (other.get('psyche') or {}).get('name'))})
-    return task_file({'write': 'read', 'coupleView': {k: v for k, v in view.items() if k != 'knowBy'}, 'people': people, 'research': RESEARCH, 'saveTo': 'work/together-read.json'})
+    out = task_file({'write': 'read', 'coupleView': {k: v for k, v in view.items() if k != 'knowBy'}, 'people': people, 'research': RESEARCH, 'saveTo': 'work/together-read.json'})
+    if isinstance(out, dict) and out.get('write') == 'read':
+        out['parts'] = list(READ_PARTS)          # release 74: the read can be written as these parts, one at a time
+    return out
 
 
 ALL_WELL = re.compile(r'\b(suits you both|works (well )?for (you )?both|works well|nothing to (worry|fix)|no (concern|problem)s?)\b', re.I)
 GUESSED_ALL = re.compile(r'\b(all|each|every) (of your |your )?guess(es)? (all )?(matched|were right|landed)|guess(es)? (about each other )?all (matched|landed|were right)|you both guessed (right|correctly)|read each other better than', re.I)
+# Release 73 (README "Checks that read the sentence"): "neither of you guessed right" says the opposite of a match, and was
+# turned back twice in a device run; a sentence that negates it before the words isn't a claim that a guess was right.
+NEGATED = re.compile(r"\b(neither|none|no|not|never|nobody|without|missed|wrong)\b|n't\b", re.I)
+
+
+def claims(rx, text):
+    for sentence in re.split(r'(?<=[.!?])\s+|\n+', text or ''):
+        m = rx.search(sentence)
+        if m and not NEGATED.search(' '.join(sentence[:m.start()].split()[-5:])):      # the few words just before it
+            return True
+    return False
+
+
 GUESSED_ANY = re.compile(r'\bguess(es|ed)? (matched|landed|(was|were) right)|guessed (right|correctly)', re.I)
 BANNED = re.compile(r'\b(score[sd]?|percent\w*|compatib\w*|incompatib\w*|divorc\w*|predict\w*|toxic|contempt\w*|stonewall\w*|narcissis\w*|'
                     r'diagnos\w*|therap\w*|treatment|disorder\w*|abus\w*|red flags?|verdict)\b|%', re.I)
@@ -2460,9 +2486,9 @@ def check_read(r, view, has_chat=False):
     gr = D(view.get('guessedRight'))
     if gr.get('of'):
         all_text = ' '.join(s_ for _, s_ in _texts(r))
-        if gr.get('right', 0) < gr['of'] and GUESSED_ALL.search(all_text):
+        if gr.get('right', 0) < gr['of'] and claims(GUESSED_ALL, all_text):
             problems.append('Your guesses: %d of %d were right (guessedRight in the couple view), so never say they all matched or that you both guessed right' % (gr.get('right', 0), gr['of']))
-        elif not gr.get('right') and GUESSED_ANY.search(all_text):
+        elif not gr.get('right') and claims(GUESSED_ANY, all_text):
             problems.append('Your guesses: none of the %d were right (guessedRight in the couple view), so never say a guess matched or was right' % gr['of'])
     tr = L(r.get('truths'))
     # Release 66: each about three sentences, with its three dated moments as pills beside it, not a paragraph of counts.
@@ -2643,13 +2669,91 @@ def read_sources(profiles, view):
             'confidence': {'score': score, 'level': LEVEL_OF(score), 'weakest': weakest, 'talk': talk, 'checkin': checkin}}
 
 
-def save_read(path):
+# Release 74 (README "The read in parts"): the read is about 25,000 characters of JSON, and a helper writing it in one go
+# once stopped at its output limit with nothing saved. It can be written as parts, each its own small file, kept here
+# one at a time and put together for check and save.
+PARTS_DIR = os.path.join(WORK, 'read-parts')
+READ_PARTS = {'opening': ('summary', 'overall', 'truths', 'relational'), 'close': None, 'life': None, 'future': None,
+              'secure': None, 'disagree': None, 'closing': ('story', 'intermission', 'plan', 'caveats')}
+
+
+def keep_part(name, path):
+    """python3 bin/together.py part <name> @<file>: one part of the read, kept until check --parts or save --parts."""
+    if name not in READ_PARTS:
+        return {'error': 'Parts: ' + ', '.join(READ_PARTS)}
+    try:
+        with open(str(path).lstrip('@'), encoding='utf-8') as f:
+            v = json.load(f)
+    except (OSError, ValueError) as err:
+        return {'error': 'Couldn\'t read %s: %s' % (path, err)}
+    if not isinstance(v, dict):
+        return {'error': 'A part is one JSON object.'}
+    keys = READ_PARTS[name]
+    if keys is None:                         # a chapter: the chapter itself, or {"<name>": chapter}
+        v = v.get(name, v) if isinstance(v.get(name), dict) else v
+    else:
+        extra = [x for x in v if x not in keys]
+        if extra:
+            return {'error': 'The %s part holds only %s, not %s.' % (name, ', '.join(keys), ', '.join(extra))}
+    os.makedirs(PARTS_DIR, exist_ok=True)
+    with open(os.path.join(PARTS_DIR, name + '.json'), 'w', encoding='utf-8') as f:
+        json.dump(v, f, ensure_ascii=False)
+    try:
+        os.remove(str(path).lstrip('@'))
+    except OSError:
+        pass
+    have = [p for p in READ_PARTS if os.path.exists(os.path.join(PARTS_DIR, p + '.json'))]
+    return {'kept': name, 'have': have, 'missing': [p for p in READ_PARTS if p not in have]}
+
+
+def assembled():
+    """The read, put together from its kept parts, or (None, what's missing)."""
+    r, missing = {'chapters': {}}, []
+    for name, keys in READ_PARTS.items():
+        try:
+            with open(os.path.join(PARTS_DIR, name + '.json'), encoding='utf-8') as f:
+                v = json.load(f)
+        except (OSError, ValueError):
+            missing.append(name)
+            continue
+        if keys is None:
+            r['chapters'][name] = v
+        else:
+            r.update(v)
+    return (None, missing) if missing else (r, [])
+
+
+def load_read(path):
+    """The read from one file (@<file>), or from its kept parts (--parts): (read, problem)."""
+    if path == '--parts':
+        r, missing = assembled()
+        return (r, None) if r else (None, 'Parts still to keep: %s.' % ', '.join(missing))
     try:
         with open(str(path).lstrip('@'), encoding='utf-8') as f:
             r = json.load(f)
     except (OSError, ValueError) as err:
-        return {'saved': False, 'problems': ['Couldn\'t read %s: %s' % (path, err)]}
-    r = r.get('answer', r) if isinstance(r, dict) else r
+        return None, 'Couldn\'t read %s: %s' % (path, err)
+    return (r.get('answer', r) if isinstance(r, dict) else r), None
+
+
+def check_file(path):
+    """python3 bin/together.py check @<file> | --parts (release 73): the read's problems, as save would list them, without saving it."""
+    r, problem = load_read(path)
+    if problem:
+        return {'ok': False, 'problems': [problem]}
+    k, got, profiles, old = couple()
+    if got.get('error'):
+        return got
+    if not profiles.get('a') or not profiles.get('b'):
+        return {'ok': False, 'problems': ['Both of you need to have sent your answers first.']}
+    problems = check_read(r, couple_view(profiles['a'], profiles['b']), bool(profiles['a'].get('chat') or profiles['b'].get('chat')))
+    return {'ok': not problems, 'problems': problems}
+
+
+def save_read(path):
+    r, problem = load_read(path)
+    if problem:
+        return {'saved': False, 'problems': [problem]}
     k, got, profiles, old = couple()
     if got.get('error'):
         return got
@@ -2674,10 +2778,13 @@ def save_read(path):
     put = tool('together_put', {'e2e': {'read': seal(box, key_for('together-box', k['code']))}})
     if put.get('error'):
         return put
-    try:
-        os.remove(str(path).lstrip('@'))
-    except OSError:
-        pass
+    if path == '--parts':
+        shutil.rmtree(PARTS_DIR, ignore_errors=True)
+    else:
+        try:
+            os.remove(str(path).lstrip('@'))
+        except OSError:
+            pass
     s = state()
     s['readAt'] = box['at']
     save_state(s)
@@ -2808,7 +2915,7 @@ def rewrite(note=None):
         return got
     if not box:
         return write_task(profiles) if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')) else {'error': 'Your read hasn\'t been written yet.'}
-    task = write_task(profiles)
+    task = write_task(profiles, again=True)
     if note and task.get('task'):
         path = os.path.join(HERE, task['task'])
         try:
@@ -4681,6 +4788,8 @@ def main(argv):
     elif cmd == 'widget':
         s = state()
         out = widget_out(s, WIDGET_SAY)
+    elif cmd == 'check' and rest and (rest[0].startswith('@') or rest[0] == '--parts'):
+        out = check_file(rest[0])          # release 73/74: the read's problems, without saving
     elif cmd == 'check':
         out = check()
         if isinstance(out, dict) and out.get('done'):
@@ -4717,6 +4826,8 @@ def main(argv):
         out = write_task()
     elif cmd == 'save':
         out = save_read(rest[0] if rest else '')
+    elif cmd == 'part' and len(rest) >= 2:
+        out = keep_part(rest[0], rest[1])
     elif cmd == 'foryou':
         out = foryou_task()
     elif cmd == 'save-foryou':

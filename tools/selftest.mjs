@@ -3647,12 +3647,21 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       await tgLib.link(A, { e2e: { id } }); await tgLib.join(B, { e2e: { id } });
       await tgLib.put(A, { e2e: { profile: bx } }); await tgLib.put(B, { e2e: { profile: bx } });
       const before = [tgLib.news(A), tgLib.news(B)];
+      // One writer (README "One writer", Psyche Together 73): the first claim wins, the other is told who writes; a claim 20 minutes old can be taken over.
+      const t0 = Date.now();
+      const claims = [tgLib.claim(B, {}, t0), tgLib.claim(A, {}, t0 + 60000), tgLib.claim(B, {}, t0 + 120000), tgLib.claim(A, {}, t0 + 120000 + tgLib.CLAIM_MS + 1000)];
+      tgLib.claim(B, {}, t0 + 120000 + tgLib.CLAIM_MS + 2000);
       await tgLib.put(B, { e2e: { read: bx } });
       const ready = [tgLib.news(A), tgLib.news(B)];
+      const afterSave = [tgLib.claim(A, {}), tgLib.claim(A, { again: true })];
       const tool = await mcp.TOOLS.find(t => t.name === 'get_news').run(A);
       await tgLib.get(A);
       const opened = tgLib.news(A);
       await tgLib.end(A);
+      check('One writer (Psyche Together 73): the first to claim the read writes it; the other is told who is writing until that claim is 20 minutes old; a saved read isn\'t claimed again unless written again; the claim ends with the save',
+        claims[0].ok === true && claims[1].ok === false && claims[1].writer === 'b' && claims[2].ok === true && claims[3].ok === true &&
+          afterSave[0].written === true && afterSave[1].ok === true && /together_claim/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'together', 'bin', 'together.py'), 'utf8')),
+        JSON.stringify({ claims, afterSave }));
       check('News on every command: get_news says a Psyche Together read waits only to the partner who didn\'t write it, as a yes or no, until they open it; it is hidden from Muse\'s tool list',
         JSON.stringify(before) === '[false,false]' && JSON.stringify(ready) === '[true,false]' && tool.together === true && Array.isArray(tool.syncs) &&
           Object.keys(tool).sort().join() === 'syncs,together' && opened === false && /const HIDDEN = new Set\(\[[^\]]*'get_news'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8')),
@@ -4144,8 +4153,25 @@ print(json.dumps({'due': due, 'firstNoSkip': 'Skip' not in m.chat_offer({})['but
   tg.bad = await run.a('save', '@work/together-read.json');
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify({ ...good, truths: [], pillars: {} }));
   tg.shallow = await run.a('save', '@work/together-read.json');
-  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-read.json'), JSON.stringify(good));
-  tg.saved = await run.a('save', '@work/together-read.json');
+  // Release 74 (README "The read in parts"): the same read, kept part by part, checked and saved together.
+  const partOf = { opening: ['summary', 'overall', 'truths', 'relational'], closing: ['story', 'intermission', 'plan', 'caveats'] };
+  tg.parts = [];
+  for (const name of ['opening', 'close', 'life', 'future', 'secure', 'disagree', 'closing']) {
+    const v = partOf[name] ? Object.fromEntries(partOf[name].filter(k => k in good).map(k => [k, good[k]])) : good.chapters[name];
+    fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'part.json'), JSON.stringify(v));
+    tg.parts.push(await run.a('part', name, '@work/part.json'));
+    if (name === 'future') tg.partsEarly = await run.a('check', '--parts');
+  }
+  fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'part.json'), JSON.stringify({ summary: 'x', chapters: {} }));
+  tg.partWrong = await run.a('part', 'opening', '@work/part.json');
+  tg.partsCheck = await run.a('check', '--parts');
+  tg.saved = await run.a('save', '--parts');
+  tg.partsGone = !fsx.existsSync(pathx.join(home.a.dir, 'work', 'read-parts'));
+  check('The read in parts (Psyche Together 74): each part is kept on its own and says what is still missing; check --parts finds nothing missing once all seven are in, and save --parts saves the same read and clears the parts; a part holding another part\'s fields is refused',
+    tg.parts.length === 7 && tg.parts[0].kept === 'opening' && JSON.stringify(tg.parts[6].missing) === '[]' && tg.parts[2].missing.includes('closing') &&
+      tg.partsEarly.ok === false && /Parts still to keep: secure, disagree, closing/.test(tg.partsEarly.problems[0]) && tg.partWrong.error && /holds only/.test(tg.partWrong.error) &&
+      tg.partsCheck.ok === true && tg.saved.saved === true && tg.partsGone,
+    JSON.stringify({ parts: tg.parts.map(x => x.kept || x.error), early: tg.partsEarly, wrong: tg.partWrong, check: tg.partsCheck, saved: tg.saved && tg.saved.saved }).slice(0, 600));
   {
     const ck = async read => JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
 import importlib.util, json, sys

@@ -31,4 +31,30 @@ const hashes = t.hashes();
 const release = t.release();
 const signature = crypto.sign(null, Buffer.from(t.signedText(version, hashes, release)), key).toString('base64url');
 fs.writeFileSync(out, JSON.stringify({ version, release, hashes, signature }, null, 1) + '\n');
+// The public list of releases (README "Psyche Together's release list", release 73): each release's SHA-256 per file,
+// on GitHub, so an install can be checked with sha256sum without trusting app.psycheai.io or this script.
+const pub = Buffer.from(crypto.createPublicKey(key).export({ format: 'der', type: 'spki' })).subarray(-32).toString('hex');
+const listPath = path.join(t.DIR, 'RELEASES.md');
+let rows = [];
+try { rows = fs.readFileSync(listPath, 'utf8').split('\n').filter(l => /^\| \d+ \|/.test(l)); } catch (err) { /* the first */ }
+const files = Object.keys(hashes);
+const row = '| ' + release + ' | ' + new Date().toISOString().slice(0, 10) + ' | ' + files.map(f => '`' + hashes[f] + '`').join(' | ') + ' |';
+rows = [row].concat(rows.filter(l => !l.startsWith('| ' + release + ' |')));
+fs.writeFileSync(listPath, `# Psyche Together skill releases
+
+Every release of the Psyche Together skill for Muse, newest first, with the SHA-256 of each of its files.
+An installed copy lives in \`~/workspace/skills/psyche-together/\`. To check yours, ask Muse:
+
+> Run sha256sum on ${files.join(', ')} in ~/workspace/skills/psyche-together, and compare them with github.com/jaredsia-svg/psycheai-app/blob/main/together/RELEASES.md
+
+All must match one row. This list is on GitHub, not on app.psycheai.io. The release number is in bin/together.py (\`RELEASE = …\`).
+
+Releases are signed with Ed25519, with the same key as the PsycheAI skill. Its public key is:
+
+\`${pub}\`
+
+| Release | Date | ${files.join(' | ')} |
+|${files.map(() => '---|').join('')}---|---|
+${rows.join('\n')}
+`);
 console.log('Signed Psyche Together ' + version + ' release ' + release);
