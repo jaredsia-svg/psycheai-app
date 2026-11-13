@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 198
+RELEASE = 199
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2982,6 +2982,20 @@ def when(value):
     return None
 
 
+# Release 199 (README "Pasted output isn't them"): a message that is mostly a program's output, pasted into a chat (a
+# command's JSON, an embedded image, a file listing), says nothing about the person who pasted it. It once became the
+# pattern "The tidy record keeper" in a thin read, and from there a point in a friend's Sync. It's left out of the digest.
+MACHINE_RX = re.compile(r'data:image/|(?=[A-Za-z0-9+/=_-]{60})(?=[A-Za-z+/=_-]*\d)(?=[\d+/=_-]*[A-Za-z])[A-Za-z0-9+/=_-]{60,}|\{\s*"[\w-]+"\s*:|\[\(\s*\'')
+
+
+def machine_text(text):
+    t = str(text or '')
+    if MACHINE_RX.search(t):
+        return True
+    words = re.findall(r'[A-Za-z]{2,}', t)
+    return len(t) > 80 and sum(len(w) for w in words) < 0.45 * len(t)      # mostly symbols and numbers, not words
+
+
 def scrub(text, names=(), people=True):
     # Links, emails, handles and numbers first, so a name inside one ("jun@…") goes with it; then the
     # names of the people in the chat (labelled), then common first names anywhere (people=False only
@@ -3096,7 +3110,7 @@ def build_digest(given=None, given_meta=None):
             names += [e for e in elsewhere if e[0] not in {x[0] for x in names}]
             names.sort(key=lambda n: -len(n[0]))
             parsed = [{'t': m['t'], 'sender': 'me' if m.get('mine') else str((m.get('with') or ['Friend'])[0]), 'text': str(m.get('text') or '')}
-                      for m in sorted(msgs, key=lambda m: m['t']) if str(m.get('text') or '').strip()]
+                      for m in sorted(msgs, key=lambda m: m['t']) if str(m.get('text') or '').strip() and not machine_text(str(m.get('text')))]
             mine, chosen = choose_messages(parsed, 'me', max(quotas[i], 300) if quotas[i] < sizes[i] else 2 * sizes[i] + 300)
             if not chosen:
                 continue
@@ -3858,7 +3872,7 @@ def collect_facebook(me=None, with_messenger=True):
                             ig(MSGR_CLI, 'repair')
                         except RuntimeError:
                             pass
-                    msgs = sorted({(x['t'], x['sender'], x['text']): x for x in msgs}.values(), key=lambda x: x['t'])
+                    msgs = sorted({(x['t'], x['sender'], x['text']): x for x in msgs if not machine_text(x['text'])}.values(), key=lambda x: x['t'])
                     if any(x['sender'] == 'me' for x in msgs):
                         gathered.append((msgs, people))
                 # Everyone read in any chat is "a friend" in the others, as the digest does.
@@ -5178,7 +5192,7 @@ def local_publish(args):
         # Release 195: the one way on, first and alone of its kind ("Sync with a friend" beside it made a new link of their own instead).
         nxt['buttons'] = [sync_label(friend.get('name'))] + [b for b in nxt['buttons'] if b != 'Sync with a friend']
         nm_ = friend.get('name') if friend.get('name') and friend.get('name') != 'Your friend' else ''
-        nxt['say'] = ('Next, your Sync with %s: their link is waiting.' % nm_) if nm_ else 'Next, your Sync: your friend\'s link is waiting.'
+        nxt['say'] = (('Next, your Sync with %s: their link is waiting.' % nm_) if nm_ else 'Next, your Sync: your friend\'s link is waiting.') + '\n\n' + SYNC_SHARES
         nxt['syncWith'] = friend.get('name')
     ideas = ask_ideas(card.get('patterns'))      # release 198: askButtons ends with "Back to the menu"
     return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ideas, 'askButtons': ideas + ['Back to the menu']}
@@ -5298,7 +5312,8 @@ _HIDDEN = re.compile('[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]')
 
 
 def sync_plain(v, n):
-    t = re.sub(r'\s+', ' ', _HIDDEN.sub(' ', '' if v is None else str(v))).strip()[:n]
+    # Release 199 (README "Card lines, whole words"): clipped at a word, as the card summary is ("…"), never mid-word.
+    t = _clip(re.sub(r'\s+', ' ', _HIDDEN.sub(' ', '' if v is None else str(v))).strip(), n)
     return t if t and not SYNC_COMMANDS.search(t) else None
 
 
@@ -5352,8 +5367,8 @@ def clean_card(c):
                     for l in (card.get('letters') if isinstance(card.get('letters'), list) else []) if isinstance(l, dict) and re.match(r'^[EINSTFJP]$', str(l.get('letter') or ''))][:4],
         'patterns': _plain_list(card.get('patterns'), 3, 40),
         'motivators': _plain_list(card.get('motivators'), 3, 30),
-        'interests': _plain_list(card.get('interests'), 6, 30),
-        'values': _plain_list(card.get('values'), 4, 40),
+        'interests': _plain_list(card.get('interests'), 6, 60),
+        'values': _plain_list(card.get('values'), 4, 60),
         'bigFive': {k: _score(big.get(k)) for k in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']},
         'loveGiving': _plain_list(card.get('loveGiving'), 2, 30),
         'confidence': _score(card.get('confidence')),
@@ -5498,7 +5513,11 @@ def invite_text(link, character, name=''):
     return 'Install %s and generate my Psyche, then sync with %s: %s' % (short, nm or 'my friend', bare)
 
 
-LINK_SAY = 'Send it to a friend, then tap below once you have.'     # release 198: the lead above already says what it does
+LINK_SAY = 'Send it to a friend, then tap below once you have.'
+# Release 199 (README "What a Sync shares, as data"): said before any Sync, in the result itself, so it never depends on
+# Muse judging whether it's "the first time in a chat" (a device once skipped it, reasoning from memory).
+SYNC_SHARES = ('To make it, your Psyche Card, plus your motivation scores and when in the day you\'re active, is shared with your friend, '
+               'locked so PsycheAI can\'t read it. A Sync never sends your report or your messages to your friend or anyone else.')     # release 198: the lead above already says what it does
 
 
 def e2e_link(post_tool):
@@ -5522,7 +5541,7 @@ def e2e_link(post_tool):
     # Release 197 (README "Sync, shared by them"): one message, laid out here (the lead, then the invite alone in a code
     # block, so it copies and isn't previewed as a link), sent by them wherever they like. Nothing is sent from Muse.
     return {'url': link, 'lead': lead, 'invite': invite, 'note': out.get('note'),
-            'message': (lead + '\n\n' if lead else '') + '```\n' + invite + '\n```',
+            'message': SYNC_SHARES + '\n\n' + (lead + '\n\n' if lead else '') + '```\n' + invite + '\n```',
             'nextStep': _step(LINK_SAY, [SHARED, 'Back to the menu'])}
 
 
@@ -5634,7 +5653,7 @@ def sync_preview(link):
     write_private([SYNC_PENDING], {'link': BASE + '/sync#' + code, 'name': name})
     if has:
         label = sync_label(name)
-        out['nextStep'] = _step('%s sent you their Psyche link. You already have your Psyche, so you can sync straight away.' % (name if name != 'Your friend' else 'A friend'),
+        out['nextStep'] = _step('%s sent you their Psyche link. You already have your Psyche, so you can sync straight away.\n\n%s' % (name if name != 'Your friend' else 'A friend', SYNC_SHARES),
                                 [label, 'Not now'])
     return out
 
@@ -5907,7 +5926,7 @@ def e2e_save(post_tool, other, info, answer):
         if os.path.exists(f):
             os.remove(f)
     # Made from a link they sent (this side is b): telling them comes first (README "Let them know, in one command").
-    told = ['Let %s know' % first_of(them)] if role == 'b' and first_of(them) != 'Your friend' else []
+    told = []      # release 199: no "Let <name> know"; the one who sent the link finds it with Show our results and news
     res = {'saved': True, 'name': first_of(them), 'summary': sync_plain(report['summary'], 200), 'sync': other,
            'nextStep': _step('Your Sync with %s is ready. They\'ll see the same Sync on their side.' % first_of(them), told + ['Sync with someone else', 'Back to the menu'])}
     if path:
