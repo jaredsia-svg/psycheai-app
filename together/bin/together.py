@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 71
+RELEASE = 72
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1656,7 +1656,7 @@ def after_chat(s, said=''):
     elif all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
         out = write_task(profiles)
     else:
-        out = {'waiting': True, 'setCheck': True, 'buttons': ['Is our read ready?'], 'asButtons': True,
+        out = {'waiting': True, 'setCheck': True, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
                'say': 'Your answers are in, and your own advice is ready for when your read arrives. I\'ll tell you here when %s has done theirs.' % (s.get('partner') or 'your partner')}
     if said:
         out = dict(out, say=said + (' ' + out['say'] if out.get('say') else ''))
@@ -1856,7 +1856,9 @@ CHECK_FOLDER = '~/workspace/skills/psyche-together'
 
 def with_remind(out):
     if isinstance(out, dict) and out.get('setCheck') and not state().get('remind'):
-        out['buttons'] = [b for b in (out.get('buttons') or []) if b != REMIND] + [REMIND]
+        bs = [b for b in (out.get('buttons') or []) if b != REMIND]
+        at = bs.index('Back to the menu') if 'Back to the menu' in bs else len(bs)      # "Back to the menu" stays last
+        out['buttons'] = bs[:at] + [REMIND] + bs[at:]
         out['asButtons'] = True
     return out
 
@@ -1907,7 +1909,7 @@ def start():
         write_private([PENDING], dict(read_first([PENDING]) or {}, start=True, paidAsked=time.time()))     # "Continue Psyche Together" picks it up too
         say_ = ('Your payment hasn\'t come through yet: it usually takes a few seconds after paying. Tap again in a moment, or open the link if you haven\'t paid.'
                 if again_ else got['access'].get('say') or '')
-        return {'needsAccess': True, 'say': say_, 'url': got['access'].get('url'), 'buttons': [PAID_BUTTON], 'asButtons': True}
+        return {'needsAccess': True, 'say': say_, 'url': got['access'].get('url'), 'buttons': [PAID_BUTTON, 'Back to the menu'], 'asButtons': True}
     if got.get('error'):
         return got
     save_keys({'code': code, 'role': 'a'})
@@ -2039,7 +2041,7 @@ def couple():
         if got.get('none'):          # ended (by either of you) or swept: nothing is kept here either (release 55)
             forget()
             return k, {'error': 'This Psyche Together has ended, so it was cleared here too. You can start a new one any time.', 'ended': True,
-                       'buttons': ['Start Psyche Together'], 'asButtons': True}, {}, None
+                       'buttons': ['Start Psyche Together', 'Back to the menu'], 'asButtons': True}, {}, None
         return k, got, {}, None
     e = got.get('e2e') or {}
     key = key_for('together-box', k['code'])
@@ -2311,7 +2313,7 @@ def send(no_chat=False):
         return got
     if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
         return dict(write_task(profiles), sent=True)
-    return {'sent': True, 'waiting': True, 'setCheck': True, 'buttons': ['Is our read ready?'], 'asButtons': True,
+    return {'sent': True, 'waiting': True, 'setCheck': True, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
             'say': 'Your answers are locked and sent. When %s has done theirs, your read is written: you\'ll both get the same one.' % (s.get('partner') or 'your partner')}
 
 
@@ -2324,7 +2326,7 @@ def write_task(profiles=None):
             return got
     if not all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
         return {'waiting': True, 'say': 'Still waiting for your partner\'s answers. Tap Is our read ready? again when they\'re done.',
-                'buttons': ['Is our read ready?'], 'asButtons': True}
+                'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True}
     view = couple_view(profiles['a'], profiles['b'])
     people = []
     for r in ('a', 'b'):
@@ -2857,7 +2859,7 @@ def round_status(s, box, profiles=None):
             return got
     if all(round_of(profiles.get(x), n) for x in ('a', 'b')):
         return recheck_task(profiles, box)
-    return {'waiting': True, 'setCheck': True, 'buttons': ['Has my partner checked in?'], 'asButtons': True,
+    return {'waiting': True, 'setCheck': True, 'buttons': ['Has my partner checked in?', 'Back to the menu'], 'asButtons': True,
             'say': 'Your answers are in. When %s has done theirs too, you\'ll both see what has moved.' % (s.get('partner') or 'your partner')}
 
 
@@ -2979,7 +2981,7 @@ def status():
     except Exception:       # never in the way: the chat stays as it was
         pass
     if not s.get('role'):
-        return {'none': True, 'say': 'Psyche Together is a private read of you and your partner, built on both your Psyches.', 'buttons': ['Start Psyche Together'], 'asButtons': True}
+        return {'none': True, 'say': 'Psyche Together is a private read of you and your partner, built on both your Psyches.', 'buttons': ['Start Psyche Together', 'Back to the menu'], 'asButtons': True}
     if s.get('role') == 'a' and not stage_of(s):
         return next_step(s)
     if s.get('role') == 'a' and not s.get('invited') and not s.get('questions'):
@@ -2997,7 +2999,7 @@ def status():
         return chat_offer(s)
     if not box:
         return write_task(profiles) if all('core' in (profiles.get(r) or {}) for r in ('a', 'b')) else {
-            'waiting': True, 'setCheck': True, 'say': '%s hasn\'t finished theirs yet. Tap Is our read ready? again when they\'re done.' % (s.get('partner') or 'Your partner'), 'buttons': ['Is our read ready?'], 'asButtons': True}
+            'waiting': True, 'setCheck': True, 'say': '%s hasn\'t finished theirs yet. Tap Is our read ready? again when they\'re done.' % (s.get('partner') or 'Your partner'), 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True}
     if not s.get('forYou'):
         return foryou_task(box)
     if live_round(s):
@@ -4467,7 +4469,7 @@ def show(box=None):
         box = box if box is not None else box_
         if not box:
             return {'waiting': True, 'say': 'Your read isn\'t written yet. Tap Is our read ready? again in a little while.',
-                    'buttons': ['Is our read ready?'], 'asButtons': True}
+                    'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True}
     s['shown'] = box.get('at')
     done_ = [x.get('n') for x in rounds_in(box)]
     if isinstance(s.get('round'), dict) and s['round'].get('n') in done_:

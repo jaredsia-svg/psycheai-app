@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 197
+RELEASE = 198
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -177,6 +177,12 @@ def file_label(kind, title=False):
     if not isinstance(tag, str) or not re.match(r'^\d{8}(-\d+){0,2}$|^\d{8} \(\d+\)$', tag):
         tag = local_now().strftime('%d%m%Y')
     if title:
+        # Release 198: the page's title reads as a date, "Psyche Report - Mei Tan - 1 Nov 2026, 13:42", where the
+        # file name keeps the tag (and any "-2" that keeps two of a minute apart).
+        m = re.match(r'^(\d{2})(\d{2})(\d{4})(?:-(\d{2})(\d{2}))?', tag)
+        if m:
+            when_ = '%d %s %s' % (int(m.group(1)), ('Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split() + ['?'])[min(int(m.group(2)) - 1, 12)], m.group(3))
+            tag = when_ + (', %s:%s' % (m.group(4), m.group(5)) if m.group(4) else '')
         return ' - '.join(x for x in [kind, name, tag] if x)
     return re.sub(r'-{2,}', '-', re.sub(r'[^\w-]+', '-', '-'.join(x for x in [kind, name, tag] if x))).strip('-')
 
@@ -457,11 +463,21 @@ PROMPTS = [
 ]
 
 
-def prompt_catalogue():
+def prompt_catalogue(prompts=None):
     rows = ''.join('<div class="pr" style="--k:%s"><span class="pi">%s</span><div class="pt"><code>%s</code><small>%s</small></div>'
-                   '<button type="button" data-copy="%s">Copy</button></div>' % (k, ic, _e(ph), _e(tag), _e(ph)) for ic, k, tag, ph in PROMPTS)
+                   '<button type="button" data-copy="%s">Copy</button></div>' % (k, ic, _e(ph), _e(tag), _e(ph)) for ic, k, tag, ph in (prompts or PROMPTS))
     return ('<section class="prompts" id="next"><h2>What to do next</h2><p class="soft">Copy one into your PsycheAI chat.</p>'
             '<div class="pmenu">' + rows + '</div></section>')
+
+
+def sync_prompts(them):
+    """What to do next on a Sync's page (README "A Sync's What to do next"): the same copy-into-chat cards as the report's.
+    The friend gets the same page, so each line works in their PsycheAI chat too."""
+    return [('🔁', '#7b3fa0', 'Rewritten from both your latest Psyche Cards', 'Write my Sync with %s again' % them),
+            ('🤝', '#2d5fa8', 'Where you click with someone else', 'Sync with a friend'),
+            ('📚', '#2f7d5b', 'Every Sync you have, in one place', 'My Syncs'),
+            ('💞', '#c2366d', 'One private read of the two of you', 'Psyche Together with my partner'),
+            ('💬', '#c2571a', 'Hard questions, answered from your data', 'Ask PsycheAI questions about myself')]
 
 
 def say_copy(lead, phrase):
@@ -870,7 +886,7 @@ def report_html(view, name='', when='', card_png=None, pages=None, doc_title=Non
     together = '' if sample else prompt_catalogue()
     first = str(name or '').split(' ')[0]
     title = (first + '’s Psyche Report') if first else 'Your Psyche Report'
-    facts = ' · '.join(x for x in ['%d parts' % i, ('%d pages' % pages) if pages else '', ('%d%% signal strength' % score) if score is not None else ''] if x)
+    facts = ' · '.join(x for x in ['%d parts' % i, ('%d pages' % pages) if pages else '', ('%d%% confidence' % score) if score is not None else ''] if x)
     banner = ('<header class="banner" id="top">' + W_LOGO + '<div class="row"><div class="txt"><div class="facts">' + _e(facts) + '</div><h1>' + _e(title) + '</h1>'
               + '<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it.</p>'
               + ('<div class="sub">' + _e(when) + '</div>' if when else '')
@@ -1064,6 +1080,16 @@ def _sync_key(na, nb):
     return '<div class="key"><span><i style="background:%s"></i>%s</span><span><i style="background:%s"></i>%s</span></div>' % (SYNC_A, _e(na), SYNC_B, _e(nb))
 
 
+# Release 198: the sentence under the Big Five names each trait in full ("conscientiousness"), as a list with commas,
+# where the chart's rows use the short labels.
+SYNC_TRAIT_WORDS = {'openness': 'openness', 'conscientiousness': 'conscientiousness', 'extraversion': 'extraversion',
+                    'agreeableness': 'agreeableness', 'neuroticism': 'sensitivity'}
+
+
+def _and(xs):
+    return xs[0] if len(xs) == 1 else ', '.join(xs[:-1]) + ' and ' + xs[-1]
+
+
 def _sync_five(a, b, na, nb):
     fa, fb = a.get('bigFive') or {}, b.get('bigFive') or {}
     rows, close, far = [], [], []
@@ -1072,12 +1098,12 @@ def _sync_five(a, b, na, nb):
         if x is None or y is None:
             continue
         lo, hi = min(x, y), max(x, y)
-        (close if hi - lo <= 10 else far if hi - lo > 25 else []).append(label.lower())
+        (close if hi - lo <= 10 else far if hi - lo > 25 else []).append(SYNC_TRAIT_WORDS.get(k, label.lower()))
         rows.append('<span>%s</span><div class="tr"><div class="gap" style="left:%d%%;width:%d%%"></div><div class="d" style="left:%d%%;background:%s"></div>'
                     '<div class="d" style="left:%d%%;background:%s"></div></div><em><b>%d</b> · <b>%d</b></em>' % (label, lo, hi - lo, x, SYNC_A, y, SYNC_B, x, y))
     if not rows:
         return ''
-    note = '; '.join(x for x in ['Closest on ' + ' and '.join(close) if close else '', 'furthest apart on ' + ' and '.join(far) if far else ''] if x)
+    note = '; '.join(x for x in ['Closest on ' + _and(close) if close else '', 'furthest apart on ' + _and(far) if far else ''] if x)
     return (_sync_key(na, nb) + '<div class="db">' + ''.join(rows) + '</div><div class="ends"><span></span><div><span>Low</span><span>High</span></div><span></span></div>'
             + ('<p class="note">' + _cap(note) + '.</p>' if note else ''))
 
@@ -1175,7 +1201,10 @@ def _sync_points(items, lead):
         for i, p in enumerate(pts))) if pts else ''
 
 
-def sync_sections(report, me, them, pics=None):
+SYNC_SKETCH_BELOW = 50      # release 198: under this on either card, the pill says "A first sketch", not "In sync"
+
+
+def sync_sections(report, me, them, pics=None, refresh=True):
     """A Sync's sections, as (first names, [(title, colour, html)]): the page and My Syncs both lay them out. A picture given as
     OWN_CARD is filled in by the page's script from the one copy of their own card (My Syncs embeds it once)."""
     me, them, pics = me if isinstance(me, dict) else {}, them if isinstance(them, dict) else {}, pics or {}
@@ -1191,7 +1220,9 @@ def sync_sections(report, me, them, pics=None):
                % (_e(n), _e(n), _e(n[:1]), src) if pic else '<div class="nopic">%s</div>' % _e(n[:1]))
         return ('<div class="who">' + img + ('<small>%s is most like</small><b>%s</b>' % (_e(n), _e(card.get('character'))) if card.get('character') else '')
                 + ('<span>%s</span>' % _e(card.get('headline')) if card.get('headline') else '') + '</div>')
-    duo = ('<div class="duo"><div class="beam"></div>' + who(me, na, 'me') + '<div class="mid">' + SYNC_ART + '<i>In sync</i></div>' + who(them, nb, 'them') + '</div>'
+    confs = [_num(c.get('confidence')) for c in (me, them) if _num(c.get('confidence')) is not None]
+    pill = 'A first sketch' if confs and min(confs) < SYNC_SKETCH_BELOW else 'In sync'
+    duo = ('<div class="duo"><div class="beam"></div>' + who(me, na, 'me') + '<div class="mid">' + SYNC_ART + '<i>' + pill + '</i></div>' + who(them, nb, 'them') + '</div>'
            + '<div class="oneline"><small>In one line</small>' + _e(report['summary']) + '</div>')
     glance = (_block('MBTI', _sync_mbti(me, them, na, nb)) + _block('Big Five', _sync_five(me, them, na, nb))
               + _block('What motivates you', _sync_motives(me, them, na, nb)) + _block('When you’re each active', _sync_active(me, them, na, nb))
@@ -1205,7 +1236,7 @@ def sync_sections(report, me, them, pics=None):
                    for c, n, col in ((me, na, SYNC_A), (them, nb, SYNC_B)) if _num(c.get('confidence')) is not None)
     how = (('<p style="margin-top:6px">' + _e(report.get('caveats')) + '</p>' if report.get('caveats') else '')
            + ('<p class="soft" style="margin-bottom:0">Confidence score. The lower of the two is as far as this Sync can be trusted.</p><div class="conf">' + conf + '</div>' if conf else '')
-           + say_copy('To refresh this Sync with your latest Psyche Card, say this in your PsycheAI chat:', 'Write my Sync with %s again' % _first(them)))
+           + (say_copy('To refresh this Sync with your latest Psyche Card, say this in your PsycheAI chat:', 'Write my Sync with %s again' % _first(them)) if refresh else ''))
     sections = [('You two', '#7b3fa0', duo), ('At a glance', '#2d5fa8', glance),
                 ('Where you align', '#2f7d6b', _sync_points(report.get('align'), 'What you have in common, or what suits each other, sharpest first.')),
                 ('Where you differ', '#c2571a', _sync_points(report.get('differ'), 'Real differences, and how each can work for you.')),
@@ -1217,7 +1248,7 @@ def sync_html(report, me, them, pics=None, when=''):
     """The Sync as one self-contained page: report as this person reads it (forA is theirs), me and them the two cards."""
     if not isinstance(report, dict) or not report.get('summary'):
         return None
-    na, nb, sections = sync_sections(report, me, them, pics)
+    na, nb, sections = sync_sections(report, me, them, pics, refresh=False)
     body = ''.join('<section class="box" style="--c:%s"><h2><i>%02d</i>%s</h2>%s</section>' % (c, i, _e(t), inner)
                    for i, (t, c, inner) in enumerate(sections))
     title = '%s & %s · Psyche Sync' % (na, nb)
@@ -1228,7 +1259,7 @@ def sync_html(report, me, them, pics=None, when=''):
     foot = '<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace.</footer>'
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<title>' + _e(title) + '</title><style>' + W_CSS + SYNC_CSS + '</style></head><body><div class="wrap">' + banner + '<div style="height:14px"></div>'
-            + body + foot + '</div>' + viewer + '<script>' + SYNC_JS + COPY_JS + '</script></body></html>')
+            + body + prompt_catalogue(sync_prompts(_first(them))) + foot + '</div>' + viewer + '<script>' + SYNC_JS + COPY_JS + '</script></body></html>')
 
 
 def sync_card_pics(me, them):
@@ -1632,7 +1663,7 @@ def local_ready(r):
         if f and os.path.exists(f):
             files[key] = {'file': f, 'bytes': os.path.getsize(f)}
     out = {'say': 'Your Psyche Card and Report are ready.', **files,
-           'next': {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')}}
+           'next': {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas'), 'askButtons': r.get('askButtons')}}
     # What was read, for the receipt under the report (counts only, from the last collect).
     last = read_first([LAST_COLLECT]) or {}
     if isinstance(last.get('read'), dict):
@@ -1650,7 +1681,7 @@ PARTS = {
     'card': local_card,
     'summary': local_report,
     'pdf': local_report,          # no PDF any more: an older helper's "show pdf" gets the report file
-    'next': lambda r: {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas')},
+    'next': lambda r: {'nextStep': r.get('nextStep'), 'askIdeas': r.get('askIdeas'), 'askButtons': r.get('askButtons')},
 }
 
 
@@ -5009,7 +5040,32 @@ def depth_problems(answer):
             if w in seen and seen[w] != p.get('id'):
                 problems.append('patterns: "%s" is in two pattern names (%s and %s): each pattern gets words of its own' % (w, seen[w], p.get('id')))
             seen.setdefault(w, p.get('id'))
+    # Release 198 (README "Each moment at most three times"): the same piece of evidence in more than three places reads
+    # as a report with little to say; and the report speaks to them as "you" throughout, never as "I".
+    cited = {}
+
+    def walk(v, key=''):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                walk(x, k)
+        elif isinstance(v, list):
+            for x in v:
+                if isinstance(x, str) and re.search(r'evidence|derivedfrom|basedon', key, re.I):
+                    norm = re.sub(r'\W+', ' ', x.lower()).strip()
+                    if norm:
+                        cited.setdefault(norm, [x, 0])[1] += 1
+                else:
+                    walk(x, key)
+        elif isinstance(v, str) and len(v.split()) >= 4 and FIRST_PERSON.search(v):      # prose only: never the letter I of E/I
+            problems.append('"%s" in %s: the report speaks to them as "you", never as "I"' % (FIRST_PERSON.search(v).group(0), key or 'a field'))
+    walk(answer)
+    for x, n in cited.values():
+        if n > 3:
+            problems.append('"%s" is cited %d times as evidence: use each moment at most three times, and find others' % (x[:80], n))
     return problems
+
+
+FIRST_PERSON = re.compile(r"(?<![/-])\bI(?:'m|'ve|'d|'ll|’m|’ve|’d|’ll)?\b(?![/-])")
 
 
 MONTH_YEAR = re.compile(r'\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.? (\d{4})\b')
@@ -5124,7 +5180,8 @@ def local_publish(args):
         nm_ = friend.get('name') if friend.get('name') and friend.get('name') != 'Your friend' else ''
         nxt['say'] = ('Next, your Sync with %s: their link is waiting.' % nm_) if nm_ else 'Next, your Sync: your friend\'s link is waiting.'
         nxt['syncWith'] = friend.get('name')
-    return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ask_ideas(card.get('patterns'))}
+    ideas = ask_ideas(card.get('patterns'))      # release 198: askButtons ends with "Back to the menu"
+    return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ideas, 'askButtons': ideas + ['Back to the menu']}
 
 
 def with_pinned_guide(tool, args, out):
@@ -5235,6 +5292,7 @@ def e2e_code_for(sid):
 # cleanCard, profileFor, derivedFacts, cleanReport, onCards, oriented; the selftest holds the two together).
 SYNC_COMMANDS = re.compile(r'\b(ignore|disregard|instructions?|system|assistant|prompt|tools?|call|send|forward|upload|delete|password|token|api|execute|run|script'
                            r'|skill|psyche\.py|digest|workspace)\b|https?:|www\.|[@<>{}`\\]|\.(json|py|md|sh)\b', re.I)
+SYNC_GENDERED = re.compile(r'\b(he|him|his|himself|she|her|hers|herself)\b', re.I)     # release 198
 SYNC_BANNED = re.compile(r'\b(tension|conflict|clash|friction|struggle|problem|incompatible)\b', re.I)
 _HIDDEN = re.compile('[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]')
 
@@ -5380,6 +5438,9 @@ def clean_sync_report(r):
         problems.append('differ needs two or three points, each with a title and detail')
     if len(out['howToPartner']['forA']) < 2 or len(out['howToPartner']['forB']) < 2:
         problems.append('howToPartner needs three things for each person')
+    g = SYNC_GENDERED.search(json.dumps(out, ensure_ascii=False))
+    if g:
+        problems.append('"%s": a Sync doesn\'t know either person\'s gender, so use their first names, or they and them' % g.group(0))
     w = SYNC_BANNED.search(json.dumps(out, ensure_ascii=False))
     if w:
         problems.append('"%s" is not used in a Sync: say "difference", "disagreement" or "a different pace"' % w.group(0))
@@ -5437,7 +5498,7 @@ def invite_text(link, character, name=''):
     return 'Install %s and generate my Psyche, then sync with %s: %s' % (short, nm or 'my friend', bare)
 
 
-LINK_SAY = 'Here\'s your Psyche link and invite: one paste in a friend\'s Muse sets up PsycheAI, makes their Psyche and syncs you. Send it to a friend, then tap below once you have.'
+LINK_SAY = 'Send it to a friend, then tap below once you have.'     # release 198: the lead above already says what it does
 
 
 def e2e_link(post_tool):
@@ -5610,6 +5671,7 @@ def e2e_list(out):
                 path = save_sync_page(content, x.get('sync'))
                 if path:
                     out['file'], shown = path, x.get('sync')
+                    out['_opened'] = shown
             else:
                 keep_sync(x.get('sync'), content)
     seen, used = {}, set()
@@ -5693,6 +5755,19 @@ def news_for(force=False):
     kept.update(syncs=sorted(said)[-200:], together=bool(got.get('together')))
     write_private([NEWS], kept)
     return {'news': lines, 'newsButtons': buttons} if lines else None
+
+
+def mark_opened(sync):
+    """A Sync shown here: opened on the server, and already said for news (README "A Sync shown is a Sync opened")."""
+    try:
+        post_tool('get_syncs', {'opened': str(sync)})
+    except Exception:
+        pass
+    kept = read_first([NEWS]) or {}
+    said = set(kept.get('syncs') or [])
+    said.add(str(sync))
+    kept['syncs'] = sorted(said)[-200:]
+    write_private([NEWS], kept)
 
 
 def with_news(argv, text):
@@ -5993,8 +6068,13 @@ def call(tool, args, first=False):
     out = result.get('structuredContent') or {}
     if tool == 'get_sync' and isinstance(out, dict) and isinstance(out.get('e2e'), dict):
         return clean_result(e2e_get(post_tool, str(args.get('sync')), out['e2e'], bool(args.get('rewrite'))))
-    if tool == 'get_syncs' and isinstance(out, dict):
+    if tool == 'get_syncs' and isinstance(out, dict) and 'opened' not in args:
         out = e2e_check(out) if args.get('check') and 'locked' in out else e2e_list(out) if 'syncs' in out else out
+        # A Sync whose page is attached here counts as opened (README "A Sync shown is a Sync opened", release 198):
+        # news and "My Syncs (1 new)" no longer offer it again.
+        shown = out.pop('_opened', None) or (out.get('sync') if out.get('file') and args.get('check') else None)
+        if shown:
+            mark_opened(shown)
         # My Syncs (README "My Syncs"): only what the server still lists, made again as one book.
         if isinstance(out.get('syncs'), list):
             prune_syncs(set(str(x.get('sync')) for x in out['syncs'] if isinstance(x, dict)))
@@ -6600,7 +6680,7 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING):
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS):     # NEWS: which Syncs news has said (release 198)
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))

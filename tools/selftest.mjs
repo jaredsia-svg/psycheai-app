@@ -976,10 +976,10 @@ function signup(email, d) {
     check('save_card keeps only the card summary, its known fields clipped as summarize clips them, locked under a key handed back and never kept, sends nothing to psycheai.io, and comes back with the card image, What\'s next and ask ideas; the skill calls it only before a Sync tool (README "Nothing leaves Muse unless they Sync"), and publishes through psyche_saved, which sends nothing',
       sc.ok && sc.cardKey && /\/card\/.+\.png$/.test(sc.image) && opened && opened.character === 'Mulan' && opened.bigFive.openness === 80 && !('evidence' in opened) && !('summary' in opened) &&
         JSON.stringify(opened.letters) === '[{"letter":"E","strength":"slight"}]' && !JSON.stringify(store.kvGet('psyche', user.id)).includes(sc.cardKey) &&
-        psyche.saveCard(user, {}).ok === false && seen.length === before && sd && sd.ok && sd.nextStep && sd.nextStep.buttons[0] === 'Ask PsycheAI questions about myself' && Array.isArray(sd.askIdeas) &&
+        psyche.saveCard(user, {}).ok === false && seen.length === before && sd && sd.ok && sd.nextStep && sd.nextStep.buttons[0] === 'Ask PsycheAI questions about myself' && Array.isArray(sd.askIdeas) && JSON.stringify(sd.askButtons) === JSON.stringify([...sd.askIdeas, 'Back to the menu']) &&
         !/call\('publish_psyche'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
         !/call\('psyche_saved'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
-        /nxt = json\.loads\(json\.dumps\(AFTER_PUBLISH\)\)[\s\S]{0,1800}'nextStep': nxt, 'askIdeas': ask_ideas\(card\.get\('patterns'\)\)/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
+        /nxt = json\.loads\(json\.dumps\(AFTER_PUBLISH\)\)[\s\S]{0,1800}'nextStep': nxt, 'askIdeas': ideas, 'askButtons': ideas \+ \['Back to the menu'\]\}/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
         /    if tool == 'sync_with':\n        kept = read_first\(\[REPORT, REPORT_KEPT\]\) or \{\}\n        if isinstance\(kept\.get\('report'\), dict\):\n            saved_card = call\('save_card', \{'card': sync_card\(kept\['report'\], kept\.get\('name'\) or ''\)\}\)/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
         (require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8').match(/call\('save_card'/g) || []).length === 1,
       JSON.stringify({ sc: { ok: sc.ok }, opened, sd: sd && Object.keys(sd) }).slice(0, 500));
@@ -1118,8 +1118,21 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       check('Sync: with no card key in the request, sync_link says the card is locked to their workspace', /locked to their own workspace/.test(sync.makeLink(noKey, {}).error || ''));
     }
     check('Ask PsycheAI: every list of questions and every answer ends with "Back to the menu", which brings back the five main buttons (README "Back to the menu")',
-      /one button each, then "Back to the menu"/.test(instructions.MUSE_PROCEDURE) && /then "Ask something else" and "Back to the menu"/.test(instructions.MUSE_PROCEDURE) &&
+      /as buttons, one each: its questions, then "Back to the menu"/.test(instructions.MUSE_PROCEDURE) && /askButtons: \[\.\.\.ideas, 'Back to the menu'\]/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8')) && (require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8').match(/withAskButtons\(askIdeas\(/g) || []).length === 4 && /then "Ask something else" and "Back to the menu"/.test(instructions.MUSE_PROCEDURE) &&
         /"Ask something else": a few more questions they haven't seen[^.]*, then "Back to the menu"\./.test(instructions.MUSE_PROCEDURE) && /"Back to the menu", and "Done" where it ends a path: "What would you like to do\?" with the five buttons someone with a read gets/.test(instructions.MUSE_PROCEDURE) && /No path ends in a dead end: wherever one ends[^.]*, its last button is "Back to the menu"\./.test(instructions.MUSE_PROCEDURE));
+    check('forget --everything also deletes news.json, which Syncs news has already said (release 198)',
+      /SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS\):/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')));
+    {
+      // Release 198 (README "What Muse reads first"): Muse reads about the first 50 KB of SKILL.md. What answers a tap ends by 45 KB,
+      // the first visit stays where it was read at install, and Psyche Together (its section names its install) and the digest's working files come after.
+      const md = require('../lib/skill.js').skillMd();
+      const at = h => Buffer.byteLength(md.slice(0, md.indexOf(h)));
+      const tapEnd = at('FIRST VISIT:');
+      check('SKILL.md order (README "What Muse reads first"): the menu, Ask, Sync, adding a source, their data and later visits end within the first 45 KB; Psyche Together and the digest\'s working files come after the first visit',
+        ['JUST CONNECTED', 'Questions about their read', 'Sync ("Sync with a friend"', 'ADDING A SOURCE', 'MY DATA AND PRIVACY', 'Later visits:'].every(h => md.includes(h) && at(h) < tapEnd) &&
+          tapEnd < 45 * 1024 && at('0. Before reading anything') < 46 * 1024 && at('PSYCHE TOGETHER (') > at('2. ONE message') && at('## Working files and the digest') > at('PSYCHE TOGETHER ('),
+        JSON.stringify({ tapEnd, together: at('PSYCHE TOGETHER ('), files: at('## Working files and the digest') }));
+    }
     check('No dead ends (README "No dead ends"): the guide\'s rule, and no step in the script, the server or Psyche Together ends on a bare "Done" (only Psyche Pair\'s form, where Done means the form is filled in)',
       /No path ends in a dead end/.test(instructions.MUSE_PROCEDURE) &&
         !/'Done'\]/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
@@ -1767,15 +1780,15 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
     check('someone new is told what PsycheAI is and offered only their read, with what they\'ll learn and privacy', /^I'm PsycheAI, your personal AI coach that already knows you\./.test(fresh.say) && /MBTI, attachment style, career strengths and blind spots/.test(fresh.say) &&
       /It takes about 5 minutes\. Then sync with a connection to see how you click\./.test(fresh.say) && /I can give you a full personality study from your data within Muse\. No questions asked\. No upload required\./.test(fresh.say) && fresh.reel === 'https://www.instagram.com/reel/DfboxNlyEx9/' && !fresh.attach && /Say it as written, with its two buttons, then go on as the guide's step 0 says: on their tap, the account question only if they have more than one account, then MESSAGES FIRST when they chose their messages and those aren't connected, then step 1\. No other buttons\./.test(fresh.after) && JSON.stringify(fresh.options) === '[{"id":"messages","label":"Include my messages (Recommended)"},{"id":"posts","label":"Posts only"}]' &&
       ((process.env.PSYCHE_REEL_URL = 'https://www.instagram.com/reel/abc/'), mcp.startMenu({ id: 'u_reel' }).reel === 'https://www.instagram.com/reel/abc/') && (delete process.env.PSYCHE_REEL_URL, true) &&
-      fresh.say.endsWith(require('../lib/mcp.js').GO_AHEAD + '\n\n▶ See what you\'ll get, in a minute: https://www.instagram.com/reel/DfboxNlyEx9/\n\n' + mcp.MESSAGES_LINE) && /^🔒 Your Instagram is read right here in your Muse account: nothing to export or upload\.\n🙈 Your posts and chats are de-identified first: names, handles, numbers and links removed, and no one else is quoted\.\n🗑️ Your report and Psyche Card are made right here in Muse\. None of your posts, messages or report go to PsycheAI\.\n✋ Your results are private to you\. Nothing is posted or shared with other people unless you choose to\. Delete it all any time\.$/.test(require('../lib/mcp.js').GO_AHEAD) && !/look again/.test(fresh.say) &&
+      fresh.say.endsWith(require('../lib/mcp.js').GO_AHEAD + '\n\n▶ [See what you\'ll get, in a minute](https://www.instagram.com/reel/DfboxNlyEx9/)\n\n' + mcp.MESSAGES_LINE) && /^🔒 Your Instagram is read right here in your Muse account: nothing to export or upload\.\n🙈 Your posts and chats are de-identified first: names, handles, numbers and links removed, and no one else is quoted\.\n🗑️ Your report and Psyche Card are made right here in Muse\. None of your posts, messages or report go to PsycheAI\.\n✋ Your results are private to you\. Nothing is posted or shared with other people unless you choose to\. Delete it all any time\.$/.test(require('../lib/mcp.js').GO_AHEAD) && !/look again/.test(fresh.say) &&
       /: PsycheAI's own introduction, in four short parts, its privacy lines as they are, since they're worded to match exactly what the code does: "I'm PsycheAI, your personal AI coach that already knows you\."/.test(instructions.MUSE_PROCEDURE) && !/muse-sample/.test(instructions.MUSE_PROCEDURE + fresh.say) && /x/.test(instructions.MUSE_PROCEDURE) && !/look again the same way/.test(instructions.MUSE_PROCEDURE) &&
-      /Delete it all any time\." Then, on its own line, the reel start gave you \(reel; if start hasn't answered, this one: https:\/\/www\.instagram\.com\/reel\/DfboxNlyEx9\/\): "▶ See what you'll get, in a minute: <reel>", a link to open, not a file to download\. Then the messages question/.test(instructions.MUSE_PROCEDURE) && !/Here's what you'll get, in a minute, while you wait/.test(instructions.MUSE_PROCEDURE) &&
+      /Delete it all any time\." Then, on its own line, the reel start gave you \(reel; if start hasn't answered, this one: https:\/\/www\.instagram\.com\/reel\/DfboxNlyEx9\/\): "▶ \[See what you'll get, in a minute\]\(<reel>\)", a named link to open, not a file to download\. Then the messages question/.test(instructions.MUSE_PROCEDURE) && !/Here's what you'll get, in a minute, while you wait/.test(instructions.MUSE_PROCEDURE) &&
       /psycheai\.io\/muse-privacy for the details: PsycheAI keeps none of your report, and a short summary of it is kept, locked, for the card picture and Syncs/.test(instructions.MUSE_PROCEDURE));
     check('someone with a read gets Ask, Sync, Psyche Together, a Fresh Psyche and More (check-ins, Syncs, Pair, WhatsApp, their data), one source button for WhatsApp, Facebook and Messenger', JSON.stringify(back.options.map(o => o.label)) ===
       '["Ask PsycheAI questions about myself","Sync with a friend","Psyche Together with my partner","Fresh Psyche","More"]' &&
       !JSON.stringify(back.options).includes('Deep Psyche') && JSON.stringify(back.options.find(o => o.id === 'more').buttons.filter(b => !/^Psyche Pair|matches|My Syncs/.test(b))) === '["Weekly check-ins on my plan","Add WhatsApp or Facebook","My data and privacy"]' && JSON.stringify(back.options.find(o => o.id === 'more').sources) === '["WhatsApp, Facebook and Messenger","WhatsApp chats","Facebook and Messenger","Facebook posts only"]' &&
       JSON.stringify(back.options.find(o => o.id === 'more').whatsapp.buttons) === '["I\'ve shared my chats","Not now"]' &&
-      /ADDING A SOURCE \("Add WhatsApp or Facebook"\): answer at once, with no tool first: "Which would you like to add\?" with the buttons "WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger" and "Facebook posts only"/.test(instructions.MUSE_PROCEDURE) && /ALL THREE \("WhatsApp, Facebook and Messenger"\): the WhatsApp steps first/.test(instructions.MUSE_PROCEDURE) && /Then ONE fresh Psyche from the digest and everything in sources\/, written once with all of it, never once per source\./.test(instructions.MUSE_PROCEDURE) && /run python3 bin\/psyche\.py collect-facebook --me "<their full name>" \(with --no-messenger for "Facebook posts only"\)/.test(instructions.MUSE_PROCEDURE) && /Never read Facebook or Messenger yourself, and never read Muse's own Messenger side chat/.test(instructions.MUSE_PROCEDURE) && /with no count of messages/.test(instructions.MUSE_PROCEDURE) && /FACEBOOK \("Facebook and Messenger", "Facebook posts only", or "add my Facebook"\):/.test(instructions.MUSE_PROCEDURE) && /Without the skill, read their own Facebook posts through Muse's Facebook connection the same way, never Messenger/.test(instructions.MUSE_PROCEDURE) &&
+      /ADDING A SOURCE \("Add WhatsApp or Facebook"\): answer at once, with no tool first: "Which would you like to add\?" with the buttons "WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger", "Facebook posts only" and "Back to the menu"/.test(instructions.MUSE_PROCEDURE) && /ALL THREE \("WhatsApp, Facebook and Messenger"\): the WhatsApp steps first/.test(instructions.MUSE_PROCEDURE) && /Then ONE fresh Psyche from the digest and everything in sources\/, written once with all of it, never once per source\./.test(instructions.MUSE_PROCEDURE) && /run python3 bin\/psyche\.py collect-facebook --me "<their full name>" \(with --no-messenger for "Facebook posts only"\)/.test(instructions.MUSE_PROCEDURE) && /Never read Facebook or Messenger yourself, and never read Muse's own Messenger side chat/.test(instructions.MUSE_PROCEDURE) && /with no count of messages/.test(instructions.MUSE_PROCEDURE) && /FACEBOOK \("Facebook and Messenger", "Facebook posts only", or "add my Facebook"\):/.test(instructions.MUSE_PROCEDURE) && /Without the skill, read their own Facebook posts through Muse's Facebook connection the same way, never Messenger/.test(instructions.MUSE_PROCEDURE) &&
       /MY DATA AND PRIVACY/.test(instructions.MUSE_PROCEDURE) && /"Your Instagram is read right here in your Muse account: nothing to export or upload\."/.test(instructions.MUSE_PROCEDURE) && /None of your posts, messages or report go to PsycheAI; only if you Sync, your card's few lines, motivation scores and daily rhythm \(when in the day you post and message\) are shared, locked under your Sync link\."/.test(instructions.MUSE_PROCEDURE) && !/PsycheAI received only your finished Psyche/.test(instructions.MUSE_PROCEDURE) && /"Yes, delete everything"/.test(instructions.MUSE_PROCEDURE) &&
       /de-identified here, in your own Muse workspace, before it's read/.test(mcp.WHATSAPP_HOW) && /Your chats, and the report written from them, never go to PsycheAI\./.test(mcp.WHATSAPP_HOW) && !/only the report written from them/.test(mcp.WHATSAPP_HOW) && /Export chat, Without media/.test(mcp.WHATSAPP_HOW) &&
       /WHATSAPP \("WhatsApp chats", "add my WhatsApp chats"/.test(instructions.MUSE_PROCEDURE) && !/"Deep Psyche\. DMs included"/.test(instructions.MUSE_PROCEDURE) && /Never read a WhatsApp export yourself/.test(instructions.MUSE_PROCEDURE) &&
@@ -1811,7 +1824,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
     const ideas = mcp.askIdeas();
     const ask = require('../lib/instructions.js').CORE_MUSE;
     check('Ask PsycheAI offers four of the site\'s own questions as buttons, a different four each time', ideas.length === 4 && new Set(ideas).size === 4 && ideas.every(q => mcp.ASK_IDEAS.includes(q)) &&
-      mcp.ASK_IDEAS.includes('What would I regret most about my life when I\'m old?') && /show the questions in askIdeas \(from start, or from publish_psyche\) as buttons, word for word/.test(ask) &&
+      mcp.ASK_IDEAS.includes('What would I regret most about my life when I\'m old?') && /show askButtons \(from start's ask option, or from publish_psyche\) as buttons, one each: its questions, then "Back to the menu"/.test(ask) &&
       mcp.askIdeas(4, () => 0).join() !== mcp.askIdeas(4, () => 0.99).join() &&
       mcp.askIdeas(4, () => 0, ['The Quiet Fixer'])[0] === 'Where does "The Quiet Fixer" come from in me, and how do I make it work for me?' && mcp.askIdeas(4, () => 0, ['X']).length === 4);
   }
@@ -2016,12 +2029,15 @@ m.saved({'ok': True})`, pathx.join(dir, 'bin', 'psyche.py')], { env: { ...proces
       skillState.heldPatched = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'));
       fsx.writeFileSync(pathx.join(dir, 'answer.json'), JSON.stringify({ answer: { summary: passage('New A'), essence: { why: passage('New B') }, card: { headline: passage('C') }, mbti: { caveat: passage('New D') } }, name: 'Mei' }));
       skillState.freshEnough = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'));
+      // Release 198: a real read cites each moment three times at most; the site's mock repeats one line, so each gets a number.
+      const distinctEvidence = (v, key = '', n = { i: 0 }) => Array.isArray(v) ? v.map(x => typeof x === 'string' && /evidence|derivedfrom|basedon/i.test(key) ? x + ' ' + (++n.i) : distinctEvidence(x, key, n))
+        : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, distinctEvidence(x, k, n)])) : v;
       // A bare answer file: check-answer says how to publish it, and publish takes it with --name.
       // A whole read (the site's mock, from the report-view fixture), since publishing now checks it here (README "The report stays in Muse").
       // The mock read, with what a real one needs to pass (README "A thin report, caught"): a roast of two paragraphs, and pattern names that share no word.
       fsx.writeFileSync(pathx.join(dir, 'answer.json'), JSON.stringify(((a) => Object.assign(a, { confidence: Object.assign({}, a.confidence, { score: 72, level: 'moderate' }),
         bonus: Object.assign({}, a.bonus, { harsh: 'You have planned the same three trips every spring for four years, posted the itinerary each time, and taken one of them. The folder of saved routes is not a plan, it is a museum of plans.\n\nAnd every invite you send ends with "no pressure", which is how someone sounds when they would rather organise the whole thing than risk asking for help with any of it.' }),
-        patterns: a.patterns.map((p, i) => Object.assign({}, p, { name: ['The steady organiser', 'The quiet mentor', 'The careful planner'][i] || p.name })) }))(JSON.parse(fsx.readFileSync(new URL('./fixtures/report-view.json', import.meta.url), 'utf8'))[1].answer)));
+        patterns: a.patterns.map((p, i) => Object.assign({}, p, { name: ['The steady organiser', 'The quiet mentor', 'The careful planner'][i] || p.name })) }))(distinctEvidence(JSON.parse(fsx.readFileSync(new URL('./fixtures/report-view.json', import.meta.url), 'utf8'))[1].answer))));
       skillState.bareCheck = await run('check-answer', '@' + pathx.join(dir, 'answer.json'));
       skillState.bare = await run('call', 'publish_psyche', '@' + pathx.join(dir, 'answer.json'), '--name', 'Mei Tan');
       skillState.tagKept = JSON.parse(fsx.readFileSync(pathx.join(keep, 'file-tag.json'), 'utf8'));
@@ -2472,7 +2488,9 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
         E.early.length === 1 && /<b>No Syncs yet\.<\/b> When a friend syncs with you, they'll appear here\./.test(E.early[0]) && !/class="sbk"/.test(E.early[0]) && E.anaEarly === 0 &&
         // Both cards at phone width (README "Sync pages Muse can show"): the page well under the report's size, each card small, and a fallback to the initial.
         E.checkPage.length < 330000 && (E.checkPage.match(/<img alt="[^"]*’s Psyche Card" data-initial="[A-Z]" src="data:image\/jpeg;base64,[^"]{1000,140000}"/g) || []).length === 2 &&
-        /querySelectorAll\('img\[data-initial\]'\)/.test(E.checkPage) && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.list.file || '') && E.list.book && E.list.file !== E.list.book)(skillState.e2e),
+        /querySelectorAll\('img\[data-initial\]'\)/.test(E.checkPage) && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.readyNow.file || '') && E.readyNow.book && E.readyNow.file !== E.readyNow.book &&
+        // Release 198 (README "A Sync shown is a Sync opened"): once its page was shown, My Syncs lists it as opened, with no page attached again.
+        E.list.syncs[0].new === false && !E.list.file && E.list.book)(skillState.e2e),
       JSON.stringify(((E) => E && { preview: E.preview, own: E.ownPreview, joined: E.joined && Object.keys(E.joined), save: E.joined && E.joined.save, gone: E.answerGone, check: E.check, list: E.list && { file: E.list.file, book: E.list.book } })(skillState.e2e)).slice(0, 1500));
     {
       const v = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, sys, json, os, tempfile, time
@@ -2566,7 +2584,8 @@ print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'say': m.THIN_SAY, 'li
         !('motives' in E.toWriteTask.personA) && /Interests in common \(exact matches only\): Reading/.test(E.toWriteTask.derivedFacts) && /guide\.json's `sync` \(its spec, brief and schema\)/.test(skillMd) &&
         E.saved.saved && E.saved.name === 'Mei' && /Racquet sports/.test(E.anaPage) && !/Skydiving/.test(E.anaPage) && E.bad.saved === false && /clash/.test(E.bad.problems.join(' ')) &&
         E.list.syncs.length === 1 && E.list.syncs[0].name === 'Ana' && E.list.syncs[0].label === 'Ana' && E.list.syncs[0].summary === 'Mei plans and Ana sparks: weekends you both remember.' && !('e2e' in E.list.syncs[0]) &&
-        JSON.stringify(E.list.nextStep.buttons) === '["Sync with someone new","Psyche Together with my partner","Add WhatsApp or Facebook","Back to the menu"]' && E.list.nextStep.say === "1 Sync, 1 new. What's next?" && E.check.say === 'Ana synced with you: your Sync is ready.' &&
+        JSON.stringify(E.readyNow.nextStep.buttons) === '["Sync with someone new","Psyche Together with my partner","Add WhatsApp or Facebook","Back to the menu"]' && E.readyNow.nextStep.say === "1 Sync, 1 new. What's next?" &&
+        JSON.stringify(E.list.nextStep.buttons) === '["Show my Sync with Ana","Sync with someone new","Back to the menu"]' && E.list.nextStep.say === '1 Sync. Which one?' && E.check.say === 'Ana synced with you: your Sync is ready.' &&
         E.meiSees.written && E.meiSees.name === 'Ana' && /For you, Mei<\/h4><ul><li>Mei tip 1/.test(E.meiPage) && /For you, Ana<\/h4><ul><li>Ana tip 1/.test(E.anaPage) &&
         /<b>Racquet sports<\/b><span><i class="ia">Mei<\/i> Pickleball<\/span><span><i class="ib">Ana<\/i> Tennis/.test(E.meiPage) && /<svg class="radar2"/.test(E.meiPage) &&
         /\/syncs\/Psyche-Syncs-Mei-Tan-\d{8}-\d{4}(-\d+)?\.html$/.test(E.list.book || '') && /<details class="sbk" data-name="ana">/.test(E.book) && /weekends you both remember/.test(E.book) && (E.book.match(/id="mecard"/g) || []).length <= 1 &&
@@ -3751,13 +3770,13 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   try { got = JSON.parse(execFileSync('python3', ['-I', '-c', py, script, JSON.stringify(full)], { timeout: 30000 }).toString()); } catch (e) { got = { error: String(e.message).slice(0, 300) }; }
   const page = got.page || '';
   const css = (page.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
-  check('the report file is one finished page with every section and a bar of section chips; its banner has the parts, pages and signal strength, the reader\'s name, the line on what the report is, and the date (no type, no "most like", no card) and PsycheAI\'s mark, the symbol alone, large and faint off its top right corner as on psycheai.io\'s front page; the card sits beside "You are most like" in the Overview (beside the box and the start of the Executive summary on a laptop, inside the box on a phone), big enough to want a tap, and opens full screen on one',
+  check('the report file is one finished page with every section and a bar of section chips; its banner has the parts, pages and confidence, the reader\'s name, the line on what the report is, and the date (no type, no "most like", no card) and PsycheAI\'s mark, the symbol alone, large and faint off its top right corner as on psycheai.io\'s front page; the card sits beside "You are most like" in the Overview (beside the box and the start of the Executive summary on a laptop, inside the box on a phone), big enough to want a tap, and opens full screen on one',
     /^<!DOCTYPE html>/.test(page) && ['Overview', 'Who you are', 'What drives you', 'How you connect', 'How you work', 'Putting it together'].every(t => page.includes('data-section="' + t + '"') && page.includes('</i>' + t + '</a>')) &&
     /<h1>Mei’s Psyche Report<\/h1>/.test(page) && /<div class="sub">1 November 2026<\/div>/.test(page) && !/<header[^]*?(ENFJ|The Protagonist)[^]*?<\/header>/.test(page) &&
     /<button type="button" class="cardbtn" id="cardopen" aria-label="Open your Psyche Card full size"><img class="cardpic" alt="Your Psyche Card" src="data:image\/png;base64,iVBORw0KGgo="><em>Your Psyche Card<br>Tap to open<\/em><\/button><div class="hero withcard"><small>You are most like<\/small>/.test(page) &&
     !/<header[^]*?cardpic[^]*?<\/header>/.test(page) && /<header class="banner" id="top"><svg class="mark" viewBox="0 0 140 140"[^>]*aria-hidden="true"[^>]*>[^]*?<\/svg><div class="row">/.test(page) && !/<header[^]*?PsycheAI<\/span>[^]*?<\/header>/.test(page) && /\.banner \.mark\{position:absolute;top:-4\.6rem;right:-3\.8rem;width:240px;height:auto;color:#fff;opacity:\.16/.test(css) && /\.cardbtn#cardopen\{float:right;margin:16px 0 10px 22px\}\n\.hero\.withcard\{display:flow-root\}/.test(css) && /\.cardpic\{display:block;width:132px/.test(css) && /\.cardpic\{width:112px\}\.cardbtn#cardopen\{margin:32px 16px 8px 12px\}\.hero\.withcard\{display:block\}/.test(css) &&
     /<div class="viewer" id="viewer" role="dialog" aria-label="Your Psyche Card" hidden><img alt="Your Psyche Card"><span>/.test(page) && (page.match(/data:image\/png;base64,/g) || []).length === 1 && /if\(big&&small&&!big\.src\)big\.src=small\.src;view\.hidden=false;/.test(page) &&
-    /<div class="facts">6 parts · 71% signal strength<\/div>/.test(page) && /<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it\.<\/p>/.test(page) &&
+    /<div class="facts">6 parts · 71% confidence<\/div>/.test(page) && /<p class="lede">The explanation behind your Psyche Card: what each result means, the evidence for it in your own data, and what to do with it\.<\/p>/.test(page) &&
     !/Most like|class="ring"/.test(page) && /pages = None {2,}# no PDF/.test(fsw.readFileSync(script, 'utf8')) && !/max\(counts\)/.test(fsw.readFileSync(script, 'utf8')), got.error);
   check('only Overview is open to start with; a tap closes the others first, then opens it and brings its title to the top under the bar; "Collapse all" closes all and goes back to the top',
     (page.match(/<section class="part open"/g) || []).length === 1 && /<section class="part open" id="p0"[^>]*data-section="Overview"/.test(page) &&
@@ -3955,7 +3974,7 @@ elif a[0] == 'thread':
   tg.gate2 = await run.a('start');
   for (const [k, v] of Object.entries(payEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   check('when Psyche Together is paid, starting one before paying gives the link and one button, "I\'ve paid, start it"; tapping it before the payment lands says so with a fresh link; once paid, the same tap starts it (README "Psyche Together, paid on the website")',
-    tg.gate1.needsAccess === true && /\/together\/buy\//.test(tg.gate1.url) && JSON.stringify(tg.gate1.buttons) === '["I\'ve paid, start it"]' && /tap the button/.test(tg.gate1.say) &&
+    tg.gate1.needsAccess === true && /\/together\/buy\//.test(tg.gate1.url) && JSON.stringify(tg.gate1.buttons) === '["I\'ve paid, start it","Back to the menu"]' && /tap the button/.test(tg.gate1.say) &&
       tg.gate2.needsAccess === true && /hasn't come through yet/.test(tg.gate2.say) && /I've paid, start it/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')),
     JSON.stringify([tg.gate1, tg.gate2]).slice(0, 400));
   tg.start = await run.a('start');
@@ -4342,6 +4361,26 @@ print(json.dumps({'gone': not hasattr(m, 'top_people') and not hasattr(m, 'peopl
     r194.gone === true && syncPart.length > 1000 && !/tap Send|Instagram message from|send that person/i.test(syncPart) &&
       /sync-check/.test(require('../lib/skill.js').skillMd()) && !/whose task is/.test(instructions.MUSE_PROCEDURE) && !/on Send, send/.test(instructions.MUSE_PROCEDURE),
     JSON.stringify({ r194, len: syncPart.length }).slice(0, 400));
+  // Release 198 (README "Report and Sync refinements"): the Sync page's What to do next, "A first sketch" on a thin card,
+  // the Big Five sentence in full words, no he or she in a Sync, and a report that cites a moment three times at most, in "you".
+  const r198 = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
+import importlib.util, json
+spec = importlib.util.spec_from_file_location('p', ${JSON.stringify(pathx.join(pathx.dirname(new URL(import.meta.url).pathname), '..', 'skill', 'bin', 'psyche.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+card = lambda n, c, o: {'firstName': n, 'confidence': c, 'bigFive': {'openness': o, 'conscientiousness': 52, 'extraversion': 62, 'agreeableness': 58, 'neuroticism': 55}}
+rep = {'summary': 'A first look at how you two click.', 'align': [{'title': 'A', 'detail': 'd', 'evidence': []}], 'differ': [], 'howToPartner': {}, 'caveats': 'Thin.'}
+thin = m.sync_html(rep, card('Jared', 71, 82), card('Jeff', 35, 55))
+full = m.sync_html(rep, card('Jared', 71, 82), card('Jeff', 80, 55))
+_, pron = m.clean_sync_report({'summary': 'Jeff and his friend', 'align': [{'title': 'x', 'detail': 'Jeff brings him along'}] * 2, 'differ': [{'title': 'y', 'detail': 'z'}], 'howToPartner': {'forA': ['a', 'b'], 'forB': ['a', 'b']}})
+ev = {'patterns': [{'id': 'p1', 'name': 'One', 'evidence': ['Your May 2018 messages'] * 2}, {'id': 'p2', 'name': 'Two', 'evidence': ['Your May 2018 messages'] * 2}],
+      'attachment': {'why': 'I considered a plain secure read and an avoidant one'}}
+print(json.dumps({'sketch': '<i>A first sketch</i>' in thin, 'insync': '<i>In sync</i>' in full, 'menu': 'What to do next' in thin and 'Write my Sync with Jeff again' in thin and 'data-copy="My Syncs"' in thin,
+  'oneRefresh': thin.count('Write my Sync with Jeff again') == 2, 'note': 'Closest on conscientiousness, extraversion, agreeableness and sensitivity; furthest apart on openness' in m._sync_five(card('a', 1, 82), card('b', 1, 55), 'a', 'b'),
+  'pron': any('gender' in x for x in pron), 'ev': [x for x in m.depth_problems(ev) if 'cited' in x or 'never as "I"' in x]}))
+`], { maxBuffer: 1 << 24 })).stdout); } catch (e) { return { error: String(e).slice(0, 400) }; } })();
+  check('Report and Sync refinements (release 198): the Sync page ends with What to do next (its refresh line among them, once), says "A first sketch" when a card is under 50% confidence, names the Big Five in full; a Sync with he or she comes back to fix; a report citing one moment four times, or saying "I", comes back to fix',
+    r198.sketch === true && r198.insync === true && r198.menu === true && r198.oneRefresh === true && r198.note === true && r198.pron === true &&
+      (r198.ev || []).some(x => /cited 4 times/.test(x)) && (r198.ev || []).some(x => /never as "I"/.test(x)),
+    JSON.stringify(r198).slice(0, 500));
   const r69 = await (async () => { try { return JSON.parse((await execFile('python3', ['-c', `
 import importlib.util, json
 spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
@@ -4470,7 +4509,7 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       // Release 68: one chat is needed, both can be added: after Instagram, WhatsApp is offered once, with Skip.
       tg.pickRead.chatOffer === true && JSON.stringify(tg.pickRead.buttons) === '["Add our WhatsApp chat","Skip","Use a different chat"]' && /^Added\. Want to add your WhatsApp chat together too\?/.test(tg.pickRead.say || '') &&
       tg.chatRules.firstNoSkip === true && tg.chatRules.due.join() === 'true,true,false,false,false' && tg.waAdded.write === 'read' && /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || '') &&
-      /\*\*When a result has `chatOffer`\*\*/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?","Remind me here"]' &&
+      /\*\*When a result has `chatOffer`\*\*/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?","Remind me here","Back to the menu"]' &&
       // The reminder is theirs to ask for (README "Psyche Together, release 57"): once set, it isn't offered again.
       tg.remindB.setReminder && tg.remindB.setReminder.name === 'Psyche Together check' && tg.remindB.setReminder.task === 'python3 bin/together.py check' && tg.remindB.setReminder.folder === '~/workspace/skills/psyche-together' &&
       // Release 70: the reminder is one command; when it ends comes from check's result, never the reminder's text.
@@ -4497,7 +4536,7 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
   check('four weeks on, the reminder asks once ("It has been 4 weeks…", Check in again / Not now), then waits a few days before asking again; the same questions come back in one widget without openers, follow-ups or decisions; the partner is told it\'s their turn; the last one in writes what moved, a line for each pillar that moved and none for the rest; it goes on top of both pages, and the other\'s reminder brings it',
     tg.checkA3.quiet === true && /^It has been 4 weeks since your Psyche Together/.test(tg.nudgeA.say || '') && JSON.stringify(tg.nudgeA.buttons) === '["Check in again","Not now"]' && tg.nudgeA2.quiet === true &&
       tg.againA.widget && RW.items.every(x => !/^(deep|decide):/.test(x.id)) && RW.items.some(x => x.id === 'overall:you') && RW.items.some(x => x.id === 'safety') && !/class="opener"/.test(tg.againA.widget) && /4 weeks on/.test(tg.againA.widget) &&
-      tg.roundA.waiting === true && JSON.stringify(tg.roundA.buttons) === '["Has my partner checked in?","Remind me here"]' && /^Mei has checked in again\. Your turn/.test(tg.nudgeB.say || '') &&
+      tg.roundA.waiting === true && JSON.stringify(tg.roundA.buttons) === '["Has my partner checked in?","Remind me here","Back to the menu"]' && /^Mei has checked in again\. Your turn/.test(tg.nudgeB.say || '') &&
       tg.recheck.write === 'recheck' && movedP.length > 0 && tg.recheck.before.pillars && tg.recheck.now.pillars && !/"core"|safety/.test(JSON.stringify(tg.recheck)) &&
       tg.recheckBad.saved === false && /changes: one line for each pillar that moved/.test(JSON.stringify(tg.recheckBad.problems)) &&
       tg.recheckSaved.file && /Ana has checked in again too\. Here's what has moved\./.test(tg.checkA4.say || '') && tg.checkA5.quiet === true &&
@@ -4654,7 +4693,7 @@ import importlib.util, json
 spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 print(json.dumps(m.write_task({'a': {}, 'b': {}})))`], { env: { ...process.env, PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tw-')) } })).stdout);
   check('Psyche Together: every wait carries "Is our read ready?" to tap again (README "Show our results")',
-    tg.waits.waiting === true && JSON.stringify(tg.waits.buttons) === '["Is our read ready?"]' && /Tap Is our read ready\? again when they're done\./.test(tg.waits.say) &&
+    tg.waits.waiting === true && JSON.stringify(tg.waits.buttons) === '["Is our read ready?","Back to the menu"]' && /Tap Is our read ready\? again when they're done\./.test(tg.waits.say) &&
       (fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8').match(/'waiting': True(?![^\n]*'buttons')[^\n]*\n(?![^\n]*'buttons')/g) || []).length === 0,
     JSON.stringify(tg.waits));
   tg.big = JSON.parse((await execFile('python3', ['-c', `
@@ -4678,7 +4717,7 @@ print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years':
       tg.big.filler.length === 0 && tg.big.named === 'I met [name] and Mei at Parc', JSON.stringify(tg.big));
   check('either can end it: everything kept goes, for both, its blobs too, and the other sees only that it ended',
     tg.end.ended && store.kvAll('together').length === 0 && tg.blobsAfterEnd === 0 && /ended/.test(JSON.stringify(tg.afterEnd)) &&
-      tg.chatGoneA && tg.stateGoneB && JSON.stringify(tg.afterEnd.buttons) === '["Start Psyche Together"]' && tg.afterEnd2.none === true,
+      tg.chatGoneA && tg.stateGoneB && JSON.stringify(tg.afterEnd.buttons) === '["Start Psyche Together","Back to the menu"]' && tg.afterEnd2.none === true,
     JSON.stringify([tg.afterEnd, tg.chatGoneA, tg.stateGoneB, tg.afterEnd2]).slice(0, 400));
   if (was === undefined) delete process.env.PSYCHE_TOGETHER; else process.env.PSYCHE_TOGETHER = was;
   await new Promise(r => srv.close(r));
