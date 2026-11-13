@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 207
+RELEASE = 208
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1620,7 +1620,7 @@ def local_report(r):
 def read_receipt(read):
     """The counts under the report, posts and stories as one (README "Posts and stories, one kind"), and the line itself."""
     got = {k: v for k, v in (read or {}).items() if isinstance(v, int) and not isinstance(v, bool)}
-    both = got.get('posts', 0) + got.get('stories', 0)
+    both = got.get('posts and stories') or got.get('posts', 0) + got.get('stories', 0)
     counts = {'posts and stories': both, 'comments': got.get('comments', 0), 'threads': got.get('threads', 0)}
     plural = lambda n, word: '{:,} {}{}'.format(n, word, '' if n == 1 else 's')
     parts = ['1 post or story' if both == 1 else '{:,} posts and stories'.format(both)] + ([plural(got['comments'], 'comment')] if got.get('comments') else []) \
@@ -5743,12 +5743,16 @@ def after_sync():
 # check every few minutes; a check that fails says nothing. Kept here only: when it last looked and what was said.
 NEWS = os.path.join(KEEP, 'news.json')
 NEWS_EVERY = 300
-NEWS_ON = ('status', 'show', 'why', 'correct', 'checkin', 'report', 'republish')
+TOGETHER_STATE = os.path.join(os.path.dirname(HERE), 'psyche-together', 'state.json')     # Psyche Together's own, if started
+NEWS_ON = ('status', 'show', 'why', 'correct', 'checkin', 'report', 'republish', 'tap')
 
 
 def news_for(force=False):
     """{'news': [lines], 'newsButtons': [labels]} when something waits that hasn't been said, else None."""
     if not read_first([REPORT, REPORT_KEPT]):
+        return None
+    # Release 208: nothing can be waiting with no Sync link made or used here and no Psyche Together started, so no call.
+    if not held_keys()['syncs'] and not e2e_codes() and not os.path.exists(TOGETHER_STATE):
         return None
     kept = read_first([NEWS]) or {}
     now = int(time.time())
@@ -5867,6 +5871,41 @@ def sync_ready(name=''):
 # The same words as lib/instructions.js's TOGETHER_INTRO (the selftest holds them equal) and as Psyche Together's own consent.
 TOGETHER_INTRO = "Psyche Together is a private read of the two of you, built on both your Psyches. You each answer about 25 questions in your own Muse, about 5 minutes, and then you both get the same read of the two of you: how you care and connect, live together, share meaning, feel secure and work through disagreements, with next steps for the weeks ahead.\n\n🔒 You each answer privately. The read shows the two of you together, never how one of you answered, except your big decisions, what you disagree about most and what you each want and think the other wants, which are set side by side.\n📄 For a read this deep, your full Psyche report, your Psyche Card picture and which Instagram account is yours (so your chat together is found for certain) go to your partner's Muse, locked.\n💬 After your questions, one of you adds your chat together (Instagram, WhatsApp or both): your read is built on it. It's de-identified here first: other people's names, handles, links, emails and phone numbers are taken out. Nothing from any other chat is read.\n🙈 Everything is locked before it leaves your Muse, so PsycheAI can't read any of it. End it any time, and what PsycheAI keeps is deleted for both of you."
 TOGETHER_ASK = 'It\'s a separate PsycheAI skill, published at app.psycheai.io/together. Would you like to install it?'
+
+
+# Release 208 (README "Every menu tap"): the menu buttons Muse once answered with no command ("More", "My data and
+# privacy", adding a source) come from here, so each tap can carry news, at most one check every five minutes.
+MENU = os.path.join(HERE, '.menu.json')
+SOURCE_LABELS = ('Add WhatsApp or Facebook and generate a Fresh Psyche', 'Add WhatsApp or Facebook')
+SOURCE_CHOICES = ['WhatsApp, Facebook and Messenger', 'WhatsApp chats', 'Facebook and Messenger', 'Facebook posts only', 'Back to the menu']
+DATA_HERE = 'Your Instagram is read right here in your Muse account: nothing to export or upload.'
+DATA_SENT = ('Your report and Psyche Card are made right here in Muse. None of your posts, messages or report go to PsycheAI; only if you '
+             'Sync, your card\'s few lines, motivation scores and daily rhythm (when in the day you post and message) are shared, locked '
+             'under your Sync link.')
+
+
+def menu_tap(label):
+    """python3 bin/psyche.py tap "<the button>": "More", "My data and privacy" or adding a source, as data."""
+    label = re.sub(r'\s+', ' ', str(label or '')).strip()
+    if label == 'More':
+        kept = read_first([MENU]) or {}
+        more = [b for b in kept.get('more') or [] if isinstance(b, str)]
+        if not more:
+            got = call('start', {})
+            more = next((o.get('buttons') for o in (got.get('options') or []) if isinstance(o, dict) and o.get('id') == 'more'), None) or []
+        return {'say': 'Here are the rest.', 'buttons': more + ['Back to the menu'], 'asButtons': True}
+    if label == 'My data and privacy':
+        last = read_first([LAST_COLLECT]) or {}
+        lines = [DATA_HERE]
+        if isinstance(last.get('read'), dict):
+            line = read_receipt(last['read'])[1]
+            lines.append('Last read: ' + line[len('Read here in Muse: '):].replace(', names removed.', ', de-identified first.'))
+        lines.append(DATA_SENT)
+        return {'say': '\n\n'.join(lines), 'buttons': ['Delete everything', 'Privacy policy', 'Back to the menu'], 'asButtons': True,
+                'links': {'Privacy policy': 'https://psycheai.io/muse-privacy'}}
+    if label in SOURCE_LABELS:
+        return {'say': 'Which would you like to add?', 'buttons': SOURCE_CHOICES, 'asButtons': True}
+    return {'unknown': True}
 
 
 def intro_for_together():
@@ -6152,6 +6191,9 @@ def call(tool, args, first=False):
         back = out.pop('returning', None)
         if isinstance(back, dict) and not first and read_first([REPORT, REPORT_KEPT]):
             out = back
+        more = next((o for o in out.get('options') or [] if isinstance(o, dict) and o.get('id') == 'more'), None)
+        if more and more.get('buttons'):
+            write_private([MENU], {'more': more['buttons'], 'at': int(time.time())})     # release 208: what "More" shows
     content = out.pop('content', None) if isinstance(out, dict) else None
     out = clean_result(with_pinned_guide(tool, args, out))
     files = [c for c in result.get('content', []) if c.get('type') == 'resource_link']
@@ -6610,6 +6652,9 @@ def main(argv):
         return
     if argv[0] == 'together-intro':
         print(json.dumps(intro_for_together(), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'tap':
+        print(with_news(argv, json.dumps(menu_tap(' '.join(argv[1:])), ensure_ascii=False, indent=1)), end='')
         return
     if argv[0] == 'sync-ready':
         print(json.dumps(sync_ready(' '.join(argv[1:])), ensure_ascii=False, indent=1))

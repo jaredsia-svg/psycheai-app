@@ -3700,6 +3700,43 @@ print(json.dumps(m.account_choice()['buttons']))
 `]).toString());
       check('The name, handed over (release 207): each account button has its name from the Instagram account list or profile, so the brief\'s full name is never looked for',
         named.length === 2 && named.find(b => b.label === '@jeffnixon').name === 'Jeff Nixon' && named.find(b => b.label === '@other').name === 'Jeff Tan', JSON.stringify(named));
+      // Release 208 (README "Every menu tap"): the taps Muse once answered alone come from tap, so they can carry news.
+      const taps = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys, tempfile, os
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = tempfile.mkdtemp()
+m.MENU = os.path.join(d, 'menu.json'); m.LAST_COLLECT = os.path.join(d, 'last.json')
+m.write_private([m.MENU], {'more': ['Weekly check-ins on my plan', 'My Syncs (1 new)', 'My data and privacy']})
+m.write_private([m.LAST_COLLECT], {'read': {'posts and stories': 239, 'comments': 30, 'threads': 15}})
+m.news_for = lambda force=False: {'news': ['Jeff synced with you: here\\'s your Sync.'], 'newsButtons': [], 'newsFile': '/x/sync.html'}
+out = [m.menu_tap('More'), m.menu_tap('My data and privacy'), m.menu_tap('Add WhatsApp or Facebook and generate a Fresh Psyche'), m.menu_tap('Something else'),
+       json.loads(m.with_news(['tap', 'More'], json.dumps(m.menu_tap('More')))), 'tap' in m.NEWS_ON]
+print(json.dumps(out))
+`]).toString());
+      check('Every menu tap (release 208): More, My data and privacy and adding a source come from tap, as data, each with news when it is due (the same five-minute limit); a button it doesn\'t know says unknown; SKILL.md says to run it',
+        JSON.stringify(taps[0].buttons) === '["Weekly check-ins on my plan","My Syncs (1 new)","My data and privacy","Back to the menu"]' &&
+          /^Your Instagram is read right here in your Muse account: nothing to export or upload\.\n\nLast read: 239 posts and stories, 30 comments and 15 conversations, de-identified first\.\n\nYour report and Psyche Card are made right here in Muse\./.test(taps[1].say) &&
+          JSON.stringify(taps[1].buttons) === '["Delete everything","Privacy policy","Back to the menu"]' && taps[2].say === 'Which would you like to add?' && taps[2].buttons.length === 5 &&
+          taps[3].unknown === true && taps[4].newsFile === '/x/sync.html' && taps[4].news.length === 1 && taps[5] === true &&
+          /\*\*Menu taps:\*\* on "More", "My data and privacy" or "Add WhatsApp or Facebook…", run \`python3 bin\/psyche\.py tap "<the button>"\`/.test(require('../lib/skill.js').skillMd()),
+        JSON.stringify(taps).slice(0, 800));
+      const quiet = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys, tempfile, os
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = tempfile.mkdtemp()
+m.REPORT = os.path.join(d, 'report.json'); m.write_private([m.REPORT], {'report': {}})
+m.KEYS = m.KEYS_KEPT = os.path.join(d, 'keys.json'); m.TOGETHER_STATE = os.path.join(d, 'none.json'); m.NEWS = os.path.join(d, 'news.json')
+calls = []
+m.post_tool = lambda t, a: calls.append(t) or {}
+first = m.news_for(True)
+m.write_private([m.KEYS], {'syncs': [], 'e2e': [{'code': 'A' * 22, 'own': True}]})
+m.news_for(True)
+print(json.dumps([first, calls]))
+`]).toString());
+      check('No news to look for (release 208): with no Sync link made or used here and no Psyche Together started, news makes no call; with a link, it asks',
+        quiet[0] === null && JSON.stringify(quiet[1]) === '["get_news"]', JSON.stringify(quiet));
       check('One writer (Psyche Together 73): the first to claim the read writes it; the other is told who is writing until that claim is 20 minutes old; a saved read isn\'t claimed again unless written again; the claim ends with the save',
         claims[0].ok === true && claims[1].ok === false && claims[1].writer === 'b' && claims[2].ok === true && claims[3].ok === true &&
           afterSave[0].written === true && afterSave[1].ok === true && refused.ok === false && refused.writer === 'b' && /together_claim/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'together', 'bin', 'together.py'), 'utf8')),
