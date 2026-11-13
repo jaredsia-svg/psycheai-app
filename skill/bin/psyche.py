@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 201
+RELEASE = 202
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5506,11 +5506,12 @@ def invite_lead(character, name=''):
 def invite_text(link, character, name=''):
     """The line a friend pastes, as lib/skill.js installPrompt words it, with the locked link: only their own request,
     from the familiar install link, then the sync (README "Invites in two parts")."""
-    bare = re.sub(r'^https?://', '', link)
-    host_ = bare.split('/')[0]
-    short = 'psycheai.io/skill' if host_ == 'app.psycheai.io' else host_ + '/install'
+    full = link if re.match(r'^https?://', link) else 'https://' + link
+    origin = re.match(r'^(https?://[^/]+)', full).group(1)
+    # The full address, https:// and all (README "Install lines with https://"): a bare one read as a search to some Muse accounts.
+    short = 'https://psycheai.io/skill' if origin == 'https://app.psycheai.io' else origin + '/install'
     nm = re.sub(r'\s+', ' ', _letters(str(name or '')).strip())[:30]
-    return 'Install %s and generate my Psyche, then sync with %s: %s' % (short, nm or 'my friend', bare)
+    return 'Install %s and generate my Psyche, then sync with %s: %s' % (short, nm or 'my friend', full)
 
 
 LINK_SAY = 'Send it to a friend, then tap below once you have.'
@@ -5831,6 +5832,16 @@ def sync_ready(name=''):
             'buttons': [SHOW_RESULTS, 'Back to the menu'], 'asButtons': True}
 
 
+# Release 202 (README "The later sections, short"): Psyche Together's intro, as data, where SKILL.md once carried it in full.
+# The same words as lib/instructions.js's TOGETHER_INTRO (the selftest holds them equal) and as Psyche Together's own consent.
+TOGETHER_INTRO = "Psyche Together is a private read of the two of you, built on both your Psyches. You each answer about 25 questions in your own Muse, about 5 minutes, and then you both get the same read of the two of you: how you care and connect, live together, share meaning, feel secure and work through disagreements, with next steps for the weeks ahead.\n\n🔒 You each answer privately. The read shows the two of you together, never how one of you answered, except your big decisions, what you disagree about most and what you each want and think the other wants, which are set side by side.\n📄 For a read this deep, your full Psyche report, your Psyche Card picture and which Instagram account is yours (so your chat together is found for certain) go to your partner's Muse, locked.\n💬 After your questions, one of you adds your chat together (Instagram, WhatsApp or both): your read is built on it. It's de-identified here first: other people's names, handles, links, emails and phone numbers are taken out. Nothing from any other chat is read.\n🙈 Everything is locked before it leaves your Muse, so PsycheAI can't read any of it. End it any time, and what PsycheAI keeps is deleted for both of you."
+TOGETHER_ASK = 'It\'s a separate PsycheAI skill, published at app.psycheai.io/together. Would you like to install it?'
+
+
+def intro_for_together():
+    return {'say': TOGETHER_INTRO + '\n\n' + TOGETHER_ASK, 'buttons': ['Install Psyche Together', 'Not now'], 'asButtons': True}
+
+
 LET_KNOW = 'I just synced with you on PsycheAI. Ask your Muse: Show my Syncs'
 
 
@@ -5950,7 +5961,7 @@ LABELS = frozenset([
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
-    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
+    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Install Psyche Together', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
               re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$')]
@@ -6566,6 +6577,9 @@ def main(argv):
         return
     if argv[0] == 'sync-check':          # release 194: the daily Sync check is this one command, nothing more
         print(json.dumps(call('get_syncs', {'check': True}), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'together-intro':
+        print(json.dumps(intro_for_together(), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'sync-ready':
         print(json.dumps(sync_ready(' '.join(argv[1:])), ensure_ascii=False, indent=1))
