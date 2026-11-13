@@ -1123,15 +1123,15 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
     check('forget --everything also deletes news.json, which Syncs news has already said (release 198)',
       /SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS\):/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')));
     {
-      // Release 198 (README "What Muse reads first"): Muse reads about the first 50 KB of SKILL.md. What answers a tap ends by 45 KB,
-      // the first visit stays where it was read at install, and Psyche Together (its section names its install) and the digest's working files come after.
+      // Release 201 (README "The install read, as it was"): Muse reads about the first 50 KB of SKILL.md when it installs. With the
+      // menu, Ask, Sync, adding a source and their data in it (198 to 200), that read failed Muse's safety check on both devices;
+      // in the order of release 197 it passed every time. Those sections stay past 52 KB, after the first visit and delivery.
       const md = require('../lib/skill.js').skillMd();
       const at = h => Buffer.byteLength(md.slice(0, md.indexOf(h)));
-      const tapEnd = at('FIRST VISIT:');
-      check('SKILL.md order (README "What Muse reads first"): the menu, Ask, Sync, adding a source, their data and later visits end within the first 45 KB; Psyche Together and the digest\'s working files come after the first visit',
-        ['JUST CONNECTED', 'Questions about their read', 'Sync ("Sync with a friend"', 'ADDING A SOURCE', 'MY DATA AND PRIVACY', 'Later visits:'].every(h => md.includes(h) && at(h) < tapEnd) &&
-          tapEnd < 45 * 1024 && at('0. Before reading anything') < 46 * 1024 && at('PSYCHE TOGETHER (') > at('2. ONE message') && at('## Working files and the digest') > at('PSYCHE TOGETHER ('),
-        JSON.stringify({ tapEnd, together: at('PSYCHE TOGETHER ('), files: at('## Working files and the digest') }));
+      const late = ['\nQuestions about their read', '\nSync ("Sync with a friend"', '\nPSYCHE TOGETHER (', '\nADDING A SOURCE (', '\nMY DATA AND PRIVACY (', '\nLater visits:'];
+      check('SKILL.md order (README "The install read, as it was"): Ask, Sync, Psyche Together, adding a source, their data and later visits all start past the first 52 KB, after the first visit and delivery; the first visit stays in the install read',
+        late.every(h => md.includes(h) && at(h) > 52 * 1024 && at(h) > at('2. ONE message')) && at('0. Before reading anything') < 46 * 1024 && at('## Working files and the digest') < at('## The guide'),
+        JSON.stringify(Object.fromEntries(late.map(h => [h.slice(1, 13), at(h)]))));
     }
     check('No dead ends (README "No dead ends"): the guide\'s rule, and no step in the script, the server or Psyche Together ends on a bare "Done" (only Psyche Pair\'s form, where Done means the form is filled in)',
       /No path ends in a dead end/.test(instructions.MUSE_PROCEDURE) &&
