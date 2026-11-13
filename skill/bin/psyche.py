@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 202
+RELEASE = 203
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -456,7 +456,7 @@ PROMPTS = [
     ('💬', '#7b3fa0', 'Hard questions, answered from your data', 'Ask PsycheAI questions about myself'),
     ('🤝', '#2d5fa8', 'Where you click, and where you differ', 'Sync with a friend'),
     ('💞', '#c2366d', 'One private read of the two of you', 'Psyche Together with my partner'),
-    ('➕', '#2f7d5b', 'More of you, for a sharper Psyche', 'Add WhatsApp or Facebook'),
+    ('➕', '#2f7d5b', 'More of you, for a sharper Psyche', 'Add WhatsApp or Facebook and generate a Fresh Psyche'),
     ('📅', '#c2571a', 'A nudge on your plan each week', 'Weekly check-ins on my plan'),
     ('🔄', '#6a4bb5', 'Rewritten from your Instagram today', 'Fresh Psyche'),
     ('🔒', '#5a4f66', 'What\'s kept, and deleting it all', 'My data and privacy'),
@@ -5721,7 +5721,7 @@ def after_sync():
     """What's next once a new Sync is open (README "After a new Sync, what's next"): another Sync, Psyche Together
     (Continue, when their partner's invite waits) and another source."""
     together = 'Continue Psyche Together' if os.path.exists(os.path.join(KEEP, 'together-pending.json')) else 'Psyche Together with my partner'
-    return ['Sync with someone new', together, 'Add WhatsApp or Facebook', 'Back to the menu']
+    return ['Sync with someone new', together, 'Add WhatsApp or Facebook and generate a Fresh Psyche', 'Back to the menu']
 
 
 # News on every command (README "News on every command", release 196): after the commands they tap through, a new
@@ -5749,7 +5749,7 @@ def news_for(force=False):
         write_private([NEWS], kept)
         return None
     said = set(kept.get('syncs') or [])
-    names = []
+    names, pages = [], []
     for x in got.get('syncs') or []:
         if not isinstance(x, dict) or not x.get('sync') or x['sync'] in said:
             continue
@@ -5758,23 +5758,40 @@ def news_for(force=False):
             if data is None or not data.get('written'):
                 continue          # not written yet: said once it is
             role = x['e2e'].get('role')
-            names.append(first_of(clean_card((data.get('cards') or {}).get('b' if role == 'a' else 'a'))))
+            them = clean_card((data.get('cards') or {}).get('b' if role == 'a' else 'a'))
+            names.append(first_of(them))
+            # The Sync itself, with the news (README "News with the Sync attached", release 203): its page, as the
+            # morning check makes it, so the menu shows it without another tap.
+            w = oriented_report(data.get('written'), role)
+            if w:
+                content = {'report': w, 'at': (data.get('written') or {}).get('at'), 'cards': {'me': clean_card((data.get('cards') or {}).get(role)), 'them': them}}
+                path = save_sync_page(content, x['sync'])
+                if path:
+                    pages.append((path, x['sync']))
         elif x.get('written'):
             names.append(str(x.get('name') or 'A friend')[:40])
         else:
             continue
         said.add(x['sync'])
-    lines, buttons = [], []
+    lines, buttons, extra = [], [], {}
     if names:
         who = ' and '.join(names) if len(names) < 3 else '%s and %d more' % (', '.join(names[:2]), len(names) - 2)
-        lines.append('%s synced with you: %s ready.' % (who, 'your Sync is' if len(names) == 1 else 'your Syncs are'))
-        buttons.append('Show my Syncs')
+        if len(names) == 1 and len(pages) == 1:
+            lines.append('%s synced with you: here\'s your Sync.' % who)
+            extra = {'newsFile': pages[0][0]}
+            try:
+                post_tool('get_syncs', {'opened': str(pages[0][1])})     # shown here, so opened (as mark_opened)
+            except Exception:
+                pass
+        else:
+            lines.append('%s synced with you: %s ready.' % (who, 'your Sync is' if len(names) == 1 else 'your Syncs are'))
+            buttons.append('Show my Syncs')
     if got.get('together') and not kept.get('together'):
         lines.append('Your Psyche Together read is ready.')
         buttons.append('Show our Psyche Together')
     kept.update(syncs=sorted(said)[-200:], together=bool(got.get('together')))
     write_private([NEWS], kept)
-    return {'news': lines, 'newsButtons': buttons} if lines else None
+    return dict({'news': lines, 'newsButtons': buttons}, **extra) if lines else None
 
 
 def mark_opened(sync):
@@ -5956,7 +5973,7 @@ LABELS = frozenset([
     'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Not now',
     'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
-    'WhatsApp, Facebook and Messenger', 'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
+    'WhatsApp, Facebook and Messenger', 'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook and generate a Fresh Psyche', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',
     'Done', 'Yes', 'No thanks', 'Show my Syncs', 'Check daily for me', 'Someone else', 'I\'ll share it myself', 'I\'ve shared it. Show our results', 'Show our results', 'My friend has synced', 'Sync with someone else', 'Sync with someone new', 'Write it again',
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
@@ -6001,13 +6018,12 @@ def clean_result(value):
 
 # What's next after a Psyche, and the ideas to ask: the server's own (lib/next.js publish_psyche, lib/mcp.js
 # ASK_IDEAS and askIdeas), here so publishing asks nothing of it. The selftest holds them to the server's.
-AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Psyche Together with my partner", "Add WhatsApp or Facebook", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger", "Facebook posts only"], "more": {"buttons": ["Weekly check-ins on my plan", "Join the Psyche Pair waitlist", "My data and privacy"]}}
+AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Psyche Together with my partner", "Add WhatsApp or Facebook and generate a Fresh Psyche", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger", "Facebook posts only"], "more": {"buttons": ["Weekly check-ins on my plan", "Join the Psyche Pair waitlist", "My data and privacy"]}}
 ASK_IDEAS = [
 "Who am I when I'm not being useful, impressive or needed?",
 "What do I keep trying to prove, and to whom?",
 "What am I most insecure about in my life?",
 "What would make my life worthwhile, even if nobody ever knew what I achieved?",
-"What would I regret most about my life when I'm old?",
 "What do I already know needs attention in my life, but keep putting off because it means a hard choice?",
 "Which commitments deserve my loyalty, and which need rethinking?",
 "How can I show up better for my partner, my family and the people closest to me?",
@@ -6748,10 +6764,10 @@ def main(argv):
         if not out.get('ok') and any('Nothing came back' in str(p) for p in out.get('problems') or []):
             who = username_of(opts.get('--account-id'))
             out['tooThin'] = {'ownWriting': 0, 'nothing': True, 'say': NOTHING_SAY % ('@' + who if who else 'your Instagram'),
-                              'buttons': ['Add WhatsApp or Facebook', "I've connected another account"]}
+                              'buttons': ['Add WhatsApp or Facebook and generate a Fresh Psyche', "I've connected another account"]}
         elif out.get('ok') and own < MIN_OWN_WRITING:
             # Too little to read well (README "A thin read, said and capped"): the read stops here, with the offer.
-            out['tooThin'] = {'ownWriting': own, 'say': THIN_SAY, 'buttons': ['Add WhatsApp or Facebook', 'Make it anyway'], 'anyway': ANYWAY_LINE}
+            out['tooThin'] = {'ownWriting': own, 'say': THIN_SAY, 'buttons': ['Add WhatsApp or Facebook and generate a Fresh Psyche', 'Make it anyway'], 'anyway': ANYWAY_LINE}
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'last-collect':
