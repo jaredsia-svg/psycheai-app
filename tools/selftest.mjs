@@ -3683,6 +3683,23 @@ print(json.dumps(out))
       check('The read waits for the chat (Psyche Together 76): the last one in, with no chat together added yet (someone on the gentle path is never asked for it), waits with Is our read ready?; with a chat in, a day on, or a read already there, it is written',
         waits[0].waiting === true && /built on your chat together, so it's written once Jeff has added it/.test(waits[0].say) && JSON.stringify(waits[0].buttons) === '["Is our read ready?","Back to the menu"]' &&
           waits[1].write === 'read' && waits[2].write === 'read' && waits[3].write === 'read', JSON.stringify(waits).slice(0, 600));
+      // Release 207 (README "The name, handed over"): each account button carries its Instagram profile's name.
+      const named = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+def fake(cli, *a, timeout=120):
+    if a[0] == 'accounts':
+        return {'accounts': [{'username': 'jeffnixon', 'user_fbid': '111'}, {'username': 'other', 'user_fbid': '222', 'full_name': 'Jeff Tan'}]}
+    if a[0] == 'profile':
+        return {'profiles': [{'username': 'jeffnixon', 'full_name': 'Jeff Nixon'}]} if a[2] == '111' else {}
+    return {}
+m.ig = fake
+m.read_first = lambda p: None
+print(json.dumps(m.account_choice()['buttons']))
+`]).toString());
+      check('The name, handed over (release 207): each account button has its name from the Instagram account list or profile, so the brief\'s full name is never looked for',
+        named.length === 2 && named.find(b => b.label === '@jeffnixon').name === 'Jeff Nixon' && named.find(b => b.label === '@other').name === 'Jeff Tan', JSON.stringify(named));
       check('One writer (Psyche Together 73): the first to claim the read writes it; the other is told who is writing until that claim is 20 minutes old; a saved read isn\'t claimed again unless written again; the claim ends with the save',
         claims[0].ok === true && claims[1].ok === false && claims[1].writer === 'b' && claims[2].ok === true && claims[3].ok === true &&
           afterSave[0].written === true && afterSave[1].ok === true && refused.ok === false && refused.writer === 'b' && /together_claim/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'together', 'bin', 'together.py'), 'utf8')),

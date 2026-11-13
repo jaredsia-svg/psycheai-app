@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 206
+RELEASE = 207
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -2543,7 +2543,9 @@ def instagram_accounts(data, messages=False):
             if isinstance(name, str) and name and fbid:
                 pro = next((bool(v[k]) for k in ('is_professional', 'professional', 'is_business', 'is_business_account') if k in v), False)
                 conn = next((bool(v[k]) for k in ('connected', 'is_connected', 'messaging_connected', 'messages_connected') if k in v), None)
-                found.append({'username': name.lstrip('@'), 'id': fbid, 'professional': pro, 'connected': conn})
+                full = v.get('full_name') or v.get('name')
+                found.append({'username': name.lstrip('@'), 'id': fbid, 'professional': pro, 'connected': conn,
+                              'name': full.strip()[:60] if isinstance(full, str) and full.strip() and full.strip().lstrip('@') != name.lstrip('@') else ''})
                 return
             for k, x in v.items():
                 if k != '_meta':
@@ -2555,6 +2557,18 @@ def instagram_accounts(data, messages=False):
 def account_tag(account_id):
     """A short hash of the account read, so last-collect can mark it next time without keeping its ID."""
     return hashlib.sha256(('psyche-account:' + str(account_id)).encode()).hexdigest()[:12]
+
+
+def profile_name(account_id):
+    """Release 207 (README "The name, handed over"): their name as their Instagram profile gives it, for the brief's
+    "<their full name>". Without it, a Muse once went looking for how to fill it in and printed the account keys,
+    which stopped the run at Muse's safety check. Empty when the profile doesn't say, or can't be read."""
+    try:
+        prof = (ig(IG_CLI, 'profile', '--account-id', account_id, timeout=20).get('profiles') or [{}])[0]
+        full = str(prof.get('full_name') or prof.get('name') or '').strip()
+        return full[:60] if full and full.lstrip('@') != str(prof.get('username') or '').lstrip('@') else ''
+    except Exception:
+        return ''
 
 
 def account_choice():
@@ -2572,7 +2586,7 @@ def account_choice():
         was = len(ig_list) > 1 and last == account_tag(a['id'])
         buttons.append(dict(label='@' + a['username'] + (' (last time)' if was else ''), last=was,
                             account_id=a['id'], messages_account_id=m['id'] if m and m['id'] != a['id'] else None,
-                            messages_connected=bool(m and m['connected'])))
+                            messages_connected=bool(m and m['connected']), name=a['name'] or profile_name(a['id'])))
     buttons.sort(key=lambda b: not b['last'])
     # No account read before and only one with messages connected: that one first, marked (README "The account to
     # pick, said"): two buttons that looked alike once left someone asking which.
