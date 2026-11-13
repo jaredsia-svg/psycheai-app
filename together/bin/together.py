@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 75
+RELEASE = 76
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -2317,6 +2317,9 @@ def send(no_chat=False):
             'say': 'Your answers are locked and sent. When %s has done theirs, your read is written: you\'ll both get the same one.' % (s.get('partner') or 'your partner')}
 
 
+CHAT_WAIT = 24 * 3600          # release 76: how long a read waits for the chat together before it's written without it
+
+
 def write_task(profiles=None, again=False):
     """What Muse needs to write the joint read: both Psyches at card level and the couple view, never either
     person's own answers. Data only."""
@@ -2327,6 +2330,15 @@ def write_task(profiles=None, again=False):
     if not all('core' in (profiles.get(r) or {}) for r in ('a', 'b')):
         return {'waiting': True, 'say': 'Still waiting for your partner\'s answers. Tap Is our read ready? again when they\'re done.',
                 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True}
+    # Release 76 (README "The read waits for the chat"): a read is built on your chat together. Someone on the gentle path
+    # is never asked for it, and once came in last and wrote the read with no chat while their partner was still adding
+    # it. Until one of you has added it, the read waits, for a day after your answers went (so two on the gentle path,
+    # where neither is asked, still get theirs).
+    st = state()
+    if not again and not st.get('readAt') and not chat_done(profiles) and time.time() - int(st.get('sent') or 0) < CHAT_WAIT:
+        return {'waiting': True, 'setCheck': True, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
+                'say': 'Your answers are in. Your read is built on your chat together, so it\'s written once %s has added it. Tap Is our read ready? to check.'
+                       % (st.get('partner') or 'your partner')}
     # Release 73 (README "One writer"): one read, written once. Both Muses once wrote it within a minute of each other,
     # each the "last one in" by its own step, and the two copies differed. The server gives the writing to whoever claims
     # it first; the other waits for it (or takes over if that claim is 20 minutes old with no read).
@@ -2776,6 +2788,12 @@ def save_read(path):
         box['chat'] = {'signals': (profiles[chat_of]['chat'] or {}).get('signals')}
         box['chatOf'] = [view['names'][0], view['names'][1]] if chat_of == 'a' else [view['names'][1], view['names'][0]]
     put = tool('together_put', {'e2e': {'read': seal(box, key_for('together-box', k['code']))}})
+    if put.get('ok') is False and (put.get('writer') or put.get('written')):
+        # Release 76 (README "One read, kept once"): the server keeps the read of whoever holds the claim; the other Muse's
+        # copy isn't saved, so both of you see the same read.
+        shutil.rmtree(PARTS_DIR, ignore_errors=True)
+        return {'waiting': True, 'saved': False, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
+                'say': '%s\'s Muse %s your read. Tap Is our read ready? to see it.' % (state().get('partner') or 'Your partner', 'is writing' if put.get('writer') else 'has saved')}
     if put.get('error'):
         return put
     if path == '--parts':
@@ -3040,6 +3058,12 @@ def save_recheck(path):
         return {'saved': False, 'problems': problems}
     box['rechecks'] = rounds_in(box) + [{'n': n, 'at': int(time.time()), 'view': round_view(profiles, n), 'moved': task['moved'], 'note': x}]
     put = tool('together_put', {'e2e': {'read': seal(box, key_for('together-box', k['code']))}})
+    if put.get('ok') is False and (put.get('writer') or put.get('written')):
+        # Release 76 (README "One read, kept once"): the server keeps the read of whoever holds the claim; the other Muse's
+        # copy isn't saved, so both of you see the same read.
+        shutil.rmtree(PARTS_DIR, ignore_errors=True)
+        return {'waiting': True, 'saved': False, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
+                'say': '%s\'s Muse %s your read. Tap Is our read ready? to see it.' % (state().get('partner') or 'Your partner', 'is writing' if put.get('writer') else 'has saved')}
     if put.get('error'):
         return put
     try:

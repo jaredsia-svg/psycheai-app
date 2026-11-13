@@ -13,5 +13,6 @@ Releases are signed with Ed25519, with the same key as the PsycheAI skill. Its p
 
 | Release | Date | SKILL.md | bin/together.py | guide.json |
 |---|---|---|---|---|
+| 76 | 2026-11-13 | `3af6ba515640dc1607d371ccf4d7e25f52a16505474dc86d50dbefe698dbbf35` | `a38bca80a830e584ecf43aaebf3fd0dd7c328b632bb4f6047cfe5fe34c88130f` | `82ad0f2f9926d055e9fe26823c849a79b3e5917f6bc9acf41a8a9c1901b142e9` |
 | 75 | 2026-11-13 | `3af6ba515640dc1607d371ccf4d7e25f52a16505474dc86d50dbefe698dbbf35` | `0a1823ef5c1d05bcd9d76832a80f329b127dede05fc01b2fac6e6a31a32fd863` | `82ad0f2f9926d055e9fe26823c849a79b3e5917f6bc9acf41a8a9c1901b142e9` |
 | 74 | 2026-11-13 | `ba7eae13ceb99634b88711aceabc02fc39db9e4f9435eb05e6992da4f6744d94` | `88cb8cb526ba385f25350a96315937fc27b93f4c6db0fa27441cf22a5fde48e0` | `82ad0f2f9926d055e9fe26823c849a79b3e5917f6bc9acf41a8a9c1901b142e9` |

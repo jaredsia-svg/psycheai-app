@@ -839,7 +839,7 @@ function signup(email, d) {
   check('"DMs included" checks their messages are connected first, before step 1\'s line, on every path to it', /MESSAGES FIRST: whenever they chose their messages \(a first Psyche or a "Fresh Psyche"\), after the account and before step 1's line, check them from Muse's Instagram messages connection's list of accounts, which shows no message \(only if their account isn't connected there, ask it for their conversation list once, keeping nothing from it, for Muse's connect link\)/.test(core) &&
     /the reply above comes first, never step 1's line/.test(core) &&
     /"Fresh Psyche" asks the messages question at once, as step 0 does, then goes on exactly as step 0 does: the account question only with more than one account, MESSAGES FIRST, then step 1/.test(core) && !/go straight to step 1/.test(core + require('../lib/skill.js').skillMd()) && /then MESSAGES FIRST, then step 1, with no Generate button/.test(require('../lib/skill.js').skillMd()) &&
-    JSON.stringify(mcp.startMenu({ id: 'u_dm_new' }).options.map(o => o.label)) === '["Include my messages (Recommended)","Posts only"]' && /on their tap, the account question only if they have more than one account, then MESSAGES FIRST when they chose their messages/.test(mcp.startMenu({ id: 'u_dm_new' }).after) && [mcp.startMenu({ id: 'u_dm_back', profile: {} })].every(m => m.options.filter(o => o.id === 'read').length === 1 && m.options.filter(o => o.id === 'read').every(o => o.label === 'Fresh Psyche' && JSON.stringify(o.buttons) === '["Include my messages (Recommended)","Posts only"]' && o.say === mcp.MESSAGES_LINE && !o.first)));
+    JSON.stringify(mcp.startMenu({ id: 'u_dm_new' }).options.map(o => o.label)) === '["Include my messages (Recommended)","Posts only"]' && /on their tap, the account question only if they have more than one account, then MESSAGES FIRST when they chose their messages/.test(mcp.startMenu({ id: 'u_dm_new' }).after) && [mcp.startMenu({ id: 'u_dm_back', profile: {} })].every(m => !m.options.some(o => o.id === 'read') && m.options.filter(o => o.id === 'source').length === 1));
   check('the read and the profile come from text only, never from photos or videos', /text only \(words and dates: never the photos or videos themselves\)/.test(core) &&
     /nothing is read from photos or videos/.test(pair) && /Never choose, look at or send their photos: they pick their own 3 in the details form/.test(pair));
   check('a fresh read asks the one go-ahead again, and an earlier chat\'s choice never stands in for it', /A new Psyche starts with the messages question after "Fresh Psyche" from start's menu, or, if they ask in their own words, the same question; then the account question only with more than one account, MESSAGES FIRST, then step 1/.test(core) && /only the answer in this chat counts/.test(core) && !/do step 1 again/.test(core));
@@ -993,7 +993,7 @@ function signup(email, d) {
     const after = mcp.startMenu(store.getUser(fresh.id)).options.map(o => o.id).join();
     check('psyche_saved takes nothing and notes only that a Psyche exists: What\'s next and ask ideas come back, the start menu then welcomes them back, and no card is kept for them',
       md && md.ok && md.nextStep && md.nextStep.buttons[0] === 'Ask PsycheAI questions about myself' && Array.isArray(md.askIdeas) && Object.keys(mcp.TOOLS.find(t => t.name === 'psyche_saved').inputSchema.properties).length === 0 &&
-        before === 'messages,posts' && /ask,sync,together,read,more/.test(after) && !psyche.has(fresh.id), JSON.stringify({ before, after }));
+        before === 'messages,posts' && /ask,sync,together,source,more/.test(after) && !psyche.has(fresh.id), JSON.stringify({ before, after }));
   }
   {
     // README "Nothing about them leaves Muse": the skill makes What's next and the ask ideas itself, from copies held in step here,
@@ -1786,10 +1786,10 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       /: PsycheAI's own introduction, in four short parts, its privacy lines as they are, since they're worded to match exactly what the code does: "I'm PsycheAI, your personal AI coach that already knows you\."/.test(instructions.MUSE_PROCEDURE) && !/muse-sample/.test(instructions.MUSE_PROCEDURE + fresh.say) && /x/.test(instructions.MUSE_PROCEDURE) && !/look again the same way/.test(instructions.MUSE_PROCEDURE) &&
       /Delete it all any time\." Then, on its own line, the reel start gave you \(reel; if start hasn't answered, this one: https:\/\/www\.instagram\.com\/reel\/DfboxNlyEx9\/\): "▶ \[See what you'll get, in a minute\]\(<reel>\)", a named link to open, not a file to download\. Then the messages question/.test(instructions.MUSE_PROCEDURE) && !/Here's what you'll get, in a minute, while you wait/.test(instructions.MUSE_PROCEDURE) &&
       /psycheai\.io\/muse-privacy for the details: PsycheAI keeps none of your report, and a short summary of it is kept, locked, for the card picture and Syncs/.test(instructions.MUSE_PROCEDURE));
-    check('someone with a read gets Ask, Sync, Psyche Together, a Fresh Psyche and More (check-ins, Syncs, Pair, WhatsApp, their data), one source button for WhatsApp, Facebook and Messenger', JSON.stringify(back.options.map(o => o.label)) ===
-      '["Ask PsycheAI questions about myself","Sync with a friend","Psyche Together with my partner","Fresh Psyche","More"]' &&
-      !JSON.stringify(back.options).includes('Deep Psyche') && JSON.stringify(back.options.find(o => o.id === 'more').buttons.filter(b => !/^Psyche Pair|matches|My Syncs/.test(b))) === '["Weekly check-ins on my plan","Add WhatsApp or Facebook and generate a Fresh Psyche","My data and privacy"]' && JSON.stringify(back.options.find(o => o.id === 'more').sources) === '["WhatsApp, Facebook and Messenger","WhatsApp chats","Facebook and Messenger","Facebook posts only"]' &&
-      JSON.stringify(back.options.find(o => o.id === 'more').whatsapp.buttons) === '["I\'ve shared my chats","Not now"]' &&
+    check('someone with a read gets Ask, Sync, Psyche Together, Add WhatsApp or Facebook and More (check-ins, Syncs, Pair, their data), one source button for WhatsApp, Facebook and Messenger', JSON.stringify(back.options.map(o => o.label)) ===
+      '["Ask PsycheAI questions about myself","Sync with a friend","Psyche Together with my partner","Add WhatsApp or Facebook and generate a Fresh Psyche","More"]' &&
+      !JSON.stringify(back.options).includes('Deep Psyche') && JSON.stringify(back.options.find(o => o.id === 'more').buttons.filter(b => !/^Psyche Pair|matches|My Syncs/.test(b))) === '["Weekly check-ins on my plan","My data and privacy"]' && JSON.stringify(back.options.find(o => o.id === 'source').sources) === '["WhatsApp, Facebook and Messenger","WhatsApp chats","Facebook and Messenger","Facebook posts only"]' &&
+      JSON.stringify(back.options.find(o => o.id === 'source').whatsapp.buttons) === '["I\'ve shared my chats","Not now"]' &&
       /ADDING A SOURCE \("Add WhatsApp or Facebook"\): answer at once, with no tool first: "Which would you like to add\?" with the buttons "WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger", "Facebook posts only" and "Back to the menu"/.test(instructions.MUSE_PROCEDURE) && /ALL THREE \("WhatsApp, Facebook and Messenger"\): the WhatsApp steps first/.test(instructions.MUSE_PROCEDURE) && /Then ONE fresh Psyche from the digest and everything in sources\/, written once with all of it, never once per source\./.test(instructions.MUSE_PROCEDURE) && /run python3 bin\/psyche\.py collect-facebook --me "<their full name>" \(with --no-messenger for "Facebook posts only"\)/.test(instructions.MUSE_PROCEDURE) && /Never read Facebook or Messenger yourself, and never read Muse's own Messenger side chat/.test(instructions.MUSE_PROCEDURE) && /with no count of messages/.test(instructions.MUSE_PROCEDURE) && /FACEBOOK \("Facebook and Messenger", "Facebook posts only", or "add my Facebook"\):/.test(instructions.MUSE_PROCEDURE) && /Without the skill, read their own Facebook posts through Muse's Facebook connection the same way, never Messenger/.test(instructions.MUSE_PROCEDURE) &&
       /MY DATA AND PRIVACY/.test(instructions.MUSE_PROCEDURE) && /"Your Instagram is read right here in your Muse account: nothing to export or upload\."/.test(instructions.MUSE_PROCEDURE) && /None of your posts, messages or report go to PsycheAI; only if you Sync, your card's few lines, motivation scores and daily rhythm \(when in the day you post and message\) are shared, locked under your Sync link\."/.test(instructions.MUSE_PROCEDURE) && !/PsycheAI received only your finished Psyche/.test(instructions.MUSE_PROCEDURE) && /"Yes, delete everything"/.test(instructions.MUSE_PROCEDURE) &&
       /de-identified here, in your own Muse workspace, before it's read/.test(mcp.WHATSAPP_HOW) && /Your chats, and the report written from them, never go to PsycheAI\./.test(mcp.WHATSAPP_HOW) && !/only the report written from them/.test(mcp.WHATSAPP_HOW) && /Export chat, Without media/.test(mcp.WHATSAPP_HOW) &&
@@ -3652,7 +3652,9 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       // One writer (README "One writer", Psyche Together 73): the first claim wins, the other is told who writes; a claim 20 minutes old can be taken over.
       const t0 = Date.now();
       const claims = [tgLib.claim(B, {}, t0), tgLib.claim(A, {}, t0 + 60000), tgLib.claim(B, {}, t0 + 120000), tgLib.claim(A, {}, t0 + 120000 + tgLib.CLAIM_MS + 1000)];
-      tgLib.claim(B, {}, t0 + 120000 + tgLib.CLAIM_MS + 2000);
+      tgLib.claim(B, {}, t0 + 120000 + 2 * tgLib.CLAIM_MS + 2000);
+      // Release 76 (README "One read, kept once"): a read is saved only by the one who holds the claim.
+      const refused = await tgLib.put(A, { e2e: { read: bx } });
       await tgLib.put(B, { e2e: { read: bx } });
       const ready = [tgLib.news(A), tgLib.news(B)];
       const afterSave = [tgLib.claim(A, {}), tgLib.claim(A, { again: true })];
@@ -3660,9 +3662,30 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       await tgLib.get(A);
       const opened = tgLib.news(A);
       await tgLib.end(A);
+      // Release 76 (README "The read waits for the chat"): the last one in, with no chat added yet, waits for it, for a day.
+      const waits = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, time
+spec = importlib.util.spec_from_file_location('t', 'together/bin/together.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.tool = lambda n, a: {'ok': True}
+m.couple_view = lambda a, b: {}
+m.task_file = lambda d: d
+m.named_chat = lambda *a: None
+m._conf = lambda r: (None,)
+both = {'a': {'core': {}}, 'b': {'core': {}}}
+withChat = {'a': {'core': {}, 'chat': {'n': 1}}, 'b': {'core': {}}}
+out = []
+for st, pr in (({'sent': int(time.time()), 'partner': 'Jeff'}, both), ({'sent': int(time.time()), 'partner': 'Jeff'}, withChat),
+               ({'sent': int(time.time()) - 90000, 'partner': 'Jeff'}, both), ({'sent': int(time.time()), 'readAt': 1, 'partner': 'Jeff'}, both)):
+    m.state = lambda st=st: st
+    out.append(m.write_task(pr))
+print(json.dumps(out))
+`]).toString());
+      check('The read waits for the chat (Psyche Together 76): the last one in, with no chat together added yet (someone on the gentle path is never asked for it), waits with Is our read ready?; with a chat in, a day on, or a read already there, it is written',
+        waits[0].waiting === true && /built on your chat together, so it's written once Jeff has added it/.test(waits[0].say) && JSON.stringify(waits[0].buttons) === '["Is our read ready?","Back to the menu"]' &&
+          waits[1].write === 'read' && waits[2].write === 'read' && waits[3].write === 'read', JSON.stringify(waits).slice(0, 600));
       check('One writer (Psyche Together 73): the first to claim the read writes it; the other is told who is writing until that claim is 20 minutes old; a saved read isn\'t claimed again unless written again; the claim ends with the save',
         claims[0].ok === true && claims[1].ok === false && claims[1].writer === 'b' && claims[2].ok === true && claims[3].ok === true &&
-          afterSave[0].written === true && afterSave[1].ok === true && /together_claim/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'together', 'bin', 'together.py'), 'utf8')),
+          afterSave[0].written === true && afterSave[1].ok === true && refused.ok === false && refused.writer === 'b' && /together_claim/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'together', 'bin', 'together.py'), 'utf8')),
         JSON.stringify({ claims, afterSave }));
       check('News on every command: get_news says a Psyche Together read waits only to the partner who didn\'t write it, as a yes or no, until they open it; it is hidden from Muse\'s tool list',
         JSON.stringify(before) === '[false,false]' && JSON.stringify(ready) === '[true,false]' && tool.together === true && Array.isArray(tool.syncs) &&
