@@ -3707,19 +3707,23 @@ sys.argv = ['x']
 spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 d = tempfile.mkdtemp()
 m.MENU = os.path.join(d, 'menu.json'); m.LAST_COLLECT = os.path.join(d, 'last.json')
-m.write_private([m.MENU], {'more': ['Weekly check-ins on my plan', 'My Syncs (1 new)', 'My data and privacy']})
+m.keep_menu({'options': [{'id': 'ask', 'askButtons': ['What do I keep trying to prove?', 'Back to the menu']}, {'id': 'source', 'whatsapp': {'answer': 'Add up to three WhatsApp chats.', 'buttons': ['I\\'ve shared my chats', 'Not now']}}, {'id': 'more', 'buttons': ['Weekly check-ins on my plan', 'My Syncs (1 new)', 'My data and privacy']}]})
 m.write_private([m.LAST_COLLECT], {'read': {'posts and stories': 239, 'comments': 30, 'threads': 15}})
 m.news_for = lambda force=False: {'news': ['Jeff synced with you: here\\'s your Sync.'], 'newsButtons': [], 'newsFile': '/x/sync.html'}
 out = [m.menu_tap('More'), m.menu_tap('My data and privacy'), m.menu_tap('Add WhatsApp or Facebook and generate a Fresh Psyche'), m.menu_tap('Something else'),
-       json.loads(m.with_news(['tap', 'More'], json.dumps(m.menu_tap('More')))), 'tap' in m.NEWS_ON]
+       json.loads(m.with_news(['tap', 'More'], json.dumps(m.menu_tap('More')))), 'tap' in m.NEWS_ON,
+       m.menu_tap('Ask PsycheAI questions about myself'), m.menu_tap('WhatsApp chats'), m.menu_tap('WhatsApp, Facebook and Messenger'), m.menu_tap('Delete everything')]
 print(json.dumps(out))
 `]).toString());
-      check('Every menu tap (release 208): More, My data and privacy and adding a source come from tap, as data, each with news when it is due (the same five-minute limit); a button it doesn\'t know says unknown; SKILL.md says to run it',
+      check('Every menu tap (releases 208 and 209): More, My data and privacy, adding a source, Ask, the WhatsApp choices and Delete everything come from tap, as data, each with news when it is due (the same five-minute limit); a button it doesn\'t know says unknown; SKILL.md says to run it',
         JSON.stringify(taps[0].buttons) === '["Weekly check-ins on my plan","My Syncs (1 new)","My data and privacy","Back to the menu"]' &&
           /^Your Instagram is read right here in your Muse account: nothing to export or upload\.\n\nLast read: 239 posts and stories, 30 comments and 15 conversations, de-identified first\.\n\nYour report and Psyche Card are made right here in Muse\./.test(taps[1].say) &&
           JSON.stringify(taps[1].buttons) === '["Delete everything","Privacy policy","Back to the menu"]' && taps[2].say === 'Which would you like to add?' && taps[2].buttons.length === 5 &&
           taps[3].unknown === true && taps[4].newsFile === '/x/sync.html' && taps[4].news.length === 1 && taps[5] === true &&
-          /\*\*Menu taps:\*\* on "More", "My data and privacy" or "Add WhatsApp or Facebook…", run \`python3 bin\/psyche\.py tap "<the button>"\`/.test(require('../lib/skill.js').skillMd()),
+          taps[6].say === 'Ask me anything about yourself, or start from one of these:' && JSON.stringify(taps[6].buttons) === '["What do I keep trying to prove?","Back to the menu"]' &&
+          taps[7].say === 'Add up to three WhatsApp chats.' && JSON.stringify(taps[7].buttons) === '["I\'ve shared my chats","Not now"]' && taps[8].say === taps[7].say &&
+          /^This deletes your Psyche, report, digest, Syncs and saved card, here and on PsycheAI\. Delete everything\?$/.test(taps[9].say) && JSON.stringify(taps[9].buttons) === '["Yes, delete everything","Cancel"]' &&
+          /\*\*Menu taps:\*\* on "More", "My data and privacy", "Add WhatsApp or Facebook…", "Ask PsycheAI questions about myself", "WhatsApp chats", "WhatsApp, Facebook and Messenger" or "Delete everything", run \`python3 bin\/psyche\.py tap "<the button>"\`/.test(require('../lib/skill.js').skillMd()),
         JSON.stringify(taps).slice(0, 800));
       const quiet = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
 import importlib.util, json, sys, tempfile, os

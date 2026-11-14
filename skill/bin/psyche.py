@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 208
+RELEASE = 209
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5884,16 +5884,52 @@ DATA_SENT = ('Your report and Psyche Card are made right here in Muse. None of y
              'under your Sync link.')
 
 
+def keep_menu(out):
+    opts = {o.get('id'): o for o in out.get('options') or [] if isinstance(o, dict)}
+    kept = read_first([MENU]) or {}
+    if (opts.get('more') or {}).get('buttons'):
+        kept['more'] = opts['more']['buttons']
+    if (opts.get('ask') or {}).get('askButtons'):
+        kept['ask'] = opts['ask']['askButtons']
+    wa = (opts.get('source') or {}).get('whatsapp') or (opts.get('more') or {}).get('whatsapp')
+    if isinstance(wa, dict) and wa.get('answer'):
+        kept['whatsapp'] = {'say': wa['answer'], 'buttons': wa.get('buttons') or ['I\'ve shared my chats', 'Not now']}
+    if kept:
+        kept['at'] = int(time.time())
+        write_private([MENU], kept)
+
+
+def kept_menu(part):
+    """What the last menu gave for part (more, ask, whatsapp), asking start again only when nothing is kept."""
+    kept = read_first([MENU]) or {}
+    if not kept.get(part):
+        got = call('start', {})          # call() keeps it, as for any start
+        kept = read_first([MENU]) or {}
+        if not kept.get(part) and isinstance(got, dict):
+            keep_menu(got)
+            kept = read_first([MENU]) or {}
+    return kept.get(part)
+
+
+ASK_SAY = 'Ask me anything about yourself, or start from one of these:'
+DELETE_SAY = 'This deletes your Psyche, report, digest, Syncs and saved card, here and on PsycheAI. Delete everything?'
+
+
 def menu_tap(label):
     """python3 bin/psyche.py tap "<the button>": "More", "My data and privacy" or adding a source, as data."""
     label = re.sub(r'\s+', ' ', str(label or '')).strip()
     if label == 'More':
-        kept = read_first([MENU]) or {}
-        more = [b for b in kept.get('more') or [] if isinstance(b, str)]
-        if not more:
-            got = call('start', {})
-            more = next((o.get('buttons') for o in (got.get('options') or []) if isinstance(o, dict) and o.get('id') == 'more'), None) or []
+        more = [b for b in kept_menu('more') or [] if isinstance(b, str)]
         return {'say': 'Here are the rest.', 'buttons': more + ['Back to the menu'], 'asButtons': True}
+    if label == 'Ask PsycheAI questions about myself':
+        asks = [b for b in kept_menu('ask') or [] if isinstance(b, str)]
+        return {'say': ASK_SAY, 'buttons': asks if asks and asks[-1] == 'Back to the menu' else asks + ['Back to the menu'], 'asButtons': True}
+    if label in ('WhatsApp chats', 'WhatsApp, Facebook and Messenger'):
+        wa = kept_menu('whatsapp') or {}
+        if wa.get('say'):
+            return dict(wa, asButtons=True)
+    if label == 'Delete everything':
+        return {'say': DELETE_SAY, 'buttons': ['Yes, delete everything', 'Cancel'], 'asButtons': True}
     if label == 'My data and privacy':
         last = read_first([LAST_COLLECT]) or {}
         lines = [DATA_HERE]
@@ -6191,9 +6227,7 @@ def call(tool, args, first=False):
         back = out.pop('returning', None)
         if isinstance(back, dict) and not first and read_first([REPORT, REPORT_KEPT]):
             out = back
-        more = next((o for o in out.get('options') or [] if isinstance(o, dict) and o.get('id') == 'more'), None)
-        if more and more.get('buttons'):
-            write_private([MENU], {'more': more['buttons'], 'at': int(time.time())})     # release 208: what "More" shows
+        keep_menu(out)          # releases 208-209: what More, Ask and the WhatsApp choices show, from this menu
     content = out.pop('content', None) if isinstance(out, dict) else None
     out = clean_result(with_pinned_guide(tool, args, out))
     files = [c for c in result.get('content', []) if c.get('type') == 'resource_link']
