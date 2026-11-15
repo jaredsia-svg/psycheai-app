@@ -4,6 +4,8 @@ process.env.NODE_ENV = 'test';
 process.env.PSYCHE_DEV = '1';
 // Psyche Pair is closed by default (lib/waitlist.js); these checks run it open, and its own block closes it.
 process.env.PSYCHE_PAIR = '1';
+// The tests' host, muse.example, stands for one of Meta's own (lib/oauth.js publicRedirectOk): a return there needs no tap.
+process.env.PSYCHE_PUBLIC_REDIRECT_HOSTS = 'muse.example';
 
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -1449,6 +1451,70 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
   }
   // The email sign-in, as a reviewer or another device uses it.
   process.env.PSYCHE_EMAIL_SIGNIN = '1';
+  {
+    // README "Ask before an unknown app", "Sign-in, tidied".
+    const wasEmailMode = process.env.PSYCHE_EMAIL_SIGNIN; delete process.env.PSYCHE_EMAIL_SIGNIN;      // the invisible sign-in, as production runs
+    const formPost = (path, data) => fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data), redirect: 'manual' });
+    const victim = store.createUser({ email: null, platform: 'muse' }).user;
+    const vCookie = oauth.accountCookie(victim.id).split(';')[0];
+    const evil = (await post('/oauth/register', { client_name: 'x', redirect_uris: ['https://evil.example/cb'] })).body;
+    const eVer = 'e'.repeat(20) + require('node:crypto').randomBytes(24).toString('base64url');
+    const eUrl = base + '/oauth/authorize?' + new URLSearchParams({ response_type: 'code', client_id: evil.client_id, redirect_uri: 'https://evil.example/cb', code_challenge: oauth.challengeOf(eVer), code_challenge_method: 'S256', state: 's' });
+    const asked = await fetch(eUrl, { redirect: 'manual', headers: { Cookie: vCookie } });
+    const askedHtml = await asked.text();
+    const askId = (/name="req" value="([^"]+)"/.exec(askedHtml) || [])[1] || '';
+    const notLogin = await formPost('/oauth/login', { req: askId, email: 'x@example.com' });
+    const tapped = await formPost('/oauth/consent', { req: askId });
+    const tappedTo = new URL(tapped.headers.get('location') || 'https://x/');
+    const eTok = await (await formPost('/oauth/token', { grant_type: 'authorization_code', code: tappedTo.searchParams.get('code'), client_id: evil.client_id, code_verifier: eVer })).json();
+    const twice = await formPost('/oauth/consent', { req: askId });
+    check('an app that returns anywhere but Meta\'s hosts gets no code without a tap (README "Ask before an unknown app"): a link to authorize, opened by someone whose browser knows their account, shows where the account would go and a button, and sends nothing back; the tap, once, sends the code; what was agreed can\'t be used as an email sign-in',
+      asked.status === 200 && !asked.headers.get('location') && /<b>evil\.example<\/b> is asking to use your PsycheAI account/.test(askedHtml) && /action="\/oauth\/consent"/.test(askedHtml) && askId.length > 20 &&
+        notLogin.status === 400 && tapped.status === 302 && tappedTo.origin === 'https://evil.example' && tappedTo.searchParams.get('state') === 's' &&
+        store.userByToken(eTok.access_token).id === victim.id && twice.status === 400, JSON.stringify({ asked: asked.status, tapped: tapped.status, twice: twice.status }));
+    // No account until the host swaps the code.
+    const before = store.allUsers().length;
+    const nVer = 'n'.repeat(20) + require('node:crypto').randomBytes(24).toString('base64url');
+    const nUrl = base + '/oauth/authorize?' + new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://muse.example/callback', code_challenge: oauth.challengeOf(nVer), code_challenge_method: 'S256', state: 'n' });
+    const first = await fetch(nUrl, { redirect: 'manual' });
+    await fetch(nUrl, { redirect: 'manual' });
+    const afterFetches = store.allUsers().length;
+    const nCookie = (first.headers.get('set-cookie') || '').split(';')[0];
+    const nTok = await (await formPost('/oauth/token', { grant_type: 'authorization_code', code: new URL(first.headers.get('location')).searchParams.get('code'), client_id: clientId, code_verifier: nVer })).json();
+    const made = store.userByToken(nTok.access_token);
+    check('a fetch of the connect address makes no account (README "Sign-in, tidied"): the id is set aside in the code and the cookie, the account is made when the host swaps the code, and the cookie names that same account',
+      afterFetches === before && store.allUsers().length === before + 1 && made && oauth.accountFromCookie(nCookie).id === made.id && made.platform === 'muse', JSON.stringify({ before, afterFetches, now: store.allUsers().length }));
+    // The ceiling on new accounts an hour, across the server.
+    const wasCeiling = process.env.PSYCHE_NEW_ACCOUNTS_PER_HOUR;
+    process.env.PSYCHE_NEW_ACCOUNTS_PER_HOUR = '1';
+    const fullSkill = require('../lib/skill.js').account('203.0.113.77');
+    const cVer = 'c'.repeat(20) + require('node:crypto').randomBytes(24).toString('base64url');
+    const cGo = await fetch(base + '/oauth/authorize?' + new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://muse.example/callback', code_challenge: oauth.challengeOf(cVer), code_challenge_method: 'S256' }), { redirect: 'manual' });
+    const fullTok = await formPost('/oauth/token', { grant_type: 'authorization_code', code: new URL(cGo.headers.get('location')).searchParams.get('code'), client_id: clientId, code_verifier: cVer });
+    if (wasCeiling === undefined) delete process.env.PSYCHE_NEW_ACCOUNTS_PER_HOUR; else process.env.PSYCHE_NEW_ACCOUNTS_PER_HOUR = wasCeiling;
+    check('new accounts have a ceiling an hour across the whole server, whatever address asks: past it the skill\'s account and a new connector account are refused, said as busy, and nothing is made',
+      fullSkill.status === 429 && /busy/.test(fullSkill.body.error) && fullTok.status === 429 && store.allUsers().length === before + 1, JSON.stringify({ skill: fullSkill.status, tok: fullTok.status }));
+    // What has lapsed is cleared.
+    const now0 = Date.now();
+    store.kvSet('oauthRequests', 'old-req', { expiresAt: now0 - 1 });
+    store.kvSet('oauthRequests', 'live-req', { expiresAt: now0 + 60000 });
+    store.kvSet('oauthCodes', 'old-code', { expiresAt: now0 - 1 });
+    store.kvSet('loginRate', 'old-rate', [now0 - 2 * 3600000]);
+    store.kvSet('loginRate', 'live-rate', [now0 - 1000]);
+    store.kvSet('oauthClients', 'c_never', { client_id: 'c_never', redirect_uris: ['https://a.example/cb'], sweepable: true, client_id_issued_at: Math.floor((now0 - 8 * 86400000) / 1000) });
+    store.kvSet('oauthClients', 'c_used', { client_id: 'c_used', redirect_uris: ['https://a.example/cb'], sweepable: true, usedAt: now0, client_id_issued_at: Math.floor((now0 - 8 * 86400000) / 1000) });
+    store.kvSet('oauthClients', 'c_before', { client_id: 'c_before', redirect_uris: ['https://a.example/cb'], client_id_issued_at: 1 });
+    const oldTok = store.issueToken(victim.id, 'access', null, now0 - 31 * 86400000);
+    oauth.sweep(now0);
+    const has = (t, k) => Boolean(store.kvGet(t, k));
+    const oddId = await fetch(base + '/oauth/authorize?' + new URLSearchParams({ response_type: 'code', client_id: 'constructor', redirect_uri: 'https://evil.example/cb', code_challenge: oauth.challengeOf(eVer), code_challenge_method: 'S256' }), { redirect: 'manual' });
+    check('what has lapsed is cleared each hour (README "Sign-in, tidied"): sign-in requests, one-time codes, code counts and tokens past their time, and an app registered from now on that never signed anyone in for a week; a live one, a used app and an app from before stay; the evil app that signed someone in is marked used; an app ID like "constructor" is refused cleanly',
+      !has('oauthRequests', 'old-req') && has('oauthRequests', 'live-req') && !has('oauthCodes', 'old-code') && !has('loginRate', 'old-rate') && has('loginRate', 'live-rate') &&
+        !has('oauthClients', 'c_never') && has('oauthClients', 'c_used') && has('oauthClients', 'c_before') && !store.userByToken(oldTok) && store.userByToken(eTok.access_token) &&
+        Boolean(store.kvGet('oauthClients', evil.client_id).usedAt) && oddId.status === 400, JSON.stringify({ odd: oddId.status }));
+    if (wasEmailMode !== undefined) process.env.PSYCHE_EMAIL_SIGNIN = wasEmailMode;
+    store.kvDel('oauthRequests', 'live-req'); store.kvDel('loginRate', 'live-rate'); store.kvDel('oauthClients', 'c_used'); store.kvDel('oauthClients', 'c_before');
+  }
   const noPkce = await fetch(base + '/oauth/authorize?' + new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://muse.example/callback', state: 's' }), { redirect: 'manual' });
   check('authorize without PKCE bounces back with an error', noPkce.status === 302 && /error=invalid_request/.test(noPkce.headers.get('location')));
   const wrongUri = await fetch(base + '/oauth/authorize?' + new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://evil.example/cb', code_challenge: challenge, code_challenge_method: 'S256' }));

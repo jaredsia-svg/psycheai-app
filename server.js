@@ -5,7 +5,7 @@
 //   GET  /.well-known/oauth-protected-resource, /.well-known/oauth-authorization-server
 //   POST /oauth/register      dynamic client registration (lib/oauth.js)
 //   GET  /oauth/authorize     sign-in: email, then a 6-digit code
-//   POST /oauth/login, /oauth/verify, /oauth/token
+//   POST /oauth/login, /oauth/verify, /oauth/consent, /oauth/token
 //   GET  /read/:id            the private read as a page to save as PDF (lib/reads.js)
 //   GET  /card/:token.png     a card as an image, for the chat (lib/cardimage.js)
 //   GET  /card/:token.pdf     a Sync as PsycheAI's Sync PDF (lib/sync.js pdfFor)
@@ -287,6 +287,7 @@ async function route(req, res) {
     }
     if (url.pathname === '/oauth/login' && req.method === 'POST') return sendResult(res, oauth.login(await readParams(req)));
     if (url.pathname === '/oauth/verify' && req.method === 'POST') return sendResult(res, oauth.verify(await readParams(req)));
+    if (url.pathname === '/oauth/consent' && req.method === 'POST') return sendResult(res, oauth.consent(await readParams(req)));
     if (url.pathname === '/oauth/token' && req.method === 'POST') {
       const params = await readParams(req);
       await oauth.loadMetadataClient(params.get('client_id') || '');
@@ -515,6 +516,7 @@ async function main() {
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
   setInterval(() => {
+    oauth.sweep();
     chat.sweep();
     reads.sweep();
     psyche.sweep();
