@@ -820,7 +820,7 @@ function signup(email, d) {
     // Release 199: no "Let <name> know" (Show our results and news find it), and the daily check is one line: how to stop an old one.
     !/Let <their first name> know/.test(core) && /- "Stop the Sync check": delete the reminder named "PsycheAI Sync check", if there is one\./.test(core) && !/runs python3 bin\/psyche\.py sync-check/.test(core) && !/Check daily for me|offerDailyCheck/.test(core) &&
     !/Want me to check each morning|"Yes, every morning"/.test(core) &&
-    /When the message carries a friend's Psyche link \(.*\/sync\/<code>\), run `python3 bin\/psyche\.py sync-preview <the link>` once it's installed, which looks at the link without syncing and keeps it here, so What's next after their card starts with "Sync with <their name>" by itself\. When status says `hasPsyche`: true, their Psyche is already made, so there is no introduction and no new read: reply with sync-preview's nextStep as it is/.test(require('../lib/skill.js').skillMd()) &&
+    /When the message carries a friend's Psyche link \(.*\/sync\/<code>\), run `python3 bin\/psyche\.py sync-preview <the link>` once it's installed, which looks at the link without syncing and keeps it here, so What's next after their card starts with "Sync with <their name>" by itself\. When its result has a `card` \(their friend's Psyche Card as a picture, which the friend shared with their link\), the welcome starts with its `cardSay` and that picture, above the introduction\. When status says `hasPsyche`: true, their Psyche is already made, so there is no introduction and no new read: reply with sync-preview's nextStep as it is \(its say names the friend; its buttons are "Sync with <their name>" and "Not now"\), under its `card` picture when it has one\./.test(require('../lib/skill.js').skillMd()) &&
     /the first visit comes first/.test(core) &&
     /unless it carries a friend's Psyche link and status says `hasPsyche`: true/.test(require('../lib/skill.js').skillMd()));
   check('nothing the host is handed sets its role: no "You are…" in the instructions, the guides or a tool description',
@@ -1825,7 +1825,8 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
   {
     const ideas = mcp.askIdeas();
     const ask = require('../lib/instructions.js').CORE_MUSE;
-    check('Ask PsycheAI offers four of the site\'s own questions as buttons, a different four each time', ideas.length === 4 && new Set(ideas).size === 4 && ideas.every(q => mcp.ASK_IDEAS.includes(q)) &&
+    check('Ask PsycheAI offers four questions as buttons, a different four each time: a decision to weigh up always among them (README "A decision, under Ask"), the rest the site\'s own', ideas.length === 4 && new Set(ideas).size === 4 && ideas.every(q => q === mcp.ASK_DECIDE || mcp.ASK_IDEAS.includes(q)) && ideas[0] === mcp.ASK_DECIDE && mcp.ASK_DECIDE === 'Help me make a decision I\'m weighing up' && mcp.askIdeas(4, () => 0, ['X'])[1] === mcp.ASK_DECIDE &&
+      new RegExp('ASK_DECIDE = "' + mcp.ASK_DECIDE + '"').test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
       !mcp.ASK_IDEAS.some(q => /regret/i.test(q)) && mcp.ASK_IDEAS.length === 10 && /show askButtons \(from start's ask option, or from publish_psyche\) as buttons, one each: its questions, then "Back to the menu"/.test(ask) &&
       mcp.askIdeas(4, () => 0).join() !== mcp.askIdeas(4, () => 0.99).join() &&
       mcp.askIdeas(4, () => 0, ['The Quiet Fixer'])[0] === 'Where does "The Quiet Fixer" come from in me, and how do I make it work for me?' && mcp.askIdeas(4, () => 0, ['X']).length === 4);
@@ -2477,6 +2478,11 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
       /Only when they Sync does anything of theirs leave: their card summary \(the few lines on their Psyche Card, their scores on the ten motivations, and their daily rhythm: what share of the posts, comments and messages they wrote falls in each part of the day and on weekends, counted from their digest\) and the written Sync, both locked here under the Sync link's code before they're sent, so PsycheAI keeps and passes them on but can't read them/.test(skillMd) &&
       /A result's `file` is a file saved here for the chat \(a Sync's page\): attach it\./.test(skillMd),
       JSON.stringify(skillState.syncPage));
+    check('a friend\'s card first (README "A friend\'s card first"): sync-preview gives the friend\'s card as a picture drawn here, with its line only when there is no Psyche yet, and never their own link\'s',
+      ((E) => E && E.preview && (!E.preview.card || /^out\/syncs\/Psyche Card from [^/]+\.png$/.test(E.preview.card)) && !('card' in (E.ownPreview || {})) &&
+        (E.preview.hasPsyche ? !('cardSay' in E.preview) : !E.preview.card || /sent you their Psyche Card\. Make yours to see how you two sync\.$/.test(E.preview.cardSay)) &&
+        /pic = friend_card_file\(card, name\)\n    if pic:\n        out\['card'\] = pic\n        if not has:\n            out\['cardSay'\]/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')))(skillState.e2e),
+      JSON.stringify({ card: skillState.e2e && skillState.e2e.preview && skillState.e2e.preview.card }));
     check('a friend\'s link is named before anything is synced (sync-preview: their name and character, and the reply with "Sync with <name>"), their own link says so, sync_with gives what get_sync gives with how to save it, the answer file goes once saved, and a new Sync comes as its own page from the morning check and from My Syncs, the same page the friend got (README "One call to a Sync", "A new Sync, as its own page")',
       ((E) => E && E.preview && E.preview.own === false && E.preview.with === 'Mei' && E.preview.character === 'Mulan' && E.preview.hasPsyche === true &&
         E.preview.nextStep && E.preview.nextStep.say === "Mei sent you their Psyche link. You already have your Psyche, so you can sync straight away.\n\nTo make it, your Psyche Card, plus your motivation scores and when in the day you're active, is shared with your friend, locked so PsycheAI can't read it. A Sync never sends your report or your messages to your friend or anyone else." && JSON.stringify(E.preview.nextStep.buttons) === '["Sync with Mei","Not now"]' &&
@@ -3023,6 +3029,30 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
         !/ACC1|T0|T1|T2|U0|Kai|Ana|Jun|Saturday/.test(raw) && (fsx.statSync(pathx.join(tmp, 'digest', 'last-collect.json')).mode & 0o777) === 0o600 &&
         /bin\/psyche\.py last-collect +# what the last collect read/.test(skillMd), JSON.stringify(kept).slice(0, 400));
       fsx.rmSync(tmp, { recursive: true, force: true });
+    }
+    check('no guess widget on a first run (README release 210: built, then taken out before it shipped)', skillState.firstRun && !('guessFile' in skillState.firstRun) && !/guessFile/.test(skillMd));
+    {
+      // README "The ring is labelled", "No empty box in What you share", "My Syncs invites the next one".
+      const got = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `import importlib.util, json, sys, re
+spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+me, them = {'firstName': 'Mei', 'interests': ['Reading'], 'values': ['Craft']}, {'firstName': 'Ana', 'interests': ['Reading'], 'values': ['Care']}
+rep = {'summary': 'S.', 'align': [], 'differ': [], 'howToPartner': {}, 'caveats': ''}
+one, none = m._sync_shared(rep, me, them, 'Mei', 'Ana'), m._sync_shared(rep, dict(me, interests=[]), them, 'Mei', 'Ana')
+inv = (m.invite_lead('Mulan', 'Mei'), m.invite_text('https://app.psycheai.io/sync#AbCdEfGhIjKlMnOpQrStUv', 'Mulan', 'Mei'))
+e = [('u_x', {'report': rep, 'cards': {'me': me, 'them': them}, 'at': 0})]
+bk, plain, first = m.sync_book_html(e, None, inv), m.sync_book_html(e), m.sync_book_html([], None, inv)
+src = open(sys.argv[1], encoding='utf-8').read()
+print(json.dumps({'one': 'class="shared one"' in one and 'Interests' in one and 'Values' not in one and 'None in common' not in one, 'none': none == '',
+                  'invite': 'Sync with another friend' in bk and inv[1] in bk and ('data-copy="%s' % inv[0][:30]) in bk and m.SYNC_SHARES.replace("'", '&#x27;') in bk,
+                  'plain': 'class="invite"' not in plain and 'Install' not in plain, 'first': 'Sync with a friend</h2>' in first,
+                  'ring': "'CONFIDENCE', 16, 700" in src}))`,
+        new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
+      check('the card\'s ring is labelled CONFIDENCE in both drawings (README "The ring is labelled"), and never on a match card, whose ring is the fit',
+        got.ring && />CONFIDENCE<\/text>/.test(require('../lib/cardimage.js').cardSvg({ stage: 'psyche', firstName: 'Mei', confidence: 80 })) && !/CONFIDENCE/.test(require('../lib/cardimage.js').cardSvg({ stage: 'picked', firstName: 'Mei', fit: 80, confidence: 80 })), JSON.stringify(got));
+      check('What you share leaves an empty box out (README "No empty box in What you share"): one box at full width, nothing when neither has any, and never "None in common yet"',
+        got.one && got.none, JSON.stringify(got));
+      check('My Syncs invites the next one (README "My Syncs invites the next one"): their own invite, both lines, with a Copy button and what a Sync shares, only when they have a link that still works',
+        got.invite && got.plain && got.first, JSON.stringify(got));
     }
     check('first-run: the account, start and both account lists in one call: step 0\'s say (its messages question already sent), the account question with one "@name" button each, business accounts left out, each button\'s accounts as data (no instruction rides in a tool result: one did, and Muse\'s safety check flagged it), and step 1\'s line word for word; a Fresh Psyche\'s accounts put last time\'s account first, from a hash of its ID; SKILL.md opens with it, messages question first, and says how to build the collect command',
       ((f) => f && /^I'm PsycheAI/.test(f.say || '') && f.question === 'Which account should I read?' && JSON.stringify(f.buttons.map(b => b.label)) === '["@mei.t (Recommended)","@mei.alt"]' &&
@@ -4726,12 +4756,12 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
   check('the page\'s buttons never offer to end it (Ask about our read, Our 28-day practice, Write our read again, Back to the menu); the page says how, with "End Psyche Together" to copy',
     JSON.stringify(tg.saved.buttons) === '["Ask about our read","Our 28-day practice","Write our read again","Back to the menu"]' && /<code>End Psyche Together<\/code><button type="button" data-copy="End Psyche Together">Copy<\/button>/.test(htmlA) &&
       /End is never offered as a button/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')), JSON.stringify(tg.saved.buttons));
-  check('the read is lean (README "Psyche Together, release 24"): each chapter opens with its takeaway, holds its truth when one belongs there (the map marks it), its pillars as compact rows, the story with dated moments as pills, and private advice as a 🔒 box where it belongs; no For you section of its own and no separate truths; one section open at a time, as the Psyche Report; a closed section has no coloured top edge; Worth attention in dark red; a sentence said twice, or "the two of them", is sent back',
+  check('the read is lean (README "Psyche Together, release 24"): each chapter opens with its takeaway, holds its truth when one belongs there (the map marks it), its pillars as compact rows, the story with dated moments as pills, and private advice as a 🔒 box where it belongs; no For you section of its own and no separate truths; one section open at a time, as the Psyche Report; a closed section has no coloured top edge; the lowest level shown as "Room to grow" in amber with a seedling, never red or "!" (README "Psyche Together, release 78"); a sentence said twice, or "the two of them", is sent back',
     (htmlA.match(/<div class="take">/g) || []).length === 5 && !/class="truth"/.test(htmlA) &&
       /<h3>Three things that stand out about you both<\/h3><div class="std"><div class="th"><span class="n">1<\/span><span class="lbl">Your biggest strength as a couple<\/span><\/div><h4>The strength<\/h4>/.test(htmlA) && /<a class="more" href="#close">More in Care &amp; Connection ›<\/a>/.test(htmlA) && /class="area" id="close-appreciation"/.test(htmlA) && /class="evp"/.test(htmlA) && !/When it showed/.test(htmlA) && !/Three truths/.test(htmlA) &&
       /class="minebox"><span class="lbl">🔒 Just for you · Ana never sees this/.test(htmlA) && /One question first/.test(htmlA.slice(htmlA.indexOf('id="disagree"'), htmlA.indexOf('id="plan"'))) &&
       /function only\(p\)\{parts\.forEach\(function\(q\)\{if\(q!==p\)set\(q,false\);\}\);/.test(htmlA) && /\.part\{background:#fff;border:1px solid #e6dcec;border-radius:20px;/.test(htmlA) && /\.part\.open\{border-top:4px solid var\(--c\)\}/.test(htmlA) &&
-      /\.lv\.Worth-attention,\.lv\.Worth-asking-each-other,\.lv\.Talk-about\{background:#fbeeed;color:#a8322a\}/.test(htmlA) &&
+      /\.lv\.Worth-attention,\.lv\.Worth-asking-each-other,\.lv\.Talk-about\{background:#fdf3e1;color:#8a5a12\}/.test(htmlA) && !/\.(lv|sv|pd|k|lw|tl|vd|ck)\.[\w.,-]*\{[^}]*#(b3261e|a8322a)/.test(htmlA) && !/Worth attention/.test(htmlA) && !/<em>!<\/em>/.test(htmlA) &&
       tg.dupProblems.some(p => /^said twice/.test(p)) && tg.themProblems.some(p => /the two of them/.test(p)), JSON.stringify([tg.dupProblems, tg.themProblems]).slice(0, 400));
   const chapterParts = ['close', 'secure', 'disagree', 'life', 'future'].map(id => {
     const from = htmlA.indexOf('id="' + id + '"'), sec = htmlA.slice(from, htmlA.indexOf('</section>', from));

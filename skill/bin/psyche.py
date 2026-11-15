@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 209
+RELEASE = 210
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1034,6 +1034,7 @@ SYNC_CSS = '''
 .wk b{font-size:18px;color:#241a2e;margin-right:5px}.wk div div{display:inline}
 .wk em{display:block;font-style:normal;margin-top:2px}
 .shared{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.shared.one{grid-template-columns:minmax(0,1fr)}
 .sh{padding:12px;border-radius:14px;background:#eef8f2;border:1px solid #cfe9db}
 .sh p{margin:0 0 8px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#22654a}
 .sh ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
@@ -1188,10 +1189,12 @@ def _sync_shared(report, a, b, na, nb):
         items = [x for x in _l(items) if isinstance(x, dict) and x.get('theme')]
         rows = ''.join('<li><b>%s</b>%s</li>' % (_e(x['theme']), '' if str(x.get('a')).lower() == str(x.get('b')).lower() == str(x['theme']).lower() else
                        '<span><i class="ia">%s</i> %s</span><span><i class="ib">%s</i> %s</span>' % (_e(na), _e(x.get('a')), _e(nb), _e(x.get('b')))) for x in items)
-        return '<div class="sh"><p>%s</p><ul>%s</ul></div>' % (title, rows or '<li class="none">None in common yet</li>')
+        # An empty box is left out (README "No empty box in What you share"): "None in common yet" read as a mark against the pair.
+        return '<div class="sh"><p>%s</p><ul>%s</ul></div>' % (title, rows) if rows else ''
     if not (_l(common.get('interests')) or _l(common.get('values'))):
         return ''
-    return '<div class="shared">' + column('Interests', common.get('interests')) + column('Values', common.get('values')) + '</div>'
+    cols = [c for c in (column('Interests', common.get('interests')), column('Values', common.get('values'))) if c]
+    return '<div class="shared%s">%s</div>' % (' one' if len(cols) == 1 else '', ''.join(cols)) if cols else ''
 
 
 def _sync_points(items, lead):
@@ -1380,6 +1383,10 @@ def prune_syncs(ids):
 
 
 BOOK_CSS = """
+.invite{margin:18px 0 6px}.invite h2{margin:0 0 2px;font-size:20px;letter-spacing:-.01em}.invite>.soft{margin:0 0 12px;font-size:13.5px}
+.inv{background:#fff;border:1px solid #ece4f1;border-radius:18px;padding:14px;margin-bottom:10px}.inv p{margin:0 0 10px;font-size:14.5px;line-height:1.45}
+.inv code{display:block;padding:10px 12px;border-radius:12px;background:#f6f1fa;font-size:13px;line-height:1.5;word-break:break-word;white-space:pre-wrap}
+.inv button{margin-top:12px;width:100%;padding:11px;border-radius:999px;border:1.5px solid #7b3fa0;background:#7b3fa0;color:#fff;font:inherit;font-weight:700;font-size:14.5px}
 .empty{display:flex;gap:16px;align-items:center;padding:18px;border-radius:20px;background:#fff;box-shadow:0 6px 20px rgba(91,42,134,.1)}
 .empty img{width:84px;border-radius:12px;box-shadow:0 4px 12px rgba(91,42,134,.2)}
 .empty p{margin:0;font-size:16px;line-height:1.45;color:#5b4a6b}.empty b{color:#2a1238}
@@ -1404,8 +1411,9 @@ var f=document.getElementById('find'),rows=[].slice.call(document.querySelectorA
 if(f)f.addEventListener('input',function(){var q=f.value.trim().toLowerCase(),n=0;rows.forEach(function(r){var hit=!q||r.getAttribute('data-name').indexOf(q)>=0;r.hidden=!hit;if(hit)n++;});if(none)none.hidden=n>0;});})();"""
 
 
-def sync_book_html(entries, own=None):
-    """My Syncs: entries are the kept Syncs, newest first; own is their card picture, embedded once."""
+def sync_book_html(entries, own=None, invite=None):
+    """My Syncs: entries are the kept Syncs, newest first; own is their card picture, embedded once; invite is their
+    own (lead, line to paste), for the next friend (README "My Syncs invites the next one")."""
     rows = []
     for sid, e in entries:
         cards = e.get('cards') or {}
@@ -1426,11 +1434,18 @@ def sync_book_html(entries, own=None):
     if not n:
         rows = ['<div class="empty">' + ('<img alt="Your Psyche Card" data-me="1" src="">' if own else '') +
                 '<p><b>No Syncs yet.</b> When a friend syncs with you, they\'ll appear here.</p></div>']
+    # Their own invite, to copy for the next friend: the same two lines "Sync with a friend" gives in the chat, sent by them.
+    more = ''
+    if invite and invite[1]:
+        both = (invite[0] + '\n\n' if invite[0] else '') + invite[1]
+        more = ('<section class="invite"><h2>Sync with %s</h2><p class="soft">Copy your invite and send it to a friend. They paste its last line into their Muse app.</p>'
+                '<div class="inv">%s<code>%s</code><button type="button" data-copy="%s">Copy</button></div><p class="soft">%s</p></section>'
+                % ('another friend' if n else 'a friend', '<p>%s</p>' % _e(invite[0]) if invite[0] else '', _e(invite[1]), _e(both), _e(SYNC_SHARES)))
     mecard = '<img id="mecard" alt="" hidden src="%s">' % _img_src(own) if own else ''
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>'
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<title>My Syncs</title><style>' + W_CSS + SYNC_CSS + BOOK_CSS + '</style></head><body><div class="wrap">' + banner + '<div style="height:14px"></div>' + find
-            + ''.join(rows) + '<p class="none" id="none" hidden>No Sync with that name.</p><footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace, from the Syncs kept here.</footer></div>'
+            + ''.join(rows) + '<p class="none" id="none" hidden>No Sync with that name.</p>' + more + '<footer><b>PsycheAI</b> · psycheai.io<br>This file was made in your own Muse workspace, from the Syncs kept here.</footer></div>'
             + mecard + viewer + '<script>' + BOOK_JS + SYNC_JS + COPY_JS + '</script></body></html>')
 
 
@@ -1470,6 +1485,20 @@ def book_path():
     return max((os.path.join(SYNC_DIR, f) for f in got), key=os.path.getmtime) if got else None
 
 
+def own_invite():
+    """Their own invite as (lead, line to paste), from the link they last made while it still works, or None."""
+    try:
+        now = int(time.time() * 1000)
+        own = [x for x in e2e_codes() if x.get('own') and now - int(x.get('at') or 0) < LINK_DAYS * 86400000]
+        card = _my_sync_card() if own else None
+        if not card:
+            return None
+        link = BASE + '/sync#' + own[-1]['code']
+        return invite_lead(card.get('character'), card.get('firstName')), invite_text(link, card.get('character'), card.get('firstName'))
+    except Exception:
+        return None
+
+
 def build_book():
     """Make My Syncs again from what's kept: its path, or None when there's no Sync (and the old book goes)."""
     s = sync_store()
@@ -1492,7 +1521,7 @@ def build_book():
         pass
     try:
         os.makedirs(SYNC_DIR, exist_ok=True)
-        return write_versioned(SYNC_DIR, book_base(), sync_book_html(entries, own))
+        return write_versioned(SYNC_DIR, book_base(), sync_book_html(entries, own, own_invite()))
     except OSError:
         return None
 
@@ -4752,6 +4781,8 @@ def draw_card(card, out_path, art=None):
         if v:
             p.draw.arc([(cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k], -90, -90 + 360 * v / 100, fill=p.rgba(C['accent']), width=7 * k)
         p.text(cx, cy + 10, str(v), 28, 700, C['ink'], anchor='ms')
+        # The ring says what it is (README "The ring is labelled"): a shared card is seen by people who never saw the report.
+        p.text(cx - r - 14, cy + 6, 'CONFIDENCE', 16, 700, C['inkSoft'], anchor='rs', spacing=16 * 0.18)
     y += 96 + S['gap']
 
     # The hero: kicker, name, headline and write-up left of the character's scene.
@@ -5644,6 +5675,20 @@ def sync_label(name):
     return 'Sync with %s' % name if name and name != 'Your friend' else 'Sync with my friend'
 
 
+def friend_card_file(card, name):
+    """A friend's card as a picture in out/syncs, or None when it can't be drawn (no Pillow, no card art, no character)."""
+    if not isinstance(card, dict) or not card.get('character'):
+        return None
+    try:
+        os.makedirs(SYNC_DIR, exist_ok=True)
+        who = re.sub(r'\s+', ' ', _letters(str(name or '')).strip())[:30] or 'A friend'
+        path = os.path.join(SYNC_DIR, 'Psyche Card from %s.png' % who)
+        draw_card(card, path)
+        return os.path.relpath(path, HERE)
+    except Exception:
+        return None
+
+
 def sync_preview(link):
     """A friend's Psyche link, looked at before anything is synced (README "A friend's link, named first"):
     whose it is, from their locked card, and the reply to give. Nothing is paired or sent about them."""
@@ -5666,6 +5711,13 @@ def sync_preview(link):
     # Kept here (never sent), so What's next after their card starts with "Sync with <name>" by itself and
     # sync-with needs no link: nothing to remember across a helper or a long read.
     write_private([SYNC_PENDING], {'link': BASE + '/sync#' + code, 'name': name})
+    # Their friend's card, shown straight away (README "A friend's card first"): the friend chose to share it with whoever
+    # has their link, and it is drawn here from the locked card, so the welcome starts with something to look at.
+    pic = friend_card_file(card, name)
+    if pic:
+        out['card'] = pic
+        if not has:
+            out['cardSay'] = '%s sent you their Psyche Card. Make yours to see how you two sync.' % (name if name != 'Your friend' else 'A friend')
     if has:
         label = sync_label(name)
         out['nextStep'] = _step('%s sent you their Psyche link. You already have your Psyche, so you can sync straight away.\n\n%s' % (name if name != 'Your friend' else 'A friend', SYNC_SHARES),
@@ -6122,11 +6174,14 @@ ASK_IDEAS = [
 ]
 
 
+ASK_DECIDE = "Help me make a decision I'm weighing up"     # lib/mcp.js ASK_DECIDE: always among them (README "A decision, under Ask")
+
+
 def ask_ideas(patterns=None, n=4):
     pool = list(ASK_IDEAS)
     random.shuffle(pool)
     own = ['Where does "%s" come from in me, and how do I make it work for me?' % str(patterns[0])[:40]] if patterns else []
-    return (own + pool)[:n]
+    return (own + [ASK_DECIDE] + pool)[:n]
 
 
 SYNC_SENDS_CARD = ('sync_link', 'sync_with', 'get_syncs', 'get_sync', 'save_sync')

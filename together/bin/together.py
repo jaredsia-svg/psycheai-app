@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 77
+RELEASE = 78
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -3370,12 +3370,12 @@ p{margin:0 0 10px}
 .tile:only-child{grid-column:1/-1}
 .lv.Strong,.lv.Aligned,.lv.Happier-than-you-each-think,.lv.About-right{background:#e3f4ec;color:var(--sage)}
 .lv.Steady,.lv.Not-decided-yet{background:#fdf1e2;color:var(--amber)}
-.lv.Worth-attention,.lv.Worth-asking-each-other{background:#fbe7e5;color:#b3261e}.lv.Talk-about{background:#f2e9f8;color:var(--plum)}
+.lv.Worth-attention,.lv.Worth-asking-each-other{background:#fdf3e1;color:#8a5a12}.lv.Talk-about{background:#f2e9f8;color:var(--plum)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
 .stat{padding:14px;border-radius:16px;background:#fff;border:1px solid #ece2f2;box-shadow:0 4px 14px rgba(70,20,100,.06)}
 .stat .lbl{margin-bottom:8px}
 .sv{display:flex;align-items:flex-start;gap:7px;font-size:16.5px;font-weight:800;line-height:1.25}.sv:before{content:"";flex:none;width:10px;height:10px;margin-top:5px;border-radius:50%;background:currentColor}
-.sv.Strong,.sv.Happier-than-you-each-think,.sv.About-right{color:var(--sage)}.sv.Steady{color:#2b5d8f}.sv.Worth-attention,.sv.Worth-asking-each-other{color:#b3261e}
+.sv.Strong,.sv.Happier-than-you-each-think,.sv.About-right{color:var(--sage)}.sv.Steady{color:#2b5d8f}.sv.Worth-attention,.sv.Worth-asking-each-other{color:#8a5a12}
 .map{display:flex;flex-direction:column;gap:10px;margin:8px 0}
 .mch{display:block;text-decoration:none;color:var(--ink);border:1px solid #ece2f2;border-left:5px solid var(--c);border-radius:16px;padding:12px 12px 12px 14px;background:linear-gradient(90deg,var(--t),#fff 60%)}
 .mhd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -3472,9 +3472,9 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}td,th{te
 .dots{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px}
 .pd{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:650;color:var(--soft)}.pd:before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
 .pd em{font-style:normal;font-size:11px;color:var(--mute)}
-.pd.Strong{color:var(--sage)}.pd.Steady{color:#2b5d8f}.pd.Worth-attention{color:#b3261e}
+.pd.Strong{color:var(--sage)}.pd.Steady{color:#2b5d8f}.pd.Worth-attention{color:#8a5a12}
 .tb{font-size:11px;font-weight:800;color:#fff;background:var(--k);border-radius:999px;padding:1px 7px}
-.key{font-size:11.5px}.key .k{width:9px;height:9px;border-radius:50%}.k.Strong{background:var(--sage)}.k.Steady{background:#2b5d8f}.k.Worth-attention{background:#b3261e}
+.key{font-size:11.5px}.key .k{width:9px;height:9px;border-radius:50%}.k.Strong{background:var(--sage)}.k.Steady{background:#2b5d8f}.k.Worth-attention{background:#8a5a12}
 .take{margin:12px 0;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#f3e9f8,#fdf0f6);border:1px solid #ead9f1}
 .take .lbl{color:var(--c)}.take p{margin:4px 0 0;font-size:16.5px;font-weight:700;line-height:1.4}
 .prow{margin:10px 0;padding:12px 14px;border-radius:14px;border:1px solid #efe6f4;background:#fdfbfe}
@@ -3522,8 +3522,8 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .lv{font-weight:650}.lv:before{display:none}
 .lv.Strong,.lv.Aligned,.lv.Happier-than-you-each-think,.lv.About-right{background:#eef6f1;color:#2f6f53}
 .lv.Steady{background:#eaf1f9;color:#2b5d8f}.lv.Not-decided-yet{background:#f3f0f5;color:#5a4f66}
-.lv.Worth-attention,.lv.Worth-asking-each-other,.lv.Talk-about{background:#fbeeed;color:#a8322a}
-.lw{font-weight:650}.lw.Strong,.lw.Happier-than-you-each-think,.lw.About-right{color:#2f6f53}.lw.Steady{color:#2b5d8f}.lw.Aligned{color:#2f6f53}.lw.Talk-about{color:#a8322a}.lw.Worth-attention,.lw.Worth-asking-each-other{color:#a8322a}
+.lv.Worth-attention,.lv.Worth-asking-each-other,.lv.Talk-about{background:#fdf3e1;color:#8a5a12}
+.lw{font-weight:650}.lw.Strong,.lw.Happier-than-you-each-think,.lw.About-right{color:#2f6f53}.lw.Steady{color:#2b5d8f}.lw.Aligned{color:#2f6f53}.lw.Talk-about{color:#8a5a12}.lw.Worth-attention,.lw.Worth-asking-each-other{color:#8a5a12}
 .callout,.callout.ask,.callout.try,.callout.key2,.truth,.take,.minebox,.psy,.two>div,.pair2>div{background:#faf7fb;border:1px solid #eee6f3;box-shadow:none}
 .callout .lbl,.callout.ask .lbl,.callout.try .lbl,.callout.key2 .lbl,.truth .lbl,.take .lbl,.psy .lbl{color:var(--c)}
 .callout.key2{font-weight:500}.minebox{border-style:dashed}
@@ -3557,7 +3557,7 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .st{margin:12px 0 0}.st .sl{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin-bottom:4px}.st>p{margin:4px 0;font-size:14.5px}
 .evd{list-style:none;margin:4px 0;padding:0}.evd li{display:grid;grid-template-columns:24px 1fr;gap:6px;margin:6px 0;font-size:14.5px;line-height:1.45}.evd i{font-style:normal}
 .st.means{border-top:1px solid #f1ebf5;padding-top:10px}.vd{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;background:#f3ecf8;color:#7b3fa0}
-.vd.matches{background:#eaf1f9;color:#2b5d8f}.vd.better{background:#eef6f1;color:#2f6f53}.vd.closer{background:#fbeeed;color:#a8322a}
+.vd.matches{background:#eaf1f9;color:#2b5d8f}.vd.better{background:#eef6f1;color:#2f6f53}.vd.closer{background:#fdf3e1;color:#8a5a12}
 .nx{margin:4px 0;padding-left:18px}.nx li{margin:6px 0;font-size:14.5px}.nx li b{display:block}.nx li span{display:block;font-size:13px;color:var(--soft)}
 .psyd{margin-top:16px;border-top:1px solid #f2ecf5;padding-top:10px}.psyd summary{cursor:pointer;font-weight:750;font-size:14px;color:#7b3fa0}.psyd summary .soft{font-weight:500;font-size:12.5px;margin-left:6px}
 .map .ws{display:block;margin:10px 0;padding:14px;border:1px solid #eee6f3;border-radius:16px;background:#fff;text-decoration:none;color:var(--ink)}
@@ -3566,7 +3566,7 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .tl{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border-radius:12px;background:#f6f2f9;border-left:0}.tl small{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
 .tl b{font-size:14.5px;font-weight:750;color:#5a4f66}.tl b:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:middle}
 .tl.Strong,.tl.Aligned{background:#eef6f1}.tl.Strong b,.tl.Aligned b{color:#2f6f53}.tl.Steady{background:#eaf1f9}.tl.Steady b{color:#2b5d8f}
-.tl.Worth-attention,.tl.Talk-about{background:#fbeeed}.tl.Worth-attention b,.tl.Talk-about b{color:#a8322a}.tl.Info{background:#f3ecf8}.tl.Info b{color:#7b3fa0}
+.tl.Worth-attention,.tl.Talk-about{background:#fdf3e1}.tl.Worth-attention b,.tl.Talk-about b{color:#8a5a12}.tl.Info{background:#f3ecf8}.tl.Info b{color:#7b3fa0}
 .ws .tk2{margin:6px 0 0;font-size:13.5px;color:var(--soft)}
 .flow{display:grid;grid-template-columns:1fr 18px 1fr;gap:6px;align-items:center;margin:8px 0;padding:10px 12px;border-radius:12px;background:#faf7fb;border:1px solid #eee6f3}
 .flow small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}.flow b{font-size:14px;font-weight:650}.flow>i{font-style:normal;color:var(--mute);text-align:center}
@@ -3599,7 +3599,7 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}.nums>div{padding:10px 12px;border-radius:12px;background:#f4f8fc;border:1px solid #e3ecf6}
 .nums b{display:block;font-size:19px;font-weight:800;color:#2b5d8f;line-height:1.2}.nums span{display:block;font-size:12.5px;color:var(--soft);margin-top:3px;line-height:1.35}
 .ml{margin:12px 0 4px;font-size:13px;font-weight:700;color:var(--ink)}
-.lv.Not-decided-yet{background:#eaf1f9;color:#2b5d8f}.lv.Talk-about{background:#fbeeed;color:#a8322a}
+.lv.Not-decided-yet{background:#eaf1f9;color:#2b5d8f}.lv.Talk-about{background:#fdf3e1;color:#8a5a12}
 .st.found>.sl,.st.means>.sl,.st.steps>.sl{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;letter-spacing:.06em;margin-bottom:8px;background:#f3ecf8;color:#7b3fa0;background:color-mix(in srgb,var(--c,#7b3fa0) 11%,#fff);color:var(--c,#7b3fa0)}
 .st.found .fp{margin:0 0 8px;font-size:15.5px;line-height:1.6}
 .st.means{border-top:0;padding:12px 14px;border-radius:14px;background:#faf7fb;background:color-mix(in srgb,var(--c,#7b3fa0) 6%,#fff);border:1px solid #efe7f4;border:1px solid color-mix(in srgb,var(--c,#7b3fa0) 16%,#fff)}.st.means p{margin:0;font-size:15px;line-height:1.55}
@@ -3613,7 +3613,7 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .psy.bare{background:none;border:0;padding:0;margin:8px 0 0}.psy.bare .pair2{display:block}.psy.bare .pair2>div{background:none;border:0;padding:0;margin:6px 0;font-size:15px}.psy.bare .pair2 b{display:inline;font-weight:750}.psy.bare .pair2 b:after{content:" · "}.psy.bare .pair2 span{display:inline}
 .fp2{margin:6px 0;font-size:15px;line-height:1.55}.fp2 b{font-weight:750}
 .cks{margin:6px 0 2px}.ck{display:flex;align-items:baseline;gap:8px;font-size:14px;margin:5px 0;line-height:1.35}.ck em{font-style:normal;font-weight:800;width:16px;flex:none;text-align:center}
-.ck span{color:var(--ink)}.ck small{margin-left:auto;padding-left:10px;font-size:12.5px;color:var(--soft);text-align:right}.ck.g em{color:#2f7d5b}.ck.b em{color:#2b5d8f}.ck.r em{color:#b3261e}
+.ck span{color:var(--ink)}.ck small{margin-left:auto;padding-left:10px;font-size:12.5px;color:var(--soft);text-align:right}.ck.g em{color:#2f7d5b}.ck.b em{color:#2b5d8f}.ck.r em{color:#8a5a12}.ck.r small{color:#8a5a12;background:#fdf3e1;padding:2px 9px;border-radius:999px;font-weight:600}
 .ck.b em{font-size:0;line-height:0}.ck.b em:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;border:2px solid #2b5d8f;background:linear-gradient(90deg,#2b5d8f 50%,transparent 50%);vertical-align:-1px}
 .mir3{display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;gap:4px;margin:8px 0}.mir3 small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--soft)}
 .mir3 b{font-size:14.5px;font-weight:650}.mir3 .g{text-align:right}.mir3>span{text-align:center;font-size:17px;font-weight:800}.mir3>span.ok{color:#2f6f53}.mir3>span.no{color:#2b5d8f}
@@ -4075,7 +4075,16 @@ def _how(box):
     return out + ('<h3>Read from</h3><ul class="srcs">%s</ul>' % ''.join(items) if items else '')
 
 
+GENTLER = ('Worth attention', 'Room to grow')
+
+
 def page(box, s):
+    """The page as the couple sees it (README "Psyche Together, release 78"): a pillar's lowest level is still 'Worth
+    attention' in the data and the guide, and reads "Room to grow" wherever the page shows it."""
+    return _page(box, s).replace(*GENTLER)
+
+
+def _page(box, s):
     """The read, integrated (README "Psyche Together", releases 14 to 19): For you first (this copy only); what moved
     since; at a glance (the overall pair, the relationship map by chapter, three truths); five chapters, each told
     once; a light intermission; one 28-day practice; and how it was read."""
@@ -4258,7 +4267,7 @@ def page(box, s):
             cls = 'Aligned' if great else 'Steady'
         return '<span class="tl %s"><small>%s</small><b>%s</b></span>' % (_e(cls), _e(nm), _e(txt[:1].upper() + txt[1:]))
     CK = {'Strong': ('✓', 'g'), 'Aligned': ('✓', 'g'), 'Happier-than-you-each-think': ('✓', 'g'), 'About-right': ('✓', 'g'),
-          'Worth-attention': ('!', 'r'), 'Talk-about': ('!', 'r'), 'Worth-asking-each-other': ('!', 'r')}
+          'Worth-attention': ('🌱', 'r'), 'Talk-about': ('🌱', 'r'), 'Worth-asking-each-other': ('🌱', 'r')}       # release 78: a seedling in amber, never a red "!"
 
     def check_row(cid, aid, nm):
         """One area as a line of the checklist at a glance (README "Psyche Together, release 65"): ✓ going well, ◐ worth
