@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 210
+RELEASE = 211
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5923,6 +5923,11 @@ def sync_ready(name=''):
 # The same words as lib/instructions.js's TOGETHER_INTRO (the selftest holds them equal) and as Psyche Together's own consent.
 TOGETHER_INTRO = "Psyche Together is a private read of the two of you, built on both your Psyches. You each answer about 25 questions in your own Muse, about 5 minutes, and then you both get the same read of the two of you: how you care and connect, live together, share meaning, feel secure and work through disagreements, with next steps for the weeks ahead.\n\n🔒 You each answer privately. The read shows the two of you together, never how one of you answered, except your big decisions, what you disagree about most and what you each want and think the other wants, which are set side by side.\n📄 For a read this deep, your full Psyche report, your Psyche Card picture and which Instagram account is yours (so your chat together is found for certain) go to your partner's Muse, locked.\n💬 After your questions, one of you adds your chat together (Instagram, WhatsApp or both): your read is built on it. It's de-identified here first: other people's names, handles, links, emails and phone numbers are taken out. Nothing from any other chat is read.\n🙈 Everything is locked before it leaves your Muse, so PsycheAI can't read any of it. End it any time, and what PsycheAI keeps is deleted for both of you."
 TOGETHER_ASK = 'It\'s a separate PsycheAI skill, published at app.psycheai.io/together. Would you like to install it?'
+# The button names where it installs from (release 211, README "The address in the tap"): with a bare "Install and start
+# Psyche Together" (releases 202 to 210) Muse had to find the address itself, and the page it then opened, asked for by
+# nobody by name, was stopped by its safety check. With the address in it, the tap is their whole request, as
+# PsycheAI's own install line is. The full address, https:// and all (README "Install lines with https://").
+TOGETHER_INSTALL = 'Install Psyche Together from %s/together and start it' % BASE.rstrip('/')
 
 
 # Release 208 (README "Every menu tap"): the menu buttons Muse once answered with no command ("More", "My data and
@@ -5997,7 +6002,7 @@ def menu_tap(label):
 
 
 def intro_for_together():
-    return {'say': TOGETHER_INTRO + '\n\n' + TOGETHER_ASK, 'buttons': ['Install and start Psyche Together', 'Not now'], 'asButtons': True}
+    return {'say': TOGETHER_INTRO + '\n\n' + TOGETHER_ASK, 'buttons': [TOGETHER_INSTALL, 'Not now'], 'asButtons': True}
 
 
 LET_KNOW = 'I just synced with you on PsycheAI. Ask your Muse: Show my Syncs'
@@ -6119,7 +6124,7 @@ LABELS = frozenset([
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
-    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Install Psyche Together', 'Install and start Psyche Together', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
+    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Install Psyche Together', 'Install and start Psyche Together', 'Install Psyche Together from https://app.psycheai.io/together and start it', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
               re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$')]
