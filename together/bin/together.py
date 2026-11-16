@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 78
+RELEASE = 79
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1045,6 +1045,11 @@ def tool(name, args):
         return {'error': body['error'].get('message', 'PsycheAI could not run that.')}
     res = body.get('result') or {}
     out = res.get('structuredContent') or {}
+    # The server's two refusals of a read (README "One writer, heard"): another Muse is writing it, or it's written.
+    # PsycheAI's server marks any ok: false as an error, and this once turned them into a bare error, so the writing
+    # claim never stopped the second Muse: it wrote the whole read and had its save turned down. They're kept as they are.
+    if res.get('isError') and out.get('ok') is False and (out.get('writer') or out.get('written')):
+        return out
     if res.get('isError') and not out.get('error'):
         out = {'error': ' '.join(c.get('text', '') for c in res.get('content') or [] if isinstance(c, dict)) or 'PsycheAI could not run that.'}
     return out
@@ -1871,18 +1876,9 @@ def remind():
             'say': 'Done: I\'ll check every hour and tell you here when there\'s something new.'}
 
 
-# The welcome to Psyche Together (README "Psyche Together, release 62"), in the PsycheAI welcome's shape: what it is, then
-# what happens to what's theirs, one line each. Every line is what the code does: keep them literally true.
-CONSENT = ('Psyche Together is a private read of the two of you, built on both your Psyches. You each answer about 25 questions '
-           'in your own Muse, about 5 minutes, and then you both get the same read of the two of you: how you care and connect, live '
-           'together, share meaning, feel secure and work through disagreements, with next steps for the weeks ahead.\n\n'
-           '🔒 You each answer privately. The read shows the two of you together, never how one of you answered, except your big '
-           'decisions, what you disagree about most and what you each want and think the other wants, which are set side by side.\n'
-           '📄 For a read this deep, your full Psyche report, your Psyche Card picture and which Instagram account is yours (so your chat together is found for certain) go to your partner\'s Muse, locked.\n'
-           '💬 After your questions, one of you adds your chat together (Instagram, WhatsApp or both): your read is built on it. It\'s de-identified here first: '
-           'other people\'s names, handles, links, emails and phone numbers are taken out. Nothing from any other chat is read.\n'
-           '🙈 Everything is locked before it leaves your Muse, so PsycheAI can\'t read any of it. End it any time, and what PsycheAI '
-           'keeps is deleted for both of you.')
+# The welcome to Psyche Together (README "Psyche Together, said simply", release 79): what it is, three steps, then what
+# happens to what's theirs, one line each. Every line is what the code does: keep them literally true.
+CONSENT = "Psyche Together is a private read of you and your partner, built on both your Psyches. Here's how it works:\n\n1️⃣ You each answer about 25 quick questions in your own Muse, about 5 minutes.\n2️⃣ One of you adds your chat together (Instagram or WhatsApp). It's de-identified first, and no other chat is read.\n3️⃣ You both get the same read: how you connect, where you differ, and small steps to try.\n\n🔒 Your answers stay private. Only a few, like your big decisions, are shown side by side.\n📄 Your full Psyche report and card, and which Instagram account is yours, go to your partner's Muse, locked.\n🙈 PsycheAI can't read any of it. End it any time and what PsycheAI keeps is deleted for both of you."
 
 
 def start():

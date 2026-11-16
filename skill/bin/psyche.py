@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 211
+RELEASE = 212
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5586,8 +5586,10 @@ def e2e_link(post_tool):
     invite = invite_text(link, card.get('character'), card.get('firstName'))
     # Release 197 (README "Sync, shared by them"): one message, laid out here (the lead, then the invite alone in a code
     # block, so it copies and isn't previewed as a link), sent by them wherever they like. Nothing is sent from Muse.
-    return {'url': link, 'lead': lead, 'invite': invite, 'note': out.get('note'),
-            'message': SYNC_SHARES + '\n\n' + (lead + '\n\n' if lead else '') + '```\n' + invite + '\n```',
+    # Release 212 (README "The invite once"): the invite is only in the message. It was also its own field, beside the
+    # bare link and a note on how other people's Muses use it: an install line and links twice over in one result,
+    # which Muse's safety check flagged on a device. The line itself is the same.
+    return {'message': SYNC_SHARES + '\n\n' + (lead + '\n\n' if lead else '') + '```\n' + invite + '\n```',
             'nextStep': _step(LINK_SAY, [SHARED, 'Back to the menu'])}
 
 
@@ -5921,8 +5923,8 @@ def sync_ready(name=''):
 
 # Release 202 (README "The later sections, short"): Psyche Together's intro, as data, where SKILL.md once carried it in full.
 # The same words as lib/instructions.js's TOGETHER_INTRO (the selftest holds them equal) and as Psyche Together's own consent.
-TOGETHER_INTRO = "Psyche Together is a private read of the two of you, built on both your Psyches. You each answer about 25 questions in your own Muse, about 5 minutes, and then you both get the same read of the two of you: how you care and connect, live together, share meaning, feel secure and work through disagreements, with next steps for the weeks ahead.\n\n🔒 You each answer privately. The read shows the two of you together, never how one of you answered, except your big decisions, what you disagree about most and what you each want and think the other wants, which are set side by side.\n📄 For a read this deep, your full Psyche report, your Psyche Card picture and which Instagram account is yours (so your chat together is found for certain) go to your partner's Muse, locked.\n💬 After your questions, one of you adds your chat together (Instagram, WhatsApp or both): your read is built on it. It's de-identified here first: other people's names, handles, links, emails and phone numbers are taken out. Nothing from any other chat is read.\n🙈 Everything is locked before it leaves your Muse, so PsycheAI can't read any of it. End it any time, and what PsycheAI keeps is deleted for both of you."
-TOGETHER_ASK = 'It\'s a separate PsycheAI skill, published at app.psycheai.io/together. Would you like to install it?'
+TOGETHER_INTRO = "Psyche Together is a private read of you and your partner, built on both your Psyches. Here's how it works:\n\n1️⃣ You each answer about 25 quick questions in your own Muse, about 5 minutes.\n2️⃣ One of you adds your chat together (Instagram or WhatsApp). It's de-identified first, and no other chat is read.\n3️⃣ You both get the same read: how you connect, where you differ, and small steps to try.\n\n🔒 Your answers stay private. Only a few, like your big decisions, are shown side by side.\n📄 Your full Psyche report and card, and which Instagram account is yours, go to your partner's Muse, locked.\n🙈 PsycheAI can't read any of it. End it any time and what PsycheAI keeps is deleted for both of you."
+TOGETHER_ASK = 'It\'s a separate PsycheAI skill, from app.psycheai.io/together. Install it and start?'
 # The button names where it installs from (release 211, README "The address in the tap"): with a bare "Install and start
 # Psyche Together" (releases 202 to 210) Muse had to find the address itself, and the page it then opened, asked for by
 # nobody by name, was stopped by its safety check. With the address in it, the tap is their whole request, as
