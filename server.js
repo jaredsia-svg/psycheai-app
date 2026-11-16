@@ -335,16 +335,19 @@ async function route(req, res) {
       const inBrowser = req.headers['sec-fetch-dest'] === 'document' && /text\/html/.test(String(req.headers.accept || ''));
       const name = owner ? sync.nameByCode(code) : null;
       const BASE = require('./lib/config').BASE_URL;
-      const shared = code
+      // /sync with no code in its path is a locked Sync link (/sync#<code>), the whole invite since release 213 (README
+      // "The Sync link is the invite"): its preview and page are a friend's, though the code never reaches here.
+      const syncLink = !code && /^\/sync\/?$/.test(url.pathname);
+      const shared = code || syncLink
         ? { title: (name || 'A friend') + ' wants to see how you two sync', description: 'Paste this link into Muse: PsycheAI writes your Psyche Card from your own Instagram and shows how you two click.' }
         : { title: 'PsycheAI for Muse', description: 'Your personal AI coach that already knows you: a Psyche Card and report from your own Instagram. Paste into Muse: psycheai.io/skill' };
       // A link previewer (WhatsApp, an Instagram DM, iMessage…) gets the preview, with the same text as its body (README "Link previews").
       if (!inBrowser && preview.isPreviewer(req.headers['user-agent'])) {
-        return send(res, 200, preview.page({ ...shared, url: BASE + url.pathname, base: BASE, text: skill.bootstrap(code ? { code, name } : {}) }), 'text/html');
+        return send(res, 200, preview.page({ ...shared, url: BASE + url.pathname, base: BASE, text: skill.bootstrap(code ? { code, name } : { syncLink }) }), 'text/html');
       }
       if (!inBrowser) {
         usage.bump(code ? 'syncFetch' : 'installFetch');
-        return send(res, 200, skill.bootstrap(code ? { code, name } : {}), 'text/markdown');
+        return send(res, 200, skill.bootstrap(code ? { code, name } : { syncLink }), 'text/markdown');
       }
       // /install opened in a browser: what PsycheAI is and the message to paste into Muse.
       if (!code) {
@@ -354,6 +357,11 @@ async function route(req, res) {
           `<p><b>Paste this into Muse</b> and send it. When Muse asks to share information with app.psycheai.io, tap <b>Always allow this site</b>, so it asks only once.</p>` +
           `<pre id="invite" style="white-space:pre-wrap;word-break:break-word;background:var(--alt);border:1.5px dashed var(--line);border-radius:12px;padding:12px;font-size:.9rem">${esc(msg)}</pre>` +
           `<p><button type="button" id="copy">Copy</button></p><script>document.getElementById('copy').onclick=function(){navigator.clipboard.writeText(document.getElementById('invite').textContent).then(function(){document.getElementById('copy').textContent='Copied';});};</script>` +
+          // A friend's Sync link opened in a browser (release 213): the code after # stays in this page, which only puts it
+          // in the line to copy, so pasting it syncs them with their friend. Nothing is sent anywhere.
+          (syncLink ? `<script>(function(){var h=location.hash;if(!/^#[A-Za-z0-9_-]{22}$/.test(h))return;` +
+            `document.querySelector('h1').textContent=${JSON.stringify(shared.title)};` +
+            `document.getElementById('invite').textContent=${JSON.stringify(skill.syncPrompt(''))}+h.slice(1);})();</script>` : '') +
           `<p>Free. Your posts and messages are read in Muse, on your own account: PsycheAI never stores them.</p>`, { head: preview.tags({ ...shared, url: BASE + url.pathname, base: BASE }) }), 'text/html');
       }
     }

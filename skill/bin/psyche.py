@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 212
+RELEASE = 213
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1434,13 +1434,12 @@ def sync_book_html(entries, own=None, invite=None):
     if not n:
         rows = ['<div class="empty">' + ('<img alt="Your Psyche Card" data-me="1" src="">' if own else '') +
                 '<p><b>No Syncs yet.</b> When a friend syncs with you, they\'ll appear here.</p></div>']
-    # Their own invite, to copy for the next friend: the same two lines "Sync with a friend" gives in the chat, sent by them.
+    # Their own Sync link, to copy for the next friend: the link "Sync with a friend" gives in the chat, sent by them.
     more = ''
     if invite and invite[1]:
-        both = (invite[0] + '\n\n' if invite[0] else '') + invite[1]
-        more = ('<section class="invite"><h2>Sync with %s</h2><p class="soft">Copy your invite and send it to a friend. They paste its last line into their Muse app.</p>'
-                '<div class="inv">%s<code>%s</code><button type="button" data-copy="%s">Copy</button></div><p class="soft">%s</p></section>'
-                % ('another friend' if n else 'a friend', '<p>%s</p>' % _e(invite[0]) if invite[0] else '', _e(invite[1]), _e(both), _e(SYNC_SHARES)))
+        more = ('<section class="invite"><h2>Sync with %s</h2><p class="soft">Copy your Sync link and send it to a friend. They paste it into their Muse app.</p>'
+                '<div class="inv"><code>%s</code><button type="button" data-copy="%s">Copy</button></div><p class="soft">%s</p></section>'
+                % ('another friend' if n else 'a friend', _e(invite[1]), _e(invite[1]), _e(SYNC_SHARES)))
     mecard = '<img id="mecard" alt="" hidden src="%s">' % _img_src(own) if own else ''
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>'
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
@@ -1494,7 +1493,7 @@ def own_invite():
         if not card:
             return None
         link = BASE + '/sync#' + own[-1]['code']
-        return invite_lead(card.get('character'), card.get('firstName')), invite_text(link, card.get('character'), card.get('firstName'))
+        return LINK_LEAD, link          # release 213: the link is the invite
     except Exception:
         return None
 
@@ -5560,6 +5559,8 @@ def invite_text(link, character, name=''):
 
 
 LINK_SAY = 'Send it to a friend, then tap below once you have.'
+LINK_LEAD = ('Here\'s your Sync link. Send it to a friend: they paste it into their Muse app to make their own Psyche Card '
+             'and see how you two click.')
 # Release 199 (README "What a Sync shares, as data"): said before any Sync, in the result itself, so it never depends on
 # Muse judging whether it's "the first time in a chat" (a device once skipped it, reasoning from memory).
 SYNC_SHARES = ('To make it, your Psyche Card, plus your motivation scores and when in the day you\'re active, is shared with your friend, '
@@ -5582,15 +5583,13 @@ def e2e_link(post_tool):
         keep_e2e(code, True)
     build_book()        # My Syncs, empty until a friend syncs, so it's in their Library from the first link
     link = BASE + '/sync#' + code
-    lead = invite_lead(card.get('character'), card.get('firstName'))
-    invite = invite_text(link, card.get('character'), card.get('firstName'))
-    # Release 197 (README "Sync, shared by them"): one message, laid out here (the lead, then the invite alone in a code
-    # block, so it copies and isn't previewed as a link), sent by them wherever they like. Nothing is sent from Muse.
-    # Release 212 (README "The invite once"): the invite is only in the message. It was also its own field, beside the
-    # bare link and a note on how other people's Muses use it: an install line and links twice over in one result,
-    # which Muse's safety check flagged on a device. The line itself is the same.
-    return {'message': SYNC_SHARES + '\n\n' + (lead + '\n\n' if lead else '') + '```\n' + invite + '\n```',
-            'nextStep': _step(LINK_SAY, [SHARED, 'Back to the menu'])}
+    # Release 213 (README "The Sync link is the invite"): the link alone, in a code block so it copies and isn't
+    # previewed. An install line in this result was flagged by Muse's safety check on devices, even once it was the only
+    # thing in it (release 212): words telling someone to install software, with links, inside a tool result. The
+    # friend pastes the link into their Muse, whose fetch of it gets the install page; a tap on it opens a page that
+    # says what to paste. What a Sync shares is said in the step after, apart from the link.
+    return {'message': LINK_LEAD + '\n\n```\n' + link + '\n```',
+            'nextStep': _step(LINK_SAY + ' ' + SYNC_SHARES, [SHARED, 'Back to the menu'])}
 
 
 def e2e_with(post_tool, link):

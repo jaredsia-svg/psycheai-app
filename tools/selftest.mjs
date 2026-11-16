@@ -36,13 +36,11 @@ const check = (label, ok, detail) => {
   else failures.push(label + (detail === undefined ? '' : ' — ' + detail));
 };
 
-// The skill's sync_link result carries the invite once, inside its message (README "The invite once"): the lead, the
-// line and its link are read back out of it here for the checks that look at them.
+// The skill's sync_link result is a line and the link alone in a code block (README "The Sync link is the invite"):
+// the line and the link are read back out of it here for the checks that look at them.
 const splitInvite = (r) => {
-  const m = r && /\n\n([^\n]*)\n\n```\n([^\n]+)\n```$/.exec(r.message || '');
-  if (!m) return r;
-  const url = (/(\S+\/sync#[A-Za-z0-9_-]{22})$/.exec(m[2]) || [])[1];
-  return { ...r, lead: m[1], invite: m[2], url };
+  const m = r && /^([^\n]*)\n\n```\n([^\n]+)\n```$/.exec(r.message || '');
+  return m ? { ...r, lead: m[1], invite: m[2], url: m[2] } : r;
 };
 
 // ---------- fixtures ----------
@@ -1152,7 +1150,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
         /\*\*"Back to the menu":\*\* "What would you like to do\?" with PsycheAI's five buttons/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'together', 'SKILL.md'), 'utf8')) &&
         // Its five labels are PsycheAI's menu as it is now (it said "Fresh Psyche" after the menu said more).
         require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'together', 'SKILL.md'), 'utf8').includes('PsycheAI\'s five buttons: "Ask PsycheAI questions about myself", "Sync with a friend", "Psyche Together with my partner", "Add WhatsApp or Facebook and generate a Fresh Psyche" and "More".'));
-    check('Sync: Muse hands over the link at once and never asks for one; one message, the lead then the invite alone in a code block, sent by them (release 197)', /call sync_link at once/.test(instructions.MUSE_PROCEDURE) && /Its message, then its nextStep's line and buttons\. They send the invite themselves/.test(instructions.MUSE_PROCEDURE) && !/Allow all|no need to open bin|is the go-ahead|is their yes/.test(require('../lib/skill.js').skillMd()) && !/Send this to a friend: they paste it into their Muse/.test(instructions.MUSE_PROCEDURE) && /"I've shared it\. Show our results", "Show our results" or "My friend has synced": python3 bin\/psyche\.py sync-ready/.test(instructions.MUSE_PROCEDURE) && !/show what it gives/.test(require('../lib/skill.js').skillMd()) && /python3 bin\/psyche\.py call sync_link +# "Sync with a friend": their own link, never asked for\. One message: its message \(the lead, then the invite alone in a code block\)/.test(require('../lib/skill.js').skillMd()) && !/"Someone else"/.test(instructions.MUSE_PROCEDURE) && /Its result is their Sync, or a line that it isn't ready yet; either comes with its buttons/.test(instructions.MUSE_PROCEDURE) && /Attach its file \(or its book when there's no file\)/.test(instructions.MUSE_PROCEDURE) && /That line is the whole message \(the reel went with the welcome\)/.test(instructions.MUSE_PROCEDURE) && /Never ask them for a link or to paste one/.test(instructions.MUSE_PROCEDURE) && !/consent/.test(JSON.stringify(mcp.TOOLS.filter(t => /sync/.test(t.name)))));
+    check('Sync: Muse hands over the link at once and never asks for one; one message, a line then the link alone in a code block, sent by them (releases 197, 213)', /call sync_link at once/.test(instructions.MUSE_PROCEDURE) && /Its message, then its nextStep's line and buttons\. They send the invite themselves/.test(instructions.MUSE_PROCEDURE) && !/Allow all|no need to open bin|is the go-ahead|is their yes/.test(require('../lib/skill.js').skillMd()) && !/Send this to a friend: they paste it into their Muse/.test(instructions.MUSE_PROCEDURE) && /"I've shared it\. Show our results", "Show our results" or "My friend has synced": python3 bin\/psyche\.py sync-ready/.test(instructions.MUSE_PROCEDURE) && !/show what it gives/.test(require('../lib/skill.js').skillMd()) && /python3 bin\/psyche\.py call sync_link +# "Sync with a friend": their own link, never asked for\. One message: its message \(a line, then the link alone in a code block\)/.test(require('../lib/skill.js').skillMd()) && !/"Someone else"/.test(instructions.MUSE_PROCEDURE) && /Its result is their Sync, or a line that it isn't ready yet; either comes with its buttons/.test(instructions.MUSE_PROCEDURE) && /Attach its file \(or its book when there's no file\)/.test(instructions.MUSE_PROCEDURE) && /That line is the whole message \(the reel went with the welcome\)/.test(instructions.MUSE_PROCEDURE) && /Never ask them for a link or to paste one/.test(instructions.MUSE_PROCEDURE) && !/consent/.test(JSON.stringify(mcp.TOOLS.filter(t => /sync/.test(t.name)))));
     check('Sync is by link only: a handle is refused and none is kept, and the tools ask for none',
       /Sync works by link: call sync_link/.test(sync.syncWith(user, { handle: '@Jun.Lee', my_handle: 'mei.tan' }).error || '') && !('handle' in store.kvGet('synccard', user.id)) &&
       !/handle/.test(JSON.stringify(mcp.TOOLS.filter(t => ['sync_with', 'sync_link'].includes(t.name)).map(t => t.inputSchema))) &&
@@ -1705,6 +1703,19 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       const waSync = await (await fetch(base + '/sync/' + code, { headers: wa })).text();
       const img = await fetch(base + '/preview.png');
       const imgBuf = Buffer.from(await img.arrayBuffer());
+      // A locked Sync link, the whole invite since release 213 (README "The Sync link is the invite"): /sync, its code after #.
+      const lockedPage = await (await fetch(base + '/sync', { headers: browser })).text();
+      const lockedSkill = await (await fetch(base + '/sync')).text();
+      const lockedWa = await (await fetch(base + '/sync', { headers: wa })).text();
+      const installPage = await (await fetch(base + '/install', { headers: browser })).text();
+      check('the Sync link is the invite (README "The Sync link is the invite"): opened in a browser, /sync is a friend\'s page whose Copy line is completed from its #code in the page (a script that sends nothing), its preview is a friend\'s, and Muse fetching it gets the install page with a line saying it is a friend\'s Sync link; /install has neither',
+        /<h1>Your personal AI coach/.test(lockedPage) && /location\.hash/.test(lockedPage) && /\^#\[A-Za-z0-9_-\]\{22\}\$/.test(lockedPage) && lockedPage.includes(JSON.stringify(require('../lib/skill.js').syncPrompt(''))) &&
+          !/fetch\(|XMLHttpRequest|sendBeacon|\.src\s*=|location\.href\s*=/.test((lockedPage.match(/<script>\(function\(\)\{var h=location\.hash[\s\S]*?<\/script>/) || [''])[0]) &&
+          /A friend wants to see how you two sync/.test(lockedPage) && !/location\.hash/.test(installPage) &&
+          /^# PsycheAI skill for Muse/.test(lockedSkill) && /This address is a friend's Sync link/.test(lockedSkill) && !/friend's Sync link/.test(plainSkill) &&
+          /<meta property="og:title" content="A friend wants to see how you two sync">/.test(lockedWa) &&
+          require('../lib/skill.js').syncPrompt('AbCdEfGhIjKlMnOpQrStUv') === 'Install PsycheAI, generate my Psyche and sync with my friend: http://localhost:8787/sync#AbCdEfGhIjKlMnOpQrStUv',
+        lockedSkill.slice(0, 300));
       const previewState = { waInstall, waSync, imgType: img.headers.get('content-type'), imgW: imgBuf.readUInt32BE(16), imgH: imgBuf.readUInt32BE(20), imgSize: imgBuf.length, plainSkill };
       check('link previews: a link previewer (WhatsApp, an Instagram DM, iMessage) gets the install link and a Psyche link as a page with Open Graph tags and a 1200x630 image, with the same install text as its body; Muse and other fetchers still get the plain text',
         ((p) => p && /<meta property="og:title" content="PsycheAI for Muse">/.test(p.waInstall) && /<meta property="og:image" content="[^"]+\/preview\.png">/.test(p.waInstall) &&
@@ -2654,9 +2665,10 @@ print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'say': m.THIN_SAY, 'li
         /and its thinLine, when it has one, right under it/.test(instructions.MUSE_PROCEDURE) &&
         /if out\.get\('ok'\) and own < MIN_OWN_WRITING:\n            # Too little to read well[^\n]*\n            out\['tooThin'\] = \{'ownWriting': own, 'say': THIN_SAY, 'buttons': \['Add WhatsApp or Facebook and generate a Fresh Psyche', 'Make it anyway'\], 'anyway': ANYWAY_LINE\}/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')), JSON.stringify(T));
     }
-    check('Show our results (README "Show our results", "Sync, shared by them"): the link comes as one message (the lead, then the invite alone in a code block), with "I\'ve shared it. Show our results" and "Back to the menu", no names and no send; sync-ready says the friend hasn\'t finished yet, with "Show our results" to tap again, then gives the Sync\'s page once it\'s written',
+    check('Show our results (README "Show our results", "Sync, shared by them"): the link comes as one message (a line, then the link alone in a code block), what a Sync shares in the step after it, with "I\'ve shared it. Show our results" and "Back to the menu", no names and no send; sync-ready says the friend hasn\'t finished yet, with "Show our results" to tap again, then gives the Sync\'s page once it\'s written',
       ((E) => E && JSON.stringify(E.link.nextStep.buttons) === '["I\'ve shared it. Show our results","Back to the menu"]' && !('people' in E.link) && !/Who should I send it to/.test(E.link.nextStep.say) &&
-        E.link.message === "To make it, your Psyche Card, plus your motivation scores and when in the day you're active, is shared with your friend, locked so PsycheAI can't read it. A Sync never sends your report or your messages to your friend or anyone else.\n\n" + E.link.lead + '\n\n```\n' + E.link.invite + '\n```' &&
+        E.link.message === "Here's your Sync link. Send it to a friend: they paste it into their Muse app to make their own Psyche Card and see how you two click.\n\n```\n" + E.link.url + '\n```' &&
+        E.link.nextStep.say === "Send it to a friend, then tap below once you have. To make it, your Psyche Card, plus your motivation scores and when in the day you're active, is shared with your friend, locked so PsycheAI can't read it. A Sync never sends your report or your messages to your friend or anyone else." &&
         E.readyEarly.ready === false && E.readyEarly.say === "Ana hasn't finished the Sync yet. Tap Show our results again when they're done." && E.readyEarly.buttons[0] === 'Show our results' &&
         E.readyNow.ready === true && /Psyche-Sync-Mei-Ana-\d{8}-\d{4}(-\d+)?\.html$/.test(E.readyNow.file || '') && E.readyNow.nextStep.buttons.includes('Back to the menu'))(skillState.e2e),
       JSON.stringify(((E) => E && [E.link && E.link.nextStep, E.readyEarly, E.readyNow && { ready: E.readyNow.ready, file: E.readyNow.file, nextStep: E.readyNow.nextStep }])(skillState.e2e)).slice(0, 900));
@@ -2666,8 +2678,8 @@ print(json.dumps({'tiny': tiny, 'mid': mid, 'full': full, 'say': m.THIN_SAY, 'li
         E.newsReady.connected === true && !('news' in E.newsAgain) && !('news' in E.newsAna))(skillState.e2e),
       JSON.stringify(((E) => E && [E.newsEarly, E.newsReady, E.newsAgain, E.newsAna])(skillState.e2e)).slice(0, 800));
     check('Sync, locked on the device (README "Sync, locked on the device"): a link made here carries its code after "#", a friend syncs, writes and saves, the other side reads it by name with the tips the right way round and a page of its own, the morning check names them, a banned word comes back to fix, and nothing readable (no name, card text, summary or code) is kept on the server',
-      ((E) => E && E.code && /^http:\/\/127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.url) && /^([^.]{1,30}) got Mulan on PsycheAI\. To make your own Psyche Card and sync with \1, paste the line below into your Muse app\.$/.test(E.link.lead) && /^Install http:\/\/127\.0\.0\.1:\d+\/install and generate my Psyche, then sync with [^:]{1,30}: http:\/\/127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.invite) &&
-        !('offerDailyCheck' in E.link) && E.link.nextStep && JSON.stringify(Object.keys(E.linkRaw).sort()) === '["message","nextStep"]' && (E.linkRaw.message.match(/Install /g) || []).length === 1 && E.joined.status === 'synced' && E.joined.with === 'Mei' && E.toWrite.write === 'sync' && E.toWriteTask && E.toWriteTask.personB.name === 'Mei' && E.toWriteTask.personA.name === 'Ana' &&
+      ((E) => E && E.code && /^http:\/\/127\.0\.0\.1:\d+\/sync#[A-Za-z0-9_-]{22}$/.test(E.link.url) && 
+        !('offerDailyCheck' in E.link) && E.link.nextStep && JSON.stringify(Object.keys(E.linkRaw).sort()) === '["message","nextStep"]' && !/install/i.test(JSON.stringify(E.linkRaw)) && (JSON.stringify(E.linkRaw).match(/https?:\/\//g) || []).length === 1 && E.joined.status === 'synced' && E.joined.with === 'Mei' && E.toWrite.write === 'sync' && E.toWriteTask && E.toWriteTask.personB.name === 'Mei' && E.toWriteTask.personA.name === 'Ana' &&
         !('motives' in E.toWriteTask.personA) && /Interests in common \(exact matches only\): Reading/.test(E.toWriteTask.derivedFacts) && /guide\.json's `sync` \(its spec, brief and schema\)/.test(skillMd) &&
         E.saved.saved && E.saved.name === 'Mei' && /Racquet sports/.test(E.anaPage) && !/Skydiving/.test(E.anaPage) && E.bad.saved === false && /clash/.test(E.bad.problems.join(' ')) &&
         E.list.syncs.length === 1 && E.list.syncs[0].name === 'Ana' && E.list.syncs[0].label === 'Ana' && E.list.syncs[0].summary === 'Mei plans and Ana sparks: weekends you both remember.' && !('e2e' in E.list.syncs[0]) &&
@@ -3006,7 +3018,7 @@ print(json.dumps({'size': list(b.size), 'diff': sum(d) / 3}))`, new URL('../skil
           cmp && JSON.stringify(cmp.size) === '[1080,1920]' && cmp.diff < 6 && /if url\.pathname === '\/skill\/card-art\.zip'|url\.pathname === '\/skill\/card-art\.zip'/.test(fsx.readFileSync(new URL('../server.js', import.meta.url), 'utf8')), JSON.stringify(cmp));
     }
     check('Sync is the one thing that shares: after a Psyche made wholly in Muse, sync_link works, with the link made and its card locked here (README "Sync, locked on the device")',
-      ((S) => S && /\/sync#[A-Za-z0-9_-]{22}$/.test(S.url || '') && /^Install https?:\/\/\S+ and generate my Psyche, then sync with [^:]{1,30}: https?:\/\/\S+\/sync#/.test(S.invite || '') && / on PsycheAI\. To make your own Psyche Card/.test(S.lead || ''))(skillState.syncAfterLocal), JSON.stringify(skillState.syncAfterLocal).slice(0, 300));
+      ((S) => S && /\/sync#[A-Za-z0-9_-]{22}$/.test(S.url || '') && S.invite === S.url && /^Here's your Sync link\./.test(S.lead || ''))(skillState.syncAfterLocal), JSON.stringify(skillState.syncAfterLocal).slice(0, 300));
     check('publishing sends nothing about them (README "Nothing leaves Muse unless they Sync"): the saved Psyche keeps its card summary here, no card key comes back, and the card is drawn here as a PNG',
       ((A) => A && A.last.ok && A.last.card && A.last.card.fullName === 'Mei Tan' && !('image' in A.last) && !('cardKey' in A.last) && !A.keys.card)(skillState.afterBare) &&
         ((C) => C && /\/out\/Psyche-Card(-[^/ ]+)?-\d{8}(-\d+){0,2}\.png$/.test(C.file || '') && C.magic === 'PNG')(skillState.afterBareReady),
@@ -3115,12 +3127,12 @@ spec = importlib.util.spec_from_file_location('p', sys.argv[1]); m = importlib.u
 me, them = {'firstName': 'Mei', 'interests': ['Reading'], 'values': ['Craft']}, {'firstName': 'Ana', 'interests': ['Reading'], 'values': ['Care']}
 rep = {'summary': 'S.', 'align': [], 'differ': [], 'howToPartner': {}, 'caveats': ''}
 one, none = m._sync_shared(rep, me, them, 'Mei', 'Ana'), m._sync_shared(rep, dict(me, interests=[]), them, 'Mei', 'Ana')
-inv = (m.invite_lead('Mulan', 'Mei'), m.invite_text('https://app.psycheai.io/sync#AbCdEfGhIjKlMnOpQrStUv', 'Mulan', 'Mei'))
+inv = (m.LINK_LEAD, 'https://app.psycheai.io/sync#AbCdEfGhIjKlMnOpQrStUv')
 e = [('u_x', {'report': rep, 'cards': {'me': me, 'them': them}, 'at': 0})]
 bk, plain, first = m.sync_book_html(e, None, inv), m.sync_book_html(e), m.sync_book_html([], None, inv)
 src = open(sys.argv[1], encoding='utf-8').read()
 print(json.dumps({'one': 'class="shared one"' in one and 'Interests' in one and 'Values' not in one and 'None in common' not in one, 'none': none == '',
-                  'invite': 'Sync with another friend' in bk and inv[1] in bk and ('data-copy="%s' % inv[0][:30]) in bk and m.SYNC_SHARES.replace("'", '&#x27;') in bk,
+                  'invite': 'Sync with another friend' in bk and ('data-copy="%s"' % inv[1]) in bk and 'Install' not in bk and m.SYNC_SHARES.replace("'", '&#x27;') in bk,
                   'plain': 'class="invite"' not in plain and 'Install' not in plain, 'first': 'Sync with a friend</h2>' in first,
                   'ring': "'CONFIDENCE', 16, 700" in src}))`,
         new URL('../skill/bin/psyche.py', import.meta.url).pathname]).toString());
@@ -3128,7 +3140,7 @@ print(json.dumps({'one': 'class="shared one"' in one and 'Interests' in one and 
         got.ring && />CONFIDENCE<\/text>/.test(require('../lib/cardimage.js').cardSvg({ stage: 'psyche', firstName: 'Mei', confidence: 80 })) && !/CONFIDENCE/.test(require('../lib/cardimage.js').cardSvg({ stage: 'picked', firstName: 'Mei', fit: 80, confidence: 80 })), JSON.stringify(got));
       check('What you share leaves an empty box out (README "No empty box in What you share"): one box at full width, nothing when neither has any, and never "None in common yet"',
         got.one && got.none, JSON.stringify(got));
-      check('My Syncs invites the next one (README "My Syncs invites the next one"): their own invite, both lines, with a Copy button and what a Sync shares, only when they have a link that still works',
+      check('My Syncs invites the next one (README "My Syncs invites the next one", "The Sync link is the invite"): their own Sync link alone, with a Copy button and what a Sync shares, only when they have a link that still works',
         got.invite && got.plain && got.first, JSON.stringify(got));
     }
     check('first-run: the account, start and both account lists in one call: step 0\'s say (its messages question already sent), the account question with one "@name" button each, business accounts left out, each button\'s accounts as data (no instruction rides in a tool result: one did, and Muse\'s safety check flagged it), and step 1\'s line word for word; a Fresh Psyche\'s accounts put last time\'s account first, from a hash of its ID; SKILL.md opens with it, messages question first, and says how to build the collect command',
