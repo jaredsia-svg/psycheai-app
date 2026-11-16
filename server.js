@@ -265,7 +265,17 @@ async function route(req, res) {
         return res.end('Sign in to see the stats.');
       }
       if (url.searchParams.get('format') === 'json') return send(res, 200, usage.summary());
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', 'Referrer-Policy': 'no-referrer' });
+      // Signed in, the page shows the private link (README "The stats page by link").
+      return res.end(usage.page(undefined, require('./lib/config').BASE_URL.replace(/\/$/, '') + '/admin/stats/' + usage.linkCode()));
+    }
+    // The same page by private link, no password: /admin/stats/<code>, the code made from PSYCHE_ADMIN_SECRET.
+    // A wrong code is "not found", so the address says nothing about what's there.
+    const statsLink = /^\/admin\/stats\/([A-Za-z0-9_-]{32})$/.exec(url.pathname);
+    if (statsLink && req.method === 'GET') {
+      if (!usage.linkOk(statsLink[1])) return send(res, 404, { error: 'Not found' });
+      if (url.searchParams.get('format') === 'json') return send(res, 200, usage.summary());
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', 'Referrer-Policy': 'no-referrer' });
       return res.end(usage.page());
     }
     if (url.pathname === '/health') return send(res, 200, { ok: true, commit: String(process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null, readGuide: psyche.guideInfo(), pairWaitlist: require('./lib/waitlist').counts(), readTimings: require('./lib/timing').latest() });

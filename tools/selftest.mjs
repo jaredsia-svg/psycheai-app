@@ -4118,6 +4118,16 @@ print(json.dumps({'page': m.report_html(v, 'Mei Tan', '1 November 2026', 'iVBORw
   const stored = JSON.stringify(store.kvAll(usage.TABLE));
   const keysOk = store.kvAll(usage.TABLE).every(([k, row]) => /^\d{4}-\d{2}-\d{2}$/.test(k) && Object.keys(row).every(x => usage.KINDS.includes(x) || x === 'releases') &&
     Object.keys(row.releases || {}).every(r => /^\d+$/.test(r)));
+  // The private link (README "The stats page by link"): the code from the secret opens the page with no password.
+  const code = usage.linkCode();
+  const byLink = await fetch(base + '/admin/stats/' + code);
+  const byLinkHtml = await byLink.text();
+  const badLink = (await fetch(base + '/admin/stats/' + 'A'.repeat(32))).status;
+  const otherSecret = usage.linkCode('z'.repeat(30));
+  check('the stats page by private link: /admin/stats/<code> opens it with no password, the code is made from PSYCHE_ADMIN_SECRET (32 characters, not the secret), a wrong code is not found, a new secret retires the link, and the signed-in page shows the link',
+    byLink.status === 200 && /Installs \(accounts made\)/.test(byLinkHtml) && byLink.headers.get('cache-control') === 'no-store' && byLink.headers.get('referrer-policy') === 'no-referrer' &&
+    /^[A-Za-z0-9_-]{32}$/.test(code) && !code.includes('x'.repeat(5)) && badLink === 404 && otherSecret !== code && usage.linkCode('short') === null &&
+    html.includes('/admin/stats/' + code) && !byLinkHtml.includes(code) && !/<script/i.test(byLinkHtml), JSON.stringify([byLink.status, badLink]));
   check('the stats page is off without PSYCHE_ADMIN_SECRET, asks for the password, refuses a wrong one, and is never cached or indexed',
     off === 404 && noAuth === 401 && wrong === 401 && res.headers.get('cache-control') === 'no-store', JSON.stringify([off, noAuth, wrong]));
   check('it counts installs, Muse fetching the install link, first cards and update checks by release, from requests the server already gets',
