@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 80
+RELEASE = 81
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1600,11 +1600,14 @@ def chat_offer_due(s, profiles):
         return False
     done = set(s.get('chatDone') or [])
     if not done:
-        return not chat_done(profiles)
+        return not chat_done(profiles) and not s.get('chatLeft')
     return len(done) == 1 and not s.get('secondOffered') and not s.get('readAt')
 
 
-CHAT_OFFER = {'chatOffer': True, 'asButtons': True, 'buttons': ['Add our Instagram chat', 'Add our WhatsApp chat'],
+# Release 81 (README "My partner will add it"): whichever of you adds the chat, it counts for both, so the one without
+# it can leave it to the other and wait for the read.
+PARTNER_ADDS = 'My partner will add it'
+CHAT_OFFER = {'chatOffer': True, 'asButtons': True, 'buttons': ['Add our Instagram chat', 'Add our WhatsApp chat', PARTNER_ADDS],
               'say': 'Next, your conversation together: your read is built on it, so one chat is needed, and you can add both. '
                      'Only your chat together is read, and it\'s de-identified here first: other people\'s names, handles, links, emails and phone '
                      'numbers are taken out before it goes with your read, locked. Whichever of you adds it, it counts for both.'}
@@ -1620,6 +1623,20 @@ def chat_offer(s, said=''):
     return {'chatOffer': True, 'asButtons': True, 'buttons': [CHAT_SOURCES[other], 'Skip', 'Use a different chat'],
             'say': (said + ' ' if said else '') + 'Want to add your %s chat together too? More of your conversation makes your read more specific.'
                    % ('WhatsApp' if other == 'whatsapp' else 'Instagram')}
+
+
+def leave_chat():
+    """"My partner will add it" (release 81): no chat is asked of them again; their read is shown once their partner
+    has added it and it's written, or now, when it already is."""
+    s = state()
+    s['chatLeft'] = True
+    save_state(s)
+    k, got, profiles, box = couple()
+    if got.get('error'):
+        return got
+    if not box and chat_done(profiles):
+        return partner_added(s, profiles) or after_chat(s)
+    return after_chat(s)
 
 
 def partner_added(s, profiles):
@@ -1767,7 +1784,10 @@ def add_chat_file(paths):
     me = psyche() or {}
     msgs = whatsapp_file(paths, [partner, _first(partner)], [str(me.get('name') or ''), _first(me.get('name'))])
     if not msgs:
-        return {'error': 'I couldn\'t find a one-to-one chat in that file: share the export of your chat together (%s).' % WHATSAPP_HOW}
+        # Release 81: with its ways on as buttons. On a device this came back as a bare error, and the next replies
+        # ("?", "I don't have it") were answered with nothing run, so the read their partner had just finished wasn't seen.
+        return {'error': 'I couldn\'t find a one-to-one chat in that file: share the export of your chat together (%s).' % WHATSAPP_HOW,
+                'buttons': ['Add our Instagram chat', PARTNER_ADDS], 'asButtons': True}
     keep_messages(old + msgs, sources + ['whatsapp'], partner)
     s.setdefault('chatDone', []).append('whatsapp')
     s['waCount'] = int(s.get('waCount') or 0) + len(msgs)
@@ -4841,6 +4861,8 @@ def main(argv):
         out = pick_thread(' '.join(x for x in rest if x != '--sure'), sure='--sure' in rest)
     elif cmd == 'reset-chat':
         out = reset_chat()
+    elif cmd == 'leave-chat':
+        out = leave_chat()
     elif cmd == 'skip-chat':
         s = state()
         if s.get('chatDone') or is_gentle(s):          # release 68: only the second chat can be skipped

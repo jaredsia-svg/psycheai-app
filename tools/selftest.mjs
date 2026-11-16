@@ -4308,6 +4308,14 @@ elif a[0] == 'thread':
   fsx.writeFileSync(pathx.join(home.a.dir, 'work', 'together-foryou.json'), JSON.stringify({ focus: [{ pillar: 'disagreements', title: 'One question first', detail: 'You argue a case.', howToRaise: 'I want to hear you out first.' }], practice: 'Ask before you answer.' }));
   // Ana skipped the chat, so Mei is offered it after her check-in; she adds Instagram, then WhatsApp, and the read follows.
   tg.offerA = await run.a('save-foryou', '@work/together-foryou.json');
+  // Release 81 (README "My partner will add it"): a WhatsApp file that isn't their chat together comes back with its ways on as
+  // buttons, and "My partner will add it" waits for the partner's chat (no chat is asked again) instead of offering it.
+  const notOurs = pathx.join(home.a.root, 'WhatsApp Chat with Someone.txt');
+  fsx.writeFileSync(notOurs, Array.from({ length: 12 }, (_, i) => `[0${1 + i % 9}/01/2025, 10:${String(i).padStart(2, '0')}:00] ${['Bo Wen', 'Ivy Ng', 'Kit Lau'][i % 3]}: see you later`).join('\n'));
+  tg.notOurs = await run.a('chat-file', notOurs);
+  tg.leftChat = await run.a('leave-chat');
+  tg.leftStatus = await run.a('status');
+  { const st = pathx.join(home.a.dir, 'state.json'); const j = JSON.parse(fsx.readFileSync(st, 'utf8')); tg.leftFlag = j.chatLeft === true; delete j.chatLeft; fsx.writeFileSync(st, JSON.stringify(j)); }
   // A fake messages tool for the chat ranking (invented names): one matched by the partner's own account, one by a word of their name.
   const fakeRank = pathx.join(home.a.root, 'fake-igm-rank');
   fsx.writeFileSync(fakeRank, '#!/usr/bin/env python3\nimport sys, json\nif sys.argv[1] == "accounts":\n    print(json.dumps({"accounts": [{"username": "me", "user_fbid": "9"}]}))\nelse:\n    print(json.dumps({"entities": {"thread": [' +
@@ -4317,6 +4325,7 @@ elif a[0] == 'thread':
 import importlib.util, json
 spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 due = [m.chat_offer_due({}, {}), m.chat_offer_due({'chatDone': ['instagram']}, {}), m.chat_offer_due({'chatDone': ['instagram'], 'secondOffered': True}, {}),
+       m.chat_offer_due({'chatLeft': True}, {}),
        m.chat_offer_due({}, {'b': {'chat': {'source': 'whatsapp'}}}), m.chat_offer_due({'chatDone': ['instagram', 'whatsapp']}, {})]
 m.IGM_CLI = ${JSON.stringify(fakeRank)}
 order = [x['label'] for x in m.instagram_threads({'psyche': {'name': 'Kai'}, 'ig': {'names': ['ruilim.x'], 'ids': []}})]
@@ -4783,11 +4792,11 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
   check('each person\'s For you is written right after they submit, from their answers, their full report and their partner\'s card; then their conversation is offered (Instagram, WhatsApp or Skip) until one of them adds it, and the read waits for that answer; the first one in then waits with a button, the last one in goes on to write the read, and the page follows its save (README "Psyche Together, release 61")',
     tg.sentB.write === 'foryou' && tg.sentB.yourReport && tg.sentB.partner && tg.sentB.partner.name === 'Mei' &&
       // Ana is on the gentle path (she said she sometimes feels unsafe): she isn't asked for their conversation; Mei is.
-      !tg.offerB.chatOffer && tg.offerB.waiting === true && tg.offerA.chatOffer === true && JSON.stringify(tg.offerA.buttons) === '["Add our Instagram chat","Add our WhatsApp chat"]' && /so one chat is needed, and you can add both/.test(tg.offerA.say || '') &&
+      !tg.offerB.chatOffer && tg.offerB.waiting === true && tg.offerA.chatOffer === true && JSON.stringify(tg.offerA.buttons) === '["Add our Instagram chat","Add our WhatsApp chat","My partner will add it"]' && /so one chat is needed, and you can add both/.test(tg.offerA.say || '') &&
       /if is_gentle\(s\):\n\s+return False/.test(fsx.readFileSync(pathx.join(home.a.dir, 'bin', 'together.py'), 'utf8')) &&
       // Release 68: one chat is needed, both can be added: after Instagram, WhatsApp is offered once, with Skip.
       tg.pickRead.chatOffer === true && JSON.stringify(tg.pickRead.buttons) === '["Add our WhatsApp chat","Skip","Use a different chat"]' && /^Added\. Want to add your WhatsApp chat together too\?/.test(tg.pickRead.say || '') &&
-      tg.chatRules.firstNoSkip === true && tg.chatRules.due.join() === 'true,true,false,false,false' && tg.waAdded.write === 'read' && /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || '') &&
+      tg.chatRules.firstNoSkip === true && tg.chatRules.due.join() === 'true,true,false,false,false,false' && tg.waAdded.write === 'read' && /^Added: 40 messages from your WhatsApp chat/.test(tg.waAdded.say || '') &&
       /\*\*When a result has `chatOffer`\*\*/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && tg.waitB.waiting === true && JSON.stringify(tg.waitB.buttons) === '["Is our read ready?","Remind me here","Back to the menu"]' &&
       // The reminder is theirs to ask for (README "Psyche Together, release 57"): once set, it isn't offered again.
       tg.remindB.setReminder && tg.remindB.setReminder.name === 'Psyche Together check' && tg.remindB.setReminder.task === 'python3 bin/together.py check' && tg.remindB.setReminder.folder === '~/workspace/skills/psyche-together' &&
@@ -4827,12 +4836,19 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       people.length === 2 && people.every(p => p.report && p.report.attachment) && people[0].chat && people[0].chat.sample.length > 10 &&
       !/"core"|safety|deep:/.test(JSON.stringify(tg.write)) && view.decisions.length === 4 && !('spec' in tg.write) && tg.write.saveTo === 'work/together-read.json',
     JSON.stringify(view).slice(0, 400));
+    check('"My partner will add it" (README "My partner will add it", Psyche Together 81): the first chat offer has it as its third button; a WhatsApp file that isn\'t their chat together comes back with "Add our Instagram chat" and "My partner will add it" as buttons, never a bare error; the tap waits for the partner\'s chat ("Is our read ready?") and status never offers the chat again',
+      JSON.stringify(tg.offerA.buttons) === '["Add our Instagram chat","Add our WhatsApp chat","My partner will add it"]' &&
+      /couldn't find a one-to-one chat/.test(tg.notOurs.error || '') && JSON.stringify(tg.notOurs.buttons) === '["Add our Instagram chat","My partner will add it"]' &&
+      tg.leftFlag && !tg.leftChat.chatOffer && tg.leftChat.waiting === true && (tg.leftChat.buttons || [])[0] === 'Is our read ready?' &&
+      !tg.leftStatus.chatOffer && tg.leftStatus.waiting === true &&
+      /\*\*"My partner will add it":\*\* `python3 bin\/together\.py leave-chat`/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')),
+      JSON.stringify({ notOurs: tg.notOurs, left: tg.leftChat, status: tg.leftStatus }).slice(0, 700));
   check('the invite first, the questions straight after, the conversation after the check-in (README "Psyche Together, releases 60 and 61"): answering the stage gives the invite alone, with no list of people; the chat is offered only once their own check-in is done, as their own Instagram chats from threads, and picking one reads it and adds it, locked, with no link, no install line and no count in the result; neither person\'s questions use the conversation, only the reports; the read has it',
     tg.invited.invite && tg.invited.invite.from === 'Mei' && tg.invited.write === 'questions' && /^I'm writing your questions now, from your Psyche/.test(tg.invited.say || '') && tg.invited.partner === null && !('buttons' in tg.invited) && !('pickThread' in tg.invited) && !('say' in tg.invited.invite) && !('chatNext' in tg.invited) &&
       tg.threads.pickThread === true && JSON.stringify(tg.threads.buttons) === '["Ana Lim","Not on Instagram"]' && /^Which of your Instagram chats is with Ana\?/.test(tg.threads.ask || '') && !('invite' in tg.threads) &&
       // Release 69: a chat not matched to the partner's own account is confirmed before it's read; "Use a different chat" removes it here and in the locked copy.
       tg.pickConfirm.confirmThread === true && JSON.stringify(tg.pickConfirm.buttons) === '["Yes, it\'s our chat","Pick again"]' && /^Is Ana Lim Ana\? Only your chat with Ana is read/.test(tg.pickConfirm.say || '') &&
-      tg.pickSure.chatOffer === true && /^Added\./.test(tg.pickSure.say || '') && /^Removed: that chat isn't part of your read\./.test(tg.resetChat.say || '') && JSON.stringify(tg.resetChat.buttons) === '["Add our Instagram chat","Add our WhatsApp chat"]' &&
+      tg.pickSure.chatOffer === true && /^Added\./.test(tg.pickSure.say || '') && /^Removed: that chat isn't part of your read\./.test(tg.resetChat.say || '') && JSON.stringify(tg.resetChat.buttons) === '["Add our Instagram chat","Add our WhatsApp chat","My partner will add it"]' &&
       !tg.resetState.chat && !tg.resetState.chatDone && tg.threads2.pickThread === true &&
       /pick-thread --sure/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /Never read or add a chat they haven't confirmed is with their partner/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.chatRules.order && tg.chatRules.order.join() === 'Rui Lim,Kai Tan,Ben Ong' &&
