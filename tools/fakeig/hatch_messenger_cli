@@ -8,6 +8,14 @@ log = os.environ.get('FAKEIG_LOG')
 if log:
     open(log, 'a').write('messenger ' + ' '.join(a) + '\n')
 opt = {a[i]: a[i + 1] for i in range(len(a) - 1) if a[i].startswith('--')}
+# FAKEMSGR_NOKEYS=1: as Messenger answered on a device that wasn't connected (release 214): a check that says only
+# that it has no keys and no user, and every other call turned down as not connected.
+if os.environ.get('FAKEMSGR_NOKEYS') and a[0] == 'check':
+    print(json.dumps({'success': True, 'data': {'epoch_count': 0, 'has_keys': False, 'reconnect_required': False, 'user_id': None}})); sys.exit(0)
+if os.environ.get('FAKEMSGR_NOKEYS_LATE') and a[0] == 'check':
+    print(json.dumps({'success': True})); sys.exit(0)
+if (os.environ.get('FAKEMSGR_NOKEYS') or os.environ.get('FAKEMSGR_NOKEYS_LATE')) and a[0] not in ('check', 'connect-url'):
+    print(': messenger_companion connector is not connected; reconnect required', file=sys.stderr); sys.exit(3)
 if a[0] == 'check':
     print(json.dumps({'connected': not os.environ.get('FAKEMSGR_OFF')})); sys.exit(0)
 if a[0] == 'connect-url':

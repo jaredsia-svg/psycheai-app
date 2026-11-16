@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 213
+RELEASE = 214
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -3741,6 +3741,29 @@ def _not_connected(got, err=None):
     return got == {} or bool(re.search(r"not connected|isn'?t connected|no (linked )?account|not linked", said, re.I))
 
 
+# Messenger not connected, caught (README "Messenger not connected, caught", release 214): on a device its check
+# answered {"success": true, "data": {"has_keys": false, "user_id": null, "reconnect_required": false}}, which says
+# nothing about being connected, so the read went on, every refresh failed with "messenger_companion connector is not
+# connected; reconnect required", and the result had seven notes and no connect link (Muse found the link itself).
+MSGR_UNLINKED = re.compile(r"not connected|isn'?t connected|reconnect required|not linked", re.I)
+
+
+class _MsgrUnlinked(Exception):
+    pass
+
+
+def _msgr_unlinked(state):
+    d = state.get('data') if isinstance(state, dict) and isinstance(state.get('data'), dict) else state
+    return isinstance(d, dict) and (d.get('has_keys') is False and not d.get('user_id') or d.get('reconnect_required') is True)
+
+
+def _msgr_connect_url():
+    try:
+        return (ig(MSGR_CLI, 'connect-url') or {}).get('connect_url') or 'Messenger settings'
+    except (RuntimeError, RateLimited):
+        return 'Messenger settings'
+
+
 def collect_facebook(me=None, with_messenger=True):
     """Their own Facebook posts and, with_messenger, their side of their busiest Messenger chats, into
     sources/facebook.txt. A service that isn't connected answers with its connect link, as data."""
@@ -3836,10 +3859,11 @@ def collect_facebook(me=None, with_messenger=True):
         blocks.append('# Facebook posts: %d of their own, %s to %s\n%s' % (read['facebook posts'], lines[0][:7], lines[-1][:7], '\n'.join(lines)))
     # Messenger: the busiest chats by what's held for each, their own words, what each answers as context.
     if with_messenger:
+        start = len(notes)
         try:
             state = ig(MSGR_CLI, 'check')
-            if _not_connected(state) or (isinstance(state, dict) and state.get('connected') is False):
-                connect['messenger'] = (ig(MSGR_CLI, 'connect-url') or {}).get('connect_url') or 'Messenger settings'
+            if _not_connected(state) or (isinstance(state, dict) and state.get('connected') is False) or _msgr_unlinked(state):
+                connect['messenger'] = _msgr_connect_url()
             else:
                 # The normal refresh first (incremental: it fills gaps), then reaching a year back for
                 # their threads, each on its own, so one failing never stops the other or the read.
@@ -3859,6 +3883,9 @@ def collect_facebook(me=None, with_messenger=True):
                         if args[1] == 'threads' and re.search(r'cannot exceed', str(err), re.I) and args[-1] != MSGR_SINCE_DAYS[-1]:
                             continue
                         notes.append('messenger: refresh (%s) %s' % (' '.join(str(a) for a in args[:2]), err))
+                # Every refresh turned down as not connected (README "Messenger not connected, caught"): the link, not notes.
+                if not refreshed and len(notes) > start and all(MSGR_UNLINKED.search(n) for n in notes[start:]):
+                    raise _MsgrUnlinked()
                 got = ig(MSGR_CLI, 'threads', '--limit', 30)
                 listed = _rows(got, ('threads', 'conversations', 'items'))
                 if not listed:
@@ -3946,14 +3973,22 @@ def collect_facebook(me=None, with_messenger=True):
                     blocks.append('# Messenger chat %d: %s, %s to %s\n%s' % (
                         read['messenger chats'], 'one-to-one' if len(others) <= 1 else 'a group of %d' % (len(others) + 1),
                         mine[0]['t'].strftime('%Y-%m') if mine else '-', mine[-1]['t'].strftime('%Y-%m') if mine else '-', '\n'.join(out)))
+        except _MsgrUnlinked:
+            del notes[start:]
+            connect['messenger'] = _msgr_connect_url()
         except RateLimited:
             notes.append('messenger: too many requests, so it stopped there')
         except RuntimeError as err:
-            notes.append('messenger: %s' % err)
+            if MSGR_UNLINKED.search(str(err)):
+                del notes[start:]
+                connect['messenger'] = _msgr_connect_url()
+            else:
+                notes.append('messenger: %s' % err)
     if not blocks:
         out = {'ok': False, 'read': read}
         if connect:
             out['connect'] = connect
+            out['buttons'] = ["I've connected it", 'Not now']
         if notes:
             out['notes'] = notes
         if not connect:
@@ -3976,6 +4011,9 @@ def collect_facebook(me=None, with_messenger=True):
     out = {'ok': True, 'deidentified': True, 'file': os.path.relpath(target, HERE), 'read': read}
     if connect:
         out['connect'] = connect
+        # Two ways on (README "Messenger not connected, caught"): with something read, "Not now" ended the path on a
+        # device and left the read unwritten, so it's connect or go on without it.
+        out['buttons'] = ["I've connected it", 'Continue without Messenger'] if list(connect) == ['messenger'] else ["I've connected it", 'Not now']
     if notes:
         out['notes'] = notes
     return out
@@ -6117,7 +6155,7 @@ def e2e_save(post_tool, other, info, answer):
 UNSIGNED = ('show', 'after', 'first', 'namesFirst')
 LABELS = frozenset([
     'Generate my Psyche', 'Generate my Psyche. DMs included (Recommended)', 'Generate my Psyche. DMs excluded', 'What will I learn?', 'Is it private?',
-    'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Not now',
+    'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'I\'ve connected them', 'Continue without messages', 'Continue without Messenger', 'Not now',
     'Reveal my roast 🔥', 'Ask PsycheAI questions about myself', 'Sync with a friend', 'Weekly check-ins on my plan',
     'Add WhatsApp or Facebook as data source', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', 'See this week\'s matches',
     'WhatsApp, Facebook and Messenger', 'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', 'Add WhatsApp or Facebook and generate a Fresh Psyche', 'Add WhatsApp or Facebook', 'WhatsApp chats', 'I\'ve shared my chats', 'I\'ve connected it', 'My Syncs',

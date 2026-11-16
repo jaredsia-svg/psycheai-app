@@ -829,7 +829,7 @@ function signup(email, d) {
     // Release 199: no "Let <name> know" (Show our results and news find it), and the daily check is one line: how to stop an old one.
     !/Let <their first name> know/.test(core) && /- "Stop the Sync check": delete the reminder named "PsycheAI Sync check", if there is one\./.test(core) && !/runs python3 bin\/psyche\.py sync-check/.test(core) && !/Check daily for me|offerDailyCheck/.test(core) &&
     !/Want me to check each morning|"Yes, every morning"/.test(core) &&
-    /When the message carries a friend's Psyche link \(.*\/sync\/<code>\), run `python3 bin\/psyche\.py sync-preview <the link>` once it's installed, which looks at the link without syncing and keeps it here, so What's next after their card starts with "Sync with <their name>" by itself\. When its result has a `card` \(their friend's Psyche Card as a picture, which the friend shared with their link\), send its `cardSay` with that picture first, as a message of its own; then the introduction as its own message, with its buttons and no picture\. When status says `hasPsyche`: true, their Psyche is already made, so there is no introduction and no new read: reply with sync-preview's nextStep as it is \(its say names the friend; its buttons are "Sync with <their name>" and "Not now"\), under its `card` picture when it has one\./.test(require('../lib/skill.js').skillMd()) &&
+    /When their message, or one earlier in this chat, carries a friend's Psyche link \(.*\/sync\/<code>\), run `python3 bin\/psyche\.py sync-preview <the link>` once it's installed, which looks at the link without syncing and keeps it here, so What's next after their card starts with "Sync with <their name>" by itself\. When its result has a `card` \(their friend's Psyche Card as a picture, which the friend shared with their link\), send its `cardSay` with that picture first, as a message of its own; then the introduction as its own message, with its buttons and no picture\. When status says `hasPsyche`: true, their Psyche is already made, so there is no introduction and no new read: reply with sync-preview's nextStep as it is \(its say names the friend; its buttons are "Sync with <their name>" and "Not now"\), under its `card` picture when it has one\./.test(require('../lib/skill.js').skillMd()) &&
     /the first visit comes first/.test(core) &&
     /unless it carries a friend's Psyche link and status says `hasPsyche`: true/.test(require('../lib/skill.js').skillMd()));
   check('nothing the host is handed sets its role: no "You are…" in the instructions, the guides or a tool description',
@@ -1712,7 +1712,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
         /<h1>Your personal AI coach/.test(lockedPage) && /location\.hash/.test(lockedPage) && /\^#\[A-Za-z0-9_-\]\{22\}\$/.test(lockedPage) && lockedPage.includes(JSON.stringify(require('../lib/skill.js').syncPrompt(''))) &&
           !/fetch\(|XMLHttpRequest|sendBeacon|\.src\s*=|location\.href\s*=/.test((lockedPage.match(/<script>\(function\(\)\{var h=location\.hash[\s\S]*?<\/script>/) || [''])[0]) &&
           /A friend wants to see how you two sync/.test(lockedPage) && !/location\.hash/.test(installPage) &&
-          /^# PsycheAI skill for Muse/.test(lockedSkill) && /This address is a friend's Sync link/.test(lockedSkill) && !/friend's Sync link/.test(plainSkill) &&
+          /^# PsycheAI skill for Muse/.test(lockedSkill) && /This address is a friend's Sync link \([^)]*\): installing PsycheAI starts with its welcome, which asks what to read, and once their Psyche Card is ready, syncing with that friend is one of the choices\./.test(lockedSkill) && !/friend's Sync link/.test(plainSkill) &&
           /<meta property="og:title" content="A friend wants to see how you two sync">/.test(lockedWa) &&
           require('../lib/skill.js').syncPrompt('AbCdEfGhIjKlMnOpQrStUv') === 'Install PsycheAI, generate my Psyche and sync with my friend: http://localhost:8787/sync#AbCdEfGhIjKlMnOpQrStUv',
         lockedSkill.slice(0, 300));
@@ -2458,7 +2458,11 @@ print(json.dumps({'fine': m.answer_problems(fine),
           const daysLog = pathx.join(fsx.mkdtempSync(pathx.join(os.tmpdir(), 'days-')), 'log');
           const daysRun = JSON.parse((await execFile('python3', [pathx.join(dir, 'bin', 'psyche.py'), 'collect-facebook', '--me', 'Mei Tan'], { env: { ...env, FAKEMSGR_DAYS: '90', FAKEIG_LOG: daysLog }, timeout: 60000 })).stdout);
           skillState.msgrDays = { tried: (fsx.readFileSync(daysLog, 'utf8').match(/sync threads --since-days \d+/g) || []).map(x => +x.split(' ').pop()), notes: daysRun.notes || [], chats: daysRun.read && daysRun.read['messenger chats'] };
-          skillState.facebook = { both, text, postsOnly, postsText, notLinked, alt, altText };
+          // Messenger not connected as a device answered it (README "Messenger not connected, caught"): a check with no keys
+          // and no user, and a check that says nothing with every refresh turned down. Facebook is read; Messenger gives its link.
+          const noKeys = await fb('--me', 'Mei Tan').then(() => execFile('python3', [pathx.join(dir, 'bin', 'psyche.py'), 'collect-facebook', '--me', 'Mei Tan'], { env: { ...env, FAKEMSGR_NOKEYS: '1' }, timeout: 60000 })).then(r => JSON.parse(r.stdout));
+          const noKeysLate = JSON.parse((await execFile('python3', [pathx.join(dir, 'bin', 'psyche.py'), 'collect-facebook', '--me', 'Mei Tan'], { env: { ...env, FAKEMSGR_NOKEYS_LATE: '1' }, timeout: 60000 })).stdout);
+          skillState.facebook = { both, text, postsOnly, postsText, notLinked, alt, altText, noKeys, noKeysLate };
           if (had === null) fsx.rmSync(fbFile); else fsx.writeFileSync(fbFile, had);
         } catch (e) { skillState.facebook = { error: String(e.message).slice(0, 400) }; }
         // A later Fresh Psyche: the account read last time comes first, marked, from last-collect's hash of its ID.
@@ -3166,6 +3170,9 @@ print(json.dumps({'one': 'class="shared one"' in one and 'Interests' in one and 
         /# Facebook posts: 9 of their own/.test(F.text) && /\[facebook post\] Fb post 0-0: hiked with a friend again, call me on \[number\]/.test(F.text) && !/aunt|Kai|Jun|Ana|Mei|FB1|ME1|cid\.|example\.com|\+65/.test(F.text) &&
         /# Messenger chat 1: one-to-one/.test(F.text) && /# Messenger chat 2: a group of 3/.test(F.text) && /^> Friend: Friend here, are you coming Saturday 0\? mail me at \[email\]$/m.test(F.text) && /^> Friend A: a friend here, are you coming Saturday 0\? mail me at \[email\]$/m.test(F.text) && /\d{2}:\d{2} Yes a friend, I will bring the snacks this time 0, see \[link\]$/m.test(F.text) && !/decrypt failed/.test(F.text) &&
         F.postsOnly.ok && F.postsOnly.read['messenger chats'] === 0 && !/Messenger chat/.test(F.postsText) &&
+        [F.noKeys, F.noKeysLate].every(r => r && r.ok === true && r.read['facebook posts'] > 0 && r.read['messenger chats'] === 0 && r.connect && r.connect.messenger === 'https://messenger.example/connect' && !r.connect.facebook && !/not connected|reconnect/i.test(JSON.stringify(r.notes || [])) && JSON.stringify(r.buttons) === '["I\'ve connected it","Continue without Messenger"]') &&
+        JSON.stringify(F.notLinked.buttons) === '["I\'ve connected it","Not now"]' &&
+        /and its buttons: "I've connected it" and "Not now", or, with Facebook read and only Messenger not connected, "I've connected it" and "Continue without Messenger", which goes on to the fresh Psyche with what was read/.test(instructions.MUSE_PROCEDURE) &&
         F.notLinked.ok === false && F.notLinked.connect.facebook === 'https://accountscenter.example/connect' && F.notLinked.connect.messenger === 'https://messenger.example/connect' && !F.notLinked.problems &&
         !/\b(send|run|tap|tell|say)\b/i.test(JSON.stringify(F.notLinked)))(skillState.facebook) &&
       /def drop_context\(\):\n    for path in \(DIGEST, os\.path\.join\(SOURCES, 'whatsapp\.txt'\), os\.path\.join\(SOURCES, 'facebook\.txt'\)\):/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
@@ -4472,7 +4479,7 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
   const theCode = JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, '.keys.json'), 'utf8')).code;
   check('faster from an invite: the invite says where to install from; join answers in a few hundred bytes with its writing job in a task file; the widget comes as a file too; the partner is offered the reminder once their answers are in; the bootstrap and SKILL.md say to join, with nothing that tells Muse not to search, look at the script or note things',
     /^127\.0\.0\.1:\d+\/together#[A-Za-z0-9_-]{22}$/.test((tg.staged.invite || {}).link || '') && (tg.staged.invite || {}).from === 'Mei' && !/Install|Paste|Muse app/.test(JSON.stringify(tg.staged)) &&
-      /then, in a code block \(three backticks\) with nothing else inside it, the line the partner pastes: "Install the Psyche Together skill from https:\/\/app\.psycheai\.io\/together and join our Psyche Together: <the invite's url>"/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
+      /then, in a code block \(three backticks\) with nothing else inside it, the line the partner pastes: "Install the Psyche Together skill and join our Psyche Together: <the invite's url>"/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       tg.join.short && JSON.stringify(tg.join.short).length < 2000 && tg.join.task === 'work/together-questions-task.json' && tg.join.short.partnerName === 'Mei' &&
       tg.formB.widgetFile === 'work/questions-widget.html' && tg.waitB.setCheck === true &&
       (tgPage => /Its SKILL\.md says how it starts, and how a partner's invite is joined\./.test(tgPage) && !/python3|\brun\b|\bsave\b|saved into/i.test(tgPage))(await (await fetch(base + '/together')).text()) &&
