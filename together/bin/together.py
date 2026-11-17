@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 81
+RELEASE = 82
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -80,31 +80,30 @@ PILLARS = {
 }
 PILLAR_ORDER = ['security', 'appreciation', 'connection', 'desire', 'disagreements', 'needs', 'life', 'future', 'growth']
 
-# The nine core questions, the same for both: asked easy first, security and desire later. Each option's
-# score (2 good, 1 middling, 0 low) makes the couple view; the words never leave this workspace.
+# Release 82 (README "Eight screens"): the core questions, the same for both, now six. Five are plain statements on one
+# screen ("How it's going", GRID), each Yes / Mostly / Not really, scored 2 / 1 / 0 as the read's levels have always been;
+# security is its own screen beside how sure you are yourself. Life fit, growth and the shared future went: the big
+# decisions, commitment and the two Psyches cover them. Asked easy first; the words never leave this workspace.
+YMN = [('Yes', 2), ('Mostly', 1), ('Not really', 0)]
 CORE = [
-    ('appreciation', 'How often do you feel appreciated by {p}?', [('Almost always', 2), ('Often', 2), ('Sometimes', 1), ('Rarely', 0)]),
-    ('connection', 'When you reach for {p}\'s attention in small ways, how often do they turn towards you?',
-     [('Almost always', 2), ('Often', 2), ('Sometimes', 1), ('Rarely', 0)]),
-    ('needs', 'How easy is it to get your needs met with {p}?', [('Easy', 2), ('Mostly', 1), ('Difficult', 0)]),
-    ('life', 'How comfortable are you with how {p} spends their free time, money and energy?',
-     [('Comfortable', 2), ('Mostly', 1), ('Some things bother me', 0)]),
-    ('growth', 'Does being with {p} help you grow into who you want to be?', [('Very much', 2), ('Somewhat', 1), ('Not really', 0)]),
-    ('disagreements', 'After a disagreement, how do you two usually end up?',
-     [('Closer', 2), ('Back to normal soon', 2), ('It lingers', 0), ('It never quite ends', 0)]),
-    ('future', 'Do you two want the same things, and picture the same life, in the years ahead?',
-     [('Yes, and we\'ve talked', 2), ('Probably, not talked', 1), ('Not sure', 0), ('No', 0)]),
+    ('appreciation', 'I feel appreciated by {p}', YMN),
+    ('connection', 'We make time for each other', YMN),
+    ('desire', 'I\'m happy with our closeness and intimacy', YMN + [('Skip', None)]),
+    ('needs', 'Life together feels fair: chores, money, time', YMN),
+    ('disagreements', 'We get past disagreements well', YMN),
     ('security', 'How sure are you that {p} is in this relationship for the long run?', [('Completely', 2), ('Mostly', 1), ('Not sure', 0)]),
-    ('desire', 'Do you feel a real, particular physical attraction to {p}, and are you happy with the closeness between you? You can skip this one.',
-     [('Yes, strongly', 2), ('Mostly', 1), ('Something to talk about', 0), ('Skip', None)]),
 ]
-# Worded for working together when they've separated; desire and growth aren't asked then.
+GRID = ['appreciation', 'connection', 'desire', 'needs', 'disagreements']
+GRID_ASK = 'Right now, how true are these for you?'
+GRID_SUB = '{p} answers the same. Your read sets them side by side.'
+OPTIONAL = {'core:desire'}          # can be left blank: "Skip"
+# Worded for working together when they've separated; closeness isn't asked then.
 CORE_SEPARATED = {
+    'connection': 'We keep each other in the loop about the children',
+    'needs': 'Sharing what the children need feels fair',
     'security': 'How sure are you that {p} will keep showing up for the children?',
-    'future': 'Do you two agree on what the children need over the next few years?',
-    'life': 'How comfortable are you with how {p} handles time, money and energy around the children?',
 }
-SKIP_SEPARATED = {'desire', 'growth'}
+SKIP_SEPARATED = {'desire'}
 
 # README "Psyche Together, release 48": how sure you are yourself, beside how sure you are of your partner (security),
 # and what you disagree about most, the same for both. Commitment shows only as the couple's level, never whose;
@@ -117,6 +116,13 @@ MIRRORS = [('appreciated', 'appreciation', 'What makes you feel most appreciated
             ['To be listened to', 'Help fixing it', 'Something to take my mind off it', 'Some space']),
            ('repair', 'disagreements', 'After a disagreement, what do you most need from {p}?', 'Now your guess: after a disagreement, what do you think {p} most needs from you?',
             ['To talk it through now', 'A little time first', 'A hug or warm gesture', 'To move on and let it go'])]
+# Release 82: two are asked, each with "Something else" in their own words. What makes you feel appreciated keeps your
+# guess of your partner (how well you read each other is the finding); after a disagreement is your own answer only, side
+# by side, since a talk-now and a time-first answer is itself the finding. "When you're stressed" went: the chat and each
+# Psyche's attachment show it. Its answers in reads written before stay readable.
+ASKED_MIRRORS = [('appreciated', True), ('repair', False)]
+MIRROR_TEXT = {'appreciated': ('What makes you feel most appreciated by {p}?', 'And what do you think makes {p} feel most appreciated by you?'),
+               'repair': ('After a disagreement, what do you most need from {p}?', None)}
 # README "Psyche Together, release 51": an optional hope in your own words (Gottman's dreams within conflict): read by
 # your partner's Muse to write the read, which may speak of it in its own words, never quoting you.
 DREAM = ('dream:self', 'Optional: what is a hope for your life that {p} might not fully know? In your own words. Your partner\'s Muse reads it to write your read, which may mention it in its own words, never quoting you.',
@@ -168,12 +174,12 @@ DECISION_LABELS = {          # release 63: each named as the decision it is, not
     'faith': 'How much faith shapes your life', 'parents': 'How involved your parents are', 'kids_routine': 'The children\'s routines between homes',
     'kids_money': 'Money for the children', 'new_partners': 'New partners and the children', 'handovers': 'Handovers between your homes',
 }
-BY_STAGE = {
+BY_STAGE = {          # release 82: three at most, on one screen; money went (Life together feels fair, and the disagreement topic, cover it)
     'Dating': ['children'],          # "What do you hope this becomes?" went (README "Psyche Together, release 62"): commit:self asks it
-    'Living together': ['children', 'marriage', 'money', 'place', 'faith'],
-    'Engaged': ['children', 'money', 'place', 'faith', 'parents'],
-    'Married': ['more_children', 'money', 'place', 'parents'],
-    SEPARATED: ['kids_routine', 'kids_money', 'new_partners', 'handovers'],
+    'Living together': ['children', 'marriage', 'place'],
+    'Engaged': ['children', 'place', 'parents'],
+    'Married': ['more_children', 'place', 'parents'],
+    SEPARATED: ['kids_routine', 'kids_money', 'new_partners'],
 }
 UNDECIDED = {'Unsure', 'Not sure yet', 'We\'ll see where it goes', 'We don\'t agree yet'}
 
@@ -350,8 +356,11 @@ def pillar_reasons(sig, core):
 # view stays fair. A follow-up shows only where it helps: when the answer above it is low, or where this person's
 # Psyche points to strain there, four at most.
 
-FLOW = ['appreciation', 'connection', 'needs', 'life', 'growth', 'disagreements', 'future', 'security']
-FOLLOW_MAX = 2      # follow-ups shown, in all (README "Psyche Together, release 41")
+FLOW = ['appreciation', 'connection', 'needs', 'disagreements', 'security']
+# Release 82: an opener only where a question has a screen of its own (the grid's five share one screen and none), and one
+# follow-up at most, since they shape only this person's own For you.
+OPENER_PILLARS = ['appreciation', 'security', 'disagreements']
+FOLLOW_MAX = 1      # follow-ups shown, in all (README "Psyche Together, release 41"; one since release 82)
 
 
 def core_for(stage):
@@ -373,82 +382,99 @@ def decision_options(topic, stage):
 
 
 def decisions_for(stage, answers):
-    topics = list(BY_STAGE.get(stage) or [])
-    future = (answers.get('core:future') or {}).get('label')
-    if stage == 'Dating' and future == 'Yes, and we\'ve talked':
-        return []
-    return topics
+    return list(BY_STAGE.get(stage) or [])
 
 
 def stage_of(s):
     return s.get('stage') or (s.get('answers') or {}).get('stage', {}).get('label')
 
 
-# README "Psyche Together, release 41": the questions follow the read's own order, chapter by chapter, so each one
-# is asked where its answer lands: overall first (the glance), then 01 to 05, the private question last.
-QUESTION_CHAPTERS = [('close', ['appreciation', 'connection', 'desire']), ('life', ['needs', 'life']),
-                     ('future', ['future', 'decisions', 'growth']), ('secure', ['security']), ('disagree', ['disagreements'])]
+# README "Psyche Together, release 41": the questions follow the read's own order. Release 82 (README "Eight screens"):
+# eight screens, each a "group" of one or more questions shown together: overall, how it's going (the grid), feeling
+# appreciated, the long run, after a disagreement, what you disagree about, the big decisions, the private question.
+QUESTION_CHAPTERS = [('close', ['appreciation', 'connection', 'desire']), ('life', ['needs']),
+                     ('future', ['decisions']), ('secure', ['security']), ('disagree', ['disagreements'])]
+GROUP_CHAPTER = {'appreciated': 'close', 'security': 'secure', 'repair': 'disagree', 'topic': 'disagree', 'decide': 'future'}
 
 
 def chapter_of(it):
-    if it['kind'] == 'know':
-        return 'close'          # asked last, before the private one (release 47), and read in 01
+    if it.get('group') in GROUP_CHAPTER:
+        return GROUP_CHAPTER[it['group']]
+    if it.get('group') in ('grid', 'overall'):
+        return None
     key = 'decisions' if it['kind'] == 'decision' else it.get('pillar')
     return next((cid for cid, keys in QUESTION_CHAPTERS if key in keys), None)
 
 
+def _core_item(key, text, opts, q, group, opener=True):
+    return {'id': 'core:' + key, 'kind': 'core', 'pillar': key, 'group': group,
+            'opener': (q.get('openers') or {}).get(key, '') if opener and key in OPENER_PILLARS else '',
+            'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]}
+
+
+def _deep_item(key, q):
+    f = (q.get('followUps') or {}).get(key)
+    if key == 'desire' or not (isinstance(f, dict) and f.get('q') and f.get('options')):
+        return []
+    return [{'id': 'deep:' + key, 'kind': 'deeper', 'pillar': key, 'opener': '', 'text': f['q'], 'follows': 'core:' + key,
+             'options': [o for o in f['options'] if o != OTHER] + [OTHER], 'own': True}]
+
+
 def items(s):
     """Every question this person is asked once their questions are written, in order. Each is a dict:
-    id, kind, pillar, opener, text, options, scores (core), follows (a follow-up's core id)."""
+    id, kind, pillar, group (questions shown on one screen share it), opener, text, options, scores (core),
+    follows (a follow-up's core id)."""
     stage, q, out = stage_of(s), s.get('questions') or {}, []
     core = {pid: (text, opts) for pid, text, opts in core_for(stage)}
     out += overall_items(stage)
-    for cid, keys in QUESTION_CHAPTERS:
-        for key in keys:
-            if key == 'decisions':
-                out += [{'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'opener': '', 'text': DECISIONS[t][0], 'options': decision_options(t, stage),
-                         'onlyIf': 'hope' if t == 'children' and stage == 'Dating' else None} for t in BY_STAGE.get(stage) or []]
-            elif key in core:
-                text, opts = core[key]
-                out.append({'id': 'core:' + key, 'kind': 'core', 'pillar': key, 'opener': (q.get('openers') or {}).get(key, '') if key != 'desire' else '',
-                            'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
-                f = (q.get('followUps') or {}).get(key)
-                if key != 'desire' and isinstance(f, dict) and f.get('q') and f.get('options'):
-                    out.append({'id': 'deep:' + key, 'kind': 'deeper', 'pillar': key, 'opener': '', 'text': f['q'], 'follows': 'core:' + key,
-                                'options': [o for o in f['options'] if o != OTHER] + [OTHER], 'own': True})
-                if key == 'growth' or (key == 'future' and 'growth' not in core):
-                    out.append({'id': DREAM[0], 'kind': 'dream', 'pillar': 'future', 'opener': '', 'text': DREAM[1], 'options': list(DREAM[2]), 'own': True, 'ownLabel': DREAM[2][1]})
-                if key == 'security':
-                    out.append({'id': COMMIT[0], 'kind': 'commit', 'pillar': 'security', 'opener': '', 'text': COMMIT_SEPARATED if stage == SEPARATED else COMMIT[1],
-                                'options': [o for o, _ in COMMIT[2]], 'scores': [sc for _, sc in COMMIT[2]]})
-                if key == 'disagreements':
-                    out.append({'id': TOPIC[0], 'kind': 'topic', 'pillar': 'disagreements', 'opener': '', 'text': TOPIC[1], 'options': TOPIC[2] + [OTHER], 'own': True})
-                for mk, mp, mq, mg, mo in MIRRORS:
-                    if mp == key and stage != SEPARATED:
-                        out.append({'id': 'mirror:%s:self' % mk, 'kind': 'mirror', 'pillar': key, 'opener': '', 'text': mq, 'options': list(mo)})
-                        out.append({'id': 'mirror:%s:guess' % mk, 'kind': 'mirror', 'pillar': key, 'opener': '', 'text': mg, 'options': list(mo)})
-    # how well you know your partner (README "Psyche Together, releases 40 and 47"): last, before the private one
-    out += [{'id': k_['id'], 'kind': 'know', 'pillar': '', 'opener': '', 'text': k_['q'], 'options': list(k_['options'])} for k_ in q.get('know') or []]
-    out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
+    out += [_core_item(k, core[k][0], core[k][1], q, 'grid', opener=False) for k in GRID if k in core]
+    for k in GRID:
+        if k in core:
+            out += _deep_item(k, q)
+    for mk, guess in ASKED_MIRRORS:
+        if stage == SEPARATED:
+            continue
+        mo = next(m[4] for m in MIRRORS if m[0] == mk)
+        if mk == 'repair':
+            out += security_items(stage, q)
+        self_q, guess_q = MIRROR_TEXT[mk]
+        out.append({'id': 'mirror:%s:self' % mk, 'kind': 'mirror', 'pillar': 'appreciation' if mk == 'appreciated' else 'disagreements', 'group': mk,
+                    'opener': (q.get('openers') or {}).get('appreciation' if mk == 'appreciated' else 'disagreements', ''),
+                    'text': self_q, 'options': list(mo) + [OTHER], 'own': True})
+        if guess:
+            out.append({'id': 'mirror:%s:guess' % mk, 'kind': 'mirror', 'pillar': 'appreciation', 'group': mk, 'opener': '',
+                        'text': guess_q, 'options': list(mo) + [OTHER], 'own': True})
+    if stage == SEPARATED:
+        out += security_items(stage, q)
+    out.append({'id': TOPIC[0], 'kind': 'topic', 'pillar': 'disagreements', 'group': 'topic', 'opener': '', 'text': TOPIC[1], 'options': TOPIC[2] + [OTHER], 'own': True})
+    out += [{'id': 'decide:' + t, 'kind': 'decision', 'pillar': '', 'group': 'decide', 'opener': '', 'text': DECISIONS[t][0], 'options': decision_options(t, stage)}
+            for t in BY_STAGE.get(stage) or []]
+    out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'group': 'safety', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
     return out
 
 
+def security_items(stage, q):
+    """The long run, on one screen: how sure you are of your partner (the security pillar), and of yourself."""
+    core = {pid: (text, opts) for pid, text, opts in core_for(stage)}
+    out = [_core_item('security', core['security'][0], core['security'][1], q, 'security'),
+           {'id': COMMIT[0], 'kind': 'commit', 'pillar': 'security', 'group': 'security', 'opener': '', 'text': COMMIT_SEPARATED if stage == SEPARATED else COMMIT[1],
+            'options': [o for o, _ in COMMIT[2]], 'scores': [sc for _, sc in COMMIT[2]]}]
+    return out + _deep_item('security', q)
+
+
 def overall_items(stage):
-    return [{'id': qid, 'kind': 'overall', 'pillar': '', 'opener': '', 'text': (OVERALL_SEPARATED.get(qid, text) if stage == SEPARATED else text),
+    return [{'id': qid, 'kind': 'overall', 'pillar': '', 'group': 'overall', 'opener': '', 'text': (OVERALL_SEPARATED.get(qid, text) if stage == SEPARATED else text),
              'options': [o for o, _ in OVERALL_OPTS], 'scores': [sc for _, sc in OVERALL_OPTS]} for qid, text in OVERALL]
 
 
 def round_items(s):
-    """The questions again, four weeks on: each pillar's own question, the two overall ones and the private one."""
+    """The questions again, four weeks on: the overall two, the grid, how sure you are of your partner, and the private one."""
     stage, out = stage_of(s), []
     core = {pid: (text, opts) for pid, text, opts in core_for(stage)}
     out += overall_items(stage)
-    for cid, keys in QUESTION_CHAPTERS:
-        for pid in keys:
-            if pid in core:
-                text, opts = core[pid]
-                out.append({'id': 'core:' + pid, 'kind': 'core', 'pillar': pid, 'opener': '', 'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]})
-    out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
+    out += [_core_item(k, core[k][0], core[k][1], {}, 'grid') for k in GRID if k in core]
+    out.append(_core_item('security', core['security'][0], core['security'][1], {}, 'security'))
+    out.append({'id': 'safety', 'kind': 'safety', 'pillar': '', 'group': 'safety', 'opener': '', 'text': SAFETY[1], 'options': SAFETY[2], 'private': True})
     return out
 
 
@@ -494,7 +520,7 @@ def certain(s):
 
 def shown(s, its, answers):
     """The ids shown, given the answers: a follow-up always where their Psyche makes it certain, and any other
-    under a low answer to its pillar's question; the Dating decisions only when they haven't talked about the future."""
+    under a low answer to its pillar's question."""
     sure, out, deep = certain(s), [], 0
     scores = {it['id']: dict(zip(it['options'], it['scores'])) for it in its if it['kind'] == 'core'}
     for it in its:
@@ -506,8 +532,6 @@ def shown(s, its, answers):
             if deep >= FOLLOW_MAX:
                 continue
             deep += 1
-        if it.get('onlyIf') and (answers.get('core:future') or {}).get('label') == 'Yes, and we\'ve talked':
-            continue
         out.append(it['id'])
     return out
 
@@ -515,6 +539,8 @@ def shown(s, its, answers):
 def say_for(s, it):
     p = s.get('partner') or 'your partner'
     text = it['text'].replace('{p}', p)
+    if it.get('group') == 'grid':          # one at a time in the chat: the statement with how to answer it
+        text = 'How true is this for you right now? %s.' % text
     return (it['opener'] + '\n\n' + text) if it.get('opener') else text
 
 
@@ -589,15 +615,23 @@ def shared_profile(s, answered=True):
         if not is_gentle(s):
             out['know']['guesses'] = {k_['id']: (answers.get(k_['id']) or {}).get('label') for k_ in know_ if answers.get(k_['id'])}
     core, ov = levels_of(stage_of(s), answers)
-    out.update(core=core, overall=ov, rounds=s.get('rounds') or [], sentAt=s.get('sent') or int(time.time()), desireTalk=(answers.get('core:desire') or {}).get('label') == 'Something to talk about',
+    out.update(core=core, overall=ov, rounds=s.get('rounds') or [], sentAt=s.get('sent') or int(time.time()), desireTalk=(answers.get('core:desire') or {}).get('label') in ('Something to talk about', 'Not really'),
                decisions={k[7:]: v.get('label') for k, v in answers.items() if k.startswith('decide:') and v.get('label')})
     if is_gentle(s):        # someone who said they sometimes feel unsafe: nothing more about them leaves than the pillars need
         return out
     mir = {}
     for mk, _, _, _, mo in MIRRORS:
-        a_, g_ = (answers.get('mirror:%s:self' % mk) or {}).get('label'), (answers.get('mirror:%s:guess' % mk) or {}).get('label')
-        if a_ in mo and g_ in mo:
-            mir[mk] = {'self': a_, 'guess': g_}
+        # Release 82: "Something else" in their own words (cleaned, as other typed answers are), and no guess where none is asked.
+        def said(qid, mo=mo):
+            a = answers.get(qid) or {}
+            if a.get('label') in mo:
+                return a['label']
+            if a.get('label') == OTHER and a.get('text'):
+                return clean_typed(a['text'], [s.get('partner') or ''])[:60] or None
+            return None
+        a_, g_ = said('mirror:%s:self' % mk), said('mirror:%s:guess' % mk)
+        if a_:
+            mir[mk] = {'self': a_, 'guess': g_} if g_ else {'self': a_}
     if mir:
         out['mirror'] = mir
     dr = answers.get(DREAM[0]) or {}
@@ -647,11 +681,19 @@ def couple_view(a, b):
     if mirrors:
         # Release 69: whether each guess was right is worked out here, never by the writer, which once read "all
         # matched" off pairs that were all different: aGuessedRight is a's guess of what b wants, against b's answer.
-        for mv in mirrors.values():
-            mv['aGuessedRight'] = mv['a'].get('guess') == mv['b'].get('self')
-            mv['bGuessedRight'] = mv['b'].get('guess') == mv['a'].get('self')
+        # Release 82: a guess is scored only when it and the answer it guesses are both buttons: a guess or an answer in
+        # their own words is compared by the writer in words, never counted right or wrong; a pair asked with no guess has none.
+        def right(g_, said_, mo):
+            return (g_ == said_) if g_ in mo and said_ in mo else None
+        scored = []
+        for mk, mv in mirrors.items():
+            mo = next(m[4] for m in MIRRORS if m[0] == mk)
+            mv['aGuessedRight'] = right(mv['a'].get('guess'), mv['b'].get('self'), mo)
+            mv['bGuessedRight'] = right(mv['b'].get('guess'), mv['a'].get('self'), mo)
+            scored += [x for x in (mv['aGuessedRight'], mv['bGuessedRight']) if x is not None]
         out['mirrors'] = mirrors
-        out['guessedRight'] = {'right': sum(int(mv['aGuessedRight']) + int(mv['bGuessedRight']) for mv in mirrors.values()), 'of': 2 * len(mirrors)}
+        if scored:
+            out['guessedRight'] = {'right': sum(int(x) for x in scored), 'of': len(scored)}
     dreams = {r: p_.get('dream') for r, p_ in (('a', a), ('b', b)) if p_.get('dream')}
     if dreams:
         out['dreams'] = dreams          # for the writer, who puts each in its own words; the page never shows these
@@ -741,6 +783,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,
 .done .big{font-size:44px;line-height:1;margin:18px 0 6px;color:var(--plum)}
 .go{margin:4px 0 12px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,#7b3fa0,#c2366d);color:#fff;font-weight:750;font-size:16px;text-align:center}
 .own{display:block;width:100%;margin-top:8px;padding:11px 12px;border:1.5px solid var(--plum);border-radius:14px;font:inherit;font-size:16px;color:var(--ink);background:#fff;resize:none;min-height:70px}.own[hidden]{display:none}
+.part{margin:0 0 6px}.part+.part{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.who{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
+.who i{font-style:normal;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--plum);color:#fff;font-size:11px}.who.g i{background:var(--rose)}
+.q2{margin:0 0 8px;font-size:16px;line-height:1.35;font-weight:750;color:var(--ink)}
+.opts.two{display:grid;grid-template-columns:1fr 1fr;gap:7px}.opts.two label{padding:9px 11px;font-size:14px;gap:8px;border-radius:12px}.opts.two label:before{width:14px;height:14px}
+.sub{margin:-4px 0 10px;font-size:13px;color:var(--soft)}
+.grid{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center}
+.grid .st{font-size:14.5px;font-weight:650;line-height:1.25}.grid .st small{display:block;font-weight:400;font-size:11.5px;color:var(--soft)}
+.seg{display:flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.seg label{position:relative;font-size:12.5px;padding:8px 7px;min-width:50px;text-align:center;border-left:1.5px solid var(--line);font-weight:600;color:var(--soft);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.seg label:first-child{border-left:0}.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label.on.s0{background:#e6f4ec;color:#1f6b45}.seg label.on.s1{background:var(--wash);color:var(--plum)}.seg label.on.s2{background:#fcebf2;color:var(--rose)}
+.pills{display:flex;flex-wrap:wrap;gap:6px}.pills label{position:relative;font-size:13.5px;padding:8px 12px;border:1.5px solid var(--line);border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pills input{position:absolute;opacity:0;pointer-events:none}.pills label.on{border-color:var(--plum);background:var(--wash);font-weight:700}
+.dq{margin:0 0 6px;font-size:14.5px;font-weight:700}
 .intro .question{font-size:20px}.how{margin:0 0 8px;font-size:15px;line-height:1.5;color:var(--ink)}.intro p.small{margin:12px 0 0;font-size:13px;color:var(--soft)}
 .start{all:unset;cursor:pointer;display:block;margin-top:16px;padding:13px 16px;border-radius:14px;background:var(--plum);color:#fff;font-weight:750;font-size:16px;text-align:center;-webkit-tap-highlight-color:transparent}
 '''
@@ -748,24 +805,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,
 W_JS = r'''
 (function(){
 var D=JSON.parse(document.getElementById('pt-data').textContent),ans={},at=-1,field=document.getElementById('pt-answers'),OTHER=D.other;
-function ownOf(id){var it=D.items.filter(function(x){return x.id===id})[0];return (it&&it.ownLabel)||OTHER;}
+function item(id){return D.items.filter(function(x){return x.id===id})[0];}
+function ownOf(id){var it=item(id);return (it&&it.ownLabel)||OTHER;}
 function done_(id){return (id in ans)&&ans[id]!==ownOf(id)+': ';}
-function score(id){var it=D.items.filter(function(x){return x.id===id})[0];return it&&it.scores&&(id in ans)?it.scores[it.options.indexOf(ans[id])]:null;}
+function score(id){var it=item(id);return it&&it.scores&&(id in ans)?it.scores[it.options.indexOf(ans[id])]:null;}
 function shown(){var deep=0;return D.items.filter(function(it){
  if(it.follows&&D.certain.indexOf(it.pillar)<0&&!(it.follows in ans&&score(it.follows)===0))return false;
- if(it.follows){if(deep>=D.followMax)return false;deep++;}
- if(it.onlyIf&&ans['core:future']===D.talked)return false;return true;}).map(function(it){return it.id});}
-function card(id){return document.getElementById('c-'+id.split(':').join('-'));}
-function show(){var ids=shown(),n=ids.filter(done_).length;
+ if(it.follows){if(deep>=D.followMax)return false;deep++;}return true;}).map(function(it){return it.id});}
+// Release 82: questions sharing a group are one screen; a screen is answered when every question on it is, but one
+// that can be left blank.
+function screens(){var out=[],ids=shown();ids.forEach(function(id){var g=item(id).group,last=out[out.length-1];
+ if(g&&last&&last.g===g)last.ids.push(id);else out.push({g:g,ids:[id]});});return out;}
+function sdone(sc){return sc.ids.every(function(id){return D.optional.indexOf(id)>=0||done_(id);});}
+function cardOf(sc){return document.getElementById(sc.ids.length>1||item(sc.ids[0]).group==='grid'||item(sc.ids[0]).group==='decide'?'c-g-'+sc.g:'c-'+sc.ids[0].split(':').join('-'));}
+function show(){var scs=screens(),n=scs.filter(sdone).length;
  [].slice.call(document.querySelectorAll('.card')).forEach(function(c){c.hidden=true});
- document.querySelector('.prog i').style.width=Math.round(100*n/ids.length)+'%';
+ document.querySelector('.prog i').style.width=Math.round(100*n/scs.length)+'%';
  field.value=JSON.stringify(ans);
- if(at<0){document.getElementById('c-intro').hidden=false;document.querySelector('.count').textContent=ids.length+' questions · about '+Math.max(3,Math.round(ids.length/4))+' minutes';return;}
- document.querySelector('.count').textContent=Math.min(at+1,ids.length)+' of '+ids.length;
- if(at>=ids.length){var d=document.getElementById('c-done');d.hidden=false;d.querySelector('h3').textContent='All '+ids.length+' answered';
-  document.querySelector('.count').textContent='All '+ids.length+' answered';return;}
- var c=card(ids[at]);c.hidden=false;c.querySelector('.back').disabled=false;c.querySelector('.next').hidden=!done_(ids[at]);}
+ if(at<0){document.getElementById('c-intro').hidden=false;document.querySelector('.count').textContent=scs.length+' quick screens · about '+Math.max(2,Math.round(scs.length/4))+' minutes';return;}
+ document.querySelector('.count').textContent=Math.min(at+1,scs.length)+' of '+scs.length;
+ if(at>=scs.length){var d=document.getElementById('c-done');d.hidden=false;d.querySelector('h3').textContent='All '+scs.length+' answered';
+  document.querySelector('.count').textContent='All '+scs.length+' answered';return;}
+ var sc=scs[at],c=cardOf(sc);c.hidden=false;
+ // a follow-up that isn't shown, inside a screen that is, stays hidden
+ [].slice.call(c.querySelectorAll('[data-row]')).forEach(function(r){r.hidden=sc.ids.indexOf(r.getAttribute('data-row'))<0;});
+ c.querySelector('.back').disabled=false;c.querySelector('.next').hidden=!sdone(sc);}
 function own(name){return document.querySelector('textarea[data-for="'+name+'"]');}
+function where(id){var scs=screens();for(var k=0;k<scs.length;k++)if(scs[k].ids.indexOf(id)>=0)return k;return -1;}
 document.addEventListener('change',function(e){var t=e.target;if(!t||t.type!=='radio')return;
  [].slice.call(document.querySelectorAll('input[name="'+t.name+'"]')).forEach(function(x){x.parentNode.classList.toggle('on',x.checked)});
  var box=own(t.name);
@@ -773,21 +839,23 @@ document.addEventListener('change',function(e){var t=e.target;if(!t||t.type!=='r
  if(box)box.hidden=true;
  ans[t.name]=t.value;
  var ids=shown();Object.keys(ans).forEach(function(k){if(ids.indexOf(k)<0)delete ans[k];});
- setTimeout(function(){at=Math.min(shown().indexOf(t.name)+1,shown().length);show();},220);});
+ var k=where(t.name),sc=screens()[k];
+ // one question on the screen, or the last one answered: on to the next screen; otherwise it stays for the rest
+ if(sc&&sdone(sc)&&(sc.ids.length===1||sc.ids[sc.ids.length-1]===t.name)){setTimeout(function(){at=Math.min(k+1,screens().length);show();},260);}else show();});
 document.addEventListener('input',function(e){var t=e.target;if(!t||!t.getAttribute||!t.getAttribute('data-for'))return;
  ans[t.getAttribute('data-for')]=ownOf(t.getAttribute('data-for'))+': '+t.value.trim();field.value=JSON.stringify(ans);
- var c=t.closest('.card');if(c)c.querySelector('.next').hidden=!t.value.trim();});
+ var c=t.closest('.card'),sc=screens()[at];if(c&&sc)c.querySelector('.next').hidden=!sdone(sc);});
 document.addEventListener('click',function(e){var b=e.target.closest?e.target.closest('button'):null;if(!b)return;
  if(b.classList.contains('start')){at=0;show();}
  if(b.classList.contains('back')){at=at-1;show();}
- if(b.classList.contains('next')){at=Math.min(at+1,shown().length);show();}
+ if(b.classList.contains('next')){at=Math.min(at+1,screens().length);show();}
  if(b.classList.contains('edit')){at=0;show();}});
 // Muse keeps a widget's form state and puts it back when it draws the widget again (scrolling, reopening the chat):
-// the answers are read back from the ticked radios and typed words, and it opens on the first one still to answer.
+// the answers are read back from the ticked radios and typed words, and it opens on the first screen still to answer.
 function restore(){if(Object.keys(ans).length)return;var got=false;
  [].slice.call(document.querySelectorAll('input[type=radio]:checked')).forEach(function(x){got=true;x.parentNode.classList.add('on');
   var box=own(x.name);if(x.value===ownOf(x.name)&&box){box.hidden=false;ans[x.name]=ownOf(x.name)+': '+box.value.trim();}else ans[x.name]=x.value;});
- if(!got)return;var ids=shown(),left=ids.filter(function(i){return !done_(i);});at=left.length?ids.indexOf(left[0]):ids.length;show();}
+ if(!got)return;var scs=screens(),left=scs.filter(function(sc){return !sdone(sc);});at=left.length?scs.indexOf(left[0]):scs.length;show();}
 show();restore();setTimeout(restore,300);setTimeout(restore,1200);})();
 '''
 
@@ -795,27 +863,71 @@ show();restore();setTimeout(restore,300);setTimeout(restore,1200);})();
 def widget_html(s):
     its = its_for(s)
     p = s.get('partner') or 'your partner'
-    data = {'certain': certain(s), 'followMax': FOLLOW_MAX, 'talked': 'Yes, and we\'ve talked', 'other': OTHER,
-            'items': [{'id': it['id'], 'pillar': it['pillar'], 'options': it['options'], 'scores': it.get('scores'), 'follows': it.get('follows'),
-                       'onlyIf': it.get('onlyIf'), 'short': it['text'].replace('{p}', p), 'ownLabel': it.get('ownLabel')} for it in its]}
-    cards = []
+    data = {'certain': certain(s), 'followMax': FOLLOW_MAX, 'other': OTHER, 'optional': sorted(OPTIONAL),
+            'items': [{'id': it['id'], 'pillar': it['pillar'], 'group': it.get('group'), 'options': it['options'], 'scores': it.get('scores'), 'follows': it.get('follows'),
+                       'short': it['text'].replace('{p}', p), 'ownLabel': it.get('ownLabel')} for it in its]}
+    groups = {}
     for it in its:
+        if it.get('group'):
+            groups.setdefault(it['group'], []).append(it)
+    radios = lambda it, cls='': ''.join('<label class="%s"><input type="radio" name="%s" value="%s"><span>%s</span></label>' % (cls % n if '%' in cls else cls, _e(it['id']), _e(o), _e(o))
+                                       for n, o in enumerate(it['options']) if not (it['id'] in OPTIONAL and o == 'Skip'))
+    ownbox = lambda it: ('<textarea class="own" data-for="%s" maxlength="200" rows="2" placeholder="In your own words" hidden></textarea>' % _e(it['id'])) if it.get('own') else ''
+    nav = '<div class="nav"><button type="button" class="back">‹ Back</button><button type="button" class="next" hidden>Next ›</button></div>'
+
+    def chip_for(it, what_=None):
         ch_ = next((c_ for c_ in CHAPTERS if c_[0] == chapter_of(it)), None)
-        what_ = ('How well you know %s' % p if it['kind'] == 'know' else 'A hope of yours' if it['kind'] == 'dream' else ('Your guess about %s' % p if it['id'].endswith(':guess') else 'What you want') if it['kind'] == 'mirror' else 'Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision'
-                 else 'Overall' if it['kind'] == 'overall' else PILLARS.get(it['pillar'], ''))
-        chip = ('<span class="chip lock">Private · never shared</span>' if it.get('private') else
-                '<span class="chip">%s</span>' % _e(('%s %s · %s' % (ch_[1], ch_[2], what_)) if ch_ else what_))
-        opts = ''.join('<label><input type="radio" name="%s" value="%s"><span>%s</span></label>' % (_e(it['id']), _e(o), _e(o)) for o in it['options'])
-        if it.get('own'):
-            opts += '<textarea class="own" data-for="%s" maxlength="200" rows="2" placeholder="In your own words" hidden></textarea>' % _e(it['id'])
-        cards.append('<section class="card" id="c-%s" hidden>%s%s<p class="question">%s</p><div class="opts">%s</div>'
-                     '<div class="nav"><button type="button" class="back">‹ Back</button><button type="button" class="next" hidden>Next ›</button></div></section>'
-                     % (it['id'].replace(':', '-'), chip, ('<p class="opener">%s</p>' % _e(it['opener'])) if it.get('opener') else '',
-                        _e(it['text'].replace('{p}', p)), opts))
+        if what_ is None:
+            what_ = ('Going deeper' if it['kind'] == 'deeper' else 'The big decisions' if it['kind'] == 'decision' else 'Overall' if it['kind'] == 'overall'
+                     else 'How it\'s going' if it.get('group') == 'grid' else 'Feeling appreciated' if it.get('group') == 'appreciated'
+                     else 'The long run' if it.get('group') == 'security' else 'After a disagreement' if it.get('group') == 'repair'
+                     else 'What you disagree about' if it['kind'] == 'topic' else PILLARS.get(it['pillar'], ''))
+        if it.get('private'):
+            return '<span class="chip lock">Private · never shared</span>'
+        return '<span class="chip">%s</span>' % _e(('%s %s · %s' % (ch_[1], ch_[2], what_)) if ch_ else what_)
+
+    def who_for(it, n):
+        if it['kind'] == 'overall':
+            return ('You', '') if n == 0 else ('Your guess', ' g')
+        if it['kind'] == 'commit':
+            return ('About you', ' g')
+        if it.get('group') == 'security':
+            return ('About %s' % p, '')
+        return ('Your guess', ' g') if it['id'].endswith(':guess') else ('You', '')
+
+    cards, done_groups = [], set()
+    for it in its:
+        g = it.get('group')
+        if g and (g in ('grid', 'decide') or len(groups[g]) > 1):
+            if g in done_groups:
+                continue
+            done_groups.add(g)
+            rows = groups[g]
+            if g == 'grid':
+                # Release 82: the five statements, each Yes / Mostly / Not really, on one screen
+                body = ('<p class="question">%s</p><p class="sub">%s</p><div class="grid">%s</div>'
+                        % (_e(GRID_ASK), _e(GRID_SUB.replace('{p}', p[:1].upper() + p[1:])), ''.join(
+                            '<div class="st" data-row="%s">%s%s</div><div class="seg" data-row="%s">%s</div>'
+                            % (_e(r['id']), _e(r['text'].replace('{p}', p).split(':')[0]),
+                               ('<small>%s</small>' % _e(r['text'].split(':', 1)[1].strip()) if ':' in r['text'] else '') + ('<small>you can leave this one blank</small>' if r['id'] in OPTIONAL else ''),
+                               _e(r['id']), radios(r, 's%d')) for r in rows)))
+            elif g == 'decide':
+                body = '<p class="question">The big decisions</p><p class="sub">Shown side by side with %s\'s.</p>%s' % (_e(p), ''.join(
+                    '<div class="part" data-row="%s"><p class="dq">%s</p><div class="pills">%s</div></div>' % (_e(r['id']), _e(r['text'].replace('{p}', p)), radios(r)) for r in rows))
+            else:
+                body = ('<p class="opener">%s</p>' % _e(rows[0]['opener']) if rows[0].get('opener') else '') + ''.join(
+                    '<div class="part" data-row="%s"><p class="who%s"><i>%d</i>%s</p><p class="q2">%s</p><div class="opts two">%s</div>%s</div>'
+                    % (_e(r['id']), who_for(r, n)[1], n + 1, _e(who_for(r, n)[0]), _e(r['text'].replace('{p}', p)), radios(r), ownbox(r)) for n, r in enumerate(rows))
+            cards.append('<section class="card" id="c-g-%s" hidden>%s%s%s</section>' % (_e(g), chip_for(rows[0]), body, nav))
+            continue
+        opts = radios(it) + ownbox(it)
+        cards.append('<section class="card" id="c-%s" hidden>%s%s<p class="question">%s</p><div class="opts">%s</div>%s</section>'
+                     % (it['id'].replace(':', '-'), chip_for(it), ('<p class="opener">%s</p>' % _e(it['opener'])) if it.get('opener') else '',
+                        _e(it['text'].replace('{p}', p)), opts, nav))
     return ('<div class="pt"><style>%s</style><div class="top"><small>Psyche Together%s</small><b>You &amp; %s</b><div class="prog"><i></i></div>'
             '<div class="count"></div></div><form id="pt-form" onsubmit="return false">'
             '<section class="card intro" id="c-intro"><span class="chip">Your questions</span><p class="question">How things feel for you right now. There are no right answers, and your partner never sees yours: your read shows the two of you together.</p>'
-            '<p class="how">Tap an answer and it moves on, with Back to change one. Some let you answer in your own words. At the end, tap <b>Submit my answers</b> just under this box.</p>'
+            '<p class="how">A few quick screens. Tap an answer and it moves on, with Back to change one. Some let you answer in your own words. At the end, tap <b>Submit my answers</b> just under this box.</p>'
             '<button type="button" class="start">Start ›</button><p class="small">Already tapped Submit my answers? Then yours are sent, and you can ignore this box.</p></section>%s'
             '<section class="card done" id="c-done" hidden><div class="big">✓</div><h3>All answered</h3><p>To check or change one, tap Change an answer and go through them again.</p><div class="go">Now tap Submit my answers, just below ↓</div>'
             '<div class="nav"><button type="button" class="edit">‹ Change an answer</button><span></span></div></section>'
@@ -855,6 +967,11 @@ def take_answers(raw):
             answers[k] = {'label': v}
         elif v not in (None, ''):
             bad.append('%s: "%s" isn\'t one of its options' % (k, v))
+    # Release 82: a question that can be left blank (closeness) and was is "Skip", once the rest of its screen is answered.
+    for k in OPTIONAL:
+        it = byid.get(k)
+        if it and k not in answers and 'Skip' in it['options'] and any(x['id'] in answers for x in its if x.get('group') == it.get('group') and x['id'] != k):
+            answers[k] = {'label': 'Skip'}
     ids = shown(s, its, answers)
     kept_ = {k: v for k, v in answers.items() if k in ids}
     if live_round(s):
@@ -1898,7 +2015,7 @@ def remind():
 
 # The welcome to Psyche Together (README "Psyche Together, said simply", release 79): what it is, three steps, then what
 # happens to what's theirs, one line each. Every line is what the code does: keep them literally true.
-CONSENT = "Psyche Together is a private read of you and your partner, built on both your Psyches. Here's how it works:\n\n1️⃣ You each answer about 25 quick questions in your own Muse, about 5 minutes.\n2️⃣ One of you adds your chat together (Instagram or WhatsApp). It's de-identified first, and no other chat is read.\n3️⃣ You both get the same read: how you connect, where you differ, and small steps to try.\n\n🔒 Your answers stay private. Only a few, like your big decisions, are shown side by side.\n📄 Your full Psyche report and card, and which Instagram account is yours, go to your partner's Muse, locked.\n🙈 PsycheAI can't read any of it. End it any time and what PsycheAI keeps is deleted for both of you."
+CONSENT = "Psyche Together is a private read of you and your partner, built on both your Psyches. Here's how it works:\n\n1️⃣ You each answer 8 quick screens of questions in your own Muse, about 2 minutes.\n2️⃣ One of you adds your chat together (Instagram or WhatsApp). It's de-identified first, and no other chat is read.\n3️⃣ You both get the same read: how you connect, where you differ, and small steps to try.\n\n🔒 Your answers stay private. Only a few, like your big decisions, are shown side by side.\n📄 Your full Psyche report and card, and which Instagram account is yours, go to your partner's Muse, locked.\n🙈 PsycheAI can't read any of it. End it any time and what PsycheAI keeps is deleted for both of you."
 
 
 def start():
@@ -2161,8 +2278,11 @@ def clean_profile(p):
         p['dream'] = str(p['dream'] or '')[:240]
     if 'mirror' in p:
         allowed = {mk: set(mo) for mk, _, _, _, mo in MIRRORS}
-        p['mirror'] = {mk: {'self': v['self'], 'guess': v['guess']} for mk, v in (p['mirror'] if isinstance(p['mirror'], dict) else {}).items()
-                       if mk in allowed and isinstance(v, dict) and v.get('self') in allowed[mk] and v.get('guess') in allowed[mk]}
+        # Release 82: a button, or their own words (60 characters at most); the guess only where one was asked.
+        ok_ = lambda x: isinstance(x, str) and 0 < len(x.strip()) <= 60
+        p['mirror'] = {mk: dict({'self': v['self'].strip()}, **({'guess': v['guess'].strip()} if ok_(v.get('guess')) else {}))
+                       for mk, v in (p['mirror'] if isinstance(p['mirror'], dict) else {}).items()
+                       if mk in allowed and isinstance(v, dict) and ok_(v.get('self'))}
     return p
 
 
@@ -2221,21 +2341,21 @@ def questions_task():
     focus = {p: n for p, n in base_priority(s).items() if p in pillars}
     return task_file({'write': 'questions', 'say': questions_intro(bool(theirs.get('psyche'))), 'you': psyche_profile(psyche() or {}), 'partner': theirs.get('psyche'), 'stage': stage,
                       'yourReport': (psyche() or {}).get('report'), 'partnerReport': theirs.get('report'),
-                      'pillars': pillars, 'focus': focus, 'saveTo': 'work/together-questions.json'})
+                      'pillars': pillars, 'openers': [p for p in pillars if p in OPENER_PILLARS], 'focus': focus, 'saveTo': 'work/together-questions.json'})
 
 
 # What the questions are for, said before they're written (README "Psyche Together, release 62"), and how to answer them.
-WIDGET_SAY = 'Tap through at your own pace, about 5 minutes. When you\'re done, tap Submit my answers below.'
+WIDGET_SAY = 'Tap through at your own pace, about 2 minutes. When you\'re done, tap Submit my answers below.'
 
 
 def questions_intro(joined):
     # Release 67: said straight under the invite, before the questions are written, so the wait is never silent.
     if not joined:
-        return ('I\'m writing your questions now, from your Psyche: about 25 quick ones on how things feel for you right now, '
+        return ('I\'m writing your questions now, from your Psyche: 8 quick screens on how things feel for you right now, '
                 'from feeling appreciated to how disagreements go. They\'ll be here in under a minute. Your partner never sees your answers: '
                 'your read shows the two of you together.')
-    return ('Now your questions. I\'m writing about 25 quick ones from both your Psyches, on how things feel for you right now: feeling appreciated, '
-            'time together, stress, what you each want ahead, and how disagreements go. Your partner never sees your answers: '
+    return ('Now your questions. I\'m writing 8 quick screens from both your Psyches, on how things feel for you right now: feeling appreciated, '
+            'time together, what you each want ahead, and how disagreements go. Your partner never sees your answers: '
             'your read shows the two of you together.')
 
 
@@ -2245,20 +2365,21 @@ def check_questions(q, partner, pillars):
         return ['The questions are not a JSON object.']
     op = q.get('openers') if isinstance(q.get('openers'), dict) else {}
     fu = q.get('followUps') if isinstance(q.get('followUps'), dict) else {}
+    opened = [p for p in pillars if p in OPENER_PILLARS]          # release 82: an opener only where a question has a screen of its own
     for p in pillars:
         o = op.get(p)
-        if not isinstance(o, str) or not 20 <= len(o.strip()) <= 240:
+        if p in opened and (not isinstance(o, str) or not 20 <= len(o.strip()) <= 240):
             problems.append('openers.%s: one or two sentences, 20 to 240 characters' % p)
         f = fu.get(p)
         if not (isinstance(f, dict) and isinstance(f.get('q'), str) and 10 <= len(f['q']) <= 180 and isinstance(f.get('options'), list)
                 and 3 <= len(f['options']) <= 5 and all(isinstance(x, str) and 1 <= len(x) <= 40 for x in f['options'])
                 and len(set(f['options'])) == len(f['options'])):
             problems.append('followUps.%s: q (10 to 180 characters) and 3 to 5 different options, each under 40 characters' % p)
-    extra = [p for p in list(op) + list(fu) if p not in pillars]
+    extra = [p for p in list(op) if p not in opened] + [p for p in list(fu) if p not in pillars]
     if extra:
-        problems.append('%s aren\'t pillars for this stage: leave them out' % ', '.join(sorted(set(extra))))
-    named = sum(1 for p in pillars if partner and partner.lower() in str(op.get(p, '')).lower())
-    if partner and named < (len(pillars) + 1) // 2:
+        problems.append('%s aren\'t asked for here: leave them out' % ', '.join(sorted(set(extra))))
+    named = sum(1 for p in opened if partner and partner.lower() in str(op.get(p, '')).lower())
+    if partner and named < (len(opened) + 1) // 2:
         problems.append('openers: name %s in at least half of them, so each reads as about the two of you' % partner)
     _plain(problems, {'openers': op, 'followUps': fu}, 240)
     return problems[:16]
@@ -2279,7 +2400,7 @@ def save_questions(path):
         return {'saved': False, 'problems': problems}
     # No questions testing how well they know their partner any more (README "Psyche Together, release 61"): they needed the
     # partner's report, so the one who starts had to wait for them to join before answering anything.
-    s['questions'] = {'openers': {p: q['openers'][p].strip() for p in pillars}, 'followUps': {p: q['followUps'][p] for p in pillars}}
+    s['questions'] = {'openers': {p: q['openers'][p].strip() for p in pillars if p in OPENER_PILLARS}, 'followUps': {p: q['followUps'][p] for p in pillars}}
     save_state(s)
     done_task('questions')
     try:
@@ -2299,7 +2420,7 @@ def form():
     os.chmod(path, 0o600)
     its = items(s)
     return {'file': path, 'questions': len(shown(s, its, {})),
-            'say': 'Your questions are ready, written from both your Psyches. Tap through them on this page (about 5 minutes), then copy your answer code and paste it here.'}
+            'say': 'Your questions are ready, written from both your Psyches. Tap through them on this page (about 2 minutes), then copy your answer code and paste it here.'}
 
 
 def send(no_chat=False):
@@ -2471,7 +2592,10 @@ VERDICTS = {'matches': 'Matches how you see it', 'better': 'Better than you thin
 
 def areas_of(cid, view):
     """A chapter's areas that apply: a pillar area only when the couple view has it, big decisions only with decisions."""
-    return [(a, n) for a, n in AREAS.get(cid, []) if (a not in PILLARS or a in (view.get('pillars') or {})) and (a != 'decisions' or view.get('decisions'))
+    # Release 82: growth is no longer asked, so Growing as yourselves comes from your two Psyches' motivations and values
+    # alone (never when working together after separating, where it was never part of the read).
+    return [(a, n) for a, n in AREAS.get(cid, []) if (a not in PILLARS or a in (view.get('pillars') or {}) or (a == 'growth' and view.get('stage') != SEPARATED))
+            and (a != 'decisions' or view.get('decisions'))
             and (a != 'know' or (view.get('know') or {}).get('items')) and (a != 'topics' or view.get('topics')) and (a != 'counts' or view.get('chat')) and (a != 'dreams' or view.get('dreams'))]
 PLAN_TITLE = 'Your 28-day practice'
 
@@ -2549,7 +2673,7 @@ def check_read(r, view, has_chat=False):
                 # Release 69: the pill comes from their answers; what we found says why, never that all is well.
                 said_ = ' '.join([T(x.get('seen'))] + [T(D(e).get('insight')) for e in evs] + [T(x.get('means'))])
                 need(not ALL_WELL.search(said_), '%s: its pill says %s, from your answers: say why from those answers, never that it suits you both or works well' % (at, view['pillars'][a]))
-            if a in PILLARS:
+            if a in PILLARS and a in (view.get('pillars') or {}):
                 need(0 < len(T(x.get('seen'))) <= 160 and not LABEL_START.match(T(x.get('seen'))),
                      '%s: seen (how you both see it, one plain line, at most 160 characters, never whose, never opening on its level, which the badge shows)' % at)
             need(not LABEL_START.match(T(x.get('means'))), '%s.means: say what it adds up to, never opening on a label the badge already shows' % at)
@@ -4326,6 +4450,12 @@ def _page(box, s):
                                             % (_e(who), _e(D(mv.get(k_)).get('self')), 'ok' if same_(k_, ok_) else 'no', 'Guessed right' if same_(k_, ok_) else 'Worth knowing',
                                                '=' if same_(k_, ok_) else '≠', _e(other_), _e(D(mv.get(ok_)).get('guess'))))
         label = {'appreciated': 'What makes you each feel most appreciated', 'stress': 'When you\'re stressed', 'repair': 'After a disagreement'}.get(mk, '')
+        if not (D(mv.get('a')).get('guess') and D(mv.get('b')).get('guess')):
+            # Release 82: asked with no guess (after a disagreement): what each needs, side by side, = when it's the same.
+            same2 = D(mv.get('a')).get('self') == D(mv.get('b')).get('self')
+            vb = 'needs' if mk == 'repair' else 'wants'
+            return '<p class="ml">%s</p>' % _e(label) + ('<div class="mir3"><div><small>%s %s</small><b>%s</b></div><span class="%s" title="%s">%s</span><div><small>%s %s</small><b>%s</b></div></div>'
+                % (_e(names[0]), vb, _e(D(mv.get('a')).get('self')), 'ok' if same2 else 'no', 'The same' if same2 else 'Different', '=' if same2 else '≠', _e(names[1]), vb, _e(D(mv.get('b')).get('self'))))
         return '<p class="ml">%s</p>' % _e(label) + row(names[0], 'a', names[1], 'b') + row(names[1], 'b', names[0], 'a')
     ICON = {'messages': ('💬', 'Messages'), 'psyches': ('🧠', 'Psyches'), 'report': ('📄', 'Reports'), 'moment': ('📅', '')}
     for cid, num, title, pids, refs in CHAPTERS:

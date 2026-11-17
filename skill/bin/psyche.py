@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 214
+RELEASE = 215
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5960,7 +5960,7 @@ def sync_ready(name=''):
 
 # Release 202 (README "The later sections, short"): Psyche Together's intro, as data, where SKILL.md once carried it in full.
 # The same words as lib/instructions.js's TOGETHER_INTRO (the selftest holds them equal) and as Psyche Together's own consent.
-TOGETHER_INTRO = "Psyche Together is a private read of you and your partner, built on both your Psyches. Here's how it works:\n\n1️⃣ You each answer about 25 quick questions in your own Muse, about 5 minutes.\n2️⃣ One of you adds your chat together (Instagram or WhatsApp). It's de-identified first, and no other chat is read.\n3️⃣ You both get the same read: how you connect, where you differ, and small steps to try.\n\n🔒 Your answers stay private. Only a few, like your big decisions, are shown side by side.\n📄 Your full Psyche report and card, and which Instagram account is yours, go to your partner's Muse, locked.\n🙈 PsycheAI can't read any of it. End it any time and what PsycheAI keeps is deleted for both of you."
+TOGETHER_INTRO = "Psyche Together is a private read of you and your partner, built on both your Psyches. Here's how it works:\n\n1️⃣ You each answer 8 quick screens of questions in your own Muse, about 2 minutes.\n2️⃣ One of you adds your chat together (Instagram or WhatsApp). It's de-identified first, and no other chat is read.\n3️⃣ You both get the same read: how you connect, where you differ, and small steps to try.\n\n🔒 Your answers stay private. Only a few, like your big decisions, are shown side by side.\n📄 Your full Psyche report and card, and which Instagram account is yours, go to your partner's Muse, locked.\n🙈 PsycheAI can't read any of it. End it any time and what PsycheAI keeps is deleted for both of you."
 TOGETHER_ASK = 'It\'s a separate PsycheAI skill, from app.psycheai.io/together. Install it and start?'
 # The button names where it installs from (release 211, README "The address in the tap"): with a bare "Install and start
 # Psyche Together" (releases 202 to 210) Muse had to find the address itself, and the page it then opened, asked for by
