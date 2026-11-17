@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 82
+RELEASE = 83
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -91,8 +91,13 @@ CORE = [
     ('desire', 'I\'m happy with our closeness and intimacy', YMN + [('Skip', None)]),
     ('needs', 'Life together feels fair: chores, money, time', YMN),
     ('disagreements', 'We get past disagreements well', YMN),
-    ('security', 'How sure are you that {p} is in this relationship for the long run?', [('Completely', 2), ('Mostly', 1), ('Not sure', 0)]),
+    ('security', 'How sure are you that {p} is in this relationship for the long run?', [('1', 0), ('2', 0), ('3', 1), ('4', 1), ('5', 2)]),
 ]
+# Release 83 (README "Scales"): overall and the long run as a 1 to 5 scale, tapped, with its two ends named. The long run
+# keeps the read's three levels (5 sure, 3 or 4 fairly sure, 1 or 2 unsure); overall keeps all five (0 to 4, "scale": 5).
+SCALE = ['1', '2', '3', '4', '5']
+SCALE_ENDS = {'overall:you': ('Not satisfied', 'Very satisfied'), 'overall:them': ('Not satisfied', 'Very satisfied'),
+              'core:security': ('Not sure', 'Completely sure'), 'commit:self': ('Not sure', 'Completely sure')}
 GRID = ['appreciation', 'connection', 'desire', 'needs', 'disagreements']
 GRID_ASK = 'Right now, how true are these for you?'
 GRID_SUB = '{p} answers the same. Your read sets them side by side.'
@@ -127,7 +132,8 @@ MIRROR_TEXT = {'appreciated': ('What makes you feel most appreciated by {p}?', '
 # your partner's Muse to write the read, which may speak of it in its own words, never quoting you.
 DREAM = ('dream:self', 'Optional: what is a hope for your life that {p} might not fully know? In your own words. Your partner\'s Muse reads it to write your read, which may mention it in its own words, never quoting you.',
          ['Skip', 'Write my own'])
-COMMIT = ('commit:self', 'And how sure are you that you want this relationship for the long run?', [('Completely', 2), ('Mostly', 1), ('Not sure', 0)])
+COMMIT = ('commit:self', 'And how sure are you that you want this relationship for the long run?', [('1', 0), ('2', 0), ('3', 1), ('4', 1), ('5', 2)])
+COMMIT_BEFORE = {'Completely': 2, 'Mostly': 1, 'Not sure': 0}          # answers given before release 83
 COMMIT_SEPARATED = 'And how sure are you that you want to keep working together for the children?'
 TOPIC = ('topic:disagree', 'What do you and {p} disagree about most? Your answer is shown to you both, side by side.',
          ['Chores and who does what', 'Money', 'Time together', 'Family and parents', 'Plans and timekeeping', 'How we talk to each other'])
@@ -138,7 +144,8 @@ TOPIC = ('topic:disagree', 'What do you and {p} disagree about most? Your answer
 OVERALL = [('overall:you', 'Overall, how satisfied are you with your relationship with {p}?'),
            ('overall:them', 'And how satisfied do you think {p} is with it?')]
 OVERALL_SEPARATED = {'overall:you': 'Overall, how satisfied are you with how you and {p} work together for the children?'}
-OVERALL_OPTS = [('Very satisfied', 3), ('Satisfied', 2), ('Somewhat', 1), ('Not very', 0)]
+OVERALL_OPTS = [('1', 0), ('2', 1), ('3', 2), ('4', 3), ('5', 4)]
+OVERALL_BEFORE = {'Very satisfied': 3, 'Satisfied': 2, 'Somewhat': 1, 'Not very': 0}          # four steps, before release 83
 READING = ('Happier than you each think', 'About right', 'Worth asking each other')
 
 # README "Psyche Together, release 17": four weeks after the read, the same questions again (no openers, no
@@ -407,9 +414,12 @@ def chapter_of(it):
 
 
 def _core_item(key, text, opts, q, group, opener=True):
-    return {'id': 'core:' + key, 'kind': 'core', 'pillar': key, 'group': group,
-            'opener': (q.get('openers') or {}).get(key, '') if opener and key in OPENER_PILLARS else '',
-            'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]}
+    out = {'id': 'core:' + key, 'kind': 'core', 'pillar': key, 'group': group,
+           'opener': (q.get('openers') or {}).get(key, '') if opener and key in OPENER_PILLARS else '',
+           'text': text, 'options': [o for o, _ in opts], 'scores': [sc for _, sc in opts]}
+    if 'core:' + key in SCALE_ENDS:
+        out['scale'] = SCALE_ENDS['core:' + key]
+    return out
 
 
 def _deep_item(key, q):
@@ -458,13 +468,13 @@ def security_items(stage, q):
     core = {pid: (text, opts) for pid, text, opts in core_for(stage)}
     out = [_core_item('security', core['security'][0], core['security'][1], q, 'security'),
            {'id': COMMIT[0], 'kind': 'commit', 'pillar': 'security', 'group': 'security', 'opener': '', 'text': COMMIT_SEPARATED if stage == SEPARATED else COMMIT[1],
-            'options': [o for o, _ in COMMIT[2]], 'scores': [sc for _, sc in COMMIT[2]]}]
+            'options': [o for o, _ in COMMIT[2]], 'scores': [sc for _, sc in COMMIT[2]], 'scale': SCALE_ENDS[COMMIT[0]]}]
     return out + _deep_item('security', q)
 
 
 def overall_items(stage):
     return [{'id': qid, 'kind': 'overall', 'pillar': '', 'group': 'overall', 'opener': '', 'text': (OVERALL_SEPARATED.get(qid, text) if stage == SEPARATED else text),
-             'options': [o for o, _ in OVERALL_OPTS], 'scores': [sc for _, sc in OVERALL_OPTS]} for qid, text in OVERALL]
+             'options': [o for o, _ in OVERALL_OPTS], 'scores': [sc for _, sc in OVERALL_OPTS], 'scale': SCALE_ENDS[qid]} for qid, text in OVERALL]
 
 
 def round_items(s):
@@ -503,7 +513,13 @@ def levels_of(stage, answers):
         a = answers.get('core:' + pid)
         if a and pid != 'desire' and dict(opts).get(a.get('label')) is not None:
             core[pid] = dict(opts)[a['label']]
+        elif a and pid == 'security' and a.get('label') in COMMIT_BEFORE:          # answered before release 83
+            core[pid] = COMMIT_BEFORE[a['label']]
     ov = {k[8:]: dict(OVERALL_OPTS)[a['label']] for k, a in answers.items() if k.startswith('overall:') and a.get('label') in dict(OVERALL_OPTS)}
+    if ov:
+        ov['scale'] = 5
+    else:
+        ov = {k[8:]: OVERALL_BEFORE[a['label']] for k, a in answers.items() if k.startswith('overall:') and a.get('label') in OVERALL_BEFORE}
     return core, ov
 
 
@@ -540,7 +556,9 @@ def say_for(s, it):
     p = s.get('partner') or 'your partner'
     text = it['text'].replace('{p}', p)
     if it.get('group') == 'grid':          # one at a time in the chat: the statement with how to answer it
-        text = 'How true is this for you right now? %s.' % text
+        text = 'How true is this for you right now? %s.' % it['text'].replace('{p}', s.get('partner') or 'my partner')
+    if it.get('scale'):
+        text += ' From 1 (%s) to 5 (%s).' % (it['scale'][0].lower(), it['scale'][1].lower())
     return (it['opener'] + '\n\n' + text) if it.get('opener') else text
 
 
@@ -638,8 +656,8 @@ def shared_profile(s, answered=True):
     if dr.get('label') == DREAM[2][1] and dr.get('text'):
         out['dream'] = clean_typed(dr['text'], [s.get('partner') or ''], 240)
     cm = (answers.get(COMMIT[0]) or {}).get('label')
-    if cm in dict(COMMIT[2]):
-        out['commit'] = dict(COMMIT[2])[cm]
+    if cm in dict(COMMIT[2]) or cm in COMMIT_BEFORE:
+        out['commit'] = dict(COMMIT[2]).get(cm, COMMIT_BEFORE.get(cm))
     tp = answers.get(TOPIC[0]) or {}
     if tp.get('label'):
         out['topic'] = (clean_typed(tp.get('text'), [s.get('partner') or ''])[:60] or OTHER) if tp['label'] == OTHER else tp['label']
@@ -737,10 +755,14 @@ def overall_view(x, y):
     x, y = x if isinstance(x, dict) else {}, y if isinstance(y, dict) else {}
     if not all(isinstance(v.get(k), int) for v in (x, y) for k in ('you', 'them')):
         return None
-    level = LEVELS[2 if x['you'] >= 2 and y['you'] >= 2 else 0 if 0 in (x['you'], y['you']) else 1]
-    if x['you'] > y['them'] and y['you'] > x['them']:
+    # Release 83: a five-step scale ("scale": 5, 0 to 4) is set on the four-step one (0 to 3) it replaced, so a 1 or 2
+    # of 5 is low, a 4 or 5 is good, and a step apart is still a step.
+    n = lambda d, k: d[k] * 3.0 / 4 if d.get('scale') == 5 else float(d[k])
+    xy, yy, xt, yt = n(x, 'you'), n(y, 'you'), n(x, 'them'), n(y, 'them')
+    level = LEVELS[2 if xy >= 2 and yy >= 2 else 0 if min(xy, yy) < 1 else 1]
+    if xy > yt and yy > xt:
         reading = READING[0]
-    elif abs(x['you'] - y['them']) <= 1 and abs(y['you'] - x['them']) <= 1:
+    elif abs(xy - yt) <= 1 and abs(yy - xt) <= 1:
         reading = READING[1]
     else:
         reading = READING[2]
@@ -764,13 +786,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,
 .top b{display:block;font-size:19px;margin-top:2px}
 .prog{height:5px;background:rgba(255,255,255,.3);border-radius:9px;margin-top:10px;overflow:hidden}.prog i{display:block;height:100%;width:0;background:#fff;transition:width .25s}
 .count{font-size:12px;opacity:.9;margin-top:5px}
-.card{padding:16px 16px 14px;min-height:470px;display:flex;flex-direction:column}.card[hidden]{display:none}.card .nav{margin-top:auto;padding-top:14px}
+.card{padding:14px 14px 12px;min-height:400px;display:flex;flex-direction:column}.card[hidden]{display:none}.card .nav{margin-top:auto;padding-top:14px}
 .chip{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--plum);background:var(--wash);border-radius:999px;padding:4px 10px;margin-bottom:10px}
 .lock{color:var(--rose);background:#fcebf2}
 .opener{margin:0 0 8px;font-size:15px;line-height:1.5;color:var(--ink)}
-.question{margin:0 0 12px;font-size:18px;line-height:1.35;font-weight:750;color:var(--ink)}
-.opts{display:flex;flex-direction:column;gap:8px}
-.opts label{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid var(--line);border-radius:14px;font-size:16px;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff}
+.question{margin:0 0 10px;font-size:17px;line-height:1.3;font-weight:750;color:var(--ink)}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opts label{display:flex;align-items:center;gap:9px;padding:9px 12px;border:1.5px solid var(--line);border-radius:12px;font-size:15px;line-height:1.25;cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff}
 .opts input{position:absolute;opacity:0;pointer-events:none}
 .opts label:before{content:"";flex:none;width:18px;height:18px;border-radius:50%;border:2px solid #cdb6dd;background:#fff}
 .opts input:checked+span{font-weight:700}
@@ -786,13 +808,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,
 .part{margin:0 0 6px}.part+.part{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .who{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
 .who i{font-style:normal;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--plum);color:#fff;font-size:11px}.who.g i{background:var(--rose)}
-.q2{margin:0 0 8px;font-size:16px;line-height:1.35;font-weight:750;color:var(--ink)}
-.opts.two{display:grid;grid-template-columns:1fr 1fr;gap:7px}.opts.two label{padding:9px 11px;font-size:14px;gap:8px;border-radius:12px}.opts.two label:before{width:14px;height:14px}
+.q2{margin:0 0 7px;font-size:15.5px;line-height:1.3;font-weight:750;color:var(--ink)}
+.opts.two{display:grid;grid-template-columns:1fr 1fr;gap:6px}.opts.two label{padding:8px 10px;font-size:13.5px;gap:0;border-radius:11px}.opts.two label:before{display:none}
+.opts.two label.on{border-color:var(--plum);background:var(--wash)}
+.scale{display:flex;gap:6px}.scale label{position:relative;flex:1;text-align:center;padding:9px 0;border:1.5px solid var(--line);border-radius:11px;font-size:16px;font-weight:700;color:var(--soft);cursor:pointer;-webkit-tap-highlight-color:transparent;background:#fff}
+.scale input{position:absolute;opacity:0;pointer-events:none}.scale label.on{border-color:var(--plum);background:var(--plum);color:#fff}
+.ends{display:flex;justify-content:space-between;margin-top:5px;font-size:12px;color:var(--soft)}
 .sub{margin:-4px 0 10px;font-size:13px;color:var(--soft)}
 .grid{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center}
 .grid .st{font-size:14.5px;font-weight:650;line-height:1.25}.grid .st small{display:block;font-weight:400;font-size:11.5px;color:var(--soft)}
 .seg{display:flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
-.seg label{position:relative;font-size:12.5px;padding:8px 7px;min-width:50px;text-align:center;border-left:1.5px solid var(--line);font-weight:600;color:var(--soft);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.seg label{position:relative;font-size:12px;padding:8px 7px;text-align:center;white-space:nowrap;border-left:1.5px solid var(--line);font-weight:600;color:var(--soft);cursor:pointer;-webkit-tap-highlight-color:transparent}
 .seg label:first-child{border-left:0}.seg input{position:absolute;opacity:0;pointer-events:none}
 .seg label.on.s0{background:#e6f4ec;color:#1f6b45}.seg label.on.s1{background:var(--wash);color:var(--plum)}.seg label.on.s2{background:#fcebf2;color:var(--rose)}
 .pills{display:flex;flex-wrap:wrap;gap:6px}.pills label{position:relative;font-size:13.5px;padding:8px 12px;border:1.5px solid var(--line);border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -874,6 +900,9 @@ def widget_html(s):
                                        for n, o in enumerate(it['options']) if not (it['id'] in OPTIONAL and o == 'Skip'))
     ownbox = lambda it: ('<textarea class="own" data-for="%s" maxlength="200" rows="2" placeholder="In your own words" hidden></textarea>' % _e(it['id'])) if it.get('own') else ''
     nav = '<div class="nav"><button type="button" class="back">‹ Back</button><button type="button" class="next" hidden>Next ›</button></div>'
+    # Release 83: a scale as five taps with its two ends named; four options or fewer one under another, more in two columns
+    choices = lambda it: (('<div class="scale">%s</div><div class="ends"><span>%s</span><span>%s</span></div>' % (radios(it), _e(it['scale'][0]), _e(it['scale'][1])))
+                          if it.get('scale') else '<div class="opts%s">%s</div>' % (' two' if len(it['options']) > 4 or it.get('group') in ('appreciated',) else '', radios(it)))
 
     def chip_for(it, what_=None):
         ch_ = next((c_ for c_ in CHAPTERS if c_[0] == chapter_of(it)), None)
@@ -904,11 +933,12 @@ def widget_html(s):
             done_groups.add(g)
             rows = groups[g]
             if g == 'grid':
+                pm = s.get('partner') or 'my partner'          # first person: "I feel appreciated by my partner"
                 # Release 82: the five statements, each Yes / Mostly / Not really, on one screen
                 body = ('<p class="question">%s</p><p class="sub">%s</p><div class="grid">%s</div>'
                         % (_e(GRID_ASK), _e(GRID_SUB.replace('{p}', p[:1].upper() + p[1:])), ''.join(
                             '<div class="st" data-row="%s">%s%s</div><div class="seg" data-row="%s">%s</div>'
-                            % (_e(r['id']), _e(r['text'].replace('{p}', p).split(':')[0]),
+                            % (_e(r['id']), _e(r['text'].replace('{p}', pm).split(':')[0]),
                                ('<small>%s</small>' % _e(r['text'].split(':', 1)[1].strip()) if ':' in r['text'] else '') + ('<small>you can leave this one blank</small>' if r['id'] in OPTIONAL else ''),
                                _e(r['id']), radios(r, 's%d')) for r in rows)))
             elif g == 'decide':
@@ -916,14 +946,15 @@ def widget_html(s):
                     '<div class="part" data-row="%s"><p class="dq">%s</p><div class="pills">%s</div></div>' % (_e(r['id']), _e(r['text'].replace('{p}', p)), radios(r)) for r in rows))
             else:
                 body = ('<p class="opener">%s</p>' % _e(rows[0]['opener']) if rows[0].get('opener') else '') + ''.join(
-                    '<div class="part" data-row="%s"><p class="who%s"><i>%d</i>%s</p><p class="q2">%s</p><div class="opts two">%s</div>%s</div>'
-                    % (_e(r['id']), who_for(r, n)[1], n + 1, _e(who_for(r, n)[0]), _e(r['text'].replace('{p}', p)), radios(r), ownbox(r)) for n, r in enumerate(rows))
+                    '<div class="part" data-row="%s"><p class="who%s"><i>%d</i>%s</p><p class="q2">%s</p>%s%s</div>'
+                    % (_e(r['id']), who_for(r, n)[1], n + 1, _e(who_for(r, n)[0]), _e(r['text'].replace('{p}', p)), choices(r), ownbox(r)) for n, r in enumerate(rows))
             cards.append('<section class="card" id="c-g-%s" hidden>%s%s%s</section>' % (_e(g), chip_for(rows[0]), body, nav))
             continue
-        opts = radios(it) + ownbox(it)
-        cards.append('<section class="card" id="c-%s" hidden>%s%s<p class="question">%s</p><div class="opts">%s</div>%s</section>'
+        opts = choices(it) + ownbox(it)
+        q_, sub_ = (it['text'].replace('{p}', p).split('? ', 1) + [''])[:2]          # release 83: what follows the question, smaller under it
+        cards.append('<section class="card" id="c-%s" hidden>%s%s<p class="question">%s</p>%s%s%s</section>'
                      % (it['id'].replace(':', '-'), chip_for(it), ('<p class="opener">%s</p>' % _e(it['opener'])) if it.get('opener') else '',
-                        _e(it['text'].replace('{p}', p)), opts, nav))
+                        _e(q_ + ('?' if sub_ else '')), ('<p class="sub">%s</p>' % _e(sub_)) if sub_ else '', opts, nav))
     return ('<div class="pt"><style>%s</style><div class="top"><small>Psyche Together%s</small><b>You &amp; %s</b><div class="prog"><i></i></div>'
             '<div class="count"></div></div><form id="pt-form" onsubmit="return false">'
             '<section class="card intro" id="c-intro"><span class="chip">Your questions</span><p class="question">How things feel for you right now. There are no right answers, and your partner never sees yours: your read shows the two of you together.</p>'
@@ -2123,6 +2154,11 @@ def after_stage(s):
     return chat_step(s)
 
 
+def untouched(s):
+    """Started here and never used: no stage (so no invite went), no questions, no answers."""
+    return s.get('role') == 'a' and not stage_of(s) and not s.get('questions') and not s.get('answers') and not s.get('sent')
+
+
 def join(link):
     m = LINK.search(str(link or ''))
     if not m:
@@ -2132,6 +2168,13 @@ def join(link):
     s = state()
     if s.get('role'):
         couple()                     # one that has ended is cleared here first, so a new invite can be joined
+        s = state()
+    if untouched(s) and keys().get('code') != m.group(1):
+        # Release 84 (README "An unused start makes way"): one they started here and never used (no stage, so no invite
+        # went and no partner can have joined, nothing answered) makes way for the partner's invite, with nothing to ask
+        # and nothing said about ending it. On a device, Start then the partner's invite gave "End it?" and "ended, for
+        # both of you" for something that had never begun.
+        end()
         s = state()
     if s.get('role'):
         return {'error': 'There\'s a Psyche Together here already: "End Psyche Together" first to join a new one.'}
@@ -2519,7 +2562,8 @@ def claims(rx, text):
 GUESSED_ANY = re.compile(r'\bguess(es|ed)? (matched|landed|(was|were) right)|guessed (right|correctly)', re.I)
 BANNED = re.compile(r'\b(score[sd]?|percent\w*|compatib\w*|incompatib\w*|divorc\w*|predict\w*|toxic|contempt\w*|stonewall\w*|narcissis\w*|'
                     r'diagnos\w*|therap\w*|treatment|disorder\w*|abus\w*|red flags?|verdict)\b|%', re.I)
-WHO_ANSWERED = re.compile(r'\b(rated|answered|ticked)\b|\bin (the|your|their|his|her) check-?in\b', re.I)
+# Release 84: "answered in kind" (returned, warmth for warmth) is not what someone answered, and Muse wrote it twice in openers.
+WHO_ANSWERED = re.compile(r'\b(rated|answered(?! in kind)|ticked)\b|\bin (the|your|their|his|her) check-?in\b', re.I)
 QUOTED = re.compile(r'["“][^"”]*\s[^"”]*\s[^"”]*\s[^"”]*["”]')
 
 
@@ -3550,7 +3594,7 @@ p{margin:0 0 10px}
 .two>div>b{display:flex;align-items:center;gap:7px;font-size:13px;margin-bottom:4px}
 .two>div>b span{flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:11px;color:#fff;background:#7b3fa0}
 .two>div:last-child>b span{background:#c2366d}
-.two p{margin:0;font-size:14.5px}
+.two p{margin:0;font-size:14.5px}.st.means .two p{font-size:13.5px;line-height:1.5}
 .callout{margin:12px 0;padding:12px 14px;border-radius:14px;font-size:14.5px}
 .callout .lbl{margin-bottom:3px}
 .callout.ask{background:#fdf6ee;border:1px solid #f4e3cc}.callout.ask .lbl{color:#9a5b12}
@@ -3755,8 +3799,15 @@ footer{margin-top:22px;text-align:center;color:var(--mute);font-size:12.5px;line
 .cks{margin:6px 0 2px}.ck{display:flex;align-items:baseline;gap:8px;font-size:14px;margin:5px 0;line-height:1.35}.ck em{font-style:normal;font-weight:800;width:16px;flex:none;text-align:center}
 .ck span{color:var(--ink)}.ck small{margin-left:auto;padding-left:10px;font-size:12.5px;color:var(--soft);text-align:right}.ck.g em{color:#2f7d5b}.ck.b em{color:#2b5d8f}.ck.r em{color:#8a5a12}.ck.r small{color:#8a5a12;background:#fdf3e1;padding:2px 9px;border-radius:999px;font-weight:600}
 .ck.b em{font-size:0;line-height:0}.ck.b em:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;border:2px solid #2b5d8f;background:linear-gradient(90deg,#2b5d8f 50%,transparent 50%);vertical-align:-1px}
-.mir3{display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;gap:4px;margin:8px 0}.mir3 small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--soft)}
-.mir3 b{font-size:14.5px;font-weight:650}.mir3 .g{text-align:right}.mir3>span{text-align:center;font-size:17px;font-weight:800}.mir3>span.ok{color:#2f6f53}.mir3>span.no{color:#2b5d8f}
+/* Release 84: each side its own card, joined by a round badge: ✓ the same, ≠ different */
+.mir3{display:grid;grid-template-columns:1fr 26px 1fr;align-items:stretch;gap:6px;margin:6px 0}
+.mir3>div{padding:8px 11px;border-radius:12px;background:#f8f5fb;border:1px solid #ece4f1;min-width:0}
+.mir3 small{display:block;margin-bottom:2px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--soft)}
+.mir3 b{display:block;font-size:14px;font-weight:650;line-height:1.3}.mir3 .g{text-align:left}
+.mir3>span{align-self:center;justify-self:center;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;line-height:1}
+.mir3>span.ok{background:#e3f3ea;color:#2f6f53}.mir3>span.no{background:#e7eef8;color:#2b5d8f}
+.mir3:has(>span.ok)>div{background:#f3faf6;border-color:#d7ecdf}
+@media(max-width:420px){.mir3>div{padding:7px 9px}.mir3 b{font-size:13px}}
 ul.how{margin:4px 0 8px;padding-left:18px}.how li{font-size:13.5px;color:var(--soft);margin:4px 0;line-height:1.45}.how li::marker{color:var(--c,#7b3fa0)}
 .day2{margin:6px 0}.d2{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center;margin:5px 0;font-size:12.5px;font-weight:650}
 .d2>div{display:flex;height:16px;border-radius:8px;overflow:hidden;background:#f1eef6}.d2 i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:700;color:#fff}
@@ -4448,14 +4499,14 @@ def _page(box, s):
         same_ = lambda k_, ok_: D(mv.get(k_)).get('self') == D(mv.get(ok_)).get('guess')
         row = lambda who, k_, other_, ok_: ('<div class="mir3"><div><small>%s wants</small><b>%s</b></div><span class="%s" title="%s">%s</span><div class="g"><small>%s guessed</small><b>%s</b></div></div>'
                                             % (_e(who), _e(D(mv.get(k_)).get('self')), 'ok' if same_(k_, ok_) else 'no', 'Guessed right' if same_(k_, ok_) else 'Worth knowing',
-                                               '=' if same_(k_, ok_) else '≠', _e(other_), _e(D(mv.get(ok_)).get('guess'))))
+                                               '✓' if same_(k_, ok_) else '≠', _e(other_), _e(D(mv.get(ok_)).get('guess'))))
         label = {'appreciated': 'What makes you each feel most appreciated', 'stress': 'When you\'re stressed', 'repair': 'After a disagreement'}.get(mk, '')
         if not (D(mv.get('a')).get('guess') and D(mv.get('b')).get('guess')):
             # Release 82: asked with no guess (after a disagreement): what each needs, side by side, = when it's the same.
             same2 = D(mv.get('a')).get('self') == D(mv.get('b')).get('self')
             vb = 'needs' if mk == 'repair' else 'wants'
             return '<p class="ml">%s</p>' % _e(label) + ('<div class="mir3"><div><small>%s %s</small><b>%s</b></div><span class="%s" title="%s">%s</span><div><small>%s %s</small><b>%s</b></div></div>'
-                % (_e(names[0]), vb, _e(D(mv.get('a')).get('self')), 'ok' if same2 else 'no', 'The same' if same2 else 'Different', '=' if same2 else '≠', _e(names[1]), vb, _e(D(mv.get('b')).get('self'))))
+                % (_e(names[0]), vb, _e(D(mv.get('a')).get('self')), 'ok' if same2 else 'no', 'The same' if same2 else 'Different', '✓' if same2 else '≠', _e(names[1]), vb, _e(D(mv.get('b')).get('self'))))
         return '<p class="ml">%s</p>' % _e(label) + row(names[0], 'a', names[1], 'b') + row(names[1], 'b', names[0], 'a')
     ICON = {'messages': ('💬', 'Messages'), 'psyches': ('🧠', 'Psyches'), 'report': ('📄', 'Reports'), 'moment': ('📅', '')}
     for cid, num, title, pids, refs in CHAPTERS:
@@ -4502,7 +4553,7 @@ def _page(box, s):
                 # the right, = or ≠ between; and the paragraph opens on the same match the pill counts.
                 flow = lambda giver, gp, taker, tp: ('<div class="mir3"><div><small>%s gives</small><b>%s</b></div><span class="%s" title="%s">%s</span><div class="g"><small>%s feels loved by</small><b>%s</b>%s</div></div>'
                                                      % (_e(giver), _e(', '.join(gv(gp)) or '–'), 'ok' if hit(gp, tp) else 'no', 'A match' if hit(gp, tp) else 'Different',
-                                                        '=' if hit(gp, tp) else '≠', _e(taker), _e(', '.join(rv(tp)) or '–'),
+                                                        '✓' if hit(gp, tp) else '≠', _e(taker), _e(', '.join(rv(tp)) or '–'),
                                                         '<small class="src">Physical touch · from your answers</small>' if tp.get('touchStated') else ''))
                 if gv(pa_) or gv(pb_):
                     lead = flow(names[0], pa_, names[1], pb_) + flow(names[1], pb_, names[0], pa_)
@@ -4623,9 +4674,9 @@ def _page(box, s):
                 sg, und, mv = D(got(x, 'signs')), D(x.get('under')) or {'a': cy.get('a'), 'b': cy.get('b')}, D(got(x, 'moves'))
                 pl_ = D(x.get('plain'))
                 if pl_.get('a') or sg.get('a') or mv.get('a'):        # release 54: each one's part in plain words, no labels
-                    extra = ''.join(
-                        '<p class="fp2"><b>%s</b> · %s</p>' % (_e(n_), _e(pl_.get(k_) or ' '.join(t_.strip().rstrip('.') + '.' for t_ in ['; '.join(sg.get(k_) or []), und.get(k_) or '', mv.get(k_) or ''] if t_.strip())))
-                        for n_, k_ in ((names[0], 'a'), (names[1], 'b')))
+                    # Release 84: each in a box of their own, as the signs in 04 are
+                    said_ = lambda k_: pl_.get(k_) or ' '.join(t_.strip().rstrip('.') + '.' for t_ in ['; '.join(sg.get(k_) or []), und.get(k_) or '', mv.get(k_) or ''] if t_.strip())
+                    extra = two(said_('a'), said_('b'), '%s\'s side of the loop' % names[0], '%s\'s side of the loop' % names[1])
             elif aid == 'know':
                 mine_k = D(view.get('knowBy')).get(s.get('role'))
                 if mine_k and not gentle:
@@ -4738,6 +4789,38 @@ def _page(box, s):
             '<title>Psyche Together · %s &amp; %s%s</title><style>%s</style></head><body><div class="wrap">%s%s%s<button type="button" class="foldall" data-fold>Close all ▲</button>'
             '<footer><b>Psyche Together</b> by PsycheAI · psycheai.io<br>Made in your own Muse workspace. PsycheAI keeps no copy it can read.</footer></div>%s<script>%s</script></body></html>'
             % (_e(names[0]), _e(names[1]), (' · %s&#x27;s copy' % _e(mine_name)) if mine_name else '', CSS, banner, bar, ''.join(parts), viewer, JS))
+
+
+def practice():
+    """"Our 28-day practice" (release 84, README "This week's practice"): this week's part of the read's practice, as data,
+    counted from the day the read was written. On a device Muse searched the 217 KB page for it."""
+    s = state()
+    k, got, profiles, box = couple()
+    if got.get('error'):
+        return got
+    pn = (box or {}).get('read', {}).get('plan') if isinstance((box or {}).get('read'), dict) else None
+    if not isinstance(pn, dict):
+        return {'error': 'Your read isn\'t written yet, so there\'s no practice to show.', 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True}
+    n = min(4, 1 + int((time.time() - int(box.get('at') or time.time())) // (7 * 86400)))
+    buttons = ['Ask about our read', 'Back to the menu']
+    if n == 1:
+        w1 = pn.get('week1') if isinstance(pn.get('week1'), dict) else {}
+        days = [str(x) for x in w1.get('days') or [] if isinstance(x, str)][:7]
+        return {'week': 1, 'title': str(w1.get('title') or ''), 'days': days, 'buttons': buttons, 'asButtons': True,
+                'say': 'Week 1 · %s, a little every day:\n%s' % (str(w1.get('title') or '').rstrip('.'), '\n'.join('%d. %s' % (i + 1, d) for i, d in enumerate(days)))}
+    weeks = [w for w in pn.get('weeks') or [] if isinstance(w, dict)]
+    if len(weeks) < n - 1:
+        return {'error': 'This read has no practice for week %d.' % n, 'buttons': buttons, 'asButtons': True}
+    w = weeks[n - 2]
+    cv = w.get('conversation') if isinstance(w.get('conversation'), dict) and not is_gentle(s) else None
+    lines = ['Week %d · %s' % (n, str(w.get('title') or '').rstrip('.'))]
+    if cv:
+        lines.append('A conversation: %s\n%s' % (cv.get('title') or '', '\n'.join('%d. %s' % (i + 1, x) for i, x in enumerate(cv.get('script') or []) if isinstance(x, str))))
+    lines += ['Ask each other: %s' % w.get('ask'), 'Do together: %s' % w.get('doTogether')]
+    out = {'week': n, 'title': str(w.get('title') or ''), 'ask': w.get('ask'), 'doTogether': w.get('doTogether'), 'buttons': buttons, 'asButtons': True, 'say': '\n\n'.join(lines)}
+    if cv:
+        out['conversation'] = {'title': cv.get('title'), 'script': [x for x in cv.get('script') or [] if isinstance(x, str)]}
+    return out
 
 
 def show(box=None):
@@ -4977,6 +5060,8 @@ def main(argv):
         out = again()
     elif cmd == 'later':
         out = later()
+    elif cmd == 'practice':
+        out = practice()
     elif cmd == 'rewrite':
         out = rewrite(opt('--note'))
     elif cmd == 'save-recheck':

@@ -4415,6 +4415,13 @@ print(json.dumps({'due': due, 'firstNoSkip': 'Skip' not in m.chat_offer({})['but
   tg.partWrong = await run.a('part', 'opening', '@work/part.json');
   tg.partsCheck = await run.a('check', '--parts');
   tg.saved = await run.a('save', '--parts');
+  tg.practiceA = await run.a('practice');
+  tg.fixes84 = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, time
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(json.dumps({'untouched': [m.untouched({'role': 'a'}), m.untouched({'role': 'a', 'stage': 'Dating'}), m.untouched({'role': 'b'}), m.untouched({'role': 'a', 'answers': {'x': 1}})],
+                  'kind': bool(m.WHO_ANSWERED.search('warmth is answered in kind')), 'plain': bool(m.WHO_ANSWERED.search('what you answered'))}))
+`], { env: home.a.env }).toString());
   tg.partsGone = !fsx.existsSync(pathx.join(home.a.dir, 'work', 'read-parts'));
   check('The read in parts (Psyche Together 74): each part is kept on its own and says what is still missing; check --parts finds nothing missing once all seven are in, and save --parts saves the same read and clears the parts; a part holding another part\'s fields is refused',
     tg.parts.length === 7 && tg.parts[0].kept === 'opening' && JSON.stringify(tg.parts[6].missing) === '[]' && tg.parts[2].missing.includes('closing') &&
@@ -4512,7 +4519,22 @@ print(json.dumps(m.check_read(json.loads(sys.stdin.read()), json.loads(${JSON.st
   const EIGHT = ['overall:you', 'overall:them', 'core:appreciation', 'core:connection', 'core:desire', 'core:needs', 'core:disagreements', 'mirror:appreciated:self', 'mirror:appreciated:guess',
     'core:security', 'commit:self', 'mirror:repair:self', 'topic:disagree', 'decide:more_children', 'decide:place', 'decide:parents', 'safety'];
   const Wa = String(tg.formA.widget || '');
-const eightConds = [
+const scaleRules = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json
+spec = importlib.util.spec_from_file_location('t', ${JSON.stringify(pathx.join(home.a.dir, 'bin', 'together.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+ov = m.overall_view
+print(json.dumps([ov({'you': 4, 'them': 3, 'scale': 5}, {'you': 3, 'them': 4, 'scale': 5}), ov({'you': 1, 'them': 2, 'scale': 5}, {'you': 3, 'them': 3, 'scale': 5}),
+                  ov({'you': 4, 'them': 4, 'scale': 5}, {'you': 3, 'them': 3}), m.levels_of('Married', {'core:security': {'label': '4'}, 'overall:you': {'label': '5'}}),
+                  m.levels_of('Married', {'core:security': {'label': 'Completely'}, 'overall:you': {'label': 'Satisfied'}})]))
+`], { env: home.a.env }).toString());
+  const eightConds = [
+    // Release 83 (README "Scales"): overall and the long run as 1 to 5 scales with their ends named; a 1 or 2 of 5 is low, and a four-step answer from before still compares
+    /<div class="scale"><label class=""><input type="radio" name="overall:you" value="1">[^]*?<\/div><div class="ends"><span>Not satisfied<\/span><span>Very satisfied<\/span><\/div>/.test(Wa) &&
+      /name="commit:self" value="5">[^]*?<div class="ends"><span>Not sure<\/span><span>Completely sure<\/span>/.test(Wa) && /name="core:security" value="3"/.test(Wa),
+    scaleRules[0].level === 'Strong' && scaleRules[1].level === 'Worth attention' && scaleRules[2].level === 'Strong' && scaleRules[3][0].security === 1 && scaleRules[3][1].you === 4 && scaleRules[3][1].scale === 5 &&
+      scaleRules[4][0].security === 2 && scaleRules[4][1].you === 2 && !('scale' in scaleRules[4][1]),
+    // "my partner" in a first-person statement before the partner is named; the topic's note under its question; long lists in two columns
+    /<div class="sub">|<p class="sub">Your answer is shown to you both, side by side\.<\/p>/.test(Wa) && /<div class="opts two"><label class=""><input type="radio" name="topic:disagree"/.test(Wa),
     JSON.stringify(orderA.filter(id => !/^deep:/.test(id))) === JSON.stringify(EIGHT),
     orderA.filter(id => /^deep:/.test(id)).length <= 1,
     ['c-g-overall', 'c-g-grid', 'c-g-appreciated', 'c-g-security', 'c-g-decide', 'c-mirror-repair-self', 'c-topic-disagree', 'c-safety'].every(id => Wa.includes('id="' + id + '"')),
@@ -4584,7 +4606,7 @@ print(json.dumps(m.repair_signals(msgs)))
   check('what you each want (README "Psyche Together, release 51", release 82): what makes you feel appreciated, yours and your guess of your partner\'s, on one screen; what you need after a disagreement, yours only; set side by side in Love languages (with whether each guess was right) and Repair; a stress pair from a read before still shows only when both have it; not on the gentle path',
     orderA.indexOf('mirror:appreciated:guess') === orderA.indexOf('mirror:appreciated:self') + 1 && !orderA.includes('mirror:stress:self') && !orderA.includes('mirror:repair:guess') &&
       !view.mirrors && full.view.mirrors && !full.view.mirrors.stress && full.view.mirrors.repair && full.view.mirrors.repair.aGuessedRight === null &&
-      !/id="close-appreciation"(?:(?!id="close-loves")[^])*<div class="mir3">/.test(full.html) && /id="close-loves"[^]*?What makes you each feel most appreciated<\/p><div class="mir3"><div><small>Mei wants<\/small><b>Being told in words<\/b><\/div><span class="ok" title="Guessed right">=<\/span><div class="g"><small>Ana guessed<\/small><b>Being told in words<\/b><\/div><\/div>/.test(full.html) &&
+      !/id="close-appreciation"(?:(?!id="close-loves")[^])*<div class="mir3">/.test(full.html) && /id="close-loves"[^]*?What makes you each feel most appreciated<\/p><div class="mir3"><div><small>Mei wants<\/small><b>Being told in words<\/b><\/div><span class="ok" title="Guessed right">✓<\/span><div class="g"><small>Ana guessed<\/small><b>Being told in words<\/b><\/div><\/div>/.test(full.html) &&
       /<div class="mir3"><div><small>Ana wants<\/small><b>Time together<\/b><\/div><span class="no" title="Worth knowing">≠<\/span><div class="g"><small>Mei guessed<\/small><b>Being told in words<\/b><\/div><\/div>/.test(full.html) &&
       !/When you(&#x27;|')re stressed<\/p>/.test(full.html) && /id="disagree-disagreements"[^]*?After a disagreement<\/p><div class="mir3"><div><small>Mei needs<\/small><b>To talk it through now<\/b><\/div><span class="no" title="Different">≠<\/span><div><small>Ana needs<\/small><b>A little time first<\/b><\/div><\/div>/.test(full.html) && !/class="mir"/.test(full.html),
     JSON.stringify([orderA, full.view && full.view.mirrors]).slice(0, 600));
@@ -4797,7 +4819,7 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       /^I'm writing your questions now, from your Psyche: 8 quick screens on how things feel for you right now/.test(tg.questionsA.short.say || '') && /They'll be here in under a minute/.test(tg.questionsA.short.say) &&
       /^Now your questions\. I'm writing 8 quick screens from both your Psyches/.test(tg.join.short.say || '') && /Your partner never sees your answers/.test(tg.join.short.say) &&
       /<span class="chip">Your questions<\/span><p class="question">How things feel for you right now\./.test(String(tg.formA.widget || '')) &&
-      /ONE message: "Here's your invite\. Send your partner both lines below/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /Before writing, send ONE message first: its `consent` when it has one, then its `say` \(that their questions are being written\), unless they already went with the invite/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /Write them yourself, in this turn, never with a helper/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /You &amp; your partner/.test(String(tg.formA.widget || '')) && /I feel appreciated by your partner<\/div>/.test(String(tg.formA.widget || '')) &&
+      /ONE message: "Here's your invite\. Send your partner both lines below/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /Before writing, send ONE message first: its `consent` when it has one, then its `say` \(that their questions are being written\), unless they already went with the invite/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /Write them yourself, in this turn, never with a helper/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) && /You &amp; your partner/.test(String(tg.formA.widget || '')) && /I feel appreciated by my partner<\/div>/.test(String(tg.formA.widget || '')) &&
       /then, under the code block, its `say` \(that their questions are being written\)\. Send that message first, then write their questions in the same turn, from the same result/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')) &&
       /When `partner` is null \(they haven't joined yet/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).questionsSpec), JSON.stringify(tg.join).slice(0, 300));
   check('Muse\'s openers must name the partner in at least half, and each pillar needs an opener and a follow-up; then the questions come back as ONE widget built here, on its own white, one question at a time with Back and a progress bar, the opener and the question in the same ink, the private question marked, real radio buttons and one answers field, no storage, and "Submit my answers" as a button under it',
@@ -4836,10 +4858,16 @@ print(json.dumps({'b': [p for p in problems if p.startswith('relational.b.feelsC
       tg.askedA.find(x => x.id === 'core:needs').buttons.join() === 'Yes,Mostly,Not really' && /in this relationship for the long run/.test(tg.askedA.find(x => x.id === 'core:security').say) &&
       tg.askedA.filter(x => x.kind === 'decision').map(x => x.id).join() === 'decide:more_children,decide:place,decide:parents' && !tg.askedA.some(x => x.id === 'stage'),
     JSON.stringify(tg.askedA.map(x => x.id)));
+  check('Psyche Together 84 (README "An unused start makes way", "This week\'s practice"): a Psyche Together started here and never used (no stage, nothing answered) makes way for a partner\'s invite with nothing asked; "Our 28-day practice" is a command giving this week\'s part as data, with its say and buttons; "answered in kind" may be written in an opener, "what you answered" still may not',
+    JSON.stringify(tg.fixes84.untouched) === '[true,false,false,false]' && tg.fixes84.kind === false && tg.fixes84.plain === true &&
+      /if untouched\(s\) and keys\(\)\.get\('code'\) != m\.group\(1\):\n(?:\s*#[^\n]*\n)*\s*end\(\)/.test(fsx.readFileSync(new URL('../together/bin/together.py', import.meta.url), 'utf8')) &&
+      tg.practiceA.week === 1 && tg.practiceA.days.length === 7 && /^Week 1 · /.test(tg.practiceA.say) && /\n7\. /.test(tg.practiceA.say) && JSON.stringify(tg.practiceA.buttons) === '["Ask about our read","Back to the menu"]' &&
+      /\*\*"Our 28-day practice":\*\* `python3 bin\/together\.py practice`/.test(fsx.readFileSync(new URL('../together/SKILL.md', import.meta.url), 'utf8')),
+    JSON.stringify([tg.fixes84, tg.practiceA]).slice(0, 600));
   check('two overall questions first, as the glance opens the read, the same for both: how satisfied each is, and how satisfied each thinks the other is; the read gets them only as a couple (a level, and how well they read each other), and the page sets them at the top of the glance with the research behind them',
     tg.askedA.map(x => x.id).indexOf('overall:you') === 0 && tg.askedA.map(x => x.id).indexOf('overall:them') < tg.askedA.map(x => x.id).indexOf('safety') &&
       /Overall, how satisfied are you with your relationship with Ana\?/.test(tg.askedA.find(x => x.id === 'overall:you').say) && /how satisfied do you think Ana is with it\?/.test(tg.askedA.find(x => x.id === 'overall:them').say) &&
-      JSON.stringify(tg.askedA.find(x => x.id === 'overall:you').buttons) === '["Very satisfied","Satisfied","Somewhat","Not very"]' && W.items.some(x => x.id === 'overall:them') &&
+      JSON.stringify(tg.askedA.find(x => x.id === 'overall:you').buttons) === '["1","2","3","4","5"]' && /From 1 \(not satisfied\) to 5 \(very satisfied\)\.$/.test(tg.askedA.find(x => x.id === 'overall:you').say) && W.items.some(x => x.id === 'overall:them') &&
       view.overall && ['Strong', 'Steady', 'Worth attention'].includes(view.overall.level) && ['Happier than you each think', 'About right', 'Worth asking each other'].includes(view.overall.reading) &&
       Object.keys(view.overall).sort().join() === 'level,reading' && /How well you read each other/.test(htmlA) && /You are both more content than you each guess/.test(htmlA) && /Joel et al\., PNAS 2020/.test(tg.write.research.overall || ''),
     JSON.stringify(view.overall));
@@ -4965,10 +4993,10 @@ r = json.loads(sys.stdin.read()); print(json.dumps(m.check_read(r, json.loads(${
       tg.ownDupProblems.some(p => /^chapters\.future\.areas\.values\.columns: shared \(2 to 5\), a and b \(1 to 3 each, more one's own, nothing also in shared\)/.test(p)) && tg.alikeProblems.some(p => /^chapters\.future\.areas\.values\.columns/.test(p)),
     JSON.stringify([tg.alikeProblems, tg.ownDupProblems]).slice(0, 300));
   check('what to do in the moment sits in its area\'s what it means: under 05\'s cycle, early signs for each of you, the need under it, each one\'s counter-move and a question to ask yourself; in 04 the signs one of you feels unsure and what reassures each; a closed chapter shows its takeaway; no thumbs, but a rewrite can carry what felt off; a long what it means is sent back',
-    /id="disagree-cycle"><div class="at">[^]*?<\/div><div class="st found"><span class="sl">🔍 What we found<\/span>(<p class="fp">[^<]*<\/p>)?<div class="cycle">[^]*?<div class="st means">[^]*?<p class="fp2"><b>Mei<\/b> · When Mei starts numbering her replies, what she wants is to know she matters\. Next time she asks one question, then waits\.<\/p>/.test(htmlA) &&
+    /id="disagree-cycle"><div class="at">[^]*?<\/div><div class="st found"><span class="sl">🔍 What we found<\/span>(<p class="fp">[^<]*<\/p>)?<div class="cycle">[^]*?<div class="st means">[^]*?<div class="two"><div><b><span>M<\/span>Mei(&#x27;|')s side of the loop<\/b><p>When Mei starts numbering her replies, what she wants is to know she matters\. Next time she asks one question, then waits\.<\/p><\/div><div><b><span>A<\/span>Ana(&#x27;|')s side of the loop<\/b>/.test(htmlA) &&
       !/<small>(Watch for|Underneath|Your move)<\/small>/.test(htmlA) && !/A question to ask yourself/.test(htmlA) && !/Early signs, for/.test(htmlA) &&
       /When Ana is feeling unsure<\/b><ul><li>Goes quiet/.test(htmlA) && /id="secure-attachment"><div class="at">[^]*?<\/div><div class="st found"><span class="sl">🔍 What we found<\/span>(<p class="fp">[^<]*<\/p>)?<p class="fp2"><b>Mei<\/b> · steady, says it plainly\. Mei needs plain reassurance\.<\/p>/.test(htmlA) &&
-      /id="close-loves"><div class="at">[^]*?<\/div><div class="st found"><span class="sl">🔍 What we found<\/span><p class="fp">What you each give is what the other feels loved by, both ways\.[^<]*<\/p><div class="mir3"><div><small>Mei gives<\/small><b>Quality time<\/b><\/div><span class="ok" title="A match">=<\/span><div class="g"><small>Ana feels loved by<\/small><b>Quality time<\/b><\/div><\/div>/.test(htmlA) && !/class="flow"/.test(htmlA) && !/What makes Mei feel cared for/.test(htmlA) &&
+      /id="close-loves"><div class="at">[^]*?<\/div><div class="st found"><span class="sl">🔍 What we found<\/span><p class="fp">What you each give is what the other feels loved by, both ways\.[^<]*<\/p><div class="mir3"><div><small>Mei gives<\/small><b>Quality time<\/b><\/div><span class="ok" title="A match">✓<\/span><div class="g"><small>Ana feels loved by<\/small><b>Quality time<\/b><\/div><\/div>/.test(htmlA) && !/class="flow"/.test(htmlA) && !/What makes Mei feel cared for/.test(htmlA) &&
       /id="close-connection"[^]*?<span class="sl">🔍 What we found<\/span>(<p class="fp">[^<]*<\/p>)?<div class="bids"><p><b>33 of 40<\/b> bids for attention in the messages read were turned toward \(83%\)/.test(htmlA) &&
       /Evidence is a pattern, not an anecdote/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).readSpec) && /Never restate what the page already shows/.test(JSON.parse(fsx.readFileSync(pathx.join(home.a.dir, 'guide.json'), 'utf8')).readSpec) && /<ul class="how"><li><b>Missed · April 2025:<\/b> a photo from a walk/.test(htmlA) &&
       !/id="future-future"/.test(htmlA) && /id="future-values"><div class="at">[^]*?<\/div><div class="st found"><span class="sl">🔍 What we found<\/span>(<p class="fp">[^<]*<\/p>)?<div class="alike">/.test(htmlA) && /<span class="tz">Name the one point early, and the loop loosens\.<\/span>/.test(htmlA) &&
