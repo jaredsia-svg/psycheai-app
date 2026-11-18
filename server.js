@@ -106,6 +106,8 @@ const theme = require('./lib/theme');
 const preview = require('./lib/preview');
 let sampleHtml = null;
 const sampleReport = () => (sampleHtml = sampleHtml || require('node:fs').readFileSync(require('node:path').join(__dirname, 'assets', 'sample-report.html')));
+let togetherSampleHtml = null;
+const togetherSample = () => (togetherSampleHtml = togetherSampleHtml || require('node:fs').readFileSync(require('node:path').join(__dirname, 'assets', 'together-sample.html')));
 // PsycheAI's app icon, at the addresses hosts and browsers look for it.
 const ICONS = Object.fromEntries([['/favicon.ico', 'favicon.ico', 'image/x-icon'], ['/icon.png', 'icon-512.png', 'image/png'],
   ['/icon-192.png', 'icon-192.png', 'image/png'], ['/apple-touch-icon.png', 'apple-touch-icon.png', 'image/png']]
@@ -446,8 +448,16 @@ async function route(req, res) {
     }
     // Psyche Together, bought on the website (lib/togetherpay.js): its page and Stripe Checkout.
     const buy = /^\/together\/buy\/([\w.-]+?)(\/checkout)?$/.exec(url.pathname);
-    if (buy && req.method === 'GET' && !buy[2]) return sendResult(res, require('./lib/togetherpay').show(buy[1], Date.now(), url.searchParams.get('done') === '1'));
-    if (buy && req.method === 'POST' && buy[2]) return sendResult(res, await require('./lib/togetherpay').checkout(buy[1]));
+    // Where to price it: ?cur= from the page, else the country Cloudflare saw, else the browser's language.
+    const where = { cur: url.searchParams.get('cur'), country: req.headers['cf-ipcountry'], language: req.headers['accept-language'] };
+    if (buy && req.method === 'GET' && !buy[2]) return sendResult(res, require('./lib/togetherpay').show(buy[1], Date.now(), url.searchParams.get('done') === '1', where));
+    if (buy && req.method === 'POST' && buy[2]) return sendResult(res, await require('./lib/togetherpay').checkout(buy[1], Date.now(), undefined, where));
+    // A sample Psyche Together report for a made-up couple (README "A sample Psyche Together report"), built by tools/together-sample.py.
+    if (/^\/together\/sample\/?$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
+      const html = togetherSample();
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600', 'Content-Length': html.length });
+      return res.end(req.method === 'HEAD' ? undefined : html);
+    }
     // Psyche Together's own skill (lib/togetherskill.js): its files and signed manifest, off unless PSYCHE_TOGETHER=1.
     const tg = require('./lib/togetherskill').route(url.pathname, req.method);
     if (tg) return send(res, tg.status, Buffer.isBuffer(tg.body) ? tg.body.toString('utf8') : tg.body, (tg.type || 'application/json').split(';')[0]);

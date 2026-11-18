@@ -3726,17 +3726,34 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       const skillUser = () => ({ ...store.getUser(lin.id), via: 'skill' });
       const idA = 'c'.repeat(64), idB = 'b'.repeat(64);
       const free = pay.gate(skillUser());
-      process.env.PSYCHE_TOGETHER_PAID = '1'; process.env.STRIPE_PRICE_TOGETHER = 'price_t';
+      process.env.PSYCHE_TOGETHER_PAID = '1';
       const gated = await tgLib.link(skillUser(), { e2e: { id: idA } });
       const buyUrl = ((gated.access || {}).url || '').replace(/^https?:\/\/[^/]+/, '');
-      const buyPage = await (await fetch(base + buyUrl)).text();
-      const co = await fetch(base + buyUrl + '/checkout', { method: 'POST', redirect: 'manual' });
+      const buyPage = await (await fetch(base + buyUrl, { headers: { 'cf-ipcountry': 'GB' } })).text();
+      const co = await fetch(base + buyUrl + '/checkout?cur=gbp', { method: 'POST', redirect: 'manual' });
       const sentT = stripeCalls.filter(c => c.path === '/v1/checkout/sessions').pop();
       check('Psyche Together: off unless switched on; when paid, starting one without a purchase answers with a link to the website, worded as a limit with no price; the page offers it and Checkout is one payment for it, tied to the account',
         free === null && !store.kvGet('together', idA) && /^\/together\/buy\/[\w.-]+$/.test(buyUrl) && !/US\$|\$\d|price|upgrade|buy/i.test(gated.access.say) &&
-          /Get Psyche Together/.test(buyPage) && /joining is free for them/.test(buyPage) && co.status === 303 &&
-          sentT && sentT.body.get('mode') === 'payment' && sentT.body.get('line_items[0][price]') === 'price_t' && sentT.body.get('metadata[kind]') === 'together' && sentT.body.get('client_reference_id') === lin.id,
+          /Get Psyche Together · £4/.test(buyPage) && /One payment, for both of you/.test(buyPage) && /Your partner joins for free/.test(buyPage) && /href="\/together\/sample"/.test(buyPage) &&
+          /you get your money back automatically/.test(buyPage) && co.status === 303 &&
+          sentT && sentT.body.get('mode') === 'payment' && sentT.body.get('line_items[0][price_data][currency]') === 'gbp' && sentT.body.get('line_items[0][price_data][unit_amount]') === '400' && !sentT.body.get('line_items[0][price]') && sentT.body.get('metadata[kind]') === 'together' && sentT.body.get('client_reference_id') === lin.id,
         JSON.stringify([gated, co.status]).slice(0, 300));
+      // US$5 everywhere (README "The Psyche Together page"): the same amounts as psycheai.io's US$5 report, when that repo is beside this one.
+      const fsP = require('node:fs'), pathP = require('node:path');
+      const siteFile = pathP.join(process.cwd(), '..', 'psycheai', 'docs', 'prices.js');
+      const site = fsP.existsSync(siteFile) ? (() => { const g = {}; new Function('window', 'module', fsP.readFileSync(siteFile, 'utf8'))(g, { exports: {} }); return g.PsychePrices || null; })() : null;
+      const sameAsSite = !site || !site.TABLE || Object.entries(pay.PRICES).every(([c, p]) => site.TABLE[c] && site.TABLE[c].unlock === p.amount);
+      const sample = await fetch(base + '/together/sample');
+      const sampleHtml = await sample.text();
+      check('Psyche Together costs US$5 (or the local equivalent) for both, picked from the page\'s currency, then the country, then the language; the amount comes from the server\'s table only; the buy page links a sample report, served at /together/sample for a made-up couple',
+        pay.PRICES.usd.amount === 500 && pay.PRICES.usd.shown === 'US$5' && Object.keys(pay.PRICES).length === 11 && sameAsSite &&
+          pay.currencyFor('JPY', 'US') === 'jpy' && pay.currencyFor('xyz', 'DE') === 'eur' && pay.currencyFor(null, null, 'en-SG,en;q=0.9') === 'sgd' && pay.currencyFor(null, 'BR', 'pt-BR') === 'usd' &&
+          sample.status === 200 && /A sample report for a made-up couple/.test(sampleHtml) && /Emily <i>&amp;<\/i> Daniel/.test(sampleHtml) && !/STRIPE_PRICE_TOGETHER/.test(fsP.readFileSync('render.yaml', 'utf8')),
+        JSON.stringify({ sameAsSite, status: sample.status, site: Boolean(site) }));
+      const sampleBefore = require('node:fs').readFileSync('assets/together-sample.html', 'utf8');
+      let built = null; try { built = JSON.parse(require('node:child_process').execFileSync('python3', ['tools/together-sample.py']).toString()); } catch (e) { built = { error: String(e.stderr || e.message).slice(0, 400) }; }
+      check('the sample Psyche Together report passes the same check every real read does, and is up to date with the report\'s layout (python3 tools/together-sample.py)',
+        built.ok === true && require('node:fs').readFileSync('assets/together-sample.html', 'utf8') === sampleBefore, JSON.stringify(built));
       const paidEvent = (id, status = 'paid', type = 'checkout.session.completed') => JSON.stringify({ type, data: { object: { id, payment_status: status, payment_intent: 'pi_' + id, client_reference_id: lin.id, metadata: { kind: 'together', userId: lin.id } } } });
       const unpaid = paidEvent('cs_t0', 'unpaid');
       await hook(unpaid, sign(unpaid));
@@ -3762,7 +3779,7 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       const refundCall = stripeCalls.filter(c => c.path === '/v1/refunds').pop();
       check('Psyche Together: if the partner never joins, the link goes after 30 days and its purchase is refunded through Stripe (PLAN.md)',
         !store.kvGet('together', idC) && refundCall && refundCall.body.get('payment_intent') === 'pi_cs_t2', JSON.stringify(refundCall ? [...refundCall.body] : null));
-      delete process.env.PSYCHE_TOGETHER_PAID; delete process.env.STRIPE_PRICE_TOGETHER;
+      delete process.env.PSYCHE_TOGETHER_PAID;
       if (wasTg === undefined) delete process.env.PSYCHE_TOGETHER; else process.env.PSYCHE_TOGETHER = wasTg;
     }
     {
@@ -4227,8 +4244,8 @@ elif a[0] == 'thread':
   tg.noPsyche = JSON.parse((await execFile('python3', [pathx.join(home.a.dir, 'bin', 'together.py'), 'status'], { env: { ...home.a.env,
     PSYCHEAI_HOME: fsx.mkdtempSync(pathx.join(os.tmpdir(), 'tg-none-')), PSYCHEAI_SKILL_DIR: '/nonexistent' } })).stdout);
   // Paid (README "Psyche Together, paid on the website"): one tap once paid, never a code.
-  const payEnv = { PSYCHE_TOGETHER_PAID: '1', STRIPE_PRICE_TOGETHER: 'price_t', STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET };
-  Object.assign(process.env, { PSYCHE_TOGETHER_PAID: '1', STRIPE_PRICE_TOGETHER: 'price_t', STRIPE_SECRET_KEY: 'sk_test_t', STRIPE_WEBHOOK_SECRET: 'whsec_t' });
+  const payEnv = { PSYCHE_TOGETHER_PAID: '1', STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET };
+  Object.assign(process.env, { PSYCHE_TOGETHER_PAID: '1', STRIPE_SECRET_KEY: 'sk_test_t', STRIPE_WEBHOOK_SECRET: 'whsec_t' });
   tg.gate1 = await run.a('start');
   tg.gate2 = await run.a('start');
   for (const [k, v] of Object.entries(payEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }

@@ -88,11 +88,7 @@ services:
       - key: STRIPE_PRICE_YEARLY
         sync: false
       # Psyche Together, paid on the website (lib/togetherpay.js): on only with
-      # PSYCHE_TOGETHER_PAID=1 and a one-time Stripe price; the shown price is
-      # for the page only (e.g. US$9.99).
+      # PSYCHE_TOGETHER_PAID=1 and Stripe set up. The price (US$5 and local
+      # equivalents) is PRICES in lib/togetherpay.js; no Stripe price is needed.
       - key: PSYCHE_TOGETHER_PAID
-        sync: false
-      - key: STRIPE_PRICE_TOGETHER
-        sync: false
-      - key: PSYCHE_TOGETHER_PRICE_SHOWN
         sync: false

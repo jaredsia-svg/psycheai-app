@@ -1,0 +1,223 @@
+{
+  "summary": "Two people who show love by doing things for each other, learning to say it out loud and to wait out the quiet after a row.",
+  "story": {
+    "eras": [
+      {"from": 2022, "to": 2022, "title": "All in", "line": "Hundreds of messages a month, late-night voice notes and a 400-day streak that started the week you met."},
+      {"from": 2023, "to": 2023, "title": "The first hard year", "line": "Moving in, a new job for Daniel and more friction than before. Fewer messages, and longer gaps after a row."},
+      {"from": 2024, "to": 2026, "title": "Finding your rhythm", "line": "Steadier and warmer. Fewer words, more plans, and you get back to warm faster after a hard day."}
+    ]
+  },
+  "relational": {
+    "a": {"showsCare": ["Acts of service", "Quality time"], "feelsCared": ["Quality time"], "lean": "secure", "attachment": "steady, carries things quietly", "basis": "Emily starts most of your plans and checks in after Daniel's long days, but rarely says when she is the one who is tired."},
+    "b": {"showsCare": ["Acts of service", "Physical touch"], "feelsCared": ["Words of affirmation"], "lean": "secure", "attachment": "steady once he has had space", "basis": "Daniel fixes, books and sorts things when Emily is stressed, and his warmest replies come after she thanks him in words."}
+  },
+  "truths": [
+    {"kind": "strength", "title": "You show up for each other", "chapter": "close", "detail": "When one of you has a hard day, the other turns up, almost every time. Emily brings food and plans; Daniel fixes whatever is broken. It is the backbone of your relationship, and it has held through a move, a new job and a hard first year.",
+     "evidence": [{"when": "January 2023", "what": "Daniel drove across town at 11pm when Emily's car broke down"}, {"when": "June 2024", "what": "Emily planned a whole weekend around Daniel's exam"}, {"when": "March 2026", "what": "dinner waiting after Emily's late shift, three nights running"}]},
+    {"kind": "edge", "title": "Talk now, or time first", "chapter": "disagree", "detail": "After a row, Emily wants to talk it through straight away and Daniel needs a few hours first. When Emily pushes, Daniel goes quieter; when he goes quiet, she pushes harder. Neither of you is wrong. You just need a plan for the gap.",
+     "evidence": [{"when": "September 2023", "what": "a row about a missed dinner that ran over two days"}, {"when": "May 2025", "what": "a short reply from Daniel, then four messages from Emily"}, {"when": "August 2026", "what": "Daniel asked for an hour and came back with a plan"}]},
+    {"kind": "surprise", "title": "Happier than you each think", "chapter": "secure", "detail": "You are each more content with your relationship than the other guesses. Both of you are sure about the long run, too. The worry each of you carries about the other is bigger than it needs to be.",
+     "evidence": [{"when": "February 2024", "what": "a quiet week both of you later called one of your best"}, {"when": "December 2025", "what": "planning next summer's trip without a second thought"}, {"when": "October 2026", "what": "you both said goodnight with the same joke"}]}
+  ],
+  "chapters": {
+    "close": {
+      "takeaway": "You care for each other mostly by doing things. Add the words, and the time, that each of you needs most.",
+      "areas": {
+        "appreciation": {
+          "seen": "One of you feels fully appreciated; the other mostly does.",
+          "evidence": [
+            {"insight": "Thanks flow more one way than the other.", "support": "Daniel thanks Emily 520 times across the messages; Emily thanks Daniel 410 times, mostly for practical help."},
+            {"insight": "Emily's own effort often goes unnamed.", "support": "Of the 60 plans Emily made in 2025, about one in three got a thank-you in words."}
+          ],
+          "means": "Most of the care between you is real but quiet. The partner who does the planning can end up feeling taken for granted, even when the other is grateful.",
+          "next": [
+            {"do": "Once a day, name one thing the other did, in words.", "because": "Daniel feels most appreciated through words, and Emily's planning often goes unthanked."},
+            {"do": "Say thank you for the planning, not just the plan.", "because": "Emily's Psyche shows she carries more than she says."}
+          ]
+        },
+        "loves": {
+          "evidence": [
+            {"insight": "You both mostly give care by doing, but want it in different forms.", "support": "Emily feels loved through time together; Daniel through words. Both of you mostly give acts of service, in hundreds of messages since 2022."}
+          ],
+          "means": "You are both fluent in acts of service, which is why the everyday runs so smoothly. What each of you wants back is different: Emily needs undivided time, Daniel needs to hear it.",
+          "next": [
+            {"do": "Daniel: one evening a week with phones away, planned by you.", "because": "Time together is how Emily feels most cared for."},
+            {"do": "Emily: tell Daniel one specific thing you love about him this week.", "because": "Words are how Daniel feels most cared for, and he rarely asks."}
+          ]
+        },
+        "connection": {
+          "seen": "Making time for each other feels easier for one of you than the other.",
+          "evidence": [
+            {"insight": "Small bids for attention mostly land.", "support": "Of 120 small bids in the messages read, 96 got a warm reply, 21 were missed and 3 were met sharply."}
+          ],
+          "means": "Your everyday connection is good. The misses cluster on busy weeknights, when one of you shares something small and the other is still in work mode.",
+          "next": [
+            {"do": "When a photo or a small story comes in, reply with one real line, even if it's later.", "because": "Most of the 21 missed bids were small shares on weeknights."}
+          ],
+          "bids": {"seen": 120, "toward": 96, "away": 21, "against": 3,
+                   "missed": [{"when": "April 2025", "text": "a photo of a new running route that got a thumbs-up and nothing else"}, {"when": "February 2026", "text": "good news about a promotion, met with a question about groceries"}]}
+        },
+        "counts": {
+          "evidence": [
+            {"insight": "Hard times get met better than good news.", "support": "You met 11 of 12 hard moments with real support, but only 7 of 11 pieces of good news with real interest."}
+          ],
+          "means": "When it really matters, you are there for each other. Good news gets less of a reaction than it deserves, and celebrating each other is one of the easiest ways to feel closer.",
+          "next": [
+            {"do": "When the other shares good news, ask one question about it before moving on.", "because": "4 of 11 pieces of good news got a flat reply."}
+          ],
+          "goodNews": {"seen": 11, "metWell": 7},
+          "hardTimes": {"seen": 12, "metWell": 11},
+          "moments": [
+            {"when": "March 2024", "kind": "hard", "met": "well", "text": "Emily's grandmother in hospital: Daniel cleared his weekend and drove"},
+            {"when": "February 2026", "kind": "good", "met": "flat", "text": "Daniel's promotion, met with a groceries question"},
+            {"when": "July 2025", "kind": "good", "met": "well", "text": "Emily's first half marathon, with a cake waiting at home"}
+          ]
+        }
+      }
+    },
+    "life": {
+      "takeaway": "Daily life mostly runs smoothly. The friction is about chores and who keeps track of them.",
+      "areas": {
+        "needs": {
+          "seen": "Life together feels fair to one of you, and mostly fair to the other.",
+          "evidence": [
+            {"insight": "One of you does most of the remembering.", "support": "Emily sends 3 in 4 of the messages about bills, bookings and plans since 2024."},
+            {"insight": "Chores come up again and again.", "support": "Chores and who does what came up in 23 tense exchanges since moving in together in 2023."}
+          ],
+          "means": "The work of running a home is shared, but the job of keeping track of it is not. That invisible load is what makes things feel less fair.",
+          "next": [
+            {"do": "Split the remembering, not just the doing: each of you owns a few things end to end.", "because": "Emily sends most of the planning messages."},
+            {"do": "Ten minutes on Sunday to look at the week together.", "because": "Most chore tensions start on a weekday evening."}
+          ]
+        },
+        "interests": {
+          "evidence": [],
+          "means": "You share good food and the outdoors, and each of you has something that is only yours. Keep both: shared time draws you together, your own time gives you something new to bring back.",
+          "next": [
+            {"do": "Try one new place to eat or walk each month, chosen in turn.", "because": "Food and the outdoors are what you both enjoy most."}
+          ],
+          "columns": {"shared": ["Cooking together", "Weekend hikes", "Live music"], "a": ["Distance running", "Reading"], "b": ["Fixing up bikes", "Climbing"]}
+        }
+      }
+    },
+    "future": {
+      "takeaway": "You want the same things at heart. Where to live, and when to marry, still need a real conversation.",
+      "areas": {
+        "values": {
+          "evidence": [],
+          "means": "Loyalty and honesty sit at the centre for both of you. Emily leans toward growth and people; Daniel toward freedom and doing things well. These pull in different directions only now and then.",
+          "next": [
+            {"do": "Talk about one thing each of you wants to learn next year.", "because": "Growth matters to Emily and craft matters to Daniel."}
+          ],
+          "columns": {"shared": ["Loyalty", "Honesty", "Close friends"], "a": ["Kindness", "Growth"], "b": ["Freedom", "Craft"]}
+        },
+        "decisions": {
+          "evidence": [],
+          "means": "On children you are on the same page. On marriage and where to live, you are not there yet, and that is normal at this stage. It just needs a calm talk before it becomes a sore spot.",
+          "next": [
+            {"do": "Have one relaxed talk about where you might live in five years, with no decision needed.", "because": "You each see a different place in five years."}
+          ],
+          "lines": {
+            "children": "You both want children one day: a good place to start talking about when.",
+            "marriage": "One of you is sure, one isn't yet. Ask what would help make it clearer, without a deadline.",
+            "place": "One of you sees staying put, one sees a new city. Talk about what each place would give you."
+          }
+        },
+        "growth": {
+          "evidence": [],
+          "means": "You both like to keep getting better at things. Emily grows through people and helping others; Daniel through mastering a skill. Cheering on each other's growth is a quiet way to stay close.",
+          "next": [
+            {"do": "Ask about the other's goal once a week, and remember the answer.", "because": "Emily's drive to help and Daniel's love of craft both show in your Psyches."}
+          ]
+        }
+      }
+    },
+    "secure": {
+      "takeaway": "You both feel secure in this, and you are both in it for the long run. Say so more often.",
+      "areas": {
+        "attachment": {
+          "evidence": [
+            {"insight": "Both of you come back after distance.", "support": "After 86 in 100 hard messages since 2022, one of you said something warm within a day."}
+          ],
+          "means": "You both lean secure. Emily copes by carrying things on her own; Daniel by taking space. Knowing that about each other turns a quiet day from a worry into just a quiet day.",
+          "next": [
+            {"do": "When you need space, say how long: an hour, an evening.", "because": "Daniel takes space first, and Emily copes better with a clear end to it."}
+          ],
+          "status": "both lean secure",
+          "reassure": {"a": "Emily is reassured when Daniel checks in first, even briefly.", "b": "Daniel is reassured by plain words that you're okay, and some room to think."}
+        },
+        "security": {
+          "seen": "You both feel secure and sure about each other.",
+          "evidence": [
+            {"insight": "You plan far ahead together.", "support": "You made 14 plans more than three months out in 2025 and 2026."}
+          ],
+          "means": "This is solid ground. You are both sure about the long run, which makes the harder conversations elsewhere safe to have.",
+          "next": [
+            {"do": "Once a month, say one thing you're looking forward to doing together.", "because": "You already plan far ahead; saying it out loud makes it felt."}
+          ],
+          "signs": {"a": ["Takes on more planning than usual", "Says she's fine, quickly"], "b": ["Shorter replies", "Spends longer in the garage"]}
+        }
+      }
+    },
+    "disagree": {
+      "takeaway": "Your rows are rarely about the topic. They are about timing: one of you needs to talk now, the other needs time first.",
+      "areas": {
+        "topics": {
+          "evidence": [],
+          "means": "You each named something different. Timekeeping and chores both come back to the same thing: how you share the running of your life.",
+          "next": [
+            {"do": "Agree a simple rule for each: who books, who tidies, how late is too late.", "because": "Both topics keep coming back in the messages."}
+          ],
+          "type": "solvable"
+        },
+        "cycle": {
+          "evidence": [],
+          "means": "This loop is common and it is fixable. It isn't about who is right: it's about the gap between talk-now and time-first.",
+          "next": [
+            {"do": "Agree a phrase that means: I need an hour, and I will come back.", "because": "Daniel needs time first, and Emily needs to know it will end."}
+          ],
+          "status": "one pushes, one pauses",
+          "steps": ["Something small goes wrong, often about plans or chores", "Emily wants to sort it out now", "Daniel goes quiet to think", "Emily pushes harder, and Daniel pulls back further"],
+          "plain": {
+            "a": "When Emily starts sending several messages in a row, she needs to know she matters. Next time, she can say it once and give Daniel a clear hour.",
+            "b": "When Daniel's replies get short, he needs room to think. Next time, he can say how long he needs, and then come back."
+          }
+        },
+        "disagreements": {
+          "seen": "Getting past disagreements feels harder to one of you than to the other.",
+          "evidence": [
+            {"insight": "Your repairs mostly work, but they take a while.", "support": "Of 41 repair attempts after friction, 33 were taken up. It took about 3.5 hours to get back to warm, down from 6 hours in 2023."}
+          ],
+          "means": "You are getting better at this every year. The hard part is not the repair but the wait before it, which one of you finds much harder than the other.",
+          "next": [
+            {"do": "After a row, send one warm line within the hour, even if the talk comes later.", "because": "Most of your repairs land, but the wait before them is long."},
+            {"do": "Daniel: name the time you'll come back. Emily: trust it.", "because": "One of you needs time first, the other needs to talk now."}
+          ],
+          "repairs": {"tried": 41, "landed": 33}
+        }
+      }
+    }
+  },
+  "overall": {"title": "How you feel about it all", "detail": "You are both happier in this than the other one thinks. Tell each other plainly what is going well."},
+  "intermission": {"title": "Your story in small moments", "lines": ["Your longest streak: 403 days in a row of messages.", "Emily sends the plans. Daniel sends the photos of what he fixed.", "Your busiest day was in May 2022: 212 messages.", "You both end most nights with the same silly goodnight."]},
+  "plan": {
+    "week1": {"title": "Small daily turns", "chapter": "close", "days": [
+      "Thank each other for one specific thing, in words.",
+      "Put phones away for the first 20 minutes of dinner.",
+      "Ask one question about the other's day and really listen.",
+      "Do one chore the other usually does, without being asked.",
+      "Send a message in the afternoon that has nothing to do with logistics.",
+      "Say one thing you're looking forward to together.",
+      "Plan next week's evening together, just the two of you."
+    ]},
+    "weeks": [
+      {"title": "Week 2: the gap after a row", "conversation": {"title": "Talk now, or time first", "why": "It's the loop behind most of your rows.", "script": ["Pick a calm evening, not right after a row.", "Each say what you need right after a disagreement.", "Agree a phrase for: I need time, and I'll come back.", "Agree how long is okay."]},
+       "ask": "What helps you feel okay while we're not talking yet?", "doTogether": "Try your new phrase the next time something small goes wrong."},
+      {"title": "Week 3: the invisible load", "conversation": {"title": "Who keeps track of what", "why": "The remembering, not the doing, is what feels unfair.", "script": ["List everything that needs remembering at home.", "Each pick the things you'll own, start to finish.", "Check in after a week."]},
+       "ask": "What do I do that you'd miss if I stopped?", "doTogether": "Spend ten minutes on Sunday looking at the week ahead."},
+      {"title": "Week 4: what comes next", "conversation": {"title": "Five years from now", "why": "Where to live and when to marry are still open.", "script": ["No decisions tonight, just dreams.", "Each describe a perfect ordinary Tuesday in five years.", "Notice what's the same.", "Pick one small step toward it."]},
+       "ask": "What would make you feel sure about the next big step?", "doTogether": "Plan one weekend away in a place you might like to live."}
+    ]
+  },
+  "caveats": "This reads your messages, your answers and your two Psyches. It can't see your days together, your tone of voice or anything you only say in person."
+}
