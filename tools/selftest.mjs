@@ -3735,7 +3735,7 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       check('Psyche Together: off unless switched on; when paid, starting one without a purchase answers with a link to the website, worded as a limit with no price; the page offers it and Checkout is one payment for it, tied to the account',
         free === null && !store.kvGet('together', idA) && /^\/together\/buy\/[\w.-]+$/.test(buyUrl) && !/US\$|\$\d|price|upgrade|buy/i.test(gated.access.say) &&
           /Get Psyche Together · £4/.test(buyPage) && /One payment, for both of you/.test(buyPage) && /Your partner joins for free/.test(buyPage) && /href="\/together\/sample"/.test(buyPage) &&
-          /you get your money back automatically/.test(buyPage) && co.status === 303 &&
+          /Money back if your partner doesn’t join within 30 days/.test(buyPage) && /src="\/together\/cards\/emily\.jpg"/.test(buyPage) && /What it reads/.test(buyPage) && /Agree: a strength/.test(buyPage) && co.status === 303 &&
           sentT && sentT.body.get('mode') === 'payment' && sentT.body.get('line_items[0][price_data][currency]') === 'gbp' && sentT.body.get('line_items[0][price_data][unit_amount]') === '400' && !sentT.body.get('line_items[0][price]') && sentT.body.get('metadata[kind]') === 'together' && sentT.body.get('client_reference_id') === lin.id,
         JSON.stringify([gated, co.status]).slice(0, 300));
       // US$5 everywhere (README "The Psyche Together page"): the same amounts as psycheai.io's US$5 report, when that repo is beside this one.
@@ -3748,7 +3748,8 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       check('Psyche Together costs US$5 (or the local equivalent) for both, picked from the page\'s currency, then the country, then the language; the amount comes from the server\'s table only; the buy page links a sample report, served at /together/sample for a made-up couple',
         pay.PRICES.usd.amount === 500 && pay.PRICES.usd.shown === 'US$5' && Object.keys(pay.PRICES).length === 11 && sameAsSite &&
           pay.currencyFor('JPY', 'US') === 'jpy' && pay.currencyFor('xyz', 'DE') === 'eur' && pay.currencyFor(null, null, 'en-SG,en;q=0.9') === 'sgd' && pay.currencyFor(null, 'BR', 'pt-BR') === 'usd' &&
-          sample.status === 200 && /A sample report for a made-up couple/.test(sampleHtml) && /Emily <i>&amp;<\/i> Daniel/.test(sampleHtml) && !/STRIPE_PRICE_TOGETHER/.test(fsP.readFileSync('render.yaml', 'utf8')),
+          sample.status === 200 && /A sample report for a made-up couple/.test(sampleHtml) && /Emily <i>&amp;<\/i> Lucas/.test(sampleHtml) && /<img alt="Emily's Psyche Card" src="data:image\/jpeg;base64,/.test(sampleHtml) &&
+          (await fetch(base + '/together/cards/lucas.jpg')).headers.get('content-type') === 'image/jpeg' && (await fetch(base + '/together/cards/other.jpg')).status !== 200 && !/STRIPE_PRICE_TOGETHER/.test(fsP.readFileSync('render.yaml', 'utf8')),
         JSON.stringify({ sameAsSite, status: sample.status, site: Boolean(site) }));
       const sampleBefore = require('node:fs').readFileSync('assets/together-sample.html', 'utf8');
       let built = null; try { built = JSON.parse(require('node:child_process').execFileSync('python3', ['tools/together-sample.py']).toString()); } catch (e) { built = { error: String(e.stderr || e.message).slice(0, 400) }; }

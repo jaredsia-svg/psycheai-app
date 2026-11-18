@@ -1,6 +1,6 @@
 # Builds assets/together-sample.html, the sample Psyche Together report served at /together/sample
 # (README "A sample Psyche Together report"): the real report page (together/bin/together.py page) for a
-# made-up couple, Emily and Daniel. Emily is psycheai.io's fictional sample reader. Nothing here is anyone's
+# made-up couple, Emily and Lucas, psycheai.io's own fictional sample readers (Mulan and Odysseus). Nothing here is anyone's
 # real data. The read is checked by the same check_read every real read passes, so the sample can't show
 # what a real read couldn't.
 # Run after a change to the report's layout: python3 tools/together-sample.py
@@ -26,14 +26,16 @@ def psyche(name, character, mbti, headline, big, motives, patterns, values, atta
             'caresBy': cares, 'feelsCaredForBy': feels, 'relationshipStrengths': strengths, 'relationshipEdges': edges}
 
 
-EMILY = psyche('Emily', 'Mulan', 'ENFJ', 'Organiser with a warm centre and a quiet battery', [72, 81, 58, 77, 44],
-               {'benevolence': 84, 'achievement': 71, 'stimulation': 52}, ['The quiet organiser', 'Generous with attention', 'Bursts, then recovery'],
-               ['Loyalty', 'Kindness', 'Growth'], 'Leans secure, with a self-reliant streak', 'Smooths it over, raises it later',
-               ['Acts of service', 'Quality time'], ['Quality time'], ['Shows up', 'Remembers the details'], ['Carries more than she says'])
-DANIEL = psyche('Daniel', 'Odysseus', 'ISTP', 'Calm fixer who thinks with his hands', [66, 55, 38, 63, 36],
-                {'self-direction': 82, 'stimulation': 68, 'security': 57}, ['Quiet problem-solver', 'Says it with a plan', 'Needs a reset after people'],
-                ['Freedom', 'Honesty', 'Craft'], 'Leans secure, needs space first', 'Goes quiet, then comes back with a fix',
-                ['Acts of service', 'Physical touch'], ['Words of affirmation'], ['Steady in a crisis', 'Keeps his word'], ['Slow to say how he feels'])
+# Emily Carter and Lucas Moreau are psycheai.io's own sample readers (docs/sample.json and docs/sample-cards.json),
+# so their Psyches here are the ones on their sample cards.
+EMILY = psyche('Emily', 'Mulan', 'ENFJ', 'Organiser with a warm centre and a quiet battery', [61, 84, 55, 79, 44],
+               {'benevolence': 88, 'achievement': 74, 'security': 61}, ['The quiet organiser', 'Generous with attention', 'Bursts, then recovery'],
+               ['Reliability', 'Craft', 'Belonging'], 'Leans secure, with a self-reliant streak', 'Smooths it over, raises it later',
+               ['Acts of service'], ['Quality time', 'Words of affirmation'], ['Remembers the detail', 'Handles friction privately'], ['Never asks for anything', 'Tallies quietly'])
+LUCAS = psyche('Lucas', 'Odysseus', 'ENTP', 'Resourceful planner with a way out of every corner', [84, 56, 72, 58, 40],
+               {'stimulation': 86, 'achievement': 77, 'self-direction': 70}, ['A plan B for every plan', 'Talks a room round', 'Always heading home'],
+               ['Ingenuity', 'Adventure', 'Loyalty'], 'Leans secure, restless when stuck', 'Argues it out, then moves on',
+               ['Words of affirmation', 'Acts of service'], ['Words of affirmation', 'Quality time'], ['Says what he admires', 'Finds a way through'], ['Pushes to settle it now'])
 
 SIGNALS = {
     'from': '2022-03-12', 'to': '2026-10-30', 'messages': 18420, 'perMonth': 330.0, 'trend': 'steady',
@@ -65,12 +67,12 @@ def profile(p, stage, core, overall, commit, mirror, topic, decisions):
             'topic': topic, 'decisions': decisions, 'desireTalk': False, 'rounds': [], 'sentAt': AT, 'chat': {'signals': SIGNALS}}
 
 
-A = profile(EMILY, 'Living together', {'security': 2, 'appreciation': 1, 'connection': 2, 'needs': 1, 'disagreements': 1},
-            {'you': 3, 'them': 2}, 2, {'appreciated': {'self': 'Time together', 'guess': 'Something done for me'}, 'repair': {'self': 'To talk it through now'}},
-            'Plans and timekeeping', {'children': 'Yes', 'marriage': 'Yes', 'place': 'Where we are now'})
-B = profile(DANIEL, None, {'security': 2, 'appreciation': 2, 'connection': 1, 'needs': 2, 'disagreements': 0},
-            {'you': 3, 'them': 2}, 2, {'appreciated': {'self': 'Being told in words', 'guess': 'Time together'}, 'repair': {'self': 'A little time first'}},
-            'Chores and who does what', {'children': 'Yes', 'marriage': 'Unsure', 'place': 'Another city or country'})
+A = profile(EMILY, 'Living together', {'security': 2, 'appreciation': 1, 'connection': 1, 'needs': 1, 'disagreements': 1},
+            {'you': 3, 'them': 2}, 2, {'appreciated': {'self': 'Time together', 'guess': 'Being told in words'}, 'repair': {'self': 'A little time first'}},
+            'Chores and who does what', {'children': 'Yes', 'marriage': 'Yes', 'place': 'Where we are now'})
+B = profile(LUCAS, None, {'security': 2, 'appreciation': 2, 'connection': 2, 'needs': 2, 'disagreements': 0},
+            {'you': 3, 'them': 2}, 2, {'appreciated': {'self': 'Being told in words', 'guess': 'Something done for me'}, 'repair': {'self': 'To talk it through now'}},
+            'Plans and timekeeping', {'children': 'Yes', 'marriage': 'Unsure', 'place': 'Another city or country'})
 VIEW = m.couple_view(A, B)
 
 READ = json.load(open(os.path.join(HERE, 'fixtures', 'together-sample-read.json')))
@@ -78,16 +80,24 @@ problems = m.check_read(READ, VIEW, True)
 if problems:
     sys.exit('The sample read no longer passes check_read:\n- ' + '\n- '.join(problems))
 
-BOX = {'v': 8, 'view': VIEW, 'read': READ, 'at': AT, 'firstAt': AT, 'rewrites': 0, 'chat': {'signals': SIGNALS}, 'chatOf': ['Emily', 'Daniel'],
-       'psyches': {'a': EMILY, 'b': DANIEL},
-       'sources': {'people': [{'name': 'Emily', 'confidence': 78, 'level': 'high', 'basedOn': ['412 posts and stories', '2,300 of her own messages']},
-                              {'name': 'Daniel', 'confidence': 71, 'level': 'moderate', 'basedOn': ['168 posts and stories', '1,900 of his own messages']}],
+BOX = {'v': 8, 'view': VIEW, 'read': READ, 'at': AT, 'firstAt': AT, 'rewrites': 0, 'chat': {'signals': SIGNALS}, 'chatOf': ['Emily', 'Lucas'],
+       'psyches': {'a': EMILY, 'b': LUCAS},
+       'sources': {'people': [{'name': 'Emily', 'confidence': 86, 'level': 'high', 'basedOn': ['412 posts and stories', '2,300 of her own messages']},
+                              {'name': 'Lucas', 'confidence': 83, 'level': 'high', 'basedOn': ['268 posts and stories', '1,900 of his own messages']}],
                    'chat': {'messages': 18420, 'counts': {'instagram': 6110, 'whatsapp': 12310}, 'source': 'instagram and whatsapp',
                             'from': '2022-03-12', 'to': '2026-10-30', 'sampleLines': 2400, 'sampleChars': 96000},
                    'checkin': {'questions': 8, 'decisions': 3, 'topics': True, 'commitment': True, 'know': 0, 'mirrors': 2, 'dreams': 0},
                    'confidence': {'score': 74, 'level': 'moderate', 'weakest': 71, 'talk': 80, 'checkin': 70}}}
-STATE = {'role': 'a', 'partner': 'Daniel', 'answers': {'safety': {'label': 'No'}}}
+STATE = {'role': 'a', 'partner': 'Lucas', 'answers': {'safety': {'label': 'No'}}}
 
+# Their Psyche Cards, as the page shows a couple's (tools/together-cards.mjs draws them from psycheai.io's own card).
+import base64
+pics = {}
+for role, who in (('a', 'emily'), ('b', 'lucas')):
+    f = os.path.join(APP, 'assets', 'together-card-%s.jpg' % who)
+    if os.path.exists(f):
+        pics[role] = 'data:image/jpeg;base64,' + base64.b64encode(open(f, 'rb').read()).decode()
+m.SEEN.update(pics=pics, cards={'a': {'character': 'Mulan', 'mbti': 'ENFJ'}, 'b': {'character': 'Odysseus', 'mbti': 'ENTP'}})
 html = m.page(BOX, STATE)
 # A note at the top, so no one mistakes it for a real couple's read.
 note = ('<div style="margin:0 auto;max-width:760px;padding:10px 16px;font:600 14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Inter,Roboto,Arial,sans-serif;'

@@ -452,6 +452,13 @@ async function route(req, res) {
     const where = { cur: url.searchParams.get('cur'), country: req.headers['cf-ipcountry'], language: req.headers['accept-language'] };
     if (buy && req.method === 'GET' && !buy[2]) return sendResult(res, require('./lib/togetherpay').show(buy[1], Date.now(), url.searchParams.get('done') === '1', where));
     if (buy && req.method === 'POST' && buy[2]) return sendResult(res, await require('./lib/togetherpay').checkout(buy[1], Date.now(), undefined, where));
+    // The sample couple's Psyche Cards, for the Psyche Together page (tools/together-cards.mjs).
+    const tcard = /^\/together\/cards\/(emily|lucas)\.jpg$/.exec(url.pathname);
+    if (tcard && (req.method === 'GET' || req.method === 'HEAD')) {
+      const img = require('node:fs').readFileSync(require('node:path').join(__dirname, 'assets', 'together-card-' + tcard[1] + '.jpg'));
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400', 'Content-Length': img.length });
+      return res.end(req.method === 'HEAD' ? undefined : img);
+    }
     // A sample Psyche Together report for a made-up couple (README "A sample Psyche Together report"), built by tools/together-sample.py.
     if (/^\/together\/sample\/?$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
       const html = togetherSample();
