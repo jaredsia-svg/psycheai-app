@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 215
+RELEASE = 216
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -457,7 +457,6 @@ PROMPTS = [
     ('🤝', '#2d5fa8', 'Where you click, and where you differ', 'Sync with a friend'),
     ('💞', '#c2366d', 'One private read of the two of you', 'Psyche Together with my partner'),
     ('➕', '#2f7d5b', 'More of you, for a sharper Psyche', 'Add WhatsApp or Facebook and generate a Fresh Psyche'),
-    ('📅', '#c2571a', 'A nudge on your plan each week', 'Weekly check-ins on my plan'),
     ('🔄', '#6a4bb5', 'Rewritten from your Instagram today', 'Fresh Psyche'),
     ('🔒', '#5a4f66', 'What\'s kept, and deleting it all', 'My data and privacy'),
 ]
@@ -5973,7 +5972,7 @@ TOGETHER_INSTALL = 'Install Psyche Together from %s/together and start it' % BAS
 # privacy", adding a source) come from here, so each tap can carry news, at most one check every five minutes.
 MENU = os.path.join(HERE, '.menu.json')
 SOURCE_LABELS = ('Add WhatsApp or Facebook and generate a Fresh Psyche', 'Add WhatsApp or Facebook')
-SOURCE_CHOICES = ['WhatsApp, Facebook and Messenger', 'WhatsApp chats', 'Facebook and Messenger', 'Facebook posts only', 'Back to the menu']
+SOURCE_CHOICES = ['WhatsApp, Facebook and Messenger', 'WhatsApp chats', 'Facebook and Messenger', 'Back to the menu']          # release 216: "Facebook posts only" went
 DATA_HERE = 'Your Instagram is read right here in your Muse account: nothing to export or upload.'
 DATA_SENT = ('Your report and Psyche Card are made right here in Muse. None of your posts, messages or report go to PsycheAI; only if you '
              'Sync, your card\'s few lines, motivation scores and daily rhythm (when in the day you post and message) are shared, locked '
@@ -6203,7 +6202,7 @@ def clean_result(value):
 
 # What's next after a Psyche, and the ideas to ask: the server's own (lib/next.js publish_psyche, lib/mcp.js
 # ASK_IDEAS and askIdeas), here so publishing asks nothing of it. The selftest holds them to the server's.
-AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Psyche Together with my partner", "Add WhatsApp or Facebook and generate a Fresh Psyche", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger", "Facebook posts only"], "more": {"buttons": ["Weekly check-ins on my plan", "Join the Psyche Pair waitlist", "My data and privacy"]}}
+AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Psyche Together with my partner", "Add WhatsApp or Facebook and generate a Fresh Psyche", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger"], "more": {"buttons": ["My data and privacy"]}}
 ASK_IDEAS = [
 "Who am I when I'm not being useful, impressive or needed?",
 "What do I keep trying to prove, and to whom?",
@@ -6625,7 +6624,13 @@ def plan_of(report):
     return out
 
 
+CHECKINS_ENDED = {'say': 'Weekly check-ins have ended in PsycheAI, so this reminder can go. Your plan is still in your report.', 'buttons': ['Back to the menu'], 'asButtons': True}
+
+
 def checkin(args):
+    # Release 216 (README "A menu of four"): weekly check-ins are no longer offered; one set up before says so.
+    if not args:
+        return dict(CHECKINS_ENDED)
     kept = read_first([REPORT, REPORT_KEPT])
     if not kept or not isinstance(kept.get('report'), dict):
         return {'error': 'No Psyche Report kept here yet, so there is no plan to check in on. Make one first.'}
@@ -6992,21 +6997,39 @@ def main(argv):
     sys.exit('Usage: python3 bin/psyche.py status | update | report | republish | show PART | prep FILE... [--me NAME] [--deep] | check-digest | forget [--everything] | sync-preview LINK | sync-with [LINK] | sync-ready [NAME] | let-know NAME | call TOOL [JSON | @FILE]')
 
 
+# Release 216 (README "Every reply has its buttons"): an error comes with a way on, so the next step is never made up.
+# On devices, a bare error ("?", "I don't have it") was answered in Muse's own words, with its own buttons.
+ERROR_BUTTONS = ['Back to the menu']
+
+
+def with_way_on(text):
+    try:
+        out = json.loads(text)
+    except ValueError:
+        return text
+    if isinstance(out, dict) and out.get('error') and not out.get('buttons'):
+        out = dict(out, buttons=ERROR_BUTTONS, asButtons=True)
+        return json.dumps(out, ensure_ascii=False, indent=1) + '\n'
+    return text
+
+
 if __name__ == '__main__':
     try:
-        if sys.argv[1:2] and (sys.argv[1] in NEWS_ON or sys.argv[1:3] == ['call', 'start']):
-            real, sys.stdout = sys.stdout, io.StringIO()
-            try:
-                main(sys.argv[1:])
-            finally:
-                text, sys.stdout = sys.stdout.getvalue(), real
+        real, sys.stdout = sys.stdout, io.StringIO()
+        try:
+            main(sys.argv[1:])
+        finally:
+            text, sys.stdout = sys.stdout.getvalue(), real
+            if sys.argv[1:2] and (sys.argv[1] in NEWS_ON or sys.argv[1:3] == ['call', 'start']):
                 try:
                     text = with_news(sys.argv[1:], text)
                 except Exception:
                     pass
-                sys.stdout.write(text)
-        else:
-            main(sys.argv[1:])
+            try:
+                text = with_way_on(text)
+            except Exception:
+                pass
+            sys.stdout.write(text)
     finally:
         # The Library's copies follow out/ after every command (README "In Muse's Library").
         try:

@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 83
+RELEASE = 84
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -5110,7 +5110,11 @@ def main(argv):
         out = remind()
     else:
         out = {'error': 'Unknown command: %s' % cmd}
-    print(json.dumps(with_remind(out), ensure_ascii=False, indent=1))
+    out = with_remind(out)
+    # Release 84 (README "Every reply has its buttons"): an error comes with a way on, so the next step is never made up.
+    if isinstance(out, dict) and out.get('error') and not out.get('buttons'):
+        out = dict(out, buttons=['Back to the menu'], asButtons=True)
+    print(json.dumps(out, ensure_ascii=False, indent=1))
 
 
 if __name__ == '__main__':
