@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 217
+RELEASE = 218
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5760,6 +5760,13 @@ def sync_preview(link):
         label = sync_label(name)
         out['nextStep'] = _step('%s sent you their Psyche link. You already have your Psyche, so you can sync straight away.\n\n%s' % (name if name != 'Your friend' else 'A friend', SYNC_SHARES),
                                 [label, 'Not now'])
+    else:
+        # Release 218 (README "First run from a link"): someone new gets first-run's result here too (the account, start and
+        # the account lists; no message is read), so their messages tap has its answer whether or not first-run was run after.
+        try:
+            out['firstRun'] = first_run()
+        except Exception as err:
+            out['firstRun'] = {'problem': 'Setting up could not finish here (%s).' % type(err).__name__}
     return out
 
 

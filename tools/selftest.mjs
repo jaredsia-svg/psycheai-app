@@ -2569,11 +2569,13 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
       /Only when they Sync does anything of theirs leave: their card summary \(the few lines on their Psyche Card, their scores on the ten motivations, and their daily rhythm: what share of the posts, comments and messages they wrote falls in each part of the day and on weekends, counted from their digest\) and the written Sync, both locked here under the Sync link's code before they're sent, so PsycheAI keeps and passes them on but can't read them/.test(skillMd) &&
       /A result's `file` is a file saved here for the chat \(a Sync's page\): attach it\./.test(skillMd),
       JSON.stringify(skillState.syncPage));
-    check('a friend\'s card first (README "A friend\'s card first"): sync-preview gives the friend\'s card as a picture drawn here, with its line only when there is no Psyche yet, and never their own link\'s',
+    check('a friend\'s card first (README "A friend\'s card first"): sync-preview gives the friend\'s card as a picture drawn here, with its line only when there is no Psyche yet, and never their own link\'s; with no Psyche yet it also carries first-run\'s result (release 218)',
       ((E) => E && E.preview && (!E.preview.card || /^out\/syncs\/Psyche Card from [^/]+\.png$/.test(E.preview.card)) && !('card' in (E.ownPreview || {})) &&
         (E.preview.hasPsyche ? !('cardSay' in E.preview) : !E.preview.card || /sent you their Psyche Card\. Make yours to see how you two sync\.$/.test(E.preview.cardSay)) &&
+        // Release 218 (README "First run from a link"): someone new gets first-run's result in the preview, so the messages tap needs no lookup.
+        (E.preview.hasPsyche ? !('firstRun' in E.preview) : Boolean(E.preview.firstRun && typeof E.preview.firstRun === 'object' && (E.preview.firstRun.question || E.preview.firstRun.reply || E.preview.firstRun.problem || E.preview.firstRun.buttons))) && !('firstRun' in (E.ownPreview || {})) &&
         /pic = friend_card_file\(card, name\)\n    if pic:\n        out\['card'\] = pic\n        if not has:\n            out\['cardSay'\]/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')))(skillState.e2e),
-      JSON.stringify({ card: skillState.e2e && skillState.e2e.preview && skillState.e2e.preview.card }));
+      JSON.stringify({ card: skillState.e2e && skillState.e2e.preview && skillState.e2e.preview.card, has: skillState.e2e && skillState.e2e.preview && skillState.e2e.preview.hasPsyche, firstRun: skillState.e2e && skillState.e2e.preview && JSON.stringify(skillState.e2e.preview.firstRun || null).slice(0, 200) }));
     check('a friend\'s link is named before anything is synced (sync-preview: their name and character, and the reply with "Sync with <name>"), their own link says so, sync_with gives what get_sync gives with how to save it, the answer file goes once saved, and a new Sync comes as its own page from the morning check and from My Syncs, the same page the friend got (README "One call to a Sync", "A new Sync, as its own page")',
       ((E) => E && E.preview && E.preview.own === false && E.preview.with === 'Mei' && E.preview.character === 'Mulan' && E.preview.hasPsyche === true &&
         E.preview.nextStep && E.preview.nextStep.say === "Mei sent you their Psyche link. You already have your Psyche, so you can sync straight away.\n\nTo make it, your Psyche Card, plus your motivation scores and when in the day you're active, is shared with your friend, locked so PsycheAI can't read it. A Sync never sends your report or your messages to your friend or anyone else." && JSON.stringify(E.preview.nextStep.buttons) === '["Sync with Mei","Not now"]' &&
@@ -3158,7 +3160,7 @@ print(json.dumps({'one': 'class="shared one"' in one and 'Interests' in one and 
       ((a) => a && JSON.stringify(a.buttons.map(b => b.label)) === '["@mei.alt (last time)","@mei.t"]' && a.stepOne === "On it. Writing your fresh Psyche takes about 5 minutes. I'll show it here when it's ready.")(skillState.freshAccounts) &&
       !/ALT1|ACC1/.test(skillState.lastCollectFile || 'ALT1') &&
       /^# PsycheAI\n\n## First run, in order\n/m.test(skillMd) && /1\. Install as below \(when it is already in ~\/workspace\/skills\/psycheai\/, `python3 bin\/psyche\.py update` is the install: it checks the signature itself\), and once the files are in, the first message is PsycheAI's own introduction below, with the buttons "Include my messages \(Recommended\)" and "Posts only"\. Its privacy lines are worded to match exactly what the code does, so they're best shown as they are: paraphrases have overstated some and dropped others\. \(It is step 0's, below, given here in full so the first run needs nothing further down this file\.\)\n\n> I'm PsycheAI, your personal AI coach that already knows you\./.test(skillMd) && skillMd.split('## Installing')[0].includes('> ' + require('../lib/mcp.js').GO_AHEAD.split('\n').join('\n> ')) && /before step 1's line, send the `connectMessages` from first-run \(or accounts, for a Fresh Psyche\) as it is, as one message: its say \(with the connect link in it, for them to tap\) and its buttons, "I've connected them" and "Continue without messages", in that same message, under the link \(never words that point to buttons that aren't shown\)\. Muse telling you their Instagram messages are now connected counts as "I've connected them"/.test(skillMd) &&
-      /2\. On their messages tap \(or, when their message already said which, as soon as first-run answers\), reply at once from first-run's result, with no tool first/.test(skillMd) && /After installing, step 0's welcome comes next, as "First run, in order" says\./.test(skillMd) && /When their install message asks for their Psyche \("…and generate my Psyche"\), the reply once status says connected is this introduction, rather than a note that it's installed or what was checked\./.test(skillMd) && /its `say` is that introduction: if it hasn't been shown yet, show it; if it has, don't show it again\./.test(skillMd) && !/word for word \(a short line|don't summarise, paraphrase/.test(skillMd) && /None of their posts, messages, digest, report or card leaves this workspace unless they choose to Sync/.test(skillMd) && /`--no-messages` when they chose "Posts only", "Instagram posts only" or "Continue without messages"/.test(skillMd) &&
+      /2\. On their messages tap \(or, when their message already said which, as soon as first-run answers\), reply at once from first-run's result \(or sync-preview's `firstRun`\), with no tool first/.test(skillMd) && /After installing, step 0's welcome comes next, as "First run, in order" says\./.test(skillMd) && /When their install message asks for their Psyche \("…and generate my Psyche"\), the reply once status says connected is this introduction, rather than a note that it's installed or what was checked\./.test(skillMd) && /its `say` is that introduction: if it hasn't been shown yet, show it; if it has, don't show it again\./.test(skillMd) && !/word for word \(a short line|don't summarise, paraphrase/.test(skillMd) && /None of their posts, messages, digest, report or card leaves this workspace unless they choose to Sync/.test(skillMd) && /`--no-messages` when they chose "Posts only", "Instagram posts only" or "Continue without messages"/.test(skillMd) &&
       /3\. Once they have chosen both, in that same turn, reply first: step 1's line, then the work\.[^]*Send, as its own message, word for word: "On it\. Reading your Instagram and writing your Psyche takes about 5 minutes\./.test(skillMd) &&
       /A Fresh Psyche goes the same way: on "Fresh Psyche", send its line and its two buttons at once \(start gave them\), then run `python3 bin\/psyche\.py accounts` in that same turn/.test(skillMd) &&
       /STEP_ONE = "On it\. Reading your Instagram and writing your Psyche takes about 5 minutes\. I'll show it here when it's ready\."/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
@@ -3881,6 +3883,33 @@ print(json.dumps(out))
           /^This deletes your Psyche, report, digest, Syncs and saved card, here and on PsycheAI\. Delete everything\?$/.test(taps[9].say) && JSON.stringify(taps[9].buttons) === '["Yes, delete everything","Cancel"]' &&
           /\*\*Menu taps:\*\* on "More", "My data and privacy", "Add WhatsApp or Facebook…", "Ask PsycheAI questions about myself", "WhatsApp chats", "WhatsApp, Facebook and Messenger" or "Delete everything", run \`python3 bin\/psyche\.py tap "<the button>"\`/.test(require('../lib/skill.js').skillMd()),
         JSON.stringify(taps).slice(0, 800));
+      // Release 218 (README "First run from a link"): a friend's link for someone new carries first-run's result.
+      const fromLink = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.read_first = lambda paths: None
+m.e2e_codes = lambda: []
+m.post_tool = lambda n, a: {'card': 'locked'}
+m.e2e_open = lambda c, k: {'name': 'Jeff Tan', 'character': 'Baymax'}
+m.clean_card = lambda c: c
+m.first_of = lambda c: 'Jeff'
+m.write_private = lambda *a: None
+m.friend_card_file = lambda c, n: None
+m.first_run = lambda: {'question': 'Which account should I read?', 'buttons': [{'label': '@jared (Recommended)'}]}
+ok = m.sync_preview('https://app.psycheai.io/sync#ET253iZhWCN20j-shAdWfA')
+def boom():
+    raise RuntimeError('x')
+m.first_run = boom
+bad = m.sync_preview('https://app.psycheai.io/sync#ET253iZhWCN20j-shAdWfA')
+print(json.dumps([ok, bad]))
+`]).toString());
+      check('a friend\'s link for someone new: sync-preview carries first-run\'s result as firstRun, so the messages tap needs nothing further down SKILL.md; if first-run fails there, a plain problem line with no instruction in it (README "First run from a link")',
+        fromLink[0].hasPsyche === false && fromLink[0].with === 'Jeff' && fromLink[0].firstRun.question === 'Which account should I read?' && !('nextStep' in fromLink[0]) &&
+          /^Setting up could not finish here \(RuntimeError\)\.$/.test(fromLink[1].firstRun.problem) && !/\b(run|python3|tap|send)\b/i.test(fromLink[1].firstRun.problem) &&
+          /Every first run, however it began \(with "generate my Psyche", with a friend's link alone, or with nothing said\), runs `python3 bin\/psyche\.py first-run` in that same turn, right after the introduction/.test(require('../lib/skill.js').skillMd()) &&
+          /If neither first-run nor sync-preview ran in this chat, run `python3 bin\/psyche\.py first-run` now and reply from its result/.test(require('../lib/skill.js').skillMd()),
+        JSON.stringify(fromLink).slice(0, 400));
       // Release 216 / Together 84 (README "Every reply has its buttons"): an error is never a dead end.
       const wfs = require('node:fs'), wos = require('node:os'), wpath = require('node:path');
       const wayOn = ['skill/bin/psyche.py checkin p9 done', 'together/bin/together.py nonsense', 'together/bin/together.py answer'].map(c => {
