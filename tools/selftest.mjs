@@ -3774,6 +3774,14 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
       check('Psyche Together: only a signed webhook for a paid session credits one, once; it is used when a new one starts (a retry of the same link uses nothing), and the next needs another',
         refused === 400 && before === 0 && after === 1 && started.ok === true && retried.ok === true && pay.credits(lin.id) === 0 && Boolean(again.access) &&
           !/Plus/.test(JSON.stringify(store.getUser(lin.id).plus || {}).replace(/./g, '')), JSON.stringify([before, after, started, again]).slice(0, 300));
+      // A 100%-off promotion code: Stripe completes the session with no_payment_required and no payment intent.
+      const freeCode = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: 'cs_free', payment_status: 'no_payment_required', payment_intent: null, client_reference_id: lin.id, metadata: { kind: 'together', userId: lin.id } } } });
+      const beforeFree = pay.credits(lin.id);
+      await hook(freeCode, sign(freeCode));
+      const afterFree = pay.credits(lin.id);
+      check('Psyche Together: a 100%-off promotion code (no_payment_required) credits one, the same as a payment, with nothing to refund',
+        afterFree === beforeFree + 1 && pay.use(lin.id).pi === null && pay.credits(lin.id) === beforeFree && (await pay.refund({ session: 'cs_free', pi: null })) === true,
+        JSON.stringify([beforeFree, afterFree]));
       // The partner never joins: after 30 days the link goes and the purchase is refunded through Stripe.
       await tgLib.end(skillUser());
       const second = paidEvent('cs_t2'); await hook(second, sign(second));
