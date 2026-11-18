@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 216
+RELEASE = 217
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5834,7 +5834,10 @@ def after_sync():
 NEWS = os.path.join(KEEP, 'news.json')
 NEWS_EVERY = 300
 TOGETHER_STATE = os.path.join(os.path.dirname(HERE), 'psyche-together', 'state.json')     # Psyche Together's own, if started
-NEWS_ON = ('status', 'show', 'why', 'correct', 'checkin', 'report', 'republish', 'tap')
+NEWS_ON = ('status', 'show', 'why', 'correct', 'checkin', 'report', 'republish', 'tap', 'together-intro')
+# Release 217 (README "News on every menu button"): every main-menu button now runs something that carries news:
+# start (Back to the menu), tap (Ask, More, adding a source, My data), sync_link (Sync with a friend) and together-intro.
+NEWS_CALLS = ('start', 'sync_link')
 
 
 def news_for(force=False):
@@ -5917,7 +5920,7 @@ def mark_opened(sync):
 
 def with_news(argv, text):
     """A command's printed result with news_for's lines added, when it's one JSON object without an error."""
-    if not argv or not (argv[0] in NEWS_ON or argv[:2] == ['call', 'start']):
+    if not argv or not (argv[0] in NEWS_ON or (argv[0] == 'call' and argv[1:2] and argv[1] in NEWS_CALLS)):
         return text
     try:
         out = json.loads(text)
@@ -7020,7 +7023,7 @@ if __name__ == '__main__':
             main(sys.argv[1:])
         finally:
             text, sys.stdout = sys.stdout.getvalue(), real
-            if sys.argv[1:2] and (sys.argv[1] in NEWS_ON or sys.argv[1:3] == ['call', 'start']):
+            if sys.argv[1:2]:          # with_news decides which commands carry news (NEWS_ON, NEWS_CALLS)
                 try:
                     text = with_news(sys.argv[1:], text)
                 except Exception:
