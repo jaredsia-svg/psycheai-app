@@ -4293,7 +4293,7 @@ elif a[0] == 'thread':
   tg.gate2 = await run.a('start');
   for (const [k, v] of Object.entries(payEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   check('when Psyche Together is paid, starting one before paying gives the link and one button, "I\'ve paid, start it"; tapping it before the payment lands says so with a fresh link; once paid, the same tap starts it (README "Psyche Together, paid on the website")',
-    tg.gate1.needsAccess === true && /\/together\/buy\//.test(tg.gate1.url) && JSON.stringify(tg.gate1.buttons) === '["I\'ve paid, start it","Back to the menu"]' && /tap the button/.test(tg.gate1.say) &&
+    tg.gate1.needsAccess === true && /\/together\/buy\//.test(tg.gate1.url) && JSON.stringify(tg.gate1.buttons) === '["I\'ve paid, start it","Back to the menu"]' && /^Psyche Together needs a one-time payment on the PsycheAI website before you can start\. Open the link below to pay, then come back and tap "I've paid, start it"\. Joining your partner's Psyche Together is free\.$/.test(tg.gate1.say) &&
       tg.gate2.needsAccess === true && /hasn't come through yet/.test(tg.gate2.say) && /I've paid, start it/.test(fsx.readFileSync(pathx.join(home.a.dir, 'SKILL.md'), 'utf8')),
     JSON.stringify([tg.gate1, tg.gate2]).slice(0, 400));
   tg.start = await run.a('start');

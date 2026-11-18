@@ -28,7 +28,7 @@ npm start      # production: Upstash, Resend and OAuth from the environment (ren
 - **The store is encrypted at rest and emails live apart.** Never put an email on a user record or in a Redis key. Use `store.emailOf` and `store.emailKey`.
 - **PLAN.md is the agreed roadmap.** Check it before starting new work, and tick items off as they land.
 - **Every store write goes through `lib/store.js`,** which marks the record for the Upstash flush. Mutating an object you got from the store without calling its setter will not be saved.
-- **Nothing is sold inside the host.** Psyche Pair Plus is priced and bought only on the website (`lib/plus.js`). Instructions and tool descriptions never mention prices, Plus or upgrading, and a limit is worded as a limit. The selftest checks this. Only a signed Stripe webhook changes a plan.
+- **Nothing is sold inside the host.** Psyche Pair Plus is priced and bought only on the website (`lib/plus.js`). Instructions and tool descriptions never mention prices, Plus or upgrading, and a limit is worded as a limit. A result may say plainly that a one-time payment on the website is needed (Psyche Together), never the price. The selftest checks this. Only a signed Stripe webhook changes a plan.
 - **Handles are like emails.** Sync's Instagram handles never appear in a Redis key: use `store.handleKey`.
 - **Stated always wins.** Traits from a psycheai.io read (`lib/join.js`, source `uploaded`) never replace a stated one.
 - **Plain Node, one dependency** (`@resvg/resvg-js`, for card images), CommonJS in `lib/`, `node:http` server.
