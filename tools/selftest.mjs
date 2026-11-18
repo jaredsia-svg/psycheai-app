@@ -3751,6 +3751,10 @@ print(json.dumps({'order': [a or c for a, b, c in marks], 'appendix': 'Appendix'
           sample.status === 200 && /A sample report for a made-up couple/.test(sampleHtml) && /Emily <i>&amp;<\/i> Lucas/.test(sampleHtml) && /<img alt="Emily's Psyche Card" src="data:image\/jpeg;base64,/.test(sampleHtml) &&
           (await fetch(base + '/together/cards/lucas.jpg')).headers.get('content-type') === 'image/jpeg' && (await fetch(base + '/together/cards/other.jpg')).status !== 200 && !/STRIPE_PRICE_TOGETHER/.test(fsP.readFileSync('render.yaml', 'utf8')),
         JSON.stringify({ sameAsSite, status: sample.status, site: Boolean(site) }));
+      const pubRes = await fetch(base + '/psyche-together', { headers: { 'cf-ipcountry': 'AU' } }), pub = await pubRes.text();
+      check('Psyche Together has a public page anyone can open (README "The Psyche Together page"): the same cards, triangle, chapters and price, with no pay button or account, ending in how to start in Muse',
+        pubRes.status === 200 && /A\$8 for both of you/.test(pub) && /What it reads/.test(pub) && /Install https:\/\/psycheai\.io\/skill and generate my Psyche/.test(pub) &&
+          /Psyche Together with my partner/.test(pub) && !/\/checkout/.test(pub) && !/<form/.test(pub) && !/Signed in as/.test(pub) && /index,follow/.test(pub), pub.slice(0, 200));
       const sampleBefore = require('node:fs').readFileSync('assets/together-sample.html', 'utf8');
       let built = null; try { built = JSON.parse(require('node:child_process').execFileSync('python3', ['tools/together-sample.py']).toString()); } catch (e) { built = { error: String(e.stderr || e.message).slice(0, 400) }; }
       check('the sample Psyche Together report passes the same check every real read does, and is up to date with the report\'s layout (python3 tools/together-sample.py)',

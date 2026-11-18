@@ -26,14 +26,16 @@ def psyche(name, character, mbti, headline, big, motives, patterns, values, atta
             'caresBy': cares, 'feelsCaredForBy': feels, 'relationshipStrengths': strengths, 'relationshipEdges': edges}
 
 
+# Their ten motivations, in together.py's order: Emily's from psycheai.io's docs/sample.json, Lucas's to fit his card's top three.
+MOTIVES = [k for k, _ in m.MOTIVE_LABEL]
 # Emily Carter and Lucas Moreau are psycheai.io's own sample readers (docs/sample.json and docs/sample-cards.json),
 # so their Psyches here are the ones on their sample cards.
 EMILY = psyche('Emily', 'Mulan', 'ENFJ', 'Organiser with a warm centre and a quiet battery', [61, 84, 55, 79, 44],
-               {'benevolence': 88, 'achievement': 74, 'security': 61}, ['The quiet organiser', 'Generous with attention', 'Bursts, then recovery'],
+               dict(zip(MOTIVES, [55, 41, 34, 66, 18, 61, 52, 38, 84, 47])), ['The quiet organiser', 'Generous with attention', 'Bursts, then recovery'],
                ['Reliability', 'Craft', 'Belonging'], 'Leans secure, with a self-reliant streak', 'Smooths it over, raises it later',
                ['Acts of service'], ['Quality time', 'Words of affirmation'], ['Remembers the detail', 'Handles friction privately'], ['Never asks for anything', 'Tallies quietly'])
 LUCAS = psyche('Lucas', 'Odysseus', 'ENTP', 'Resourceful planner with a way out of every corner', [84, 56, 72, 58, 40],
-               {'stimulation': 86, 'achievement': 77, 'self-direction': 70}, ['A plan B for every plan', 'Talks a room round', 'Always heading home'],
+               dict(zip(MOTIVES, [74, 86, 62, 77, 41, 33, 24, 22, 58, 52])), ['A plan B for every plan', 'Talks a room round', 'Always heading home'],
                ['Ingenuity', 'Adventure', 'Loyalty'], 'Leans secure, restless when stuck', 'Argues it out, then moves on',
                ['Words of affirmation', 'Acts of service'], ['Words of affirmation', 'Quality time'], ['Says what he admires', 'Finds a way through'], ['Pushes to settle it now'])
 
@@ -52,27 +54,37 @@ SIGNALS = {
               + [['2025-%02d' % i, n] for i, n in zip(range(1, 13), [280, 260, 250, 270, 240, 230, 220, 250, 260, 240, 230, 250])]
               + [['2026-%02d' % i, n] for i, n in zip(range(1, 11), [240, 230, 260, 250, 240, 230, 220, 240, 250, 260])],
     'fun': {'first': '12 March 2022', 'busiestDay': ['14 May 2022', 212], 'streak': 403, 'daysTalking': 1612},
-    'years': [{'year': 2022, 'messages': 4400, 'positivePer100': 15.2, 'hardPer100': 1.1, 'warm': 690, 'sorry': 31, 'quickReplies': 2100},
-              {'year': 2023, 'messages': 3930, 'positivePer100': 11.8, 'hardPer100': 2.9, 'warm': 470, 'sorry': 74, 'quickReplies': 1500},
-              {'year': 2024, 'messages': 3690, 'positivePer100': 13.1, 'hardPer100': 1.9, 'warm': 420, 'sorry': 52, 'quickReplies': 1350},
-              {'year': 2025, 'messages': 2960, 'positivePer100': 13.6, 'hardPer100': 1.6, 'warm': 300, 'sorry': 44, 'quickReplies': 1080},
-              {'year': 2026, 'messages': 2420, 'positivePer100': 14.4, 'hardPer100': 1.3, 'warm': 170, 'sorry': 36, 'quickReplies': 900}],
+    'years': [{'year': 2022, 'messages': 4400, 'positivePer100': 15.2, 'hardPer100': 1.1, 'warm': 690, 'sorry': 31, 'quickReplies': 48},
+              {'year': 2023, 'messages': 3930, 'positivePer100': 11.8, 'hardPer100': 2.9, 'warm': 470, 'sorry': 74, 'quickReplies': 38},
+              {'year': 2024, 'messages': 3690, 'positivePer100': 13.1, 'hardPer100': 1.9, 'warm': 420, 'sorry': 52, 'quickReplies': 37},
+              {'year': 2025, 'messages': 2960, 'positivePer100': 13.6, 'hardPer100': 1.6, 'warm': 300, 'sorry': 44, 'quickReplies': 36},
+              {'year': 2026, 'messages': 2420, 'positivePer100': 14.4, 'hardPer100': 1.3, 'warm': 170, 'sorry': 36, 'quickReplies': 37}],
     'repair': {'hard': 196, 'medianHoursBack': 3.5, 'backWithinDay': 0.86, 'ratioInside': 3.2,
                'byYear': {'2023': {'hard': 114, 'medianHoursBack': 6.0}, '2025': {'hard': 47, 'medianHoursBack': 2.5}}},
 }
 
 
-def profile(p, stage, core, overall, commit, mirror, topic, decisions):
-    return {'v': 8, 'psyche': p, 'stage': stage, 'core': core, 'overall': dict(overall, scale=5), 'commit': commit, 'mirror': mirror,
-            'topic': topic, 'decisions': decisions, 'desireTalk': False, 'rounds': [], 'sentAt': AT, 'chat': {'signals': SIGNALS}}
+def profile(p, stage, core, overall, commit, mirror, topic, decisions, confidence, based, chat=None):
+    out = {'v': 8, 'psyche': p, 'stage': stage, 'core': core, 'overall': dict(overall, scale=5), 'commit': commit, 'mirror': mirror,
+           'topic': topic, 'decisions': decisions, 'desireTalk': False, 'rounds': [], 'sentAt': AT,
+           'report': {'confidence': {'score': confidence, 'basedOn': based}}}
+    if chat:
+        out['chat'] = chat
+    return out
+
+
+# The chat as the one who added it shares it: its signals, its counts and how much of it was read in full (2,400 lines).
+CHAT = {'signals': SIGNALS, 'counts': {'instagram': 6110, 'whatsapp': 12310}, 'source': 'instagram and whatsapp', 'sample': ['x' * 40] * 2400}
 
 
 A = profile(EMILY, 'Living together', {'security': 2, 'appreciation': 1, 'connection': 1, 'needs': 1, 'disagreements': 1},
             {'you': 3, 'them': 2}, 2, {'appreciated': {'self': 'Time together', 'guess': 'Being told in words'}, 'repair': {'self': 'A little time first'}},
-            'Chores and who does what', {'children': 'Yes', 'marriage': 'Yes', 'place': 'Where we are now'})
+            'Chores and who does what', {'children': 'Yes', 'marriage': 'Yes', 'place': 'Where we are now'},
+            86, ['1,204 of 1,204 captions', '318 of 2,940 own messages'], CHAT)
 B = profile(LUCAS, None, {'security': 2, 'appreciation': 2, 'connection': 2, 'needs': 2, 'disagreements': 0},
             {'you': 3, 'them': 2}, 2, {'appreciated': {'self': 'Being told in words', 'guess': 'Something done for me'}, 'repair': {'self': 'To talk it through now'}},
-            'Plans and timekeeping', {'children': 'Yes', 'marriage': 'Unsure', 'place': 'Another city or country'})
+            'Plans and timekeeping', {'children': 'Yes', 'marriage': 'Unsure', 'place': 'Another city or country'},
+            83, ['268 posts and stories', '1,900 of his own messages'])
 VIEW = m.couple_view(A, B)
 
 READ = json.load(open(os.path.join(HERE, 'fixtures', 'together-sample-read.json')))
@@ -82,12 +94,7 @@ if problems:
 
 BOX = {'v': 8, 'view': VIEW, 'read': READ, 'at': AT, 'firstAt': AT, 'rewrites': 0, 'chat': {'signals': SIGNALS}, 'chatOf': ['Emily', 'Lucas'],
        'psyches': {'a': EMILY, 'b': LUCAS},
-       'sources': {'people': [{'name': 'Emily', 'confidence': 86, 'level': 'high', 'basedOn': ['412 posts and stories', '2,300 of her own messages']},
-                              {'name': 'Lucas', 'confidence': 83, 'level': 'high', 'basedOn': ['268 posts and stories', '1,900 of his own messages']}],
-                   'chat': {'messages': 18420, 'counts': {'instagram': 6110, 'whatsapp': 12310}, 'source': 'instagram and whatsapp',
-                            'from': '2022-03-12', 'to': '2026-10-30', 'sampleLines': 2400, 'sampleChars': 96000},
-                   'checkin': {'questions': 8, 'decisions': 3, 'topics': True, 'commitment': True, 'know': 0, 'mirrors': 2, 'dreams': 0},
-                   'confidence': {'score': 74, 'level': 'moderate', 'weakest': 71, 'talk': 80, 'checkin': 70}}}
+       'sources': m.read_sources({'a': A, 'b': B}, VIEW)}
 STATE = {'role': 'a', 'partner': 'Lucas', 'answers': {'safety': {'label': 'No'}}}
 
 # Their Psyche Cards, as the page shows a couple's (tools/together-cards.mjs draws them from psycheai.io's own card).

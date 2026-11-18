@@ -1,69 +1,69 @@
 {
-  "summary": "A planner and an improviser who turn up for each other, learning to say what they need before it piles up.",
+  "summary": "A planner and an improviser who turn up in a crisis, but let small things pile up because Emily keeps them quiet and Lucas moves on fast.",
   "story": {
     "eras": [
-      {"from": 2022, "to": 2022, "title": "All in", "line": "Hundreds of messages a month, late-night voice notes and a 400-day streak that started the week you met."},
-      {"from": 2023, "to": 2023, "title": "The first hard year", "line": "Moving in, Lucas starting a company and more friction than before. Fewer messages, and longer gaps after a row."},
-      {"from": 2024, "to": 2026, "title": "Finding your rhythm", "line": "Steadier and warmer. Fewer words, more plans, and you get back to warm faster after a hard day."}
+      {"from": 2022, "to": 2022, "title": "All in", "line": "About 370 messages a month, half of the replies inside five minutes, and a 403-day streak that started the week you met."},
+      {"from": 2023, "to": 2023, "title": "The first hard year", "line": "You moved in and Lucas started his company. Friction nearly tripled, and getting back to warm after a row took about six hours."},
+      {"from": 2024, "to": 2026, "title": "Finding your rhythm", "line": "Fewer messages but warmer ones, more plans made weeks ahead, and repair down to about three and a half hours."}
     ]
   },
   "relational": {
-    "a": {"showsCare": ["Acts of service"], "feelsCared": ["Quality time", "Words of affirmation"], "lean": "secure", "attachment": "steady, carries things quietly", "basis": "Emily books, plans and remembers for you both, and her warmest messages follow an evening Lucas cleared for her. She rarely says when she is the one who is tired."},
-    "b": {"showsCare": ["Words of affirmation", "Acts of service"], "feelsCared": ["Words of affirmation", "Quality time"], "lean": "secure", "attachment": "steady, restless when stuck", "basis": "Lucas tells Emily what he admires about her more than anyone else in his messages, and lights up when she cheers on his plans."}
+    "a": {"showsCare": ["Acts of service"], "feelsCared": ["Quality time", "Words of affirmation"], "lean": "secure", "attachment": "steady, carries things alone", "basis": "Emily sends most of the bookings, reminders and check-ins, but her warmest messages come the day after an evening Lucas cleared just for her. She says she is tired about once a month; he says it most weeks."},
+    "b": {"showsCare": ["Words of affirmation", "Acts of service"], "feelsCared": ["Words of affirmation", "Quality time"], "lean": "secure", "attachment": "steady, restless when stuck", "basis": "Lucas praises Emily in words more often than anything else he sends her, and his longest, happiest replies follow her cheering on one of his plans."}
   },
   "truths": [
-    {"kind": "strength", "title": "You show up for each other", "chapter": "close", "detail": "When one of you has a hard day, the other turns up, almost every time. Emily brings food and a plan; Lucas brings words and a way through. It has held through a move, a new company and a hard first year.",
-     "evidence": [{"when": "January 2023", "what": "Lucas drove across town at 11pm when Emily's car broke down"}, {"when": "June 2024", "what": "Emily cleared a whole weekend for Lucas's investor pitch"}, {"when": "March 2026", "what": "dinner waiting after Emily's late shift, three nights running"}]},
-    {"kind": "edge", "title": "Talk now, or time first", "chapter": "disagree", "detail": "After a row, Lucas wants to talk it through straight away and Emily needs a few hours first. When Lucas pushes, Emily smooths it over; later, it comes back bigger. Neither of you is wrong. You just need a plan for the gap.",
+    {"kind": "strength", "title": "When it's hard, you turn up", "chapter": "secure", "detail": "You met 11 of 12 hard moments in your messages with real support, often within the hour. Emily turns up with a plan and practical help; Lucas turns up with words and a way through. Between you, the person having the hard day gets both kinds of help.",
+     "evidence": [{"when": "January 2023", "what": "Lucas drove across town at 11pm when Emily's car broke down"}, {"when": "March 2024", "what": "Lucas cleared his week when Emily's grandmother was in hospital"}, {"when": "June 2024", "what": "Emily cleared a whole weekend for Lucas's investor pitch"}]},
+    {"kind": "edge", "title": "Fine, until it isn't", "chapter": "disagree", "detail": "Emily says it's fine to keep the peace, and Lucas takes her at her word and moves on. The issue goes quiet, then comes back days later, bigger and about something else. Nine of your 23 rows about chores were an earlier one coming back.",
      "evidence": [{"when": "September 2023", "what": "a row about a missed dinner that came back two weeks later"}, {"when": "May 2025", "what": "five messages from Lucas, then a short okay from Emily"}, {"when": "August 2026", "what": "Emily asked for an hour and came back with what she needed"}]},
-    {"kind": "surprise", "title": "Happier than you each think", "chapter": "secure", "detail": "You are each more content with your relationship than the other guesses. Both of you are sure about the long run, too. The worry each of you carries about the other is bigger than it needs to be.",
-     "evidence": [{"when": "February 2024", "what": "a quiet week both of you later called one of your best"}, {"when": "December 2025", "what": "planning next summer's sailing trip without a second thought"}, {"when": "October 2026", "what": "you both said goodnight with the same joke"}]}
+    {"kind": "surprise", "title": "What Emily wants isn't what she gives", "chapter": "close", "detail": "Lucas guessed that Emily feels most loved when things are done for her, because that is how she shows love. What she actually wants most is unhurried time together. Her warmest messages come after quiet evenings for two, not after group plans or favours.",
+     "evidence": [{"when": "February 2024", "what": "a quiet week at home Emily later called one of her best"}, {"when": "November 2025", "what": "Lucas fixed the boiler, and Emily replied with a thumbs-up"}, {"when": "July 2026", "what": "a phone-free Sunday walk, and Emily's longest message that month"}]}
   ],
   "chapters": {
     "close": {
-      "takeaway": "You care for each other well, but in different forms. Emily needs your time; Lucas needs to hear it.",
+      "takeaway": "You both care a lot, but not always in the form the other needs. Lucas: give time, not just favours. Emily: say what you need, out loud.",
       "areas": {
         "appreciation": {
           "seen": "One of you feels fully appreciated; the other mostly does.",
           "evidence": [
-            {"insight": "Thanks flow more one way than the other.", "support": "Lucas sends 520 messages of thanks or praise across the chat; Emily sends 410, mostly for practical help."},
-            {"insight": "Emily's own effort often goes unnamed.", "support": "Of the 60 plans Emily made in 2025, about one in three got a thank-you in words."}
+            {"insight": "Emily's work is mostly invisible, so it's rarely thanked.", "support": "Emily made 60 plans in 2025 (trips, dinners, bookings); about 1 in 3 got a thank-you in words."},
+            {"insight": "Lucas thanks Emily for outcomes, not for the effort behind them.", "support": "Of his 520 messages of thanks since 2022, most follow an event, such as a great dinner, not the planning that made it happen."}
           ],
-          "means": "Most of the care between you is real. The one who does the planning can end up feeling taken for granted, even when the other is grateful.",
+          "means": "Emily does a lot of quiet work and, as her Psyche shows, tends to keep count without saying so. Lucas is grateful but thanks the result, not the work, so the effort goes unseen and a small resentment can build.",
           "next": [
-            {"do": "Lucas: thank Emily for the planning itself, not just the plan.", "because": "Emily's Psyche shows she does the unassigned work and keeps quiet about it."},
-            {"do": "Emily: say what you need out loud, once a week.", "because": "Her Psyche shows she rarely asks for anything for herself."}
+            {"do": "Lucas: once this week, thank Emily for the work behind something, not just for the thing.", "because": "her Psyche shows she does the unassigned work and keeps quiet about it."},
+            {"do": "Emily: when something feels unthanked, say so the same day, lightly.", "because": "her Psyche shows she tallies quietly rather than asking."}
           ]
         },
         "loves": {
           "evidence": [
-            {"insight": "You give care in different forms than you each want it.", "support": "Emily mostly gives acts of service and wants time; Lucas gives words and wants words back, across hundreds of messages since 2022."}
+            {"insight": "Emily gives practical help but wants time. Lucas gives words and wants words back.", "support": "Emily's warmest messages follow 9 of 10 evenings alone together; Lucas's longest replies follow praise for his plans, across 2022 to 2026."}
           ],
-          "means": "Lucas guesses Emily wants things done for her, because that is what she gives. What she wants most is unhurried time together. Lucas already knows Emily's words matter to him.",
+          "means": "Words are a match: Emily already knows they matter to Lucas, and she uses them. The gap runs the other way. Lucas reads Emily's acts of service as her love language, so he tends to show love by doing favours, when what fills her up is his undivided time.",
           "next": [
-            {"do": "Lucas: one evening a week with phones away and nothing planned after.", "because": "Time together is how Emily feels most cared for."},
-            {"do": "Emily: tell Lucas one specific thing you admire about him this week.", "because": "Words are how Lucas feels most cared for."}
+            {"do": "Lucas: one evening a week with phones away and nothing planned after.", "because": "time together is how Emily feels most cared for, and Lucas guessed otherwise."},
+            {"do": "Emily: keep naming what you admire in Lucas; it lands every time.", "because": "words are how Lucas feels most cared for."}
           ]
         },
         "connection": {
           "seen": "Making time for each other feels easier for one of you than the other.",
           "evidence": [
-            {"insight": "Small bids for attention mostly land.", "support": "Of 120 small bids in the messages read, 96 got a warm reply, 21 were missed and 3 were met sharply."}
+            {"insight": "Small bids land most of the time, but not on weeknights.", "support": "Of 120 small bids in the messages read, 96 got a warm reply. 15 of the 21 missed were on weeknights, between 5pm and 8pm."}
           ],
-          "means": "Your everyday connection is good. The misses cluster on busy weeknights, when one of you shares something small and the other is still in work mode.",
+          "means": "Turning toward each other 80 times in 100 is good. The misses are not about care; they come at one time of day, when both of you are still in work mode and a small share gets a one-word reply.",
           "next": [
-            {"do": "When a photo or a small story comes in, reply with one real line, even if it's later.", "because": "Most of the 21 missed bids were small shares on weeknights."}
+            {"do": "Between 5pm and 8pm, if you can't reply properly, say you'll answer later, then do.", "because": "15 of the 21 missed bids were on weeknight evenings."}
           ],
           "bids": {"seen": 120, "toward": 96, "away": 21, "against": 3,
                    "missed": [{"when": "April 2025", "text": "a photo of a new running route that got a thumbs-up and nothing else"}, {"when": "February 2026", "text": "news of a new client, met with a question about groceries"}]}
         },
         "counts": {
           "evidence": [
-            {"insight": "Hard times get met better than good news.", "support": "You met 11 of 12 hard moments with real support, but only 7 of 11 pieces of good news with real interest."}
+            {"insight": "You're better at hard times than good news.", "support": "You met 11 of 12 hard moments with real support, but only 7 of 11 pieces of good news with real interest."}
           ],
-          "means": "When it really matters, you are there for each other. Good news gets less of a reaction than it deserves, and celebrating each other is one of the easiest ways to feel closer.",
+          "means": "When one of you is struggling, the other turns up. Good news gets less: a quick well done, then back to logistics. How a partner reacts to good news builds as much closeness as support in hard times, and it is the easier one to fix.",
           "next": [
-            {"do": "When the other shares good news, ask one question about it before moving on.", "because": "4 of 11 pieces of good news got a flat reply."}
+            {"do": "When the other shares good news, ask two questions about it before changing the subject.", "because": "4 of 11 pieces of good news got a flat reply."}
           ],
           "goodNews": {"seen": 11, "metWell": 7},
           "hardTimes": {"seen": 12, "metWell": 11},
@@ -76,147 +76,148 @@
       }
     },
     "life": {
-      "takeaway": "Daily life mostly runs smoothly. The friction is about chores, and who keeps track of them.",
+      "takeaway": "The chores get done. What feels unfair is that one of you keeps track of all of them.",
       "areas": {
         "needs": {
           "seen": "Life together feels fair to one of you, and mostly fair to the other.",
           "evidence": [
             {"insight": "One of you does most of the remembering.", "support": "Emily sends 3 in 4 of the messages about bills, bookings and plans since 2024."},
-            {"insight": "Chores come up again and again.", "support": "Chores and who does what came up in 23 tense exchanges since moving in together in 2023."}
+            {"insight": "Chore rows tend to start with a reminder.", "support": "17 of your 23 tense exchanges about chores since 2023 began with Emily reminding Lucas of something."}
           ],
-          "means": "The work of running a home is shared, but the job of keeping track of it is not. That invisible load is what makes things feel less fair, and Emily is unlikely to say so first.",
+          "means": "The doing is shared; the remembering is not. Emily's high conscientiousness makes her the natural tracker, and Lucas's spontaneity means he rarely thinks ahead. Being the one who always has to remind makes her feel like a manager, and makes him feel nagged.",
           "next": [
-            {"do": "Split the remembering, not just the doing: each of you owns a few things end to end.", "because": "Emily sends most of the planning messages."},
-            {"do": "Ten minutes on Sunday to look at the week together.", "because": "Most chore tensions start on a weekday evening."}
+            {"do": "Split the remembering, not just the doing: each of you owns a few jobs end to end, reminders included.", "because": "17 of 23 chore rows started with a reminder from Emily."},
+            {"do": "Ten minutes on Sunday evening to look at the week together.", "because": "most chore rows start on a weekday evening, when you are both tired."}
           ]
         },
         "interests": {
           "evidence": [],
-          "means": "You share good food, music and being outdoors, and each of you has something that is only yours. Keep both: shared time draws you together, your own time gives you something new to bring back.",
+          "means": "You share cooking, music and weekends outside, and you each have a world of your own: Emily's running and books, Lucas's boat and games. Lucas needs new things and Emily needs things planned, so new things planned together suit you both.",
           "next": [
-            {"do": "Take turns choosing one new thing to try together each month.", "because": "Lucas loves something new and Emily loves a plan: this gives you both."}
+            {"do": "Take turns picking one new thing to try together each month; the other plans it.", "because": "his Psyche shows he is driven by novelty, and hers by doing things well."}
           ],
           "columns": {"shared": ["Cooking together", "Live music", "Weekends outdoors"], "a": ["Distance running", "Reading"], "b": ["Sailing", "Strategy games"]}
         }
       }
     },
     "future": {
-      "takeaway": "You want the same things at heart. Where to live, and when to marry, still need a real conversation.",
+      "takeaway": "You agree on children. Marriage and where to live are still open: talk about them before they turn into a quiet worry.",
       "areas": {
         "values": {
           "evidence": [],
-          "means": "Loyalty and keeping your word sit at the centre for both of you. Emily leans toward reliability and belonging; Lucas toward ingenuity and adventure. These pull in different directions only now and then.",
+          "means": "Loyalty and keeping your word are the ground you both stand on. Beyond that you pull different ways: Emily towards reliability and belonging, Lucas towards ingenuity and adventure. That shows up in small things, like how far ahead to book a holiday.",
           "next": [
-            {"do": "Plan one adventure a year that Emily gets to plan properly.", "because": "Adventure matters to Lucas, and a good plan matters to Emily."}
+            {"do": "Plan one adventure a year: Lucas picks where, Emily plans how.", "because": "adventure matters to Lucas and reliability to Emily, and this uses both."}
           ],
           "columns": {"shared": ["Loyalty", "Keeping your word", "Close friends"], "a": ["Reliability", "Belonging"], "b": ["Ingenuity", "Adventure"]}
         },
         "decisions": {
           "evidence": [],
-          "means": "On children you are on the same page. On marriage and where to live, you are not there yet, and that is normal at this stage. It just needs a calm talk before it becomes a sore spot.",
+          "means": "Children is settled. Marriage and where to live are linked: Lucas's itch for a new city fits his need for adventure, while Emily's sense of belonging is tied to where you are now. Left unspoken, this can turn into a quiet worry for the one who wants things settled.",
           "next": [
-            {"do": "Have one relaxed talk about where you might live in five years, with no decision needed.", "because": "You each see a different place in five years."}
+            {"do": "Have one relaxed talk about where you might live in five years, with no decision needed.", "because": "you each see a different place in five years."}
           ],
           "lines": {
-            "children": "You both want children one day: a good place to start talking about when.",
-            "marriage": "One of you is sure, one isn't yet. Ask what would help make it clearer, without a deadline.",
-            "place": "One of you sees staying put, one sees a new city. Talk about what each place would give you."
+            "children": "You both want children one day. A good next talk is roughly when, and what needs to be in place first.",
+            "marriage": "One of you is sure and one is unsure. Ask what unsure means: not yet, not sure about marriage itself, or something else.",
+            "place": "One of you sees staying put, one sees a new city. Talk about what each place would give you, not just where it is."
           }
         },
         "growth": {
           "evidence": [],
-          "means": "You both like to keep growing, in different ways. Emily grows by doing things well for people; Lucas by trying the next new thing. Cheering on each other's growth is a quiet way to stay close.",
+          "means": "Achievement, care and freedom drive you both. You pull apart on two: Lucas needs far more novelty than Emily, and Emily needs far more security than Lucas. That is the same tension as your big decisions, a new city or staying put.",
           "next": [
-            {"do": "Ask about the other's goal once a week, and remember the answer.", "because": "Emily's drive to do well by people and Lucas's love of new challenges both show in your Psyches."}
+            {"do": "Each name one goal for next year and one way the other can help with it.", "because": "you share a drive to achieve, and back each other best when the goal is named."}
           ]
         }
       }
     },
     "secure": {
-      "takeaway": "You both feel secure in this, and you are both in it for the long run. Say so more often.",
+      "takeaway": "You are both sure about this, and you are both reliable in a crisis. Say it out loud more often.",
       "areas": {
         "attachment": {
           "evidence": [
             {"insight": "Both of you come back after distance.", "support": "After 86 in 100 hard messages since 2022, one of you said something warm within a day."}
           ],
-          "means": "You both lean secure. Emily copes by carrying things on her own; Lucas by keeping busy with the next plan. Knowing that about each other turns a quiet day from a worry into just a quiet day.",
+          "means": "You both lean secure, with different ways of coping. Under stress Emily handles things alone and says she's fine; Lucas starts a new project to stay busy. Neither is pulling away, but each can look like it to the other.",
           "next": [
-            {"do": "When you need space, say how long: an hour, an evening.", "because": "Emily takes time first, and Lucas copes better with a clear end to it."}
+            {"do": "When you need space, say how long you need: an hour, or an evening.", "because": "Emily takes time first, and Lucas copes better when he knows when it ends."}
           ],
           "status": "both lean secure",
-          "reassure": {"a": "Emily is reassured by an evening cleared just for her, and by being asked how she really is.", "b": "Lucas is reassured by plain words that you're okay, and that you're still with him on the plan."}
+          "reassure": {"a": "Emily is reassured by an evening cleared just for her, and by being asked how she really is, twice.", "b": "Lucas is reassured by hearing plainly that you're okay, and that you're still with him on the plan."}
         },
         "security": {
           "seen": "You both feel secure and sure about each other.",
           "evidence": [
-            {"insight": "You plan far ahead together.", "support": "You made 14 plans more than three months out in 2025 and 2026."}
+            {"insight": "You plan far ahead together.", "support": "You made 14 plans more than three months ahead in 2025 and 2026, up from 3 in 2023."}
           ],
-          "means": "This is solid ground. You are both sure about the long run, which makes the harder conversations elsewhere safe to have.",
+          "means": "This is solid ground, and it has grown: you plan further ahead now than in your first years. Feeling sure of each other is what makes harder talks, like marriage and where to live, safe to have.",
           "next": [
-            {"do": "Once a month, say one thing you're looking forward to doing together.", "because": "You already plan far ahead; saying it out loud makes it felt."}
+            {"do": "Once a month, say one thing you're looking forward to doing together.", "because": "you already plan ahead; saying it out loud makes the security felt."}
           ],
           "signs": {"a": ["Takes on more planning than usual", "Says she's fine, quickly"], "b": ["Starts three new projects at once", "Jokes past a serious question"]}
         }
       }
     },
     "disagree": {
-      "takeaway": "Your rows are rarely about the topic. They are about timing: one of you needs to talk now, the other needs time first.",
+      "takeaway": "Your rows are rarely about chores or plans. They are about timing: Lucas needs to settle it now, Emily needs time first and then says it's fine.",
       "areas": {
         "topics": {
           "evidence": [],
-          "means": "You each named something different. Chores and timekeeping both come back to the same thing: one of you plans ahead, the other likes to keep things open.",
+          "means": "You each named a different topic, but they have the same root: Emily plans ahead and Lucas keeps things open. To her, his lateness feels like her time doesn't count; to him, her chore lists feel like being managed.",
           "next": [
-            {"do": "Agree a simple rule for each: who books, who tidies, how late is too late.", "because": "Both topics keep coming back in the messages."}
+            {"do": "Agree three simple house rules: who books, who tidies what, and how late is too late.", "because": "both topics keep coming back in the messages."}
           ],
           "type": "solvable"
         },
         "cycle": {
           "evidence": [],
-          "means": "This loop is common and it is fixable. It isn't about who is right: it's about the gap between talk-now and time-first.",
+          "means": "This is a common loop, and it can be fixed. Lucas's push to settle things and Emily's habit of smoothing them over each make sense alone; together, they bury the issue instead of solving it.",
           "next": [
-            {"do": "Agree a phrase that means: I need an hour, and I will come back.", "because": "Emily needs time first, and Lucas needs to know it will end."}
+            {"do": "Agree on a phrase that means: I need an hour, and I will come back to this.", "because": "Emily needs time first, and Lucas needs to know the talk will happen."}
           ],
           "status": "one pushes, one smooths",
-          "steps": ["Something small goes wrong, often about plans or chores", "Lucas wants to talk it through now", "Emily smooths it over to keep the peace", "It comes back later, bigger, and Lucas feels blindsided"],
+          "steps": ["Something small goes wrong, often about plans or chores", "Lucas wants to talk it through now", "Emily says it's fine, to keep the peace", "It comes back later, bigger, and Lucas feels blindsided"],
           "plain": {
-            "a": "When Emily says it's fine too quickly, she needs time to think, and to feel safe saying what's wrong. Next time, she can ask for an hour, then come back and say it plainly.",
+            "a": "When Emily says it's fine quickly, she needs time to think and to feel safe saying what's wrong. Next time, she can ask for an hour, then come back and say it plainly.",
             "b": "When Lucas sends message after message, he needs to know you're still in it together. Next time, he can say it once, then give Emily the hour she asks for."
           }
         },
         "disagreements": {
           "seen": "Getting past disagreements feels harder to one of you than to the other.",
           "evidence": [
-            {"insight": "Your repairs mostly work, but they take a while.", "support": "Of 41 repair attempts after friction, 33 were taken up. It took about 3.5 hours to get back to warm, down from 6 hours in 2023."}
+            {"insight": "Repairs mostly land, and faster every year.", "support": "Of 41 repair attempts after friction, 33 were taken up. Getting back to warm took about 6 hours in 2023 and about 3.5 hours since 2025."},
+            {"insight": "What isn't repaired is what was never said.", "support": "9 of 23 chore rows reopened an earlier one that had ended with Emily saying it was fine."}
           ],
-          "means": "You are getting better at this every year. The hard part is not the repair but what goes unsaid before it: things smoothed over come back later.",
+          "means": "You are good at making up: a joke from Lucas or a kind message from Emily usually works. The trouble is what gets smoothed over instead of settled. Repairing the row is not the same as solving what caused it.",
           "next": [
-            {"do": "After a row, send one warm line within the hour, even if the talk comes later.", "because": "Most of your repairs land, but the wait before them is long."},
-            {"do": "Emily: name the time you'll come back. Lucas: trust it.", "because": "One of you needs time first, the other needs to talk now."}
+            {"do": "After a row, send one warm line within the hour, even if the talk comes later.", "because": "most repairs land; the long wait before them is what hurts."},
+            {"do": "Emily: name a time to come back to it. Lucas: trust that time and wait.", "because": "one of you needs time first, the other needs to talk now."}
           ],
           "repairs": {"tried": 41, "landed": 33}
         }
       }
     }
   },
-  "overall": {"title": "How you feel about it all", "detail": "You are both happier in this than the other one thinks. Tell each other plainly what is going well."},
-  "intermission": {"title": "Your story in small moments", "lines": ["Your longest streak: 403 days in a row of messages.", "Emily sends the plans. Lucas sends plan B.", "Your busiest day was in May 2022: 212 messages.", "You both end most nights with the same silly goodnight."]},
+  "overall": {"title": "How you feel about it all", "detail": "You are each happier in this than the other one guesses. Tell each other plainly what is going well, and you will both worry less."},
+  "intermission": {"title": "Your story in small moments", "lines": ["Your longest streak: 403 days in a row of messages.", "Emily sends the plans. Lucas sends plan B.", "Your busiest day was 14 May 2022: 212 messages.", "You end most nights with the same silly goodnight."]},
   "plan": {
     "week1": {"title": "Small daily turns", "chapter": "close", "days": [
-      "Thank each other for one specific thing, in words.",
-      "Put phones away for the first 20 minutes of dinner.",
-      "Ask one question about the other's day and really listen.",
-      "Do one chore the other usually does, without being asked.",
-      "Send a message in the afternoon that has nothing to do with logistics.",
-      "Say one thing you're looking forward to together.",
-      "Plan next week's evening together, just the two of you."
+      "Lucas: thank Emily for the work behind one thing she did today.",
+      "Phones away for the first 20 minutes of dinner.",
+      "When good news comes in, ask two questions before changing the subject.",
+      "Each do one job the other usually keeps track of, start to finish.",
+      "Send an afternoon message that has nothing to do with logistics.",
+      "Emily: say one thing you need this week, out loud.",
+      "Lucas plans an evening for two with nothing after it."
     ]},
     "weeks": [
-      {"title": "Week 2: the gap after a row", "conversation": {"title": "Talk now, or time first", "why": "It's the loop behind most of your rows.", "script": ["Pick a calm evening, not right after a row.", "Each say what you need right after a disagreement.", "Agree a phrase for: I need time, and I'll come back.", "Agree how long is okay."]},
-       "ask": "What helps you feel okay while we're not talking yet?", "doTogether": "Try your new phrase the next time something small goes wrong."},
-      {"title": "Week 3: the invisible load", "conversation": {"title": "Who keeps track of what", "why": "The remembering, not the doing, is what feels unfair.", "script": ["List everything that needs remembering at home.", "Each pick the things you'll own, start to finish.", "Check in after a week."]},
-       "ask": "What do I do that you'd miss if I stopped?", "doTogether": "Spend ten minutes on Sunday looking at the week ahead."},
-      {"title": "Week 4: what comes next", "conversation": {"title": "Five years from now", "why": "Where to live and when to marry are still open.", "script": ["No decisions tonight, just dreams.", "Each describe a perfect ordinary Tuesday in five years.", "Notice what's the same.", "Pick one small step toward it."]},
-       "ask": "What would make you feel sure about the next big step?", "doTogether": "Plan one weekend away in a place you might like to live."}
+      {"title": "Week 2: the gap after a row", "conversation": {"title": "Talk now, or time first", "why": "It's the loop behind most of your rows.", "script": ["Pick a calm evening, not right after a row.", "Each say what you need right after a disagreement.", "Agree a phrase for: I need an hour, and I'll come back.", "Agree how long is okay, and what the warm line in between looks like."]},
+       "ask": "When I say it's fine, how can you tell if it really is?", "doTogether": "Try your new phrase the next time something small goes wrong."},
+      {"title": "Week 3: the invisible load", "conversation": {"title": "Who keeps track of what", "why": "The remembering, not the doing, is what feels unfair.", "script": ["List everything that needs remembering at home.", "Each pick the jobs you'll own, start to finish, reminders included.", "Check in after a week on what slipped."]},
+       "ask": "What do I do that you'd miss if I stopped?", "doTogether": "Spend ten minutes on Sunday evening looking at the week ahead."},
+      {"title": "Week 4: what comes next", "conversation": {"title": "Five years from now", "why": "Where to live and when to marry are still open.", "script": ["No decisions tonight, just pictures.", "Each describe an ordinary Tuesday in five years.", "Notice what's the same in both.", "Pick one small step toward it."]},
+       "ask": "What would help you feel sure about the next big step?", "doTogether": "Spend a weekend away somewhere you might like to live one day."}
     ]
   },
   "caveats": "This reads your messages, your answers and your two Psyches. It can't see your days together, your tone of voice or anything you only say in person."

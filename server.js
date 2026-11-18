@@ -452,6 +452,8 @@ async function route(req, res) {
     const where = { cur: url.searchParams.get('cur'), country: req.headers['cf-ipcountry'], language: req.headers['accept-language'] };
     if (buy && req.method === 'GET' && !buy[2]) return sendResult(res, require('./lib/togetherpay').show(buy[1], Date.now(), url.searchParams.get('done') === '1', where));
     if (buy && req.method === 'POST' && buy[2]) return sendResult(res, await require('./lib/togetherpay').checkout(buy[1], Date.now(), undefined, where));
+    // Psyche Together's public page (README "The Psyche Together page"), for anyone, with no account.
+    if (/^\/psyche-together\/?$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) return sendResult(res, require('./lib/togetherpay').about(where));
     // The sample couple's Psyche Cards, for the Psyche Together page (tools/together-cards.mjs).
     const tcard = /^\/together\/cards\/(emily|lucas)\.jpg$/.exec(url.pathname);
     if (tcard && (req.method === 'GET' || req.method === 'HEAD')) {
