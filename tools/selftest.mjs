@@ -2230,6 +2230,32 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
         };
         const mei = workspace('Mei Tan', answerFor('Mulan', 'ENFJ', 'Organiser with a warm centre', ['Pickleball', 'Reading']));
         const ana = workspace('Ana Cruz', answerFor('Odysseus', 'INTP', 'Takes things apart to fix them', ['Tennis', 'Reading']));
+        // No step needs SKILL.md (release 219, README "One command for every button"): from a real menu, each main and More
+        // button is answered by tap alone, with something to show and buttons that are all known, so Muse never looks one up.
+        {
+          const walker = workspace('Wan Li', answerFor('Rapunzel', 'ENFP', 'Curious and quick to start', ['Climbing', 'Film']));
+          const menu = await walker('call', 'start', '{}');
+          const opts = menu.options || [];
+          const labels = opts.map(o => o.label).concat(((opts.find(o => o.id === 'more') || {}).buttons) || []);
+          const walked = [];
+          for (const label of labels) {
+            const r = await walker('tap', label);
+            const btns = [].concat(r.buttons || [], (r.nextStep && r.nextStep.buttons) || []).map(b => (typeof b === 'string' ? b : b && b.label)).filter(Boolean);
+            walked.push({ label, unknown: Boolean(r.unknown), error: r.error || null, via: r.via || null, shows: Boolean(r.say || r.message || r.file || r.answer || (r.nextStep && r.nextStep.say)), btns });
+          }
+          // Ask's buttons are questions to ask (answered by Muse from the report, as Ask PsycheAI does), not menu buttons.
+          const allBtns = [...new Set(walked.filter(w => w.label !== 'Ask PsycheAI questions about myself').flatMap(w => w.btns))];
+          const known = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys
+labels = json.loads(sys.argv[1]); sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+own = {'More', 'Ask PsycheAI questions about myself', 'WhatsApp chats', 'WhatsApp, Facebook and Messenger', 'Delete everything', 'My data and privacy'} | set(m.SOURCE_LABELS)
+left = sorted(l for l in m.LABELS if l not in m.TAP_ROUTES and l not in m.TAP_GUIDED and l not in own)
+print(json.dumps({'unknownButtons': [b for b in labels if not m.known_label(b)], 'unsorted': left,
+                  'overlap': sorted((set(m.TAP_ROUTES) | own) & m.TAP_GUIDED)}))
+`, JSON.stringify(allBtns)], { env: { ...process.env, PSYCHEAI_BASE: base } }).toString());
+          skillState.walk = { labels, walked, known };
+        }
         const E = {};
         E.link = splitInvite(E.linkRaw = await mei('call', 'sync_link', '{}'));
         E.code = ((/#([A-Za-z0-9_-]{22})$/.exec(E.link.url || '')) || [])[1];
@@ -2569,6 +2595,12 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
       /Only when they Sync does anything of theirs leave: their card summary \(the few lines on their Psyche Card, their scores on the ten motivations, and their daily rhythm: what share of the posts, comments and messages they wrote falls in each part of the day and on weekends, counted from their digest\) and the written Sync, both locked here under the Sync link's code before they're sent, so PsycheAI keeps and passes them on but can't read them/.test(skillMd) &&
       /A result's `file` is a file saved here for the chat \(a Sync's page\): attach it\./.test(skillMd),
       JSON.stringify(skillState.syncPage));
+    check('no step needs SKILL.md (README "One command for every button"): every main and More button, tapped from a real menu, is answered by tap alone (Sync with a friend, My Syncs and Psyche Together by the command they stand for, named in via), with something to show and only known buttons; every known button is either one command or one the guide answers, never both',
+      ((W) => W && W.labels.length >= 6 && W.walked.every(w => !w.unknown && !w.error && w.shows && w.btns.length > 0) &&
+        ['sync_link', 'together-intro'].every(v => W.walked.some(w => w.via === v)) &&
+        W.known.unknownButtons.length === 0 && W.known.unsorted.length === 0 && W.known.overlap.length === 0)(skillState.walk) &&
+        /\*\*Menu taps:\*\* on any button from PsycheAI's results [^\n]*run `python3 bin\/psyche\.py tap "<the button>"` first and show its result[^\n]*With `unknown`, go on as the guide says for that button\./.test(require('../lib/skill.js').skillMd()),
+      JSON.stringify(skillState.walk).slice(0, 900));
     check('a friend\'s card first (README "A friend\'s card first"): sync-preview gives the friend\'s card as a picture drawn here, with its line only when there is no Psyche yet, and never their own link\'s; with no Psyche yet it also carries first-run\'s result (release 218)',
       ((E) => E && E.preview && (!E.preview.card || /^out\/syncs\/Psyche Card from [^/]+\.png$/.test(E.preview.card)) && !('card' in (E.ownPreview || {})) &&
         (E.preview.hasPsyche ? !('cardSay' in E.preview) : !E.preview.card || /sent you their Psyche Card\. Make yours to see how you two sync\.$/.test(E.preview.cardSay)) &&
@@ -3881,7 +3913,7 @@ print(json.dumps(out))
           taps[6].say === 'Ask me anything about yourself, or start from one of these:' && JSON.stringify(taps[6].buttons) === '["What do I keep trying to prove?","Back to the menu"]' &&
           taps[7].say === 'Add up to three WhatsApp chats.' && JSON.stringify(taps[7].buttons) === '["I\'ve shared my chats","Not now"]' && taps[8].say === taps[7].say &&
           /^This deletes your Psyche, report, digest, Syncs and saved card, here and on PsycheAI\. Delete everything\?$/.test(taps[9].say) && JSON.stringify(taps[9].buttons) === '["Yes, delete everything","Cancel"]' &&
-          /\*\*Menu taps:\*\* on "More", "My data and privacy", "Add WhatsApp or Facebook…", "Ask PsycheAI questions about myself", "WhatsApp chats", "WhatsApp, Facebook and Messenger" or "Delete everything", run \`python3 bin\/psyche\.py tap "<the button>"\`/.test(require('../lib/skill.js').skillMd()),
+          /\*\*Menu taps:\*\* on any button from PsycheAI's results \(the menu, More, Ask, Sync, My Syncs, Psyche Together, adding a source, their data, Back to the menu and the rest\), run \`python3 bin\/psyche\.py tap "<the button>"\` first/.test(require('../lib/skill.js').skillMd()),
         JSON.stringify(taps).slice(0, 800));
       // Release 218 (README "First run from a link"): a friend's link for someone new carries first-run's result.
       const fromLink = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `

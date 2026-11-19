@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 218
+RELEASE = 219
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -6046,7 +6046,64 @@ def menu_tap(label):
                 'links': {'Privacy policy': 'https://psycheai.io/muse-privacy'}}
     if label in SOURCE_LABELS:
         return {'say': 'Which would you like to add?', 'buttons': SOURCE_CHOICES, 'asButtons': True}
+    # Release 219 (README "One command for every button"): a button that maps to one command runs it here, so Muse needs
+    # nothing further down SKILL.md to answer it. The result is that command's own, with `via` naming it.
+    routed = route_tap(label)
+    if routed is not None:
+        return routed
     return {'unknown': True}
+
+
+TOGETHER_DIR = os.path.join(os.path.dirname(HERE), 'psyche-together')
+# Each button that is one command, by label (and the forms that carry a name or a count).
+TAP_ROUTES = {
+    'Back to the menu': 'start', 'Done': 'start',
+    'Sync with a friend': 'sync_link', 'Sync with someone else': 'sync_link', 'Sync with someone new': 'sync_link',
+    'My Syncs': 'get_syncs', 'Show my Syncs': 'get_syncs',
+    "I've shared it. Show our results": 'sync-ready', 'Show our results': 'sync-ready', 'My friend has synced': 'sync-ready',
+    'Psyche Together with my partner': 'together-intro',
+}
+# The buttons the guide answers, each because Muse itself does the next step: the first-run choices (first-run's result
+# has their answers), installing or starting Psyche Together, writing or asking something, a link, a connection, a
+# choice between sources, or deleting. tap answers these with unknown. The selftest checks every known label is in
+# TAP_ROUTES, a TAP_ROUTES form, menu_tap's own list or here, so a new button can't be left without a way on.
+TAP_GUIDED = frozenset([
+    'Generate my Psyche', 'Generate my Psyche. DMs included (Recommended)', 'Generate my Psyche. DMs excluded', 'What will I learn?', 'Is it private?',
+    'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'Fresh Psyche', 'Include my messages (Recommended)', 'Posts only',
+    "I've connected them", 'Continue without messages', 'Continue without Messenger', "I've connected it", "I've connected another account", 'Not now',
+    'Reveal my roast 🔥', 'Weekly check-ins on my plan', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', "See this week's matches",
+    'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', "I've shared my chats",
+    'Yes', 'No thanks', 'Check daily for me', 'Someone else', "I'll share it myself", 'Write it again',
+    'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', "That's all", 'Not this week',
+    'See who picked me', 'See my other matches', "Yes, I'd like to meet", 'Chat privately', 'Swap Instagram',
+    'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
+    'Explain why you said this', 'Correct something', 'Show our Psyche Together', 'Ask something else',
+    'Install Psyche Together', 'Install and start Psyche Together', 'Make it anyway', 'Yes, delete everything', 'Cancel', 'Privacy policy',
+    'Continue Psyche Together', 'Add WhatsApp as data source', 'Add WhatsApp or Facebook as data source', TOGETHER_INSTALL,
+    'Install Psyche Together from https://app.psycheai.io/together and start it',
+])
+
+
+def route_tap(label):
+    """The command a button stands for, run here: its result, with `via`; None when the guide answers it."""
+    cmd = TAP_ROUTES.get(label)
+    if cmd is None and re.match(r'^My Syncs \(\d{1,3} new\)$', label):
+        cmd = 'get_syncs'
+    if cmd is None and label.startswith('Install Psyche Together from '):
+        return None
+    if cmd is None and re.match(r'^Sync with [^\n@/:]{1,30}$', label) and (pending_sync() or {}).get('link'):
+        out = call('sync_with', {'link': pending_sync()['link']})
+        return dict(out, via='sync-with') if isinstance(out, dict) else out
+    if cmd is None:
+        return None
+    if cmd == 'together-intro':
+        if os.path.isdir(TOGETHER_DIR):
+            return None            # installed: its own SKILL.md takes it from here, as the guide says
+        return dict(intro_for_together(), via='together-intro')
+    if cmd == 'sync-ready':
+        return dict(sync_ready(''), via='sync-ready')
+    out = call(cmd, {})
+    return dict(out, via=cmd) if isinstance(out, dict) else out
 
 
 def intro_for_together():
@@ -6172,7 +6229,7 @@ LABELS = frozenset([
     'Answer here instead', 'Looks right', 'Change something', 'Add a must-have', 'Add another', 'That\'s all', 'Not this week',
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
-    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Install Psyche Together', 'Install and start Psyche Together', 'Install Psyche Together from https://app.psycheai.io/together and start it', 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
+    'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Install Psyche Together', 'Install and start Psyche Together', 'Install Psyche Together from https://app.psycheai.io/together and start it', TOGETHER_INSTALL, 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
               re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$')]
