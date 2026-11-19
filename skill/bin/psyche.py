@@ -2688,6 +2688,9 @@ def first_run():
         return with_reply(out)
     with_connect(out)
     out['stepOne'] = STEP_ONE   # the reel is in the welcome now (README "The reel with the welcome")
+    # Kept here (release 219, README "The first-run taps"), so tap answers the messages and account taps from it.
+    keep = {k: out[k] for k in ('question', 'buttons', 'stepOne', 'connectMessages') if k in out}
+    write_private([FIRST_RUN_KEPT], dict(keep, at=int(time.time())))
     return out
 
 def local_version():
@@ -6069,7 +6072,7 @@ TAP_ROUTES = {
 # TAP_ROUTES, a TAP_ROUTES form, menu_tap's own list or here, so a new button can't be left without a way on.
 TAP_GUIDED = frozenset([
     'Generate my Psyche', 'Generate my Psyche. DMs included (Recommended)', 'Generate my Psyche. DMs excluded', 'What will I learn?', 'Is it private?',
-    'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'Fresh Psyche', 'Include my messages (Recommended)', 'Posts only',
+    'Fresh Psyche. DMs included (Recommended)', 'Fresh Psyche. DMs excluded', 'Fresh Psyche',
     "I've connected them", 'Continue without messages', 'Continue without Messenger', "I've connected it", "I've connected another account", 'Not now',
     'Reveal my roast 🔥', 'Weekly check-ins on my plan', 'Find potential romantic matches', 'Join the Psyche Pair waitlist', "See this week's matches",
     'Facebook and Messenger', 'Facebook posts only', 'Facebook posts', "I've shared my chats",
@@ -6084,8 +6087,67 @@ TAP_GUIDED = frozenset([
 ])
 
 
+def accounts_result():
+    """python3 bin/psyche.py accounts: both account lists read again, kept as first-run's are (README "The first-run taps")."""
+    try:
+        out = account_choice()
+    except (RuntimeError, RateLimited) as err:
+        out = {'accounts': None, 'problem': 'The account lists could not be read here (%s).' % type(err).__name__}
+    with_reply(with_connect(out))
+    # A first Psyche gets the first line even after "I've connected them"; a fresh one, its own (README "Connect, ready-made").
+    out['stepOne'] = FRESH_STEP_ONE if read_first([REPORT, REPORT_KEPT]) else STEP_ONE
+    if out.get('buttons') and not out.get('reply'):
+        old = read_first([FIRST_RUN_KEPT]) or {}
+        keep = {k: out[k] for k in ('question', 'buttons', 'stepOne', 'connectMessages') if k in out}
+        write_private([FIRST_RUN_KEPT], dict(keep, at=int(time.time()), **({'messagesChoice': old['messagesChoice']} if old.get('messagesChoice') else {})))
+    return out
+
+
+FIRST_RUN_KEPT = os.path.join(HERE, '.first-run.json')
+FIRST_RUN_FRESH = 6 * 3600
+# The messages question's two buttons (README "The first-run taps"): what they chose, kept with first-run's result.
+MESSAGE_CHOICES = {'Include my messages (Recommended)': 'include', 'Posts only': 'posts'}
+
+
+def first_run_kept():
+    kept = read_first([FIRST_RUN_KEPT]) or {}
+    return kept if kept.get('buttons') and time.time() - int(kept.get('at') or 0) < FIRST_RUN_FRESH else None
+
+
+def first_run_tap(label):
+    """The messages tap and the account tap of a first run, answered from first-run's result: data only, as first-run's
+    own (README "The first-run taps"). None when the label is neither."""
+    if label in MESSAGE_CHOICES:
+        # Someone with a Psyche is making a fresh one: its account lists are read again, as accounts does.
+        kept = None if read_first([REPORT, REPORT_KEPT]) else first_run_kept()
+        if not kept:
+            got = accounts_result() if read_first([REPORT, REPORT_KEPT]) else first_run()
+            if got.get('reply') or got.get('error') or not got.get('buttons'):
+                return dict({k: got[k] for k in ('reply', 'error', 'problem') if k in got}, via='first-run')
+            kept = first_run_kept() or got
+        choice = MESSAGE_CHOICES[label]
+        write_private([FIRST_RUN_KEPT], dict(kept, messagesChoice=choice))
+        out = {'via': 'first-run', 'messagesChoice': choice, 'question': kept.get('question'), 'buttons': kept.get('buttons'), 'stepOne': kept.get('stepOne')}
+        if choice == 'include' and kept.get('connectMessages'):
+            out['connectMessages'] = kept['connectMessages']
+        return out
+    kept = first_run_kept() if label.startswith('@') else None
+    b = next((x for x in (kept or {}).get('buttons') or [] if isinstance(x, dict) and x.get('label') == label), None)
+    if not b:
+        return None
+    choice = kept.get('messagesChoice') or 'include'
+    out = {'via': 'account', 'messagesChoice': choice, 'stepOne': kept.get('stepOne'),
+           'account': {k: b.get(k) for k in ('account_id', 'messages_account_id', 'messages_connected', 'name')}}
+    if choice == 'include' and b.get('messages_connected') is False and kept.get('connectMessages'):
+        out['connectMessages'] = kept['connectMessages']
+    return out
+
+
 def route_tap(label):
     """The command a button stands for, run here: its result, with `via`; None when the guide answers it."""
+    early = first_run_tap(label)
+    if early is not None:
+        return early
     cmd = TAP_ROUTES.get(label)
     if cmd is None and re.match(r'^My Syncs \(\d{1,3} new\)$', label):
         cmd = 'get_syncs'
@@ -6893,14 +6955,7 @@ def main(argv):
                           'checkWithoutThisScript': 'sha256sum SKILL.md bin/psyche.py guide.json (in %s)' % HERE}, ensure_ascii=False, indent=1))
         return
     if argv[0] == 'accounts':
-        try:
-            out = account_choice()
-        except (RuntimeError, RateLimited) as err:
-            out = {'accounts': None, 'problem': 'The account lists could not be read here (%s).' % type(err).__name__}
-        with_reply(with_connect(out))
-        # A first Psyche gets the first line even after "I've connected them"; a fresh one, its own (README "Connect, ready-made").
-        out['stepOne'] = FRESH_STEP_ONE if read_first([REPORT, REPORT_KEPT]) else STEP_ONE
-        print(json.dumps(out, ensure_ascii=False, indent=1))
+        print(json.dumps(accounts_result(), ensure_ascii=False, indent=1))
         return
     if argv[0] == 'call' and len(argv) >= 2:
         raw = argv[2] if len(argv) > 2 else '{}'
@@ -6993,7 +7048,7 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS):     # NEWS: which Syncs news has said (release 198)
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT):     # NEWS: which Syncs news has said (release 198)
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))

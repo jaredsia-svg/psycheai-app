@@ -1129,8 +1129,8 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
     check('Ask PsycheAI: every list of questions and every answer ends with "Back to the menu", which brings back the five main buttons (README "Back to the menu")',
       /as buttons, one each: its questions, then "Back to the menu"/.test(instructions.MUSE_PROCEDURE) && /askButtons: \[\.\.\.ideas, 'Back to the menu'\]/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8')) && (require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8').match(/withAskButtons\(askIdeas\(/g) || []).length === 4 && /then "Ask something else" and "Back to the menu"/.test(instructions.MUSE_PROCEDURE) &&
         /"Ask something else": a few more questions they haven't seen[^.]*, then "Back to the menu"\./.test(instructions.MUSE_PROCEDURE) && /"Back to the menu", and "Done" where it ends a path: "What would you like to do\?" with the five buttons someone with a read gets/.test(instructions.MUSE_PROCEDURE) && /No path ends in a dead end: wherever one ends[^.]*, its last button is "Back to the menu"\./.test(instructions.MUSE_PROCEDURE));
-    check('forget --everything also deletes news.json, which Syncs news has already said (release 198)',
-      /SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS\):/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')));
+    check('forget --everything also deletes news.json, which Syncs news has already said (release 198), and the kept first-run result (release 219)',
+      /SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT\):/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')));
     {
       // Release 201 (README "The install read, as it was"): Muse reads about the first 50 KB of SKILL.md when it installs. With the
       // menu, Ask, Sync, adding a source and their data in it (198 to 200), that read failed Muse's safety check on both devices;
@@ -2249,7 +2249,7 @@ print(json.dumps({'sentHtml': sent[0]['arguments'].get('html'), 'keys': sorted(o
 import importlib.util, json, sys
 labels = json.loads(sys.argv[1]); sys.argv = ['x']
 spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-own = {'More', 'Ask PsycheAI questions about myself', 'WhatsApp chats', 'WhatsApp, Facebook and Messenger', 'Delete everything', 'My data and privacy'} | set(m.SOURCE_LABELS)
+own = {'More', 'Ask PsycheAI questions about myself', 'WhatsApp chats', 'WhatsApp, Facebook and Messenger', 'Delete everything', 'My data and privacy'} | set(m.SOURCE_LABELS) | set(m.MESSAGE_CHOICES)
 left = sorted(l for l in m.LABELS if l not in m.TAP_ROUTES and l not in m.TAP_GUIDED and l not in own)
 print(json.dumps({'unknownButtons': [b for b in labels if not m.known_label(b)], 'unsorted': left,
                   'overlap': sorted((set(m.TAP_ROUTES) | own) & m.TAP_GUIDED)}))
@@ -3192,7 +3192,7 @@ print(json.dumps({'one': 'class="shared one"' in one and 'Interests' in one and 
       ((a) => a && JSON.stringify(a.buttons.map(b => b.label)) === '["@mei.alt (last time)","@mei.t"]' && a.stepOne === "On it. Writing your fresh Psyche takes about 5 minutes. I'll show it here when it's ready.")(skillState.freshAccounts) &&
       !/ALT1|ACC1/.test(skillState.lastCollectFile || 'ALT1') &&
       /^# PsycheAI\n\n## First run, in order\n/m.test(skillMd) && /1\. Install as below \(when it is already in ~\/workspace\/skills\/psycheai\/, `python3 bin\/psyche\.py update` is the install: it checks the signature itself\), and once the files are in, the first message is PsycheAI's own introduction below, with the buttons "Include my messages \(Recommended\)" and "Posts only"\. Its privacy lines are worded to match exactly what the code does, so they're best shown as they are: paraphrases have overstated some and dropped others\. \(It is step 0's, below, given here in full so the first run needs nothing further down this file\.\)\n\n> I'm PsycheAI, your personal AI coach that already knows you\./.test(skillMd) && skillMd.split('## Installing')[0].includes('> ' + require('../lib/mcp.js').GO_AHEAD.split('\n').join('\n> ')) && /before step 1's line, send the `connectMessages` from first-run \(or accounts, for a Fresh Psyche\) as it is, as one message: its say \(with the connect link in it, for them to tap\) and its buttons, "I've connected them" and "Continue without messages", in that same message, under the link \(never words that point to buttons that aren't shown\)\. Muse telling you their Instagram messages are now connected counts as "I've connected them"/.test(skillMd) &&
-      /2\. On their messages tap \(or, when their message already said which, as soon as first-run answers\), reply at once from first-run's result \(or sync-preview's `firstRun`\), with no tool first/.test(skillMd) && /After installing, step 0's welcome comes next, as "First run, in order" says\./.test(skillMd) && /When their install message asks for their Psyche \("…and generate my Psyche"\), the reply once status says connected is this introduction, rather than a note that it's installed or what was checked\./.test(skillMd) && /its `say` is that introduction: if it hasn't been shown yet, show it; if it has, don't show it again\./.test(skillMd) && !/word for word \(a short line|don't summarise, paraphrase/.test(skillMd) && /None of their posts, messages, digest, report or card leaves this workspace unless they choose to Sync/.test(skillMd) && /`--no-messages` when they chose "Posts only", "Instagram posts only" or "Continue without messages"/.test(skillMd) &&
+      /2\. On their messages tap \(or, when their message already said which, as soon as first-run answers\), run `python3 bin\/psyche\.py tap "<the button>"` and reply at once from its result, which has first-run's `question` and `buttons` \(kept from first-run or sync-preview, or read then\)/.test(skillMd) && /After installing, step 0's welcome comes next, as "First run, in order" says\./.test(skillMd) && /When their install message asks for their Psyche \("…and generate my Psyche"\), the reply once status says connected is this introduction, rather than a note that it's installed or what was checked\./.test(skillMd) && /its `say` is that introduction: if it hasn't been shown yet, show it; if it has, don't show it again\./.test(skillMd) && !/word for word \(a short line|don't summarise, paraphrase/.test(skillMd) && /None of their posts, messages, digest, report or card leaves this workspace unless they choose to Sync/.test(skillMd) && /`--no-messages` when they chose "Posts only", "Instagram posts only" or "Continue without messages"/.test(skillMd) &&
       /3\. Once they have chosen both, in that same turn, reply first: step 1's line, then the work\.[^]*Send, as its own message, word for word: "On it\. Reading your Instagram and writing your Psyche takes about 5 minutes\./.test(skillMd) &&
       /A Fresh Psyche goes the same way: on "Fresh Psyche", send its line and its two buttons at once \(start gave them\), then run `python3 bin\/psyche\.py accounts` in that same turn/.test(skillMd) &&
       /STEP_ONE = "On it\. Reading your Instagram and writing your Psyche takes about 5 minutes\. I'll show it here when it's ready\."/.test(fsx.readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
@@ -3940,8 +3940,42 @@ print(json.dumps([ok, bad]))
         fromLink[0].hasPsyche === false && fromLink[0].with === 'Jeff' && fromLink[0].firstRun.question === 'Which account should I read?' && !('nextStep' in fromLink[0]) &&
           /^Setting up could not finish here \(RuntimeError\)\.$/.test(fromLink[1].firstRun.problem) && !/\b(run|python3|tap|send)\b/i.test(fromLink[1].firstRun.problem) &&
           /Every first run, however it began \(with "generate my Psyche", with a friend's link alone, or with nothing said\), runs `python3 bin\/psyche\.py first-run` in that same turn, right after the introduction/.test(require('../lib/skill.js').skillMd()) &&
-          /If neither first-run nor sync-preview ran in this chat, run `python3 bin\/psyche\.py first-run` now and reply from its result/.test(require('../lib/skill.js').skillMd()),
+          /For a Fresh Psyche, the same tap reads the account lists again, as accounts does\./.test(require('../lib/skill.js').skillMd()),
         JSON.stringify(fromLink).slice(0, 400));
+      // Release 219 (README "The first-run taps"): the messages tap and the account tap answered by tap, from first-run's kept result.
+      const frTaps = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys, tempfile, os
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+d = tempfile.mkdtemp()
+m.FIRST_RUN_KEPT = os.path.join(d, 'fr.json'); m.REPORT = os.path.join(d, 'r.json'); m.REPORT_KEPT = os.path.join(d, 'rk.json')
+calls = []
+def fake_first_run():
+    calls.append('first-run')
+    out = {'say': 'intro', 'question': 'Which account should I read?', 'stepOne': m.STEP_ONE,
+           'buttons': [{'label': '@mei.t (Recommended)', 'account_id': 'ACC1', 'messages_account_id': None, 'messages_connected': True, 'name': 'Mei Tan'},
+                       {'label': '@mei.alt', 'account_id': 'ALT1', 'messages_account_id': None, 'messages_connected': False, 'name': 'Mei Tan'}],
+           'connectMessages': {'say': 'Your Instagram messages aren\\'t connected yet.', 'buttons': list(m.CONNECT_BUTTONS)}}
+    m.write_private([m.FIRST_RUN_KEPT], dict({k: out[k] for k in ('question', 'buttons', 'stepOne', 'connectMessages')}, at=int(m.time.time())))
+    return out
+m.first_run = fake_first_run
+inc = m.menu_tap('Include my messages (Recommended)')
+again = m.menu_tap('Include my messages (Recommended)')
+acc = m.menu_tap('@mei.alt')
+posts = m.menu_tap('Posts only')
+acc2 = m.menu_tap('@mei.t (Recommended)')
+other = m.menu_tap('@someone.else')
+print(json.dumps({'inc': inc, 'again': again, 'acc': acc, 'posts': posts, 'acc2': acc2, 'other': other, 'calls': calls}))
+`]).toString());
+      const instr = o => /\b(send|run|start|tap|end the turn|never show|MESSAGES FIRST|helper|do what|word for word|exactly as given|unchanged)\b/i.test(JSON.stringify(Object.fromEntries(Object.entries(o).filter(([k]) => !['stepOne', 'connectMessages', 'via'].includes(k)))));
+      check('the first-run taps (README "The first-run taps"): "Include my messages" and "Posts only" give first-run\'s account question from its kept result (first-run runs once, only when nothing is kept), and an account button gives that account\'s IDs, the messages choice and, when its messages aren\'t connected, the connect reply; all data, with no instruction in any of it',
+        frTaps.inc.via === 'first-run' && frTaps.inc.question === 'Which account should I read?' && frTaps.inc.buttons.length === 2 && frTaps.inc.messagesChoice === 'include' && !('say' in frTaps.inc) &&
+          JSON.stringify(frTaps.calls) === '["first-run"]' && frTaps.again.question === frTaps.inc.question &&
+          frTaps.acc.via === 'account' && frTaps.acc.account.account_id === 'ALT1' && frTaps.acc.account.messages_connected === false && frTaps.acc.messagesChoice === 'include' && Boolean(frTaps.acc.connectMessages) &&
+          frTaps.posts.messagesChoice === 'posts' && !('connectMessages' in frTaps.posts) && frTaps.acc2.messagesChoice === 'posts' && frTaps.acc2.account.account_id === 'ACC1' && !('connectMessages' in frTaps.acc2) &&
+          frTaps.other.unknown === true && ![frTaps.inc, frTaps.acc, frTaps.posts, frTaps.acc2].some(instr) &&
+          /3\. Once they have chosen both, in that same turn, reply first: step 1's line, then the work\. `python3 bin\/psyche\.py tap "<their account button>"` gives that account/.test(require('../lib/skill.js').skillMd()),
+        JSON.stringify(frTaps).slice(0, 600));
       // Release 216 / Together 84 (README "Every reply has its buttons"): an error is never a dead end.
       const wfs = require('node:fs'), wos = require('node:os'), wpath = require('node:path');
       const wayOn = ['skill/bin/psyche.py checkin p9 done', 'together/bin/together.py nonsense', 'together/bin/together.py answer'].map(c => {
