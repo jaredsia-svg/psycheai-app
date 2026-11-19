@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 219
+RELEASE = 220
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5730,6 +5730,18 @@ def friend_card_file(card, name):
         return None
 
 
+def already_synced(owner):
+    """The label of their Sync with this person (as My Syncs shows it), or None. Read from the list only: nothing is opened or marked."""
+    try:
+        got = post_tool('get_syncs', {})
+    except Exception:
+        return None
+    for x in (got or {}).get('syncs') or [] if isinstance(got, dict) else []:
+        if isinstance(x, dict) and x.get('sync') == owner:
+            return x.get('label') or x.get('name') or 'them'
+    return None
+
+
 def sync_preview(link):
     """A friend's Psyche link, looked at before anything is synced (README "A friend's link, named first"):
     whose it is, from their locked card, and the reply to give. Nothing is paired or sent about them."""
@@ -5749,6 +5761,15 @@ def sync_preview(link):
     card = clean_card(theirs)
     name = first_of(card)
     out = {'own': False, 'with': name, 'character': re.sub(r'\s+', ' ', _letters(str(theirs.get('character') or ''))).strip()[:40] or None, 'hasPsyche': has}
+    # Release 220 (README "Already synced"): a link from someone they already have a Sync with makes no second one. The
+    # server keeps one Sync per two people, so a second would write over the first, and the friend's new link would
+    # never count as used.
+    already = has and first.get('owner') and already_synced(first.get('owner'))
+    if already:
+        out['already'] = True
+        out['nextStep'] = _step('You and %s already have a Sync, so there\'s nothing new to make.' % (name if name != 'Your friend' else 'this friend'),
+                                ['Show my Sync with %s' % already, 'Back to the menu'])
+        return out
     # Kept here (never sent), so What's next after their card starts with "Sync with <name>" by itself and
     # sync-with needs no link: nothing to remember across a helper or a long read.
     write_private([SYNC_PENDING], {'link': BASE + '/sync#' + code, 'name': name})
@@ -6153,14 +6174,23 @@ def route_tap(label):
         cmd = 'get_syncs'
     if cmd is None and label.startswith('Install Psyche Together from '):
         return None
+    m_ = re.match(r'^Show my Sync with ([^\n@/:]{1,40})$', label)
+    if cmd is None and m_:
+        listed = call('get_syncs', {})
+        want = m_.group(1).strip()
+        x = next((y for y in (listed or {}).get('syncs') or [] if isinstance(y, dict) and want in (y.get('label'), y.get('name'))), None) if isinstance(listed, dict) else None
+        if not x:
+            return None
+        out = call('get_sync', {'sync': x.get('sync')})
+        return dict(out, via='get_sync') if isinstance(out, dict) else out
     if cmd is None and re.match(r'^Sync with [^\n@/:]{1,30}$', label) and (pending_sync() or {}).get('link'):
         out = call('sync_with', {'link': pending_sync()['link']})
         return dict(out, via='sync-with') if isinstance(out, dict) else out
     if cmd is None:
         return None
     if cmd == 'together-intro':
-        if os.path.isdir(TOGETHER_DIR):
-            return None            # installed: its own SKILL.md takes it from here, as the guide says
+        if os.path.exists(os.path.join(TOGETHER_DIR, 'SKILL.md')):
+            return None            # installed: its own SKILL.md takes it from here, as the guide says (release 220: a folder alone isn't)
         return dict(intro_for_together(), via='together-intro')
     if cmd == 'sync-ready':
         return dict(sync_ready(''), via='sync-ready')

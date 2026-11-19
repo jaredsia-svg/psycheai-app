@@ -2599,7 +2599,7 @@ print(json.dumps({'old': old, 'path': m.LAST_COLLECT, 'report': None if had_repo
       ((W) => W && W.labels.length >= 6 && W.walked.every(w => !w.unknown && !w.error && w.shows && w.btns.length > 0) &&
         ['sync_link', 'together-intro'].every(v => W.walked.some(w => w.via === v)) &&
         W.known.unknownButtons.length === 0 && W.known.unsorted.length === 0 && W.known.overlap.length === 0)(skillState.walk) &&
-        /\*\*Menu taps:\*\* on any button from PsycheAI's results [^\n]*run `python3 bin\/psyche\.py tap "<the button>"` first and show its result[^\n]*With `unknown`, go on as the guide says for that button\./.test(require('../lib/skill.js').skillMd()),
+        /\*\*Menu taps:\*\* on any button from this skill's own results [^\n]*run `python3 bin\/psyche\.py tap "<the button>"` first and show its result[^\n]*With `unknown`, go on as the guide says for that button\./.test(require('../lib/skill.js').skillMd()),
       JSON.stringify(skillState.walk).slice(0, 900));
     check('a friend\'s card first (README "A friend\'s card first"): sync-preview gives the friend\'s card as a picture drawn here, with its line only when there is no Psyche yet, and never their own link\'s; with no Psyche yet it also carries first-run\'s result (release 218)',
       ((E) => E && E.preview && (!E.preview.card || /^out\/syncs\/Psyche Card from [^/]+\.png$/.test(E.preview.card)) && !('card' in (E.ownPreview || {})) &&
@@ -3913,7 +3913,7 @@ print(json.dumps(out))
           taps[6].say === 'Ask me anything about yourself, or start from one of these:' && JSON.stringify(taps[6].buttons) === '["What do I keep trying to prove?","Back to the menu"]' &&
           taps[7].say === 'Add up to three WhatsApp chats.' && JSON.stringify(taps[7].buttons) === '["I\'ve shared my chats","Not now"]' && taps[8].say === taps[7].say &&
           /^This deletes your Psyche, report, digest, Syncs and saved card, here and on PsycheAI\. Delete everything\?$/.test(taps[9].say) && JSON.stringify(taps[9].buttons) === '["Yes, delete everything","Cancel"]' &&
-          /\*\*Menu taps:\*\* on any button from PsycheAI's results \(the menu, More, Ask, Sync, My Syncs, Psyche Together, adding a source, their data, Back to the menu and the rest\), run \`python3 bin\/psyche\.py tap "<the button>"\` first/.test(require('../lib/skill.js').skillMd()),
+          /\*\*Menu taps:\*\* on any button from this skill's own results \(the menu, More, Ask, Sync, My Syncs, Psyche Together with my partner, adding a source, their data, Back to the menu and the rest; once Psyche Together is installed, its own buttons go as its own SKILL\.md says\), run \`python3 bin\/psyche\.py tap "<the button>"\` first/.test(require('../lib/skill.js').skillMd()),
         JSON.stringify(taps).slice(0, 800));
       // Release 218 (README "First run from a link"): a friend's link for someone new carries first-run's result.
       const fromLink = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
@@ -3942,6 +3942,46 @@ print(json.dumps([ok, bad]))
           /Every first run, however it began \(with "generate my Psyche", with a friend's link alone, or with nothing said\), runs `python3 bin\/psyche\.py first-run` in that same turn, right after the introduction/.test(require('../lib/skill.js').skillMd()) &&
           /For a Fresh Psyche, the same tap reads the account lists again, as accounts does\./.test(require('../lib/skill.js').skillMd()),
         JSON.stringify(fromLink).slice(0, 400));
+      // Release 220 (README "Already synced"): a link from someone already synced with makes no second Sync; an empty Psyche Together folder isn't an install.
+      const r220 = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys, tempfile, os
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.read_first = lambda paths: {'report': {}}
+m.e2e_codes = lambda: []
+wrote = []
+m.write_private = lambda paths, data: wrote.append(paths[0])
+m.e2e_open = lambda c, k: {'name': 'Jeff Tan', 'character': 'Remy'}
+m.clean_card = lambda c: c
+m.first_of = lambda c: 'Jeff'
+m.friend_card_file = lambda c, n: None
+def post(n, a):
+    if n == 'sync_with':
+        return {'e2e': True, 'owner': 'u_jeff', 'card': 'locked'}
+    if n == 'get_syncs':
+        return {'syncs': [{'sync': 'u_jeff', 'label': 'Jeff', 'name': 'Jeff'}]}
+    return {}
+m.post_tool = post
+again = m.sync_preview('https://app.psycheai.io/sync#Z3pYHbfAk8Ib0A4JHL2_6A')
+post2 = lambda n, a: {'e2e': True, 'owner': 'u_new', 'card': 'locked'} if n == 'sync_with' else {'syncs': [{'sync': 'u_jeff', 'label': 'Jeff'}]}
+m.post_tool = post2
+fresh = m.sync_preview('https://app.psycheai.io/sync#Z3pYHbfAk8Ib0A4JHL2_6A')
+d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, 'bin'))
+m.TOGETHER_DIR = d
+m.intro_for_together = lambda: {'say': 'intro', 'buttons': ['Install', 'Not now']}
+empty = m.route_tap('Psyche Together with my partner')
+open(os.path.join(d, 'SKILL.md'), 'w').write('x')
+installed = m.route_tap('Psyche Together with my partner')
+m.call = lambda t, a: {'syncs': [{'sync': 'u_jeff', 'label': 'Jeff', 'name': 'Jeff'}]} if t == 'get_syncs' else {'opened': a.get('sync')}
+shown = m.route_tap('Show my Sync with Jeff')
+print(json.dumps({'again': again, 'fresh': fresh, 'wrote': len(wrote), 'empty': empty, 'installed': installed, 'shown': shown}))
+`]).toString());
+      check('already synced, and Psyche Together installed only with its SKILL.md (README "Already synced", release 220): a link from someone already synced with says so, with "Show my Sync with <them>" and no second Sync; a new friend\'s link goes on as before; an empty Psyche Together folder still gets the intro; "Show my Sync with <name>" opens that Sync; the Menu taps line covers this skill\'s own buttons only',
+        r220.again.already === true && /^You and Jeff already have a Sync/.test(r220.again.nextStep.say) && JSON.stringify(r220.again.nextStep.buttons) === '["Show my Sync with Jeff","Back to the menu"]' &&
+          !r220.fresh.already && JSON.stringify(r220.fresh.nextStep.buttons).includes('Jeff') && r220.wrote === 1 &&
+          r220.empty && r220.empty.via === 'together-intro' && r220.installed === null && r220.shown.via === 'get_sync' && r220.shown.opened === 'u_jeff' &&
+          /once Psyche Together is installed, its own buttons go as its own SKILL\.md says/.test(require('../lib/skill.js').skillMd()),
+        JSON.stringify(r220).slice(0, 500));
       // Release 219 (README "The first-run taps"): the messages tap and the account tap answered by tap, from first-run's kept result.
       const frTaps = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
 import importlib.util, json, sys, tempfile, os
