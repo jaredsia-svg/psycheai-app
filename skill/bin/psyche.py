@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 220
+RELEASE = 221
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -1436,9 +1436,10 @@ def sync_book_html(entries, own=None, invite=None):
     # Their own Sync link, to copy for the next friend: the link "Sync with a friend" gives in the chat, sent by them.
     more = ''
     if invite and invite[1]:
-        more = ('<section class="invite"><h2>Sync with %s</h2><p class="soft">Copy your Sync link and send it to a friend. They paste it into their Muse app.</p>'
+        line = INVITE_LINE % invite[1]
+        more = ('<section class="invite"><h2>Sync with %s</h2><p class="soft">Copy this and send it to a friend. They paste it into their Muse app.</p>'
                 '<div class="inv"><code>%s</code><button type="button" data-copy="%s">Copy</button></div><p class="soft">%s</p></section>'
-                % ('another friend' if n else 'a friend', _e(invite[1]), _e(invite[1]), _e(SYNC_SHARES)))
+                % ('another friend' if n else 'a friend', _e(line), _e(line), _e(SYNC_SHARES)))
     mecard = '<img id="mecard" alt="" hidden src="%s">' % _img_src(own) if own else ''
     viewer = '<div class="viewer" id="viewer" role="dialog" aria-label="Psyche Card" hidden><img alt=""><span>Tap to close</span></div>'
     return ('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
@@ -5598,6 +5599,9 @@ def invite_text(link, character, name=''):
     return 'Install %s and generate my Psyche, then sync with %s: %s' % (short, nm or 'my friend', full)
 
 
+# The line a friend pastes (release 221): one address, which is also where PsycheAI installs from for them. On the
+# My Syncs page and the /sync page only; in the chat, SKILL.md writes it around the result's invite url.
+INVITE_LINE = 'Install PsycheAI from this link and sync with my friend: %s'
 LINK_SAY = 'Send it to a friend, then tap below once you have.'
 LINK_LEAD = ('Here\'s your Sync link. Send it to a friend: they paste it into their Muse app to make their own Psyche Card '
              'and see how you two click.')
@@ -5628,7 +5632,10 @@ def e2e_link(post_tool):
     # thing in it (release 212): words telling someone to install software, with links, inside a tool result. The
     # friend pastes the link into their Muse, whose fetch of it gets the install page; a tap on it opens a page that
     # says what to paste. What a Sync shares is said in the step after, apart from the link.
-    return {'message': LINK_LEAD + '\n\n```\n' + link + '\n```',
+    # Release 221 (README "The Sync invite, one line"): the link as data, as Psyche Together's invite is. The line the friend
+    # pastes ("Install PsycheAI from this link and sync with my friend: <url>") is written by SKILL.md around it, never in
+    # this result: install words in a result were stopped by Muse's safety check (releases 212 and 213).
+    return {'invite': {'url': link},
             'nextStep': _step(LINK_SAY + ' ' + SYNC_SHARES, [SHARED, 'Back to the menu'])}
 
 
