@@ -3942,6 +3942,31 @@ print(json.dumps([ok, bad]))
           /Every first run, however it began \(with "generate my Psyche", with a friend's link alone, or with nothing said\), runs `python3 bin\/psyche\.py first-run` in that same turn, right after the introduction/.test(require('../lib/skill.js').skillMd()) &&
           /For a Fresh Psyche, the same tap reads the account lists again, as accounts does\./.test(require('../lib/skill.js').skillMd()),
         JSON.stringify(fromLink).slice(0, 400));
+      // Psyche Together 85 (README "The partner's chat, noticed"): "Add our WhatsApp chat" runs a command, so a chat the partner already added is noticed.
+      const wa85 = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('t', 'together/bin/together.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+st = {'partner': 'Jared'}
+m.state = lambda: st
+m.couple = lambda: ('k', {}, {'a': {}, 'b': {'chat': {'n': 1}}}, None)
+m.partner_added = lambda s, p: {'waiting': True, 'writing': True, 'say': 'Jared already added your chat together. Jared\\'s Muse is writing your read now.', 'buttons': ['Is our read ready?', 'Back to the menu']}
+added = m.whatsapp_step()
+m.partner_added = lambda s, p: None
+none = m.whatsapp_step()
+st['chatDone'] = ['instagram']
+second = m.whatsapp_step()
+m.couple = lambda: ('k', {}, {}, {'read': 1})
+m.show = lambda box: {'file': 'read.html', 'say': 'Your Psyche Together is ready.'}
+ready = m.whatsapp_step()
+print(json.dumps({'added': added, 'none': none, 'second': second, 'ready': ready}))
+`]).toString());
+      check('Psyche Together 85: "Add our WhatsApp chat" runs whatsapp, which notices a chat the partner already added (and the read being written or ready), else gives how to export with a way on; while the other Muse writes, it says how long (README "The partner\'s chat, noticed")',
+        wa85.added.writing === true && /^Jared already added your chat together/.test(wa85.added.say) && /^In WhatsApp, open your chat with your partner, tap ⋮ or their name, then More, Export chat, Without media, and share the \.zip here\.$/.test(wa85.none.say) &&
+          JSON.stringify(wa85.none.buttons) === '["My partner will add it","Back to the menu"]' && JSON.stringify(wa85.second.buttons) === '["Skip","Back to the menu"]' && wa85.ready.file === 'read.html' &&
+          /"Add our WhatsApp chat":\*\* `python3 bin\/together\.py whatsapp`, then its say with its buttons/.test(require('node:fs').readFileSync('together/SKILL.md', 'utf8')) &&
+          /It takes about 10 minutes: tap Is our read ready\? then\./.test(require('node:fs').readFileSync('together/bin/together.py', 'utf8')),
+        JSON.stringify(wa85).slice(0, 500));
       // Release 220 (README "Already synced"): a link from someone already synced with makes no second Sync; an empty Psyche Together folder isn't an install.
       const r220 = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
 import importlib.util, json, sys, tempfile, os
@@ -4063,7 +4088,7 @@ print(json.dumps({'tool': out, 'task': task}))
         together_get: { result: { structuredContent: { ok: false }, isError: true, content: [{ type: 'text', text: 'nope' }] } } })]).toString());
       check('One writer, heard (Psyche Together 79): the device keeps the server\'s two refusals of a read as they come back over /mcp (marked as errors there): another Muse is writing it, so this one waits and writes nothing; or it is written; any other refusal is still an error',
         heard.tool.together_claim.writer === 'b' && heard.tool.together_put.written === true && heard.tool.together_get.error === 'nope' &&
-          heard.task.waiting === true && heard.task.writing === true && !('write' in heard.task) && /Jeff's Muse is writing your read now/.test(heard.task.say || '') &&
+          heard.task.waiting === true && heard.task.writing === true && !('write' in heard.task) && /Jeff's Muse is writing your read now\. It takes about 10 minutes/.test(heard.task.say || '') &&
           /const isError = Boolean\(out && \(out\.error \|\| out\.ok === false\)\)/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8')),
         JSON.stringify(heard).slice(0, 600));
       check('News on every command: get_news says a Psyche Together read waits only to the partner who didn\'t write it, as a yes or no, until they open it; it is hidden from Muse\'s tool list',

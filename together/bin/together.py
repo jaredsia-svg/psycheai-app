@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 84
+RELEASE = 85
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -1918,6 +1918,22 @@ def reset_chat():
 WHATSAPP_HOW = 'in WhatsApp, open your chat with your partner, tap ⋮ or their name, then More, Export chat, Without media, and share the .zip here'
 
 
+def whatsapp_step():
+    """python3 bin/together.py whatsapp: "Add our WhatsApp chat" (release 85, README "The partner's chat, noticed"). When their
+    partner has already added your chat together, that's said, and what comes next with it: the read being written by
+    their Muse, or the read itself. Otherwise how to export the chat, with a way on."""
+    s = state()
+    k, got, profiles, box = couple()
+    if not got.get('error'):
+        if box:
+            return show(box)
+        added = partner_added(s, profiles)
+        if added:
+            return added
+    done = bool(s.get('chatDone'))
+    return {'say': WHATSAPP_HOW[0].upper() + WHATSAPP_HOW[1:] + '.', 'buttons': ['Skip' if done else PARTNER_ADDS, 'Back to the menu'], 'asButtons': True}
+
+
 def add_chat_file(paths):
     """Their WhatsApp chat together, any time before the read is written: added to the conversation, and the
     locked card sent again with it."""
@@ -2524,8 +2540,9 @@ def write_task(profiles=None, again=False):
     # it first; the other waits for it (or takes over if that claim is 20 minutes old with no read).
     claimed = tool('together_claim', {'again': True} if again else {})
     if claimed.get('writer'):
+        # Release 85 (README "The partner's chat, noticed"): how long, so they know when to look.
         return {'waiting': True, 'writing': True, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
-                'say': '%s\'s Muse is writing your read now. Tap Is our read ready? in a few minutes.' % (state().get('partner') or 'Your partner')}
+                'say': '%s\'s Muse is writing your read now. It takes about 10 minutes: tap Is our read ready? then.' % (state().get('partner') or 'Your partner')}
     if claimed.get('written'):
         return {'waiting': True, 'buttons': ['Is our read ready?', 'Back to the menu'], 'asButtons': True,
                 'say': 'Your read has just been saved. Tap Is our read ready? to see it.'}
@@ -5072,6 +5089,8 @@ def main(argv):
         out = send('--no-chat' in rest)
     elif cmd == 'chat-file':
         out = add_chat_file(rest)
+    elif cmd == 'whatsapp':
+        out = whatsapp_step()
     elif cmd == 'pick-thread':
         out = pick_thread(' '.join(x for x in rest if x != '--sure'), sure='--sure' in rest)
     elif cmd == 'reset-chat':
