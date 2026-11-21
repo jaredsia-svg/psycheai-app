@@ -3977,6 +3977,9 @@ print(json.dumps({'added': added, 'none': none, 'second': second, 'ready': ready
           /"Add our WhatsApp chat":\*\* `python3 bin\/together\.py whatsapp`, then its say with its buttons/.test(require('node:fs').readFileSync('together/SKILL.md', 'utf8')) &&
           /It takes about 10 minutes: tap Is our read ready\? then\./.test(require('node:fs').readFileSync('together/bin/together.py', 'utf8')),
         JSON.stringify(wa85).slice(0, 500));
+      check('Psyche Together 87: How it\'s going reads Not really, Mostly, Yes from left to right (the row laid out right to left), its answers and scoring unchanged (README "Yes on the right")',
+        /\.seg\{display:flex;flex-direction:row-reverse;/.test(require('node:fs').readFileSync('together/bin/together.py', 'utf8')) &&
+          /YMN = \[\('Yes', 2\), \('Mostly', 1\), \('Not really', 0\)\]/.test(require('node:fs').readFileSync('together/bin/together.py', 'utf8')));
       // Release 220 (README "Already synced"): a link from someone already synced with makes no second Sync; an empty Psyche Together folder isn't an install.
       const r220 = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
 import importlib.util, json, sys, tempfile, os

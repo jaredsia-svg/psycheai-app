@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 86
+RELEASE = 87
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -817,9 +817,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,
 .sub{margin:-4px 0 10px;font-size:13px;color:var(--soft)}
 .grid{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center}
 .grid .st{font-size:14.5px;font-weight:650;line-height:1.25}.grid .st small{display:block;font-weight:400;font-size:11.5px;color:var(--soft)}
-.seg{display:flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
-.seg label{position:relative;font-size:12px;padding:8px 7px;text-align:center;white-space:nowrap;border-left:1.5px solid var(--line);font-weight:600;color:var(--soft);cursor:pointer;-webkit-tap-highlight-color:transparent}
-.seg label:first-child{border-left:0}.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg{display:flex;flex-direction:row-reverse;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.seg label{position:relative;font-size:12px;padding:8px 7px;text-align:center;white-space:nowrap;border-right:1.5px solid var(--line);font-weight:600;color:var(--soft);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.seg label:first-child{border-right:0}.seg input{position:absolute;opacity:0;pointer-events:none}
 .seg label.on.s0{background:#e6f4ec;color:#1f6b45}.seg label.on.s1{background:var(--wash);color:var(--plum)}.seg label.on.s2{background:#fcebf2;color:var(--rose)}
 .pills{display:flex;flex-wrap:wrap;gap:6px}.pills label{position:relative;font-size:13.5px;padding:8px 12px;border:1.5px solid var(--line);border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .pills input{position:absolute;opacity:0;pointer-events:none}.pills label.on{border-color:var(--plum);background:var(--wash);font-weight:700}
