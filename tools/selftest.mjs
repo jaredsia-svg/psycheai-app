@@ -3977,6 +3977,26 @@ print(json.dumps({'added': added, 'none': none, 'second': second, 'ready': ready
           /"Add our WhatsApp chat":\*\* `python3 bin\/together\.py whatsapp`, then its say with its buttons/.test(require('node:fs').readFileSync('together/SKILL.md', 'utf8')) &&
           /It takes about 10 minutes: tap Is our read ready\? then\./.test(require('node:fs').readFileSync('together/bin/together.py', 'utf8')),
         JSON.stringify(wa85).slice(0, 500));
+      const t88 = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('t', 'together/bin/together.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+q = {'openers': {}, 'followUps': {'appreciation': {'q': 'When thanks feels thin, what do you do?', 'options': ['I say so', 'I wait', 'I pull back']},
+                                  'disagreements': {'q': 'After a disagreement, what helps you feel close again?', 'options': ['We talk', 'We joke about it', 'We wait']}}}
+st = {'stage': 'Dating', 'role': 'a', 'questions': q, 'answers': {}}
+its = m.items(st)
+guess = next(i for i in its if i['id'] == 'mirror:appreciated:guess')
+own = next(i for i in its if i['id'] == 'mirror:appreciated:self')
+deep = [i['id'] for i in its if i['id'].startswith('deep:')]
+probs = m.check_questions({'openers': {}, 'followUps': {k: q['followUps']['appreciation'] for k in ('appreciation', 'connection', 'needs', 'security')}}, 'Jeff', ['appreciation', 'connection', 'needs', 'disagreements', 'security'])
+print(json.dumps({'guess': guess['options'], 'own': own['options'], 'deep': deep, 'probs': [p for p in probs if p.startswith('followUps')], 'kept': m.GUESS_KEPT}))
+`]).toString());
+      check('Psyche Together 88 (README "Your guess, in your words"): the guess reads "Something done for my partner" (kept as the shared option, so it compares with the partner\'s own); no Going deeper question for disagreements, which its own screen already asks; follow-up options plain and literal',
+        JSON.stringify(t88.guess) === '["Being told in words","Time together","Something done for my partner","A hug or touch","Something else"]' && t88.own.includes('Something done for me') &&
+          !t88.deep.includes('deep:disagreements') && t88.deep.includes('deep:appreciation') && t88.probs.length === 0 && t88.kept['Something done for my partner'] === 'Something done for me' &&
+          /a\['label'\] = GUESS_KEPT\[a\['label'\]\]/.test(require('node:fs').readFileSync('together/bin/together.py', 'utf8')) &&
+          /never an idiom or a vague phrase \("We joke about it", not "You make light of it"\)\. Disagreements has no follow-up/.test(JSON.parse(require('node:fs').readFileSync('together/guide.json', 'utf8')).questionsSpec),
+        JSON.stringify(t88).slice(0, 500));
       check('Psyche Together 87: How it\'s going reads Not really, Mostly, Yes from left to right (the row laid out right to left), its answers and scoring unchanged (README "Yes on the right")',
         /\.seg\{display:flex;flex-direction:row-reverse;/.test(require('node:fs').readFileSync('together/bin/together.py', 'utf8')) &&
           /YMN = \[\('Yes', 2\), \('Mostly', 1\), \('Not really', 0\)\]/.test(require('node:fs').readFileSync('together/bin/together.py', 'utf8')));

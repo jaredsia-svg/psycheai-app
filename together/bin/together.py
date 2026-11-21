@@ -48,7 +48,7 @@ from datetime import datetime
 
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-together.mjs and signed with the rest.
-RELEASE = 87
+RELEASE = 88
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'work')
 OUT = os.path.join(HERE, 'out')
@@ -126,6 +126,10 @@ MIRRORS = [('appreciated', 'appreciation', 'What makes you feel most appreciated
 # by side, since a talk-now and a time-first answer is itself the finding. "When you're stressed" went: the chat and each
 # Psyche's attachment show it. Its answers in reads written before stay readable.
 ASKED_MIRRORS = [('appreciated', True), ('repair', False)]
+# Release 88 (README "Your guess, in your words"): a guess about the partner reads from the guesser's side ("Something done
+# for my partner", where their own answer reads "Something done for me"); it is kept as the shared option, so the two compare.
+GUESS_SHOWN = {'Something done for me': 'Something done for my partner'}
+GUESS_KEPT = {v: k for k, v in GUESS_SHOWN.items()}
 MIRROR_TEXT = {'appreciated': ('What makes you feel most appreciated by {p}?', 'And what do you think makes {p} feel most appreciated by you?'),
                'repair': ('After a disagreement, what do you most need from {p}?', None)}
 # README "Psyche Together, release 51": an optional hope in your own words (Gottman's dreams within conflict): read by
@@ -422,9 +426,14 @@ def _core_item(key, text, opts, q, group, opener=True):
     return out
 
 
+NO_FOLLOW = ('desire', 'disagreements')
+
+
 def _deep_item(key, q):
     f = (q.get('followUps') or {}).get(key)
-    if key == 'desire' or not (isinstance(f, dict) and f.get('q') and f.get('options')):
+    # Release 88: none for disagreements either: its own screen asks what they need after one, and a second, written
+    # question on the same thing read as the same question twice.
+    if key in NO_FOLLOW or not (isinstance(f, dict) and f.get('q') and f.get('options')):
         return []
     return [{'id': 'deep:' + key, 'kind': 'deeper', 'pillar': key, 'opener': '', 'text': f['q'], 'follows': 'core:' + key,
              'options': [o for o in f['options'] if o != OTHER] + [OTHER], 'own': True}]
@@ -453,7 +462,7 @@ def items(s):
                     'text': self_q, 'options': list(mo) + [OTHER], 'own': True})
         if guess:
             out.append({'id': 'mirror:%s:guess' % mk, 'kind': 'mirror', 'pillar': 'appreciation', 'group': mk, 'opener': '',
-                        'text': guess_q, 'options': list(mo) + [OTHER], 'own': True})
+                        'text': guess_q, 'options': [GUESS_SHOWN.get(o, o) for o in mo] + [OTHER], 'own': True})
     if stage == SEPARATED:
         out += security_items(stage, q)
     out.append({'id': TOPIC[0], 'kind': 'topic', 'pillar': 'disagreements', 'group': 'topic', 'opener': '', 'text': TOPIC[1], 'options': TOPIC[2] + [OTHER], 'own': True})
@@ -641,7 +650,9 @@ def shared_profile(s, answered=True):
     for mk, _, _, _, mo in MIRRORS:
         # Release 82: "Something else" in their own words (cleaned, as other typed answers are), and no guess where none is asked.
         def said(qid, mo=mo):
-            a = answers.get(qid) or {}
+            a = dict(answers.get(qid) or {})
+            if qid.endswith(':guess') and a.get('label') in GUESS_KEPT:
+                a['label'] = GUESS_KEPT[a['label']]
             if a.get('label') in mo:
                 return a['label']
             if a.get('label') == OTHER and a.get('text'):
@@ -2430,6 +2441,8 @@ def check_questions(q, partner, pillars):
         if p in opened and (not isinstance(o, str) or not 20 <= len(o.strip()) <= 240):
             problems.append('openers.%s: one or two sentences, 20 to 240 characters' % p)
         f = fu.get(p)
+        if p in NO_FOLLOW:
+            continue
         if not (isinstance(f, dict) and isinstance(f.get('q'), str) and 10 <= len(f['q']) <= 180 and isinstance(f.get('options'), list)
                 and 3 <= len(f['options']) <= 5 and all(isinstance(x, str) and 1 <= len(x) <= 40 for x in f['options'])
                 and len(set(f['options'])) == len(f['options'])):
