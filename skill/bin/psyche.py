@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 223
+RELEASE = 224
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5984,7 +5984,28 @@ def with_news(argv, text):
     if not got:
         return text
     out.update(got)
+    if 'Show our Psyche Together' in (got.get('newsButtons') or []):
+        menu_read_first(out)
     return json.dumps(out, ensure_ascii=False, indent=1) + '\n'
+
+
+def menu_read_first(out):
+    """Release 224 (README "The read first"): when the news is that their Psyche Together read is ready, a menu shows only
+    "Show our Psyche Together" (the news's own button) and "More", with the rest under More, kept so tap "More" gives it."""
+    opts = out.get('options') if isinstance(out.get('options'), list) else None
+    more = next((o for o in opts or [] if isinstance(o, dict) and o.get('id') == 'more'), None)
+    if not more:
+        return out
+    rest = [o.get('label') for o in opts if isinstance(o, dict) and o.get('id') != 'more' and o.get('label')]
+    buttons = rest + [b for b in more.get('buttons') or [] if b not in rest]
+    out['options'] = [dict(more, buttons=buttons)]
+    out['readFirst'] = True
+    try:
+        write_private([MENU], dict(read_first([MENU]) or {}, more=buttons, at=int(time.time())))
+    except Exception:
+        pass
+    return out
+
 
 
 # Show our results (README "Show our results", release 196): one tap, after sharing a link, to see whether the friend has

@@ -4074,6 +4074,27 @@ print(json.dumps({'inc': inc, 'again': again, 'acc': acc, 'posts': posts, 'acc2'
           frTaps.other.unknown === true && ![frTaps.inc, frTaps.acc, frTaps.posts, frTaps.acc2].some(instr) &&
           /3\. Once they have chosen both, in that same turn, reply first: step 1's line, then the work\. `python3 bin\/psyche\.py tap "<their account button>"` gives that account/.test(require('../lib/skill.js').skillMd()),
         JSON.stringify(frTaps).slice(0, 600));
+      // Release 224 (README "The read first"): with the Together read ready, the menu is the news's button and More.
+      const rf = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', `
+import importlib.util, json, sys, tempfile, os
+sys.argv = ['x']
+spec = importlib.util.spec_from_file_location('p', 'skill/bin/psyche.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.MENU = os.path.join(tempfile.mkdtemp(), 'menu.json')
+m.news_for = lambda force=False: {'news': ['Your Psyche Together read is ready.'], 'newsButtons': ['Show our Psyche Together']}
+menu = {'say': 'Welcome back.', 'options': [{'id': 'ask', 'label': 'Ask PsycheAI questions about myself'}, {'id': 'sync', 'label': 'Sync with a friend'},
+        {'id': 'together', 'label': 'Psyche Together with my partner'}, {'id': 'source', 'label': 'Add WhatsApp or Facebook and generate a Fresh Psyche'},
+        {'id': 'more', 'label': 'More', 'buttons': ['My data and privacy']}]}
+out = json.loads(m.with_news(['call', 'start'], json.dumps(menu)))
+more = m.menu_tap('More')
+m.news_for = lambda force=False: {'news': ['Jeff synced with you.'], 'newsButtons': []}
+plain = json.loads(m.with_news(['call', 'start'], json.dumps(menu)))
+print(json.dumps({'out': out, 'more': more, 'plain': len(plain['options'])}))
+`]).toString());
+      check('the read first (README "The read first", release 224): with the news that the Psyche Together read is ready, a menu shows only "Show our Psyche Together" and More, with the rest under More (which a tap gives); other news leaves the menu as it is',
+        rf.out.readFirst === true && JSON.stringify(rf.out.newsButtons) === '["Show our Psyche Together"]' && JSON.stringify(rf.out.options.map(o => o.label)) === '["More"]' &&
+          JSON.stringify(rf.more.buttons) === '["Ask PsycheAI questions about myself","Sync with a friend","Psyche Together with my partner","Add WhatsApp or Facebook and generate a Fresh Psyche","My data and privacy","Back to the menu"]' &&
+          rf.plain === 5 && /with `readFirst` \(their Psyche Together read is ready\), the menu's only other button is More, which holds the rest\./.test(require('../lib/skill.js').skillMd()),
+        JSON.stringify(rf).slice(0, 500));
       // Release 216 / Together 84 (README "Every reply has its buttons"): an error is never a dead end.
       const wfs = require('node:fs'), wos = require('node:os'), wpath = require('node:path');
       const wayOn = ['skill/bin/psyche.py checkin p9 done', 'together/bin/together.py nonsense', 'together/bin/together.py answer'].map(c => {
