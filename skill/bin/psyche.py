@@ -92,7 +92,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 222
+RELEASE = 223
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5274,13 +5274,27 @@ def local_publish(args):
         nxt['continueTogether'] = True     # offered first; the Together skill is theirs to install (lib/instructions.js TOGETHER)
     friend = pending_sync()
     if friend:     # a friend's link came with the install (README "The friend's link, kept"): their Sync first, only on a tap
-        # Release 195: the one way on, first and alone of its kind ("Sync with a friend" beside it made a new link of their own instead).
-        nxt['buttons'] = [sync_label(friend.get('name'))] + [b for b in nxt['buttons'] if b != 'Sync with a friend']
+        sync_first(nxt, friend)
         nm_ = friend.get('name') if friend.get('name') and friend.get('name') != 'Your friend' else ''
         nxt['say'] = (('Next, your Sync with %s: their link is waiting.' % nm_) if nm_ else 'Next, your Sync: your friend\'s link is waiting.') + '\n\n' + SYNC_SHARES
         nxt['syncWith'] = friend.get('name')
     ideas = ask_ideas(card.get('patterns'))      # release 198: askButtons ends with "Back to the menu"
     return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ideas, 'askButtons': ideas + ['Back to the menu']}
+
+
+def sync_first(nxt, friend):
+    """Release 223 (README "The Sync first"): with a friend's link waiting, What's next is only "Sync with <name>" and "More",
+    so the Sync is the next step; the rest goes under More, kept here so tap "More" gives it. "Continue Psyche Together"
+    stays beside it when a partner's invite waits too."""
+    rest = [b for b in nxt['buttons'] if b not in ('Sync with a friend', 'More')]
+    nxt['buttons'] = [sync_label(friend.get('name'))] + [b for b in rest if b == 'Continue Psyche Together'] + ['More']
+    more_ = [b for b in rest if b != 'Continue Psyche Together'] + [b for b in (nxt.get('more') or {}).get('buttons') or [] if b not in rest]
+    nxt['more'] = dict(nxt.get('more') or {}, buttons=more_)
+    try:
+        write_private([MENU], dict(read_first([MENU]) or {}, more=more_, at=int(time.time())))
+    except Exception:
+        pass
+    return nxt
 
 
 def with_pinned_guide(tool, args, out):
