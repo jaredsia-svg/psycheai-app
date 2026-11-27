@@ -7587,7 +7587,7 @@ def quiz_publish(raw):
     while len(code) != 22:
         code = secrets.token_urlsafe(16)
     quiz = {'v': 1, 'name': draft.get('name') or '', 'character': draft.get('character') or '', 'card': _quiz_card_data(),
-            'questions': [{'q': x['q'], 'o': x['o'], 'a': x['a']} for x in chosen]}
+            'questions': [dict({'q': x['q'], 'o': x['o'], 'a': x['a']}, **({'k': x['kind']} if x.get('kind') in QUIZ_KINDS else {})) for x in chosen]}
     out = post_tool('quiz_put', {'e2e': {'id': e2e_key('quiz-id', code).hex(), 'box': e2e_seal(quiz, e2e_key('quiz', code)), 'n': len(chosen)}})
     if not isinstance(out, dict) or out.get('error'):
         return out if isinstance(out, dict) else {'error': 'PsycheAI could not save the quiz. Try again.'}
