@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 229
+RELEASE = 230
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7258,14 +7258,16 @@ MAKE_QUIZ = 'Make a quiz for my friends'
 NEW_QUIZ = 'Make a new quiz'
 QUIZ_RESULTS = 'Show my quiz results'
 QUIZ_MAKE_BTN = 'Make my quiz'
-QUIZ_MIN, QUIZ_MAX = 7, 11       # 11 written (release 229); down to 7 once they've said some aren't true about them
+QUIZ_MIN, QUIZ_MAX = 10, 10      # release 230: ten, each answer clear from the data, made with no question to them
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
 # happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
-QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'never', 'deep', 'finale')
+QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'never', 'finale')
 # Release 229 (README "An arc, and a fact for every right answer"): the order is set here, not by Muse: an easy warm-up, then
 # real knowledge, then the deep end, an honest question and the character. One year and one numbers question now, with
 # "Which came first?" and "Which would they never do?" in their place.
-QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'numbers', 'deep', 'niche', 'fake', 'never', 'finale')
+QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'numbers', 'niche', 'fake', 'never', 'finale')
+# Release 230 (README "No confirming"): every answer must be clear from the data, so nothing is put to them and the
+# quiz is made at once; the scenario went, since only they could say how they'd act.
 # Release 229 (README "Eleven, and nothing twice"): one rather, one year, one deep scenario (always put to them to confirm),
 # no which came first and no blind spot (too personal): eleven questions.
 QUIZ_TWO = ('rather', 'first')         # the kinds with exactly two options
@@ -7520,14 +7522,7 @@ def _quiz_item(x, n):
         say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
-    # Release 226 (README "Only the unsure asked"): sure is Muse's own word on whether the data makes the answer clear. The
-    # numbers and the finale stand on what was counted or the card, so they're always sure. A year question is sure only when
-    # a post says the moment outright (release 227: one assumed a dog was adopted that year, and it wasn't).
-    sure = x.get('sure')
-    if kind not in ('numbers', 'finale', 'deep') and not isinstance(sure, bool):
-        probs.append('%s: sure is true when the report or their posts make the answer clear, false when it is a guess' % label)
-    # The deep scenario is always put to them (release 229): how they'd act in a made-up situation is theirs to say.
-    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'sure': True if kind in ('numbers', 'finale') else False if kind == 'deep' else sure is True}, probs
+    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact}, probs
 
 
 def quiz_arc(items):
@@ -7547,8 +7542,8 @@ def quiz_arc(items):
 
 
 def quiz_save(raw):
-    """python3 bin/psyche.py quiz-save @work/quiz.json: the ten questions Muse wrote, checked, kept here, and shown as one
-    widget for them to pick their own answer to each."""
+    """python3 bin/psyche.py quiz-save @work/quiz.json: the ten questions Muse wrote, checked, and made into their quiz at
+    once (release 230: every answer stands on the data, so nothing is put to them)."""
     try:
         got = json.loads(open(raw[1:], encoding='utf-8').read() if str(raw).startswith('@') else raw)
     except (OSError, ValueError) as err:
@@ -7570,10 +7565,10 @@ def quiz_save(raw):
         facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)
         posted = bool(facts.get('postsByYear'))
         need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 1, 'niche': 2, 'fake': 1,
-                'caption': 1 if posted else 0, 'favourite': 1, 'never': 1, 'deep': 1, 'finale': 1}
-        over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('deep', 1), ('numbers', 1), ('niche', 2)) if kinds.count(w_) > most]
+                'caption': 1 if posted else 0, 'favourite': 1, 'never': 1, 'finale': 1}
+        over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('numbers', 1), ('niche', 2)) if kinds.count(w_) > most]
         if over:
-            probs.append('questions has at most one rather, one year, one deep and one numbers question, and two deep cuts; this has %s' % ', '.join(over))
+            probs.append('questions has at most one rather, one year and one numbers question, and two deep cuts; this has %s' % ', '.join(over))
         short = ['%d %s' % (k_, w_) for w_, k_ in need.items() if k_ and kinds.count(w_) < k_]
         if short:
             probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
@@ -7615,75 +7610,8 @@ def quiz_save(raw):
              'character': (((kept.get('report') or {}).get('essence') or {}).get('character') or '')[:40], 'at': int(time.time()),
              'for': (pend or {}).get('name')}
     write_private([QUIZ_DRAFT], draft)
-    # Only the answers Muse isn't sure of are asked (README "Only the unsure asked"); with none, the quiz is made now.
-    if all(x.get('sure') for x in items):
-        return dict(quiz_publish('{}'), saved=True, asked=0)
-    return quiz_widget_out(draft)
-
-
-QZ_CSS = '''
-:root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--line:#ece4f1;--plum:#6e3796;--rose:#c2366d;--wash:#f6effb}
-*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;color:var(--ink);-webkit-text-size-adjust:100%}
-.qz{background:#fff;border-radius:18px;overflow:hidden;border:1px solid var(--line);max-width:560px;margin:0 auto}
-.top{padding:14px 16px 12px;color:#fff;background:linear-gradient(135deg,#5b2a86,#7b3fa0 45%,#c2366d)}
-.top small{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.85}
-.top b{display:block;font-size:19px;margin-top:2px}.top span{display:block;font-size:13px;opacity:.92;margin-top:4px}
-.it{margin:10px 12px;padding:12px;border:1.5px solid var(--line);border-radius:14px}
-.k{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--plum);background:var(--wash);border-radius:999px;padding:3px 9px;margin-bottom:6px}
-.q{margin:0 0 8px;font-size:15.5px;line-height:1.3;font-weight:750}
-.opts{display:flex;flex-direction:column;gap:5px}
-.opts label{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--line);border-radius:11px;font-size:14px;line-height:1.25;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.opts input{position:absolute;opacity:0;pointer-events:none}
-.opts label:before{content:"";flex:none;width:16px;height:16px;border-radius:50%;border:2px solid #cdb6dd}
-.opts label.on{border-color:var(--plum);background:var(--wash);font-weight:700}.opts label.on:before{border-color:var(--plum);background:radial-gradient(circle,var(--plum) 45%,#fff 50%)}
-.opts label.no{color:var(--soft);font-style:italic}.opts label.no.on{background:#fcebf2;border-color:var(--rose);color:var(--rose)}
-.foot{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px;font-size:14px;font-weight:700;text-align:center}
-'''
-
-QZ_JS = r'''
-(function(){
-var D=JSON.parse(document.getElementById('qz-data').textContent),field=document.getElementById('qz-picks');
-function show(){var p={};D.ids.forEach(function(id){var x=document.querySelector('input[name="'+id+'"]:checked');p[id]=x?x.value:null;
- [].slice.call(document.querySelectorAll('input[name="'+id+'"]')).forEach(function(y){y.parentNode.classList.toggle('on',y.checked);});});
- field.value=JSON.stringify(p);}
-document.addEventListener('change',function(e){if(e.target&&e.target.type==='radio')show();});
-show();setTimeout(show,300);setTimeout(show,1200);})();
-'''
-
-QUIZ_KIND_LABELS = {'year': '📅 The year', 'numbers': '📊 By the numbers', 'rather': '⚖️ Would they rather', 'niche': '🔍 Deep cut', 'fake': '🕵️ Spot the fake',
-                    'caption': '📸 Did they post it?', 'favourite': '⭐ Favourite', 'never': '✋ Never', 'deep': '💭 Scenario', 'hard': '🔥 Hard', 'finale': '✨ Finale'}
-
-
-def quiz_widget_html(draft):
-    body = []
-    for it in (x for x in draft['items'] if not x.get('sure')):
-        rows = ''.join('<label><input type="radio" name="%s" value="%d"%s><span>%s</span></label>'
-                       % (_e(it['id']), i, ' checked' if it['a'] == i else '', _e(o)) for i, o in enumerate(it['o']))
-        # Something the read may have got wrong (release 227): they can say so, and the question goes.
-        rows += '<label class="no"><input type="radio" name="%s" value="untrue"><span>That\'s not true about me</span></label>' % _e(it['id'])
-        body.append('<section class="it"><span class="k">%s</span><p class="q">%s</p><div class="opts">%s</div></section>'
-                    % (_e(QUIZ_KIND_LABELS.get(it.get('kind'), '')), _e(it['q']), rows))
-    data = {'ids': [x['id'] for x in draft['items'] if not x.get('sure')]}
-    head = 'How well do you know %s?' % (draft.get('name') or 'me')
-    return ('<div class="qz"><style>%s</style><div class="top"><small>PsycheAI quiz</small><b>%s</b><span>PsycheAI wasn\'t sure of these. The highlighted answer is its guess: tap the one that\'s really yours, or say it\'s not true.</span></div>'
-            '<form onsubmit="return false">%s<input type="hidden" id="qz-picks" name="psyche-quiz-picks" value="{}"></form>'
-            '<div class="foot">When they look right, tap Make my quiz below ↓</div><script type="application/json" id="qz-data">%s</script><script>%s</script></div>'
-            % (QZ_CSS, _e(head), ''.join(body), json.dumps(data).replace('</', '<\\/'), QZ_JS))
-
-
-def quiz_widget_out(draft):
-    html_ = quiz_widget_html(draft)
-    os.makedirs(WORK, exist_ok=True)
-    path = os.path.join(WORK, 'quiz-widget.html')
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(html_)
-    return {'saved': True, 'widget': html_, 'widgetFile': 'work/quiz-widget.html',
-            'say': 'Your quiz is almost ready. I wasn\'t sure of %s: check %s, then tap Make my quiz.' % (
-                'one answer' if sum(1 for x in draft['items'] if not x.get('sure')) == 1 else '%d answers' % sum(1 for x in draft['items'] if not x.get('sure')),
-                'it' if sum(1 for x in draft['items'] if not x.get('sure')) == 1 else 'them'),
-            'asked': sum(1 for x in draft['items'] if not x.get('sure')),
-            'buttons': [QUIZ_MAKE_BTN, 'Write different questions', 'Back to the menu'], 'asButtons': True}
+    # Made at once (release 230, README "No confirming"): every answer stands on the data, so nothing is put to them.
+    return dict(quiz_publish('{}'), saved=True)
 
 
 def _quiz_card_data():
@@ -7718,8 +7646,6 @@ def quiz_publish(raw):
     chosen = []
     for it in draft['items']:
         v = picks.get(it['id'])
-        if v == 'untrue' and not it.get('sure'):
-            continue          # they said it isn't true about them: the question goes (release 227)
         try:
             v = int(v)
         except (TypeError, ValueError):
