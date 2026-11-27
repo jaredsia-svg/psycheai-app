@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 227
+RELEASE = 228
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7321,6 +7321,7 @@ def quiz_finale(item, character):
     return dict(item, o=opts, a=opts.index(c), sure=True)
 
 
+QUIZ_QWORDS = set('which what where when how does did year years jared most more these isn true quietly thing things something post posted posts actually favourite rather would'.split())
 QUIZ_COMMON = set('the and you your his her their they them with for from into that this what when who will would more than about have has are was were can could just only also not but all one out get got make makes made being been very really most'.split())
 QUIZ_STRIP = ('evidence', 'quotes', 'quote', 'basedOn', 'rationale', 'caveat', 'reading', 'confidence')
 
@@ -7540,6 +7541,18 @@ def quiz_save(raw):
             probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
         if kinds[-1] != 'finale':
             probs.append('questions %d of %d is the finale: which character PsycheAI says they are (kind "finale")' % (QUIZ_MAX, QUIZ_MAX))
+        # No two questions on the same thing (release 228, README "Nothing asked twice"): much the same words in two questions,
+        # or the same right answer, is refused, naming both.
+        name_ = set(re.findall(r"[a-z']{3,}", str((read_first([REPORT, REPORT_KEPT]) or {}).get('name') or '').lower()))
+        words = lambda t: set(re.findall(r"[a-z']{3,}", t.lower())) - QUIZ_COMMON - QUIZ_QWORDS - name_
+        for i, x in enumerate(items):
+            for k, y in enumerate(items[i + 1:], i + 1):
+                if 'finale' in (x['kind'], y['kind']):
+                    continue
+                wq, wy = words(x['q']), words(y['q'])
+                ax, ay = words(x['o'][x['a']]), words(y['o'][y['a']])
+                if (len(wq & wy) >= 2 and len(wq & wy) / max(1, min(len(wq), len(wy))) >= 0.5) or (ax and ay and (ax == ay or len(ax & ay) / min(len(ax), len(ay)) >= 0.75)):
+                    probs.append('questions %d and %d of %d ask about the same thing ("%s" and "%s"). Every question is about something different: change one.' % (i + 1, k + 1, QUIZ_MAX, x['q'], y['q']))
         if sum(1 for x in items if QUIZ_ALL.match(x['o'][-1])) > 2:
             probs.append('at most 2 questions end with "All of the above" (or "None of these", "Both")')
     if probs:
@@ -7630,9 +7643,9 @@ def _quiz_card_data():
     try:
         from PIL import Image
         im = Image.open(own).convert('RGB')
-        im.thumbnail((420, 760), Image.LANCZOS)
+        im.thumbnail((600, 1068), Image.LANCZOS)        # release 228: sharp enough to open full screen on the quiz page
         buf = io.BytesIO()
-        im.save(buf, 'JPEG', quality=78, optimize=True, progressive=True)
+        im.save(buf, 'JPEG', quality=80, optimize=True, progressive=True)
         return 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
     except Exception:
         return None
