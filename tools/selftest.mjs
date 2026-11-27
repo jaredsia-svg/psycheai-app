@@ -5397,6 +5397,8 @@ probs = {
   'handle': bad(lambda b: b['questions'][2]['o'].__setitem__(0, '@ana')),
   'count': bad(lambda b: b['questions'].pop()),
 }
+# Release 226: words that only sound like messages pass ("hard conversations" was refused on a device).
+soft = m._quiz_item({'kind': 'deep', 'q': 'What do people get wrong about me?', 'o': ['They think I avoid hard conversations', 'I chat to anyone', 'I talk it through', 'I never stop talking'], 'a': 0}, 'questions', 8)[1]
 saved = m.quiz_save(json.dumps(good))
 w = saved.get('widget', '')
 import re
@@ -5411,7 +5413,7 @@ nxt = m.quiz_first(json.loads(json.dumps(m.AFTER_PUBLISH)), {'name': 'Ana'})
 m.write_private([m.QUIZ_PENDING], {'link': m.BASE + '/quiz#' + code + '.0000000000', 'name': 'Jared'})
 m._quiz_open = lambda c: (opened, {})
 missed = m.quiz_missed()
-print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'saved': saved.get('saved'),
+print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'),
   'checked': checked, 'buttons': saved.get('buttons'), 'few': pub_few, 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
   'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'draftGone': not os.path.exists(m.QUIZ_DRAFT),
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
@@ -5419,9 +5421,10 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
   let Q = null, qerr = '';
   try { Q = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', py, dir], { maxBuffer: 1 << 24 }).toString()); } catch (e) { qerr = String(e.stderr || e.message).slice(-600); }
   const has = (k, rx) => Q && (Q.probs[k] || []).some(p => rx.test(p));
-  check('the quiz is written from their Psyche (README "The quiz, what it asks"): the task file leaves out the read\'s beliefs and wellbeing and every piece of evidence; quiz-save refuses a question that mentions messages, a belief outside beliefs, a belief answer the read picked, health, a handle, or the wrong count',
+  check('the quiz is written from their Psyche (README "The quiz, what it asks"): the task file leaves out the read\'s beliefs and wellbeing and every piece of evidence; quiz-save refuses a question that mentions messages, a belief outside beliefs, a belief answer the read picked, health, a handle, or the wrong count, each problem naming the question (counted from 1, "of 10"), the part and the word (release 226), and words that only sound like messages (hard conversations, a plain chat) pass',
     Q && Q.task.write === 'quiz' && !Q.taskKeys.includes('beliefs') && !Q.taskKeys.includes('wellness') && JSON.stringify(Q.patterns) === '[{"title":"The planner","detail":"Plans ahead"}]' &&
-      has('messages', /nothing from their messages/) && has('belief', /go only in beliefs/) && has('guessed', /a is null/) && has('health', /never be about health/) && has('handle', /no quotes, handles/) && has('count', /questions has exactly 10/),
+      has('messages', /^questions 1 of 10, the question \("What did I text you last week\?"\): "text" points at their messages|^questions 1 of 10, the question[^:]*: "\w+" points at their messages/) && has('belief', /^questions 2 of 10, the question[^:]*: "church" is about politics, religion, kids or marriage/) && has('guessed', /a is null/) && has('health', /"mental health" is about health, which a quiz question can never be about/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has exactly 10/) &&
+      Q.soft.length === 0,
     qerr || JSON.stringify(Q && Q.probs).slice(0, 600));
   check('the quiz widget starts with the quiz\'s own ten questions in, each with the read\'s guess picked, and every spare and beliefs question out until they pick its answer; publishing takes 5 to 10, puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
     Q && Q.saved === true && Q.checked.filter(([id, v]) => /^q/.test(id) && v !== 'out').length === 10 && Q.checked.filter(([id, v]) => /^[sb]/.test(id)).every(([, v]) => v === 'out') && Q.checked.length === 18 &&

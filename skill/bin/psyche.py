@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 225
+RELEASE = 226
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7275,8 +7275,11 @@ QUIZ_NEVER = [
 QUIZ_BELIEF_WORDS = re.compile(r'\b(religio\w*|church\w*|mosques?|temples?|god|faith\w*|pray\w*|politic\w*|vot(e|es|ed|ing)|elections?|left-wing|right-wing|kids?|child(ren)?|bab(y|ies)|marr\w*|wedding\w*|spouse)\b', re.I)
 # Nothing from their messages is quoted or described (README "The quiz, what it asks"): a question that names them is
 # refused here, and the spec asks for words that would hold from their posts alone.
-QUIZ_MESSAGES = re.compile(r'\b(dms?|messag\w*|text(s|ed|ing)?|chats?|whatsapp|messenger|inbox|conversations?|voice notes?)\b', re.I)
-QUIZ_IDENT = re.compile(r'https?:|www\.|@\w|[\w.+-]+@[\w-]+\.\w|\d[\d\s-]{6,}\d|["“”]')
+# Release 226 (README "The quiz, a word at a time"): only words that point at their messages. "conversations" and a bare
+# "chat" went: "I avoid hard conversations" is about them, not their DMs, and was refused on a device. Texting stays out:
+# how they text is read from their messages.
+QUIZ_MESSAGES = re.compile(r'\b(dms?|direct messages?|messag(e|es|ed|ing)|text(s|ed|ing)?|inbox|whatsapp|messenger|voice notes?|group ?chats?|(my|our|your) chats?)\b', re.I)
+QUIZ_IDENT = re.compile(r'https?:\S*|www\.\S*|@\w+|[\w.+-]+@[\w-]+\.\w|\d[\d\s-]{6,}\d|["“”]')
 QUIZ_STRIP = ('evidence', 'quotes', 'quote', 'basedOn', 'rationale', 'caveat', 'reading', 'confidence')
 
 
@@ -7362,7 +7365,7 @@ def _quiz_item(x, where, n):
     q = _quiz_clean(x.get('q'), 160)
     opts = x.get('o') if isinstance(x.get('o'), list) else []
     o = [_quiz_clean(y, 70) for y in opts]
-    label = '%s %d' % (where, n)
+    label = '%s %d of %d' % (where, n, {'questions': QUIZ_MAX, 'spares': QUIZ_SPARES}.get(where, len(QUIZ_BELIEFS)))
     if not q:
         probs.append('%s: q is the question, 1 to 160 characters' % label)
     if len(o) != 4 or not all(o) or len({y.lower() for y in o if y}) != 4:
@@ -7380,16 +7383,22 @@ def _quiz_item(x, where, n):
     kind = x.get('kind') if not belief else 'beliefs'
     if not belief and kind not in QUIZ_KINDS:
         probs.append('%s: kind is one of %s' % (label, ', '.join(QUIZ_KINDS)))
-    words = ' '.join([q or ''] + [y or '' for y in o])
+    # Each problem names the part and the words it found (release 226): "questions 8" alone was read as counting from 0,
+    # the wrong question was changed, and the script was opened to find out what the check looks for.
+    parts = [('the question', q)] + [('option %d' % (i + 1), y) for i, y in enumerate(o)]
+
+    def hits(rx):
+        return [(name, text, m.group(0)) for name, text in parts if text for m in [rx.search(text)] if m]
+
+    def say(found, why):
+        for name, text, word in found:
+            probs.append('%s, %s ("%s"): "%s" %s' % (label, name, text, word, why))
     for rx, topic_ in QUIZ_NEVER:
-        if rx.search(words):
-            probs.append('%s: a quiz question can never be about %s' % (label, topic_))
-    if not belief and QUIZ_BELIEF_WORDS.search(words):
-        probs.append('%s: politics, religion, kids and marriage go only in beliefs, with no answer picked' % label)
-    if QUIZ_MESSAGES.search(words):
-        probs.append('%s: nothing from their messages is quoted or described, and no question mentions messages or chats' % label)
-    if QUIZ_IDENT.search(words):
-        probs.append('%s: no quotes, handles, links, emails or numbers' % label)
+        say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
+    if not belief:
+        say(hits(QUIZ_BELIEF_WORDS), 'is about politics, religion, kids or marriage, which go only in beliefs, with no answer picked. Reword it or move it there.')
+    say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
+    say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
     item = {'kind': kind, 'q': q, 'o': o, 'a': a if not belief else None}
     if belief:
         item['topic'] = x.get('topic')
