@@ -5364,6 +5364,9 @@ print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years':
       /location\.hash/.test(page.JS) && !/fetch\([^)]*code/.test(page.JS.replace(/keyFor\([^)]*\)/g, '')) && /'✗ Not quite'/.test(page.JS) && /b\.className=ok\?'right':'wrong'/.test(page.JS) &&
       !/\.a\]\.className|children\[q\.a\]|nth\(q\.a\)/.test(page.JS) && /body:JSON\.stringify\(\{s:right,box:b\[0\],name:b\[1\]\}\)/.test(page.JS) &&
       /\$\('q-turn'\)\.onclick=function\(\)\{\$\('q-line'\)\.textContent=installLine\(\)/.test(page.JS) && /link\(\)\+'\.'\+picks\.join\(''\)/.test(page.JS) && /<div id="q-turn-box" hidden>/.test(html));
+  check('the quiz page keeps their Psyche Card blurred and their character unnamed until the end, then reveals the full card; the answers a friend missed stay hidden (README "The quiz")',
+    /class="q-cardwrap q-locked"/.test(html) && /\.q-cardwrap\.q-locked \.q-card\{filter:blur\(16px\)/.test(page.CSS) && !/quiz\.character/.test(page.JS.slice(page.JS.indexOf('function intro()'), page.JS.indexOf('function done('))) &&
+      /function done\(again\)[^]*?if\(hasCard\(\)\)\{var im=\$\('q-reveal-img'\);im\.src=quiz\.card;/.test(page.JS) && /id="q-reveal" class="q-glass q-reveal" hidden/.test(html) && /answers are still a mystery/.test(page.JS));
   // The skill's side, in a copy of the skill (its working files go there, never in this repo), with PsycheAI's tools stubbed.
   const dir = fsq.mkdtempSync(pathq.join(osq.tmpdir(), 'quiz-'));
   fsq.mkdirSync(pathq.join(dir, 'bin')); fsq.copyFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), pathq.join(dir, 'bin', 'psyche.py')); fsq.copyFileSync(pathq.join(process.cwd(), 'skill', 'guide.json'), pathq.join(dir, 'guide.json'));
