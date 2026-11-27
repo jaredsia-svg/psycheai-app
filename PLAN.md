@@ -118,3 +118,64 @@ Agreed 8 November 2026 (plan, fifth draft). Standalone skill in together/, off u
 - [x] The four-week re-check (release 17): the same questions again every four weeks, what moved on top of the page.
 - [x] Overall satisfaction and how satisfied each thinks the other is (release 17), for the couple only.
 - [ ] The six-month redo.
+
+## How well do you know me? (the quiz)
+
+Agreed 27 November 2026. Not built yet. A PsycheAI user makes a quiz about themselves in Muse, sends the link to friends, and each friend answers on a web page with no sign-in. Making a quiz needs Muse; taking one doesn't.
+
+**Decisions**
+- Muse only for making a quiz. No web quiz for someone without Muse: the turnaround is "make your quiz in Muse".
+- 5 to 10 questions, 4 options each. The owner picks every right answer; the read's pick is only a starting point.
+- Right or wrong shows straight after each answer (✓ "You know me" / ✗ "Not quite"), and a wrong answer never shows the right one. The end screen keeps the ✓ and ✗.
+- A friend sees the answers they missed only once they've made their own quiz.
+- Deep, not trivia: hypotheticals, motivations, the report's findings, blind spots, regrets.
+
+**Where questions come from**
+- Posts, stories, interests and motivations: may be stated outright ("What did I post about most this year?").
+- The report's findings (traits, patterns, the character, blind spots): may be stated as findings.
+- Messages: nothing in them is quoted, paraphrased or described, no events and no conversations. A finding they helped shape is used only in words that would hold from posts alone.
+- Other people: never, even from posts (no names, handles, or who is in a photo).
+- Politics, religion, kids and marriage are allowed, but they're stated-only (CLAUDE.md), so the read never suggests or pre-fills an answer: they're a "Beliefs and future" group the owner adds on purpose, with the answer left blank for the owner to set. They never appear on the score card or the Story image.
+- Age, gender, orientation, ethnicity, health, height and drugs stay out.
+- Every question, including ones the owner writes, goes through the custom questions' keyword filter (`lib/questions.js`).
+
+**A quiz of 10:** 2 warm-ups (posts, interests), 5 deep (findings, motivations, hypotheticals), 2 hard (blind spots, how they come across vs who they are) and the finale, "Which character am I?". The wrong options are plausible: drawn from the owner's own traits, so only a friend who knows them gets it.
+
+**The owner, in Muse**
+1. After the Psyche is published, What's next has "Make a quiz for my friends" (it takes "Add WhatsApp or Facebook…"'s place, which moves under More). When a friend's Sync link is waiting (release 223) or the Together read is ready (release 224), the quiz goes under More.
+2. One widget with the questions: each has Keep / Swap / Edit / Remove, the options, and the answer to confirm; "Add a question" and "Beliefs and future" at the end.
+3. "Your quiz is ready": the quiz card image and two buttons, "Send to a friend" (an invite line, sent only once they tap Send) and "Save for my Story" (an image for Instagram's link sticker).
+4. Results: a line on the next menu tap ("3 friends took your quiz: Ana got 9/10"), the digest when away, and, at 3 answers, "What friends get wrong about you" (counts only).
+
+**The friend, on the quiz page**
+1. The owner's Psyche Card and "How well do you know Jared?", and a first name to type.
+2. One question at a time, ✓ or ✗ after each.
+3. The score card: "8/10, you know Jared better than 70% of his friends", a "Best friend" badge for the top score, their rank (others' first names only for friends who ticked "Show my name"), and "Share my score".
+4. "Your turn: make your quiz in Muse": one tap copies `Install https://psycheai.io/skill and make my quiz for Jared: <quiz link>`. Shown only after the score and only on that tap, never beside the friend's answers.
+
+**The friend, back in Muse:** the pasted line installs PsycheAI and makes their Psyche, as a Sync link does. Then What's next is "Make my quiz for <name>" and "More", and their quiz's first button is "Send to <name>". Making it unlocks the answers they missed on the owner's quiz.
+
+**Privacy and storage**
+- The quiz is locked on the owner's device, with its key after the # of the quiz link, so the server never receives the key.
+- The server keeps only boxes it can't open: the quiz, and each friend's first name and answers, locked in the friend's browser with the quiz key, so only the owner's device opens them. It keeps a count and a score per answer, for "better than X%" and the news.
+- The page is `noindex` and out of the sitemap.
+- The browser holds the answers to mark them, so a determined friend can read them in the page: accepted, it's a game.
+- The quiz ends when the owner ends it or deletes their data, and with it every answer.
+
+**Muse safety check (flag before shipping)**
+- The instruction that writes the questions states the messages limit in the same line: "from posts, stories, interests and the report's findings; nothing from messages is quoted or described".
+- The "Beliefs and future" line says in the same sentence that the owner states the answer.
+- The invite line and the Story image carry a link: only in a message meant for a friend, sent only after they tap Send.
+- Results come back as counts and scores, never a friend's answers as text beside a link.
+- New wording in SKILL.md and results goes to Jared before release; no safety-check baseline is raised without asking.
+
+**Build**
+- [ ] `bin/psyche.py quiz`: writes the questions from the read under the rules above, the widget, locking, the link; `tap` handles its buttons.
+- [ ] Menus: "Make a quiz for my friends" after the Psyche; "Make my quiz for <name>" after a quiz link; quiz news on the menu.
+- [ ] Server (`lib/quiz.js`): create, get, answer and end, with locked boxes only; counts for "better than X%" and the news; the digest line.
+- [ ] The quiz page `/quiz/<id>`: one question at a time, ✓/✗, score card, rank, "Show my name", the turnaround.
+- [ ] Images (`lib/cardimage.js`): the quiz card, the score card and the Story image, with no beliefs-and-future content.
+- [ ] "What friends get wrong about you", at 3 answers.
+- [ ] Unlocking a friend's missed answers once their own quiz exists.
+- [ ] Selftest: no stated-only answer pre-filled; nothing from messages; no other people's names; nothing readable on the server; the sensitive group off the images; safety-check phrase counts.
+- [ ] README design-log entry; sign a new skill release.
