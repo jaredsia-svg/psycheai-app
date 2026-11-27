@@ -5390,11 +5390,11 @@ def nope(*a, **k): raise RuntimeError('no card art here')
 m.card_art = nope
 task = m.quiz_task()
 t = json.load(open(m.QUIZ_TASK))
-q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure}
-r = lambda text, a=0, sure=True: q('rather', text, a, ['Lead the room', 'Be the one everyone calls'], sure)
+q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure, 'fact': 'True and specific, from the data: ' + text[:60]}
+r = lambda text, a=0, sure=True: q('rather', text, a, ['Lead a team of fifty through a hard launch', 'Be the friend everyone calls at 2am'], sure)
 good = {'questions': [q('year', 'In which year did Jared run his first marathon?', 1, ['2016', '2018', '2020', '2023']), q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
-                      r('Would Jared rather lead or help?', 0, False), q('deep', 'What drives Jared, underneath it all?', 1, ['Being respected by his peers', 'Getting really good at a craft', 'Changing a stranger\'s day', 'Freedom to choose his hours']), q('year', 'In which year did Jared move to London?', 0, ['2012', '2015', '2018', '2021']),
-                      q('numbers', 'Which of these has Jared posted about?', 3, ['Surfing', 'Pottery', 'Hiking', 'All of the above']), q('rather', 'Would Jared rather rest or roam?', 1, ['Rest at home with a book', 'Roam a new city on foot']),
+                      r('Would Jared rather lead or help?', 0, False), q('deep', 'What drives Jared, underneath it all?', 1, ['Being respected by his peers', 'Getting really good at a craft', 'Changing a stranger\'s day', 'Freedom to choose his hours']), q('first', 'What came first for Jared: bringing home his rescue dog or moving to London?', 0, ['Bringing home his rescue greyhound', 'Moving into his first London flat']),
+                      q('never', 'Which of these would Jared never do?', 2, ['Sign up for a muddy obstacle race', 'Spend a Sunday perfecting pour-over', 'Skip a friend\'s birthday for overtime', 'Join a dawn hike with strangers']), q('rather', 'Would Jared rather rest or roam?', 1, ['Rest at home with a book', 'Roam a new city on foot']),
                       q('deep', 'When plans fall apart, what does Jared do first?', 2, ['Make a new plan on the spot', 'Call someone to vent', 'Go for a long walk alone', 'Shrug and order takeaway'], False), q('hard', 'What do people most often get wrong about Jared?', 1, ['That he is cold and distant', 'That he is always fine', 'That he loves an argument', 'That he never takes risks']),
                       q('niche', 'Which rabbit hole has Jared quietly gone deepest into?', 1, ['Restoring 1970s film cameras', 'Ultra-trail races up mountains', 'Fermenting hot sauce at home', 'Collecting vintage synthesisers']),
                       q('fake', 'Which of these is NOT true about Jared?', 3, ['He ran a marathon in the rain', 'He learned to make pour-over coffee', 'He hiked three peaks in a weekend', 'He keeps a pet tortoise named Kevin']),
@@ -5415,6 +5415,8 @@ probs = {
   'finaleLast': bad(lambda b: b['questions'].insert(0, b['questions'].pop())),
   'noNumbers': bad(lambda b: [x.update(kind='deep') for x in b['questions'] if x['kind'] == 'numbers']),
   'noSure': bad(lambda b: b['questions'][3].pop('sure')),
+  'plainRather': bad(lambda b: b['questions'][2].update(o=['Lead', 'Help others out'])),
+  'noFact': bad(lambda b: b['questions'][3].pop('fact')),
   'repeat': bad(lambda b: b['questions'][11].update(q='Which rabbit hole has Jared quietly gone deepest into lately?')),
   'sameAnswer': bad(lambda b: b['questions'][13].update(o=['Ultra-trail races up mountains', 'An iced oat latte', 'A double espresso standing up', 'A flat white with honey'], a=0)),
   'plain': bad(lambda b: b['questions'][10].update(o=['Ran once', 'He learned to make pour-over coffee', 'He hiked three peaks in a weekend', 'He keeps a pet tortoise named Kevin'])),
@@ -5424,12 +5426,12 @@ probs = {
   'nearCopy': bad(lambda b: b['questions'][7].update(o=['Make a careful plan', 'Make a plan', 'Call a friend', 'Go for a long run'], a=0)),
 }
 # Release 226: words that only sound like messages pass ("hard conversations" was refused on a device).
-soft = m._quiz_item({'kind': 'deep', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'They think he will chat to anyone at all', 'They think he talks every problem through', 'They think he never stops talking at parties'], 'a': 0, 'sure': False}, 8)[1]
+soft = m._quiz_item({'kind': 'deep', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'They think he will chat to anyone at all', 'They think he talks every problem through', 'They think he never stops talking at parties'], 'a': 0, 'sure': False, 'fact': 'He has hosted the same supper club for four years.'}, 8)[1]
 saved = m.quiz_save(json.dumps(good))
 w = saved.get('widget', '')
 import re
 checked = re.findall(r'name="(\w+)" value="(\w+)" checked', w)
-pub = m.quiz_publish(json.dumps({'q3': '1', 'q8': 'untrue', 'q1': 'untrue'}))
+pub = m.quiz_publish(json.dumps({'q2': '1', 'q13': 'untrue', 'q4': 'untrue'}))
 code = m.read_first([m.QUIZ_KEPT])['code']
 tool, args = sent[-1]
 opened = m.e2e_open(args['e2e']['box'], m.e2e_key('quiz', code))
@@ -5457,15 +5459,17 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       Q.facts && Q.facts.busiestYear && Q.facts.peakHours && /pm|am/.test(Q.facts.peakHours) && !/^(12am|1am|2am|3am) /.test(Q.facts.peakHours) && JSON.stringify(Q.facts.hashtagsOfWhatTheySaveAndLike) === '{"saves":["#trailrunning (9)","#coffee (4)"]}' &&
       has('messages', /^questions 4 of 15, the question[^:]*: "text" points at their messages/) && has('belief', /"church" is about politics, religion, kids or marriage, which a quiz question can never be about/) &&
       has('health', /"mental health" is about health/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has exactly 15/) && has('rather4', /exactly two/) &&
-      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 2 numbers/) && has('noSure', /questions 4 of 15: sure is true when/) && has('repeat', /^questions 10 and 12 of 15 ask about the same thing/) && has('sameAnswer', /^questions 10 and 14 of 15 ask about the same thing/) && has('plain', /option 1 \("Ran once"\): it is much plainer than the answer/) && has('fake3', /exactly four/) && has('yearNoSure', /questions 1 of 15: sure is true when/) && has('yearWord', /each option of a year question is a year/) && !(Q.probs.yearClose || []).length && has('nearCopy', /option 2 \("Make a plan"\): it is too close to the answer \("Make a careful plan"\)/) && Q.soft.length === 0,
+      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 1 numbers/) && has('plainRather', /both options of a rather question are vivid scenes/) && has('noFact', /questions 4 of 15: fact is one line/) && has('noSure', /questions 4 of 15: sure is true when/) && has('repeat', /^questions 10 and 12 of 15 ask about the same thing/) && has('sameAnswer', /^questions 10 and 14 of 15 ask about the same thing/) && has('plain', /option 1 \("Ran once"\): it is much plainer than the answer/) && has('fake3', /exactly four/) && has('yearNoSure', /questions 1 of 15: sure is true when/) && has('yearWord', /each option of a year question is a year/) && !(Q.probs.yearClose || []).length && has('nearCopy', /option 2 \("Make a plan"\): it is too close to the answer \("Make a careful plan"\)/) && Q.soft.length === 0,
     qerr || JSON.stringify(Q && { soft: Q.soft, facts: Q.facts, probs: Q.probs }).slice(0, 1500));
   check('the quiz widget asks only the answers Muse wasn\'t sure of, each with "That\'s not true about me", which drops that question (release 227, down to 8 of 15); the finale\'s options are set here from the 28 characters, theirs and the three closest in temperament (README "The finale, from the 28"); each with its guess picked, with nothing to swap in or leave out, and with every answer sure the quiz is made at once with no widget (release 226, README "Only the unsure asked"); publishing keeps all ten with the answers picked (a pick that isn\'t one keeps the guess), puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
-    Q && Q.saved === true && Q.checked.length === 2 && JSON.stringify(Q.checked.map(c => c[0])) === '["q3","q8"]' && !Q.widgetOut && Q.asked === 2 &&
+    Q && Q.saved === true && Q.checked.length === 2 && JSON.stringify(Q.checked.map(c => c[0])) === '["q2","q13"]' && !Q.widgetOut && Q.asked === 2 &&
       Q.straight.widget === false && Q.straight.invite === true && Q.straight.asked === 0 && Q.straight.saved === true && Q.straight.sent === 1 && /value="untrue"><span>That's not true about me/.test(Q.widget) && JSON.stringify(Q.buttons) === '["Make my quiz","Write different questions","Back to the menu"]' && Q.tool === 'quiz_put' && Q.id && Q.n === 14 && !Q.opened.questions.some(x => x.q === 'When plans fall apart, what does Jared do first?') && Q.opened.questions.some(x => x.q === 'In which year did Jared run his first marathon?') &&
       Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 14 && Q.opened.questions[13].k === 'finale' && Q.opened.questions[13].o[Q.opened.questions[13].a] === 'Sherlock Holmes' && Q.opened.questions.some(x => x.k === 'favourite') && Q.opened.questions.some(x => x.k === 'fake') && Q.opened.questions.some(x => x.k === 'caption') && JSON.stringify(Q.opened.questions[13].o.slice().sort()) === '["Elsa","Hermione Granger","Remy","Sherlock Holmes"]' && Q.likeAll &&
-      Q.opened.questions[2].a === 1 && Q.opened.questions[2].o.length === 2 && Q.opened.questions[2].k === 'rather' && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone &&
+      Q.opened.questions[1].q === 'Would Jared rather lead or help?' && Q.opened.questions[1].a === 1 && Q.opened.questions[1].o.length === 2 && Q.opened.questions[1].k === 'rather' &&
+      JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","rather","caption","year","niche","numbers","deep","first","rather","niche","fake","never","hard","finale"]' &&
+      Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) &&  /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone &&
       JSON.stringify(Q.pubButtons) === '["Show my quiz results","Back to the menu"]',
-    qerr || JSON.stringify(Q && { checked: Q.checked, pub: Q.pub, opened: Q.opened }).slice(0, 600));
+    qerr || JSON.stringify(Q && { checked: Q.checked, n: Q.n, kinds: Q.opened.questions.map(x => x.k), finale: Q.opened.questions[13] }).slice(0, 900));
   check('a friend\'s quiz comes first after their card ("Make my quiz for <name>" and More, the rest under More), and once their own quiz is made, quiz-missed shows only the ones they missed with the right answer, then forgets the link; the quiz buttons are known labels',
     Q && JSON.stringify(Q.nxt.buttons) === '["Make my quiz for Ana","More"]' && Q.nxt.more.buttons[0] === 'Sync with a friend' && Q.nxt.more.buttons.includes('Ask PsycheAI questions about myself') &&
       Q.missed.missed.length === Q.opened.questions.filter(x => x.a !== 0).length && Q.missed.missed.every(x => x.answer && x.yours === Q.opened.questions.find(y => y.q === x.question).o[0]) && /^The \d+ you missed on Jared's quiz/.test(Q.missed.say) &&
@@ -5492,7 +5496,7 @@ print(json.dumps(m.e2e_open(json.loads(sys.argv[3]), m.e2e_key('quiz-answer', sy
     JSON.stringify({ openedJs, back, tampered }).slice(0, 300));
   check('the quiz guide in the signed guide.json is this repo\'s lib/quizguide.js, and pin-guide keeps it there; its rules match what quiz-save checks',
     JSON.stringify(require('../skill/guide.json').quiz) === JSON.stringify(require('../lib/quizguide.js')) && /quiz: require\(path\.join\(here, '\.\.', 'lib', 'quizguide\.js'\)\)/.test(fsq.readFileSync(pathq.join(process.cwd(), 'tools', 'pin-guide.mjs'), 'utf8')) &&
-      /nothing in them is quoted, paraphrased or described/.test(require('../lib/quizguide.js').spec) && /Never politics, religion, kids or marriage/.test(require('../lib/quizguide.js').spec) && /kind "rather"\), two questions:\*\* exactly two options/.test(require('../lib/quizguide.js').spec));
+      /nothing in them is quoted, paraphrased or described/.test(require('../lib/quizguide.js').spec) && /Never politics, religion, kids or marriage/.test(require('../lib/quizguide.js').spec) && /kind "rather"\), two questions, each a real dilemma:\*\* two vivid scenes with a cost on each side/.test(require('../lib/quizguide.js').spec));
   const md = require('../lib/skill.js').skillMd();
   check('SKILL.md says how to make a quiz in one line near the top, inside the install read, with its limit in the same line (nothing from their messages), that the link is a line they copy and PsycheAI sends nothing, and that a friend\'s quiz link is made into their own quiz only on their tap; nothing about the quiz sits past the install read, where a mid-run look into SKILL.md has stopped Muse before (release 219)',
     /\n- \*\*The quiz\*\* \("Make a quiz for my friends"\)[^\n]*nothing from their messages is quoted or described\.[^\n]*PsycheAI sends nothing itself: they copy the line\./.test(md) &&

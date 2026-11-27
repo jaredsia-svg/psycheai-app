@@ -7261,7 +7261,12 @@ QUIZ_MAKE_BTN = 'Make my quiz'
 QUIZ_MIN, QUIZ_MAX = 8, 15       # 15 written (release 227); down to 8 once they've said some aren't true about them
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
 # happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
-QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'deep', 'hard', 'finale')
+QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'first', 'never', 'deep', 'hard', 'finale')
+# Release 229 (README "An arc, and a fact for every right answer"): the order is set here, not by Muse: an easy warm-up, then
+# real knowledge, then the deep end, an honest question and the character. One year and one numbers question now, with
+# "Which came first?" and "Which would they never do?" in their place.
+QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'numbers', 'deep', 'first', 'rather', 'niche', 'fake', 'never', 'deep', 'hard', 'finale')
+QUIZ_TWO = ('rather', 'first')         # the kinds with exactly two options
 # Release 228 (README "Fourteen, and the obscure"): a deep cut into a lesser-known passion, spot the fake among three true
 # things, and which caption they really posted, for fourteen questions.
 QUIZ_ALL = re.compile(r'^(all|none|both|neither) of (the above|these|them)$|^(both|neither)$', re.I)
@@ -7269,7 +7274,8 @@ QUIZ_ALL = re.compile(r'^(all|none|both|neither) of (the above|these|them)$|^(bo
 # stated-only (CLAUDE.md), so since release 227, with no beliefs group, they're never asked at all.
 QUIZ_NEVER = [
     (re.compile(r'\b(sex|sexual\w*|sexuality|orientation|gay|lesbian|bisexual|queer|virgin\w*|kink\w*|fetish\w*|nudes?|hook ?ups?)\b', re.I), 'sex or orientation'),
-    (re.compile(r'\b(race|racial\w*|ethnic\w*|skin colou?r)\b', re.I), 'race or ethnicity'),
+    # Not a bare "race" (release 229): a marathon or an obstacle race is a race too.
+    (re.compile(r'\b(racial\w*|ethnic\w*|skin colou?r|(what|which|his|her|their|my) race\b(?! (day|bib|kit|pace|time|plan)))', re.I), 'race or ethnicity'),
     (re.compile(r'\b(health\w*|disease\w*|disab\w*|illness\w*|medic\w*|diagnos\w*|depress\w*|anxiety|adhd|autis\w*|therap\w*|mental health|disorder\w*)\b', re.I), 'health'),
     (re.compile(r'\b(weigh\w*|heights?|my body|body shape|attractive\w*|pretty|handsome|ugly)\b', re.I), 'bodies or looks'),
     (re.compile(r'\b(drugs?|weed|cannabis|cocaine|pills?)\b', re.I), 'drugs'),
@@ -7318,7 +7324,7 @@ def quiz_finale(item, character):
         return item
     opts = [c] + QUIZ_LIKE[c]
     random.shuffle(opts)
-    return dict(item, o=opts, a=opts.index(c), sure=True)
+    return dict(item, o=opts, a=opts.index(c), sure=True, f=None)      # the reveal at the end says it, not a fact line
 
 
 QUIZ_QWORDS = set('which what where when how does did year years jared most more these isn true quietly thing things something post posted posts actually favourite rather would'.split())
@@ -7462,11 +7468,18 @@ def _quiz_item(x, n):
     kind = x.get('kind')
     opts = x.get('o') if isinstance(x.get('o'), list) else []
     o = [_quiz_clean(y, 70) for y in opts]
-    want = (2, 2) if kind == 'rather' else (4, 4) if kind == 'fake' else (3, 4)
+    want = (2, 2) if kind in QUIZ_TWO else (4, 4) if kind == 'fake' else (3, 4)
     if not q:
         probs.append('%s: q is the question, 1 to 160 characters' % label)
     if not want[0] <= len(o) <= want[1] or not all(o) or len({y.lower() for y in o if y}) != len(o):
-        probs.append('%s: o is %s different options, each 1 to 70 characters' % (label, 'exactly two' if kind == 'rather' else 'exactly four' if kind == 'fake' else 'three or four'))
+        probs.append('%s: o is %s different options, each 1 to 70 characters' % (label, 'exactly two' if kind in QUIZ_TWO else 'exactly four' if kind == 'fake' else 'three or four'))
+    # Would they rather, as two vivid scenes (release 229): both options a real picture, neither a few plain words.
+    if kind == 'rather' and len(o) == 2 and all(o) and (min(len(o[0]), len(o[1])) < 20 or min(len(o[0]), len(o[1])) < 0.5 * max(len(o[0]), len(o[1]))):
+        probs.append('%s: both options of a rather question are vivid scenes of about the same length, each 20 characters or more ("%s" / "%s")' % (label, o[0], o[1]))
+    # The fact shown with a right answer (release 229): what the data says, never shown with a wrong one.
+    fact = _quiz_clean(x.get('fact'), 120)
+    if kind != 'finale' and not fact:
+        probs.append('%s: fact is one line (up to 120 characters) shown only when a friend gets it right: something true they might not know, from the data' % label)
     a = x.get('a')
     if not (isinstance(a, int) and not isinstance(a, bool) and 0 <= a < max(1, len(o))):
         probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
@@ -7484,14 +7497,14 @@ def _quiz_item(x, n):
             if i != a and mine_ and theirs and len(mine_ & theirs) / min(len(mine_), len(theirs)) >= 0.6:
                 probs.append('%s, option %d ("%s"): it is too close to the answer ("%s"). Make it clearly different.' % (label, i + 1, y, o[a]))
             # As vivid as the answer (release 228): a wrong option much shorter than it gives the answer away.
-            elif i != a and kind not in ('rather', 'finale') and len(o[a]) >= 24 and len(y) < 0.5 * len(o[a]) and not QUIZ_ALL.match(y):
+            elif i != a and kind not in ('rather', 'first', 'finale') and len(o[a]) >= 24 and len(y) < 0.5 * len(o[a]) and not QUIZ_ALL.match(y):
                 probs.append('%s, option %d ("%s"): it is much plainer than the answer ("%s"), which gives it away. Make it as specific and vivid.' % (label, i + 1, y, o[a]))
     alls = [i for i, y in enumerate(o) if y and QUIZ_ALL.match(y)]
-    if alls and (kind == 'rather' or alls != [len(o) - 1]):
+    if alls and (kind in QUIZ_TWO or alls != [len(o) - 1]):
         probs.append('%s: "All of the above" (or "None of these", "Both") is only ever the last option, and never in a rather question' % label)
     # Each problem names the part and the words it found (release 226): "questions 8" alone was read as counting from 0,
     # the wrong question was changed, and the script was opened to find out what the check looks for.
-    parts = [('the question', q)] + [('option %d' % (i + 1), y) for i, y in enumerate(o)]
+    parts = [('the question', q)] + [('option %d' % (i + 1), y) for i, y in enumerate(o)] + ([('the fact', fact)] if fact else [])
 
     def hits(rx):
         return [(name, text, m.group(0)) for name, text in parts if text for m in [rx.search(text)] if m]
@@ -7509,7 +7522,23 @@ def _quiz_item(x, n):
     sure = x.get('sure')
     if kind not in ('numbers', 'finale') and not isinstance(sure, bool):
         probs.append('%s: sure is true when the report or their posts make the answer clear, false when it is a guess' % label)
-    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'sure': True if kind in ('numbers', 'finale') else sure is True}, probs
+    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'sure': True if kind in ('numbers', 'finale') else sure is True}, probs
+
+
+def quiz_arc(items):
+    """The questions in QUIZ_ORDER (release 229): each slot takes the next question of its kind; any left over (a kind
+    written in place of one there was no data for) go into the deep end, before the hard question and the finale."""
+    left, out = list(items), []
+    for kind in QUIZ_ORDER:
+        it = next((x for x in left if x['kind'] == kind), None)
+        if it:
+            out.append(it)
+            left.remove(it)
+    tail = [x for x in out if x['kind'] in ('hard', 'finale')]
+    out = [x for x in out if x['kind'] not in ('hard', 'finale')] + left + tail
+    for n, it in enumerate(out, 1):
+        it['id'] = 'q%d' % n
+    return out
 
 
 def quiz_save(raw):
@@ -7534,8 +7563,9 @@ def quiz_save(raw):
     if not probs:
         kinds = [x['kind'] for x in items]
         facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)
-        need = {'year': 2 if facts.get('postsByYear') else 0, 'numbers': 2 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 2,
-                'niche': 2, 'fake': 1, 'caption': 1 if facts.get('postsByYear') else 0, 'favourite': 1, 'finale': 1}
+        posted = bool(facts.get('postsByYear'))
+        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 2, 'niche': 2, 'fake': 1,
+                'caption': 1 if posted else 0, 'first': 1 if posted else 0, 'favourite': 1, 'never': 1, 'finale': 1}
         short = ['%d %s' % (k_, w_) for w_, k_ in need.items() if k_ and kinds.count(w_) < k_]
         if short:
             probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
@@ -7559,6 +7589,7 @@ def quiz_save(raw):
         return {'saved': False, 'problems': probs[:20]}
     kept = read_first([REPORT, REPORT_KEPT]) or {}
     items = [quiz_finale(x, ((kept.get('report') or {}).get('essence') or {}).get('character')) if x['kind'] == 'finale' else x for x in items]
+    items = quiz_arc(items)
     pend = quiz_pending()
     draft = {'items': items, 'name': (str(kept.get('name') or '').split(' ') or [''])[0][:30],
              'character': (((kept.get('report') or {}).get('essence') or {}).get('character') or '')[:40], 'at': int(time.time()),
@@ -7601,7 +7632,7 @@ show();setTimeout(show,300);setTimeout(show,1200);})();
 '''
 
 QUIZ_KIND_LABELS = {'year': '📅 The year', 'numbers': '📊 By the numbers', 'rather': '⚖️ Would they rather', 'niche': '🔍 Deep cut', 'fake': '🕵️ Spot the fake',
-                    'caption': '📸 Did they post it?', 'favourite': '⭐ Favourite', 'deep': '💭 Deep', 'hard': '🔥 Hard', 'finale': '✨ Finale'}
+                    'caption': '📸 Did they post it?', 'favourite': '⭐ Favourite', 'first': '⏳ Which came first?', 'never': '✋ Never', 'deep': '💭 Deep', 'hard': '🔥 Hard', 'finale': '✨ Finale'}
 
 
 def quiz_widget_html(draft):
@@ -7683,7 +7714,7 @@ def quiz_publish(raw):
     while len(code) != 22:
         code = secrets.token_urlsafe(16)
     quiz = {'v': 1, 'name': draft.get('name') or '', 'character': draft.get('character') or '', 'card': _quiz_card_data(),
-            'questions': [dict({'q': x['q'], 'o': x['o'], 'a': x['a']}, **({'k': x['kind']} if x.get('kind') in QUIZ_KINDS else {})) for x in chosen]}
+            'questions': [dict({'q': x['q'], 'o': x['o'], 'a': x['a']}, **({'k': x['kind']} if x.get('kind') in QUIZ_KINDS else {}), **({'f': x['f']} if x.get('f') else {})) for x in chosen]}
     out = post_tool('quiz_put', {'e2e': {'id': e2e_key('quiz-id', code).hex(), 'box': e2e_seal(quiz, e2e_key('quiz', code)), 'n': len(chosen)}})
     if not isinstance(out, dict) or out.get('error'):
         return out if isinstance(out, dict) else {'error': 'PsycheAI could not save the quiz. Try again.'}
