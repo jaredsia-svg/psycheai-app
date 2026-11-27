@@ -58,7 +58,7 @@ What it does, in full:
                                        report and their posts and stories, to write the quiz from
   python3 bin/psyche.py quiz-save @work/quiz.json  the quiz written, checked and kept here; its widget
   python3 bin/psyche.py quiz-publish '<picks>' the quiz they picked, locked here under a new code and
-                                       saved; its link (app.psycheai.io/quiz#<code>) and Story picture
+                                       saved; its link (app.psycheai.io/quiz#<code>)
   python3 bin/psyche.py quiz-results           who took it and their scores, opened here
   python3 bin/psyche.py quiz-preview <link>    a friend's quiz link, kept for after their card
   python3 bin/psyche.py quiz-missed            the answers they missed on that friend's quiz, once theirs is made
@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 226
+RELEASE = 227
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7258,7 +7258,7 @@ MAKE_QUIZ = 'Make a quiz for my friends'
 NEW_QUIZ = 'Make a new quiz'
 QUIZ_RESULTS = 'Show my quiz results'
 QUIZ_MAKE_BTN = 'Make my quiz'
-QUIZ_MIN, QUIZ_MAX = 10, 10
+QUIZ_MIN, QUIZ_MAX = 6, 10       # 10 written; down to 6 once they've said some aren't true about them
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
 # happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
 QUIZ_KINDS = ('year', 'numbers', 'rather', 'deep', 'hard', 'finale')
@@ -7283,6 +7283,42 @@ QUIZ_NEVER = [
 # how they text is read from their messages.
 QUIZ_MESSAGES = re.compile(r'\b(dms?|direct messages?|messag(e|es|ed|ing)|text(s|ed|ing)?|inbox|whatsapp|messenger|voice notes?|group ?chats?|(my|our|your) chats?)\b', re.I)
 QUIZ_IDENT = re.compile(r'https?:\S*|www\.\S*|@\w+|[\w.+-]+@[\w-]+\.\w|\d[\d\s-]{6,}\d|["“”]')
+# The finale is built here, from PsycheAI's 28 characters (lib/characters.js), never written by Muse (release 227, README
+# "The finale, from the 28"): their character and the three closest to it in temperament, so it takes knowing them.
+QUIZ_LIKE = {
+    'Mulan': ['Wonder Woman', 'Hermione Granger', 'Captain America'], 'Elsa': ['Hermione Granger', 'Sherlock Holmes', 'Hulk'],
+    'Moana': ['Hiccup', 'Rapunzel', 'Odysseus'], 'Simba': ['Po', 'Captain America', 'Spider-Man'],
+    'Rapunzel': ['Moana', 'Joy', 'Remy'], 'Judy Hopps': ['Captain America', 'Hermione Granger', 'Buzz Lightyear'],
+    'Nick Wilde': ['Shrek', 'Kuromi', 'Odysseus'], 'Baymax': ['Dr Watson', 'The Tin Man', 'Po'],
+    'Dr Watson': ['Baymax', 'The Tin Man', 'Captain America'], 'Buzz Lightyear': ['Captain America', 'Judy Hopps', 'Wonder Woman'],
+    'The Tin Man': ['Baymax', 'Dr Watson', 'Hello Kitty'], 'Remy': ['Rapunzel', 'Hiccup', 'Sherlock Holmes'],
+    'Joy': ['Pikachu', 'Rapunzel', 'Sailor Moon'], 'Odysseus': ['Nick Wilde', 'Sherlock Holmes', 'Moana'],
+    'Captain America': ['Wonder Woman', 'Buzz Lightyear', 'Mulan'], 'Spider-Man': ['Simba', 'Hiccup', 'Po'],
+    'Hulk': ['Elsa', 'Shrek', 'Kuromi'], 'Wonder Woman': ['Captain America', 'Mulan', 'Judy Hopps'],
+    'Sherlock Holmes': ['Hermione Granger', 'Elsa', 'Remy'], 'Pikachu': ['Joy', 'Po', 'Hello Kitty'],
+    'Princess Peach': ['Hello Kitty', 'Sailor Moon', 'Joy'], 'Shrek': ['Nick Wilde', 'Hulk', 'Kuromi'],
+    'Po': ['Simba', 'Pikachu', 'Spider-Man'], 'Hiccup': ['Moana', 'Spider-Man', 'Remy'],
+    'Hermione Granger': ['Sherlock Holmes', 'Judy Hopps', 'Mulan'], 'Sailor Moon': ['Princess Peach', 'Joy', 'Spider-Man'],
+    'Hello Kitty': ['Princess Peach', 'Pikachu', 'Baymax'], 'Kuromi': ['Nick Wilde', 'Shrek', 'Hulk'],
+}
+
+
+def quiz_character(name):
+    """Their character as the catalogue names it ("Sherlock" is Sherlock Holmes), or None."""
+    n = re.sub(r'\s+', ' ', str(name or '')).strip().lower()
+    return next((c for c in QUIZ_LIKE if c.lower() == n), None) or next((c for c in QUIZ_LIKE if n and c.lower().split(' ')[0] == n.split(' ')[0]), None)
+
+
+def quiz_finale(item, character):
+    """The finale's options: their character and its three closest, in a random order."""
+    c = quiz_character(character)
+    if not c:
+        return item
+    opts = [c] + QUIZ_LIKE[c]
+    random.shuffle(opts)
+    return dict(item, o=opts, a=opts.index(c), sure=True)
+
+
 QUIZ_COMMON = set('the and you your his her their they them with for from into that this what when who will would more than about have has are was were can could just only also not but all one out get got make makes made being been very really most'.split())
 QUIZ_STRIP = ('evidence', 'quotes', 'quote', 'basedOn', 'rationale', 'caveat', 'reading', 'confidence')
 
@@ -7460,11 +7496,12 @@ def _quiz_item(x, n):
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
     # Release 226 (README "Only the unsure asked"): sure is Muse's own word on whether the data makes the answer clear. The
-    # year, numbers and finale questions stand on what was counted or the card, so they're always sure.
+    # numbers and the finale stand on what was counted or the card, so they're always sure. A year question is sure only when
+    # a post says the moment outright (release 227: one assumed a dog was adopted that year, and it wasn't).
     sure = x.get('sure')
-    if kind not in ('year', 'numbers', 'finale') and not isinstance(sure, bool):
+    if kind not in ('numbers', 'finale') and not isinstance(sure, bool):
         probs.append('%s: sure is true when the report or their posts make the answer clear, false when it is a guess' % label)
-    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'sure': True if kind in ('year', 'numbers', 'finale') else sure is True}, probs
+    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'sure': True if kind in ('numbers', 'finale') else sure is True}, probs
 
 
 def quiz_save(raw):
@@ -7500,6 +7537,7 @@ def quiz_save(raw):
     if probs:
         return {'saved': False, 'problems': probs[:20]}
     kept = read_first([REPORT, REPORT_KEPT]) or {}
+    items = [quiz_finale(x, ((kept.get('report') or {}).get('essence') or {}).get('character')) if x['kind'] == 'finale' else x for x in items]
     pend = quiz_pending()
     draft = {'items': items, 'name': (str(kept.get('name') or '').split(' ') or [''])[0][:30],
              'character': (((kept.get('report') or {}).get('essence') or {}).get('character') or '')[:40], 'at': int(time.time()),
@@ -7527,6 +7565,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,
 .opts input{position:absolute;opacity:0;pointer-events:none}
 .opts label:before{content:"";flex:none;width:16px;height:16px;border-radius:50%;border:2px solid #cdb6dd}
 .opts label.on{border-color:var(--plum);background:var(--wash);font-weight:700}.opts label.on:before{border-color:var(--plum);background:radial-gradient(circle,var(--plum) 45%,#fff 50%)}
+.opts label.no{color:var(--soft);font-style:italic}.opts label.no.on{background:#fcebf2;border-color:var(--rose);color:var(--rose)}
 .foot{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px;font-size:14px;font-weight:700;text-align:center}
 '''
 
@@ -7548,11 +7587,13 @@ def quiz_widget_html(draft):
     for it in (x for x in draft['items'] if not x.get('sure')):
         rows = ''.join('<label><input type="radio" name="%s" value="%d"%s><span>%s</span></label>'
                        % (_e(it['id']), i, ' checked' if it['a'] == i else '', _e(o)) for i, o in enumerate(it['o']))
+        # Something the read may have got wrong (release 227): they can say so, and the question goes.
+        rows += '<label class="no"><input type="radio" name="%s" value="untrue"><span>That\'s not true about me</span></label>' % _e(it['id'])
         body.append('<section class="it"><span class="k">%s</span><p class="q">%s</p><div class="opts">%s</div></section>'
                     % (_e(QUIZ_KIND_LABELS.get(it.get('kind'), '')), _e(it['q']), rows))
     data = {'ids': [x['id'] for x in draft['items'] if not x.get('sure')]}
     head = 'How well do you know %s?' % (draft.get('name') or 'me')
-    return ('<div class="qz"><style>%s</style><div class="top"><small>PsycheAI quiz</small><b>%s</b><span>PsycheAI wasn\'t sure of these. The highlighted answer is its guess: tap the one that\'s really yours.</span></div>'
+    return ('<div class="qz"><style>%s</style><div class="top"><small>PsycheAI quiz</small><b>%s</b><span>PsycheAI wasn\'t sure of these. The highlighted answer is its guess: tap the one that\'s really yours, or say it\'s not true.</span></div>'
             '<form onsubmit="return false">%s<input type="hidden" id="qz-picks" name="psyche-quiz-picks" value="{}"></form>'
             '<div class="foot">When they look right, tap Make my quiz below ↓</div><script type="application/json" id="qz-data">%s</script><script>%s</script></div>'
             % (QZ_CSS, _e(head), ''.join(body), json.dumps(data).replace('</', '<\\/'), QZ_JS))
@@ -7588,43 +7629,9 @@ def _quiz_card_data():
         return None
 
 
-def quiz_story_image(name, card_path):
-    """The Story picture (1080 x 1920): "How well do you know <name>?", their card, and where the link goes. None without Pillow."""
-    try:
-        from PIL import Image, ImageDraw
-        art = card_art()
-        p = _Painter(art, 1080, 1920)
-        C, k = p.C, p.K
-        bg = p.linear([(0, p.rgba('#5b2a86')), (0.5, p.rgba('#7b3fa0')), (1, p.rgba('#c2366d'))], 0, 0, 1, 1)
-        base = bg([0, 0, 1080 * k, 1920 * k]).crop((0, 0, 1080 * k, 1920 * k)).convert('RGBA')
-        p.text(540, 190, 'PSYCHEAI QUIZ', 30, 700, '#ffffff', alpha=0.85, anchor='ms', spacing=30 * 0.18)
-        y = 300
-        for line in p.wrap('How well do you know %s?' % (name or 'me'), 84, 700, 920):
-            p.text(540, y, line, 84, 700, '#ffffff', anchor='ms')
-            y += 96
-        if card_path:
-            w = 560
-            h = int(w * 1920 / 1080)
-            top = max(y + 10, 480)
-            if top + h > 1700:
-                h = 1700 - top
-                w = int(h * 1080 / 1920)
-            p.rrect(540 - w / 2 - 10, top - 10, w + 20, h + 20, 34, fill='#ffffff', alpha=0.25)
-            p.image(card_path, 540 - w / 2, top, w, h)
-        p.text(540, 1800, 'Tap the link to take my quiz', 40, 700, '#ffffff', anchor='ms')
-        base.alpha_composite(p.im)
-        out = base.resize((1080, 1920), Image.LANCZOS).convert('RGB')
-        os.makedirs(QUIZ_DIR, exist_ok=True)
-        path = os.path.join(QUIZ_DIR, 'Quiz for my Story - %s.png' % re.sub(r'[^\w -]', '', name or 'me')[:30])
-        out.save(path, 'PNG', optimize=True)
-        return os.path.relpath(path, HERE)
-    except Exception:
-        return None
-
-
 def quiz_publish(raw):
     """python3 bin/psyche.py quiz-publish '<the widget's picks>': the quiz made from the questions they kept, with the
-    answers they picked, locked here under a new code and saved. Its link is the invite; their Story picture comes with it."""
+    answers they picked, locked here under a new code and saved. Its link is the invite."""
     draft = read_first([QUIZ_DRAFT])
     if not isinstance(draft, dict) or not draft.get('items'):
         return {'error': 'There\'s no quiz to make yet. Tap Make a quiz for my friends first.', 'buttons': [MAKE_QUIZ, 'Back to the menu'], 'asButtons': True}
@@ -7638,6 +7645,8 @@ def quiz_publish(raw):
     chosen = []
     for it in draft['items']:
         v = picks.get(it['id'])
+        if v == 'untrue' and not it.get('sure'):
+            continue          # they said it isn't true about them: the question goes (release 227)
         try:
             v = int(v)
         except (TypeError, ValueError):
@@ -7646,7 +7655,7 @@ def quiz_publish(raw):
     finale = [x for x in chosen if x.get('kind') == 'finale']
     chosen = [x for x in chosen if x.get('kind') != 'finale'] + finale
     if not QUIZ_MIN <= len(chosen) <= QUIZ_MAX:
-        return {'saved': False, 'problems': ['A quiz has %d questions, and this one has %d. Tap Write different questions.' % (QUIZ_MAX, len(chosen))],
+        return {'saved': False, 'problems': ['That leaves %d questions, and a quiz needs at least %d. Tap Write different questions.' % (len(chosen), QUIZ_MIN)],
                 'buttons': [QUIZ_MAKE_BTN, 'Back to the menu'], 'asButtons': True}
     code = secrets.token_urlsafe(16)
     while len(code) != 22:
@@ -7667,11 +7676,7 @@ def quiz_publish(raw):
     # The line they copy (README "The quiz, shared by them"): no install words and nothing about them beside the link.
     say = 'Here\'s your quiz. Copy the line below and send it to %s:' % (pend.get('name') if pend and pend.get('name') else 'friends')
     res = {'invite': {'url': link, 'line': 'Take my quiz: how well do you know me? ' + link}, 'n': len(chosen)}
-    pic = quiz_story_image(quiz['name'], current_out('Psyche Card', '.png'))
-    if pic:
-        res['storyImage'] = pic
-        say = 'For your Story: add Instagram\'s link sticker with your quiz link.\n\n' + say
-    res['invite']['say'] = say
+    res['invite']['say'] = say          # release 227: no Story picture with it (it showed their card)
     buttons = [QUIZ_RESULTS, 'Back to the menu']
     if pend:
         res['for'] = pend.get('name')

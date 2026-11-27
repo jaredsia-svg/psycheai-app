@@ -5365,7 +5365,7 @@ print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years':
       !/\.a\]\.className|children\[q\.a\]|nth\(q\.a\)/.test(page.JS) && /body:JSON\.stringify\(\{s:right,box:b\[0\],name:b\[1\]\}\)/.test(page.JS) &&
       /\$\('q-turn'\)\.onclick=function\(\)\{\$\('q-line'\)\.textContent=installLine\(\)/.test(page.JS) && /link\(\)\+'\.'\+picks\.join\(''\)/.test(page.JS) && /<div id="q-turn-box" hidden>/.test(html));
   check('the quiz page keeps their Psyche Card blurred and their character unnamed until the end, then reveals the full card; the answers a friend missed stay hidden (README "The quiz")',
-    /class="q-cardwrap q-locked"/.test(html) && /\.q-cardwrap\.q-locked \.q-card\{filter:blur\(16px\)/.test(page.CSS) && !/quiz\.character/.test(page.JS.slice(page.JS.indexOf('function intro()'), page.JS.indexOf('function done('))) &&
+    /class="q-cardwrap q-locked"/.test(html) && /<input type="checkbox" id="q-show" checked>/.test(html) && /\.q-cardwrap\.q-locked \.q-card\{filter:blur\(16px\)/.test(page.CSS) && !/quiz\.character/.test(page.JS.slice(page.JS.indexOf('function intro()'), page.JS.indexOf('function done('))) &&
       /function done\(again\)[^]*?if\(hasCard\(\)\)\{var im=\$\('q-reveal-img'\);im\.src=quiz\.card;/.test(page.JS) && /id="q-reveal" class="q-glass q-reveal" hidden/.test(html) && /answers are still a mystery/.test(page.JS));
   // The skill's side, in a copy of the skill (its working files go there, never in this repo), with PsycheAI's tools stubbed.
   const dir = fsq.mkdtempSync(pathq.join(osq.tmpdir(), 'quiz-'));
@@ -5408,6 +5408,7 @@ probs = {
   'finaleLast': bad(lambda b: b['questions'].insert(0, b['questions'].pop())),
   'noNumbers': bad(lambda b: [x.update(kind='deep') for x in b['questions'] if x['kind'] == 'numbers']),
   'noSure': bad(lambda b: b['questions'][3].pop('sure')),
+  'yearNoSure': bad(lambda b: b['questions'][0].pop('sure')),
   'yearWord': bad(lambda b: b['questions'][0].update(o=['2019', '2020', 'Last year', '2024'])),
   'nearCopy': bad(lambda b: b['questions'][7].update(o=['Make a careful plan', 'Make a plan', 'Call a friend', 'Go for a long run'], a=0)),
 }
@@ -5417,7 +5418,7 @@ saved = m.quiz_save(json.dumps(good))
 w = saved.get('widget', '')
 import re
 checked = re.findall(r'name="(\w+)" value="(\w+)" checked', w)
-pub = m.quiz_publish(json.dumps({'q3': '1', 'q8': 'nonsense'}))
+pub = m.quiz_publish(json.dumps({'q3': '1', 'q8': 'untrue', 'q1': 'untrue'}))
 code = m.read_first([m.QUIZ_KEPT])['code']
 tool, args = sent[-1]
 opened = m.e2e_open(args['e2e']['box'], m.e2e_key('quiz', code))
@@ -5433,7 +5434,7 @@ m.write_private([m.QUIZ_PENDING], {'link': m.BASE + '/quiz#' + code + '.00000000
 m._quiz_open = lambda c: (opened, {})
 missed = m.quiz_missed()
 print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'), 'widgetOut': 'Leave this one out' in w,
-  'checked': checked, 'asked': saved.get('asked'), 'buttons': saved.get('buttons'), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
+  'checked': checked, 'asked': saved.get('asked'), 'widget': w, 'likeAll': sorted(m.QUIZ_LIKE) == sorted(m.QUIZ_LIKE) and len(m.QUIZ_LIKE) == 28 and all(len(v) == 3 and c not in v and all(x in m.QUIZ_LIKE for x in v) for c, v in m.QUIZ_LIKE.items()), 'buttons': saved.get('buttons'), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
   'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'draftGone': draftGone, 'straight': straight,
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
@@ -5445,13 +5446,13 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       Q.facts && Q.facts.busiestYear && Q.facts.peakHours && /pm|am/.test(Q.facts.peakHours) && !/^(12am|1am|2am|3am) /.test(Q.facts.peakHours) && JSON.stringify(Q.facts.hashtagsOfWhatTheySaveAndLike) === '{"saves":["#trailrunning (9)","#coffee (4)"]}' &&
       has('messages', /^questions 4 of 10, the question[^:]*: "text" points at their messages/) && has('belief', /"church" is about politics, religion, kids or marriage, which a quiz question can never be about/) &&
       has('health', /"mental health" is about health/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has exactly 10/) && has('rather4', /exactly two/) &&
-      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 2 numbers/) && has('noSure', /questions 4 of 10: sure is true when/) && has('yearWord', /each option of a year question is a year/) && !(Q.probs.yearClose || []).length && has('nearCopy', /option 2 \("Make a plan"\): it is too close to the answer \("Make a careful plan"\)/) && Q.soft.length === 0,
+      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 2 numbers/) && has('noSure', /questions 4 of 10: sure is true when/) && has('yearNoSure', /questions 1 of 10: sure is true when/) && has('yearWord', /each option of a year question is a year/) && !(Q.probs.yearClose || []).length && has('nearCopy', /option 2 \("Make a plan"\): it is too close to the answer \("Make a careful plan"\)/) && Q.soft.length === 0,
     qerr || JSON.stringify(Q && { soft: Q.soft, facts: Q.facts, probs: Q.probs }).slice(0, 1500));
-  check('the quiz widget asks only the answers Muse wasn\'t sure of, each with its guess picked, with nothing to swap in or leave out, and with every answer sure the quiz is made at once with no widget (release 226, README "Only the unsure asked"); publishing keeps all ten with the answers picked (a pick that isn\'t one keeps the guess), puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
+  check('the quiz widget asks only the answers Muse wasn\'t sure of, each with "That\'s not true about me", which drops that question (release 227, down to 6); the finale\'s options are set here from the 28 characters, theirs and the three closest in temperament (README "The finale, from the 28"); each with its guess picked, with nothing to swap in or leave out, and with every answer sure the quiz is made at once with no widget (release 226, README "Only the unsure asked"); publishing keeps all ten with the answers picked (a pick that isn\'t one keeps the guess), puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
     Q && Q.saved === true && Q.checked.length === 2 && JSON.stringify(Q.checked.map(c => c[0])) === '["q3","q8"]' && !Q.widgetOut && Q.asked === 2 &&
-      Q.straight.widget === false && Q.straight.invite === true && Q.straight.asked === 0 && Q.straight.saved === true && Q.straight.sent === 1 && JSON.stringify(Q.buttons) === '["Make my quiz","Write different questions","Back to the menu"]' && Q.tool === 'quiz_put' && Q.id && Q.n === 10 &&
-      Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 10 && Q.opened.questions[9].k === 'finale' && Q.opened.questions[9].a === 3 &&
-      Q.opened.questions[2].a === 1 && Q.opened.questions[7].a === 2 && Q.opened.questions[2].o.length === 2 && Q.opened.questions[2].k === 'rather' && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone &&
+      Q.straight.widget === false && Q.straight.invite === true && Q.straight.asked === 0 && Q.straight.saved === true && Q.straight.sent === 1 && /value="untrue"><span>That's not true about me/.test(Q.widget) && JSON.stringify(Q.buttons) === '["Make my quiz","Write different questions","Back to the menu"]' && Q.tool === 'quiz_put' && Q.id && Q.n === 9 && !Q.opened.questions.some(x => x.q === 'D2?') && Q.opened.questions.some(x => x.q === 'In which year did Jared run his first marathon?') &&
+      Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 9 && Q.opened.questions[8].k === 'finale' && Q.opened.questions[8].o[Q.opened.questions[8].a] === 'Sherlock Holmes' && JSON.stringify(Q.opened.questions[8].o.slice().sort()) === '["Elsa","Hermione Granger","Remy","Sherlock Holmes"]' && Q.likeAll &&
+      Q.opened.questions[2].a === 1 && Q.opened.questions[2].o.length === 2 && Q.opened.questions[2].k === 'rather' && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone &&
       JSON.stringify(Q.pubButtons) === '["Show my quiz results","Back to the menu"]',
     qerr || JSON.stringify(Q && { checked: Q.checked, pub: Q.pub, opened: Q.opened }).slice(0, 600));
   check('a friend\'s quiz comes first after their card ("Make my quiz for <name>" and More, the rest under More), and once their own quiz is made, quiz-missed shows only the ones they missed with the right answer, then forgets the link; the quiz buttons are known labels',
