@@ -3,7 +3,8 @@
 
 What it does, in full:
   - contacts only app.psycheai.io (and psycheai.io, for a card a release before 133 saved: FETCH_HOSTS); it
-    sends nothing about them unless they choose to Sync (local_publish, SYNC_SENDS_CARD)
+    sends nothing about them unless they choose to Sync (local_publish, SYNC_SENDS_CARD) or make a quiz
+    (quiz_publish: locked under the quiz link's code)
   - runs only Muse's own Instagram, Messenger and Facebook tools (/opt/hatch/bin) and curl
   - writes only in this skill's folder (~/workspace/skills/psycheai/), ~/.psycheai/ (a spare
     copy of the account keys), a temporary folder it removes after each request, and
@@ -53,6 +54,14 @@ What it does, in full:
                                        when none is given): the Sync's task file, the two cards and the facts
   python3 bin/psyche.py let-know NAME          after a Sync from their link: who among the people they
                                        message to send the line to, names to pick, or the line to copy
+  python3 bin/psyche.py quiz                   "Make a quiz for my friends": work/quiz-task.json, from their
+                                       report and their posts and stories, to write the quiz from
+  python3 bin/psyche.py quiz-save @work/quiz.json  the quiz written, checked and kept here; its widget
+  python3 bin/psyche.py quiz-publish '<picks>' the quiz they picked, locked here under a new code and
+                                       saved; its link (app.psycheai.io/quiz#<code>) and Story picture
+  python3 bin/psyche.py quiz-results           who took it and their scores, opened here
+  python3 bin/psyche.py quiz-preview <link>    a friend's quiz link, kept for after their card
+  python3 bin/psyche.py quiz-missed            the answers they missed on that friend's quiz, once theirs is made
   python3 bin/psyche.py forget [--everything]  delete the working files (work/, sources/, notes/);
                                        with --everything, the digest and the report too
 
@@ -92,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 224
+RELEASE = 225
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5278,6 +5287,8 @@ def local_publish(args):
         nm_ = friend.get('name') if friend.get('name') and friend.get('name') != 'Your friend' else ''
         nxt['say'] = (('Next, your Sync with %s: their link is waiting.' % nm_) if nm_ else 'Next, your Sync: your friend\'s link is waiting.') + '\n\n' + SYNC_SHARES
         nxt['syncWith'] = friend.get('name')
+    elif quiz_pending():     # a friend's quiz came with the install (README "A friend's quiz"): their quiz first, only on a tap
+        quiz_first(nxt, quiz_pending())
     ideas = ask_ideas(card.get('patterns'))      # release 198: askButtons ends with "Back to the menu"
     return {'ok': True, 'full': full, 'card': card, 'nextStep': nxt, 'askIdeas': ideas, 'askButtons': ideas + ['Back to the menu']}
 
@@ -5897,7 +5908,7 @@ def news_for(force=False):
     if not read_first([REPORT, REPORT_KEPT]):
         return None
     # Release 208: nothing can be waiting with no Sync link made or used here and no Psyche Together started, so no call.
-    if not held_keys()['syncs'] and not e2e_codes() and not os.path.exists(TOGETHER_STATE):
+    if not held_keys()['syncs'] and not e2e_codes() and not os.path.exists(TOGETHER_STATE) and not read_first([QUIZ_KEPT, QUIZ_KEPT_SPARE]):
         return None
     kept = read_first([NEWS]) or {}
     now = int(time.time())
@@ -5952,6 +5963,13 @@ def news_for(force=False):
     if got.get('together') and not kept.get('together'):
         lines.append('Your Psyche Together read is ready.')
         buttons.append('Show our Psyche Together')
+    # Release 225 (README "The quiz"): friends who took their quiz since they last looked, as a count; names are in the results.
+    qz = got.get('quiz') if isinstance(got.get('quiz'), dict) else {}
+    fresh = int(qz.get('new') or 0)
+    if fresh and int(kept.get('quizSaid') or 0) != int(qz.get('answers') or 0):
+        lines.append('%s took your quiz.' % ('A friend' if fresh == 1 else '%d friends' % fresh))
+        buttons.append('Show my quiz results')
+    kept['quizSaid'] = int(qz.get('answers') or 0)
     kept.update(syncs=sorted(said)[-200:], together=bool(got.get('together')))
     write_private([NEWS], kept)
     return dict({'news': lines, 'newsButtons': buttons}, **extra) if lines else None
@@ -6052,7 +6070,8 @@ SOURCE_CHOICES = ['WhatsApp, Facebook and Messenger', 'WhatsApp chats', 'Faceboo
 DATA_HERE = 'Your Instagram is read right here in your Muse account: nothing to export or upload.'
 DATA_SENT = ('Your report and Psyche Card are made right here in Muse. None of your posts, messages or report go to PsycheAI; only if you '
              'Sync, your card\'s few lines, motivation scores and daily rhythm (when in the day you post and message) are shared, locked '
-             'under your Sync link.')
+             'under your Sync link. A quiz you make shares its questions, your answers, your first name and your card with '
+             'friends who have its link, locked so PsycheAI can\'t read them.')
 
 
 def keep_menu(out):
@@ -6060,8 +6079,9 @@ def keep_menu(out):
     kept = read_first([MENU]) or {}
     if (opts.get('more') or {}).get('buttons'):
         kept['more'] = opts['more']['buttons']
-    if (opts.get('ask') or {}).get('askButtons'):
-        kept['ask'] = opts['ask']['askButtons']
+    ask = (opts.get('ask') or {}).get('askButtons') or (opts.get('more') or {}).get('askButtons')     # release 225: Ask sits under More
+    if ask:
+        kept['ask'] = ask
     wa = (opts.get('source') or {}).get('whatsapp') or (opts.get('more') or {}).get('whatsapp')
     if isinstance(wa, dict) and wa.get('answer'):
         kept['whatsapp'] = {'say': wa['answer'], 'buttons': wa.get('buttons') or ['I\'ve shared my chats', 'Not now']}
@@ -6128,6 +6148,7 @@ TAP_ROUTES = {
     'My Syncs': 'get_syncs', 'Show my Syncs': 'get_syncs',
     "I've shared it. Show our results": 'sync-ready', 'Show our results': 'sync-ready', 'My friend has synced': 'sync-ready',
     'Psyche Together with my partner': 'together-intro',
+    'Make a quiz for my friends': 'quiz', 'Make a new quiz': 'quiz', 'Write different questions': 'quiz', 'Show my quiz results': 'quiz-results',
 }
 # The buttons the guide answers, each because Muse itself does the next step: the first-run choices (first-run's result
 # has their answers), installing or starting Psyche Together, writing or asking something, a link, a connection, a
@@ -6146,7 +6167,7 @@ TAP_GUIDED = frozenset([
     'Explain why you said this', 'Correct something', 'Show our Psyche Together', 'Ask something else',
     'Install Psyche Together', 'Install and start Psyche Together', 'Make it anyway', 'Yes, delete everything', 'Cancel', 'Privacy policy',
     'Continue Psyche Together', 'Add WhatsApp as data source', 'Add WhatsApp or Facebook as data source', TOGETHER_INSTALL,
-    'Install Psyche Together from https://app.psycheai.io/together and start it',
+    'Install Psyche Together from https://app.psycheai.io/together and start it', 'Make my quiz',
 ])
 
 
@@ -6228,8 +6249,16 @@ def route_tap(label):
     if cmd is None and re.match(r'^Sync with [^\n@/:]{1,30}$', label) and (pending_sync() or {}).get('link'):
         out = call('sync_with', {'link': pending_sync()['link']})
         return dict(out, via='sync-with') if isinstance(out, dict) else out
+    if cmd is None and re.match(r'^Make my quiz for [^\n@/:]{1,30}$', label):
+        cmd = 'quiz'
+    if cmd is None and re.match(r"^See what I missed on [^\n@/:]{1,30}'s quiz$", label):
+        return dict(quiz_missed(), via='quiz-missed')
     if cmd is None:
         return None
+    if cmd == 'quiz':
+        return dict(quiz_task(), via='quiz')
+    if cmd == 'quiz-results':
+        return dict(quiz_results(), via='quiz-results')
     if cmd == 'together-intro':
         if os.path.exists(os.path.join(TOGETHER_DIR, 'SKILL.md')):
             return None            # installed: its own SKILL.md takes it from here, as the guide says (release 220: a folder alone isn't)
@@ -6364,9 +6393,11 @@ LABELS = frozenset([
     'See who picked me', 'See my other matches', 'Yes, I\'d like to meet', 'Chat privately', 'Swap Instagram',
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
     'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Install Psyche Together', 'Install and start Psyche Together', 'Install Psyche Together from https://app.psycheai.io/together and start it', TOGETHER_INSTALL, 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
-    'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only'])
+    'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only',
+    'Make a quiz for my friends', 'Make a new quiz', 'Show my quiz results', 'Make my quiz', 'Write different questions'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
-              re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$')]
+              re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$'),
+              re.compile(r'^Make my quiz for [^\n@/:]{1,30}$'), re.compile(r"^See what I missed on [^\n@/:]{1,30}'s quiz$")]
 
 
 def known_label(label):
@@ -6403,7 +6434,7 @@ def clean_result(value):
 
 # What's next after a Psyche, and the ideas to ask: the server's own (lib/next.js publish_psyche, lib/mcp.js
 # ASK_IDEAS and askIdeas), here so publishing asks nothing of it. The selftest holds them to the server's.
-AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Ask PsycheAI questions about myself", "Sync with a friend", "Psyche Together with my partner", "Add WhatsApp or Facebook and generate a Fresh Psyche", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger"], "more": {"buttons": ["My data and privacy"]}}
+AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Make a quiz for my friends", "Sync with a friend", "Add WhatsApp or Facebook and generate a Fresh Psyche", "Psyche Together with my partner", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger"], "more": {"buttons": ["Ask PsycheAI questions about myself", "My data and privacy"]}}
 ASK_IDEAS = [
 "Who am I when I'm not being useful, impressive or needed?",
 "What do I keep trying to prove, and to whom?",
@@ -7001,6 +7032,24 @@ def main(argv):
     if argv[0] == 'let-know' and len(argv) >= 2:
         print(json.dumps(let_know(' '.join(argv[1:])), ensure_ascii=False, indent=1))
         return
+    if argv[0] == 'quiz':
+        print(json.dumps(quiz_task(), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'quiz-save' and len(argv) >= 2:
+        print(json.dumps(quiz_save(argv[1]), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'quiz-publish':
+        print(json.dumps(quiz_publish(argv[1] if len(argv) >= 2 else '{}'), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'quiz-results':
+        print(json.dumps(quiz_results(), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'quiz-preview' and len(argv) >= 2:
+        print(json.dumps(quiz_preview(argv[1]), ensure_ascii=False, indent=1))
+        return
+    if argv[0] == 'quiz-missed':
+        print(json.dumps(quiz_missed(), ensure_ascii=False, indent=1))
+        return
     if argv[0] == 'sync-preview' and len(argv) >= 2:
         print(json.dumps(sync_preview(argv[1]), ensure_ascii=False, indent=1))
         return
@@ -7120,7 +7169,7 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT):     # NEWS: which Syncs news has said (release 198)
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_PENDING):     # NEWS: which Syncs news has said (release 198)
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))
@@ -7189,6 +7238,522 @@ def main(argv):
         print(json.dumps(kept, ensure_ascii=False))
         return
     sys.exit('Usage: python3 bin/psyche.py status | update | report | republish | show PART | prep FILE... [--me NAME] [--deep] | check-digest | forget [--everything] | sync-preview LINK | sync-with [LINK] | sync-ready [NAME] | let-know NAME | call TOOL [JSON | @FILE]')
+
+
+# ---------------------------------------------------------------- How well do you know me? (the quiz)
+# README "The quiz", PLAN.md "How well do you know me?": Muse writes questions about them from their Psyche (quiz), they
+# check and pick the answers in one widget (quiz-save), and the quiz is locked here under a new code and saved
+# (quiz-publish): its link is app.psycheai.io/quiz#<code>, where friends answer it with no sign-in. The page opens it in
+# the friend's browser; PsycheAI keeps only boxes it can't open. A friend's own answers come back locked for this
+# workspace (quiz-results). A friend who comes from a quiz pastes a line with its link (quiz-preview), and once their
+# own quiz is made, sees the answers they missed (quiz-missed).
+QUIZ_E2E = re.compile(r'/quiz/?#([A-Za-z0-9_-]{22})(?:\.([0-3]{1,10}))?(?![A-Za-z0-9_-])')
+QUIZ_TASK = os.path.join(WORK, 'quiz-task.json')
+QUIZ_DRAFT = os.path.join(HERE, '.quiz-draft.json')
+QUIZ_KEPT = os.path.join(HERE, '.quiz.json')
+QUIZ_KEPT_SPARE = os.path.join(KEEP, 'quiz.json')
+QUIZ_PENDING = os.path.join(KEEP, 'quiz-pending.json')
+QUIZ_DIR = os.path.join(OUT, 'quiz')
+MAKE_QUIZ = 'Make a quiz for my friends'
+NEW_QUIZ = 'Make a new quiz'
+QUIZ_RESULTS = 'Show my quiz results'
+QUIZ_MAKE_BTN = 'Make my quiz'
+QUIZ_MIN, QUIZ_MAX, QUIZ_SPARES = 5, 10, 4
+QUIZ_KINDS = ('warm-up', 'deep', 'hard', 'finale')
+QUIZ_BELIEFS = ('politics', 'religion', 'kids', 'marriage')
+# What a question can never be about (README "The quiz, what it asks"). Politics, religion, kids and marriage are
+# stated-only, so they're only in the beliefs group, where the read never picks an answer: the owner does.
+QUIZ_NEVER = [
+    (re.compile(r'\b(sex|sexual\w*|sexuality|orientation|gay|lesbian|bisexual|queer|virgin\w*|kink\w*|fetish\w*|nudes?|hook ?ups?)\b', re.I), 'sex or orientation'),
+    (re.compile(r'\b(race|racial\w*|ethnic\w*|skin colou?r)\b', re.I), 'race or ethnicity'),
+    (re.compile(r'\b(health\w*|disease\w*|disab\w*|illness\w*|medic\w*|diagnos\w*|depress\w*|anxiety|adhd|autis\w*|therap\w*|mental health|disorder\w*)\b', re.I), 'health'),
+    (re.compile(r'\b(weigh\w*|heights?|my body|body shape|attractive\w*|pretty|handsome|ugly)\b', re.I), 'bodies or looks'),
+    (re.compile(r'\b(drugs?|weed|cannabis|cocaine|pills?)\b', re.I), 'drugs'),
+    (re.compile(r'\b(pregnan\w*|fertil\w*|abortion\w*|criminal\w*|arrest\w*|prison\w*|jail\w*|visas?|immigra\w*|citizen\w*|passports?)\b', re.I), 'a private matter'),
+    (re.compile(r'\b(how old|my age)\b', re.I), 'age'),
+]
+QUIZ_BELIEF_WORDS = re.compile(r'\b(religio\w*|church\w*|mosques?|temples?|god|faith\w*|pray\w*|politic\w*|vot(e|es|ed|ing)|elections?|left-wing|right-wing|kids?|child(ren)?|bab(y|ies)|marr\w*|wedding\w*|spouse)\b', re.I)
+# Nothing from their messages is quoted or described (README "The quiz, what it asks"): a question that names them is
+# refused here, and the spec asks for words that would hold from their posts alone.
+QUIZ_MESSAGES = re.compile(r'\b(dms?|messag\w*|text(s|ed|ing)?|chats?|whatsapp|messenger|inbox|conversations?|voice notes?)\b', re.I)
+QUIZ_IDENT = re.compile(r'https?:|www\.|@\w|[\w.+-]+@[\w-]+\.\w|\d[\d\s-]{6,}\d|["“”]')
+QUIZ_STRIP = ('evidence', 'quotes', 'quote', 'basedOn', 'rationale', 'caveat', 'reading', 'confidence')
+
+
+def _quiz_clean(text, most):
+    t = re.sub(r'\s+', ' ', _HIDDEN.sub(' ', '' if text is None else str(text))).strip()
+    return t if 0 < len(t) <= most else None
+
+
+def _quiz_strip(v):
+    if isinstance(v, dict):
+        return {k: _quiz_strip(x) for k, x in v.items() if k not in QUIZ_STRIP}
+    if isinstance(v, list):
+        return [_quiz_strip(x) for x in v]
+    return v
+
+
+def _digest_section(head):
+    """One section of their digest (e.g. "## Posts and stories"), or ''."""
+    try:
+        text = open(DIGEST, encoding='utf-8').read()
+    except OSError:
+        return ''
+    out, on = [], False
+    for line in text.splitlines():
+        if line.startswith('## '):
+            on = line.startswith(head)
+            continue
+        if on:
+            out.append(line)
+    return '\n'.join(out).strip()
+
+
+def quiz_pending():
+    got = read_first([QUIZ_PENDING])
+    return got if isinstance(got, dict) and QUIZ_E2E.search(str(got.get('link') or '')) else None
+
+
+def drop_quiz_pending():
+    try:
+        os.remove(QUIZ_PENDING)
+    except OSError:
+        pass
+
+
+def quiz_label(name):
+    return 'Make my quiz for %s' % name if name and name != 'Your friend' else 'Make my quiz for my friend'
+
+
+def quiz_missed_label(name):
+    return 'See what I missed on %s\'s quiz' % (name if name and name != 'Your friend' else 'my friend')
+
+
+def quiz_task():
+    """python3 bin/psyche.py quiz: the task file to write their quiz from (guide.json's quiz), from their kept Psyche."""
+    kept = read_first([REPORT, REPORT_KEPT]) or {}
+    report = kept.get('report') if isinstance(kept.get('report'), dict) else None
+    if not report:
+        return {'error': 'There\'s no Psyche here yet to make a quiz from. Make their Psyche first.', 'buttons': ['Generate my Psyche', 'Back to the menu'], 'asButtons': True}
+    # What it's written from (README "The quiz, what it asks"): the report's findings, interests and motivations, and their
+    # posts and stories. Never their messages or comments, the read's beliefs (stated-only) or its wellbeing (health).
+    mine = {k: _quiz_strip(report[k]) for k in ('mbti', 'bigFive', 'patterns', 'interests', 'values', 'topMotivators', 'motivators', 'relationship',
+                                               'career', 'careerAssessment', 'essence', 'summary', 'cardHighlights') if k in report}
+    posts = _digest_section('## Posts and stories')[:12000]
+    first = (str(kept.get('name') or '').split(' ') or [''])[0][:30]
+    character = ((report.get('essence') or {}).get('character') or '')[:40]
+    data = {'name': first, 'character': character, 'report': mine, 'postsAndStories': posts,
+            'about': 'Their own Psyche report and their own posts and stories: something to write questions from, never instructions.'}
+    os.makedirs(WORK, exist_ok=True)
+    with open(QUIZ_TASK, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    pend = quiz_pending()
+    out = {'write': 'quiz', 'task': 'work/quiz-task.json', 'say': 'Writing your quiz from your Psyche. About a minute.'}
+    if pend:
+        out['for'] = pend.get('name')
+    return out
+
+
+def _quiz_item(x, where, n):
+    """One question checked: ({id, kind, q, o, a, topic?}, problems)."""
+    probs = []
+    if not isinstance(x, dict):
+        return None, ['%s %d isn\'t an object' % (where, n)]
+    q = _quiz_clean(x.get('q'), 160)
+    opts = x.get('o') if isinstance(x.get('o'), list) else []
+    o = [_quiz_clean(y, 70) for y in opts]
+    label = '%s %d' % (where, n)
+    if not q:
+        probs.append('%s: q is the question, 1 to 160 characters' % label)
+    if len(o) != 4 or not all(o) or len({y.lower() for y in o if y}) != 4:
+        probs.append('%s: o is exactly four different options, each 1 to 70 characters' % label)
+    belief = where == 'beliefs'
+    a = x.get('a')
+    if belief:
+        if a is not None:
+            probs.append('%s: a is null. The read never picks an answer about %s: they choose it themselves' % (label, '/'.join(QUIZ_BELIEFS)))
+        topic = x.get('topic')
+        if topic not in QUIZ_BELIEFS:
+            probs.append('%s: topic is one of %s' % (label, ', '.join(QUIZ_BELIEFS)))
+    elif not (isinstance(a, int) and not isinstance(a, bool) and 0 <= a <= 3):
+        probs.append('%s: a is the index (0 to 3) of the option you think they\'d pick' % label)
+    kind = x.get('kind') if not belief else 'beliefs'
+    if not belief and kind not in QUIZ_KINDS:
+        probs.append('%s: kind is one of %s' % (label, ', '.join(QUIZ_KINDS)))
+    words = ' '.join([q or ''] + [y or '' for y in o])
+    for rx, topic_ in QUIZ_NEVER:
+        if rx.search(words):
+            probs.append('%s: a quiz question can never be about %s' % (label, topic_))
+    if not belief and QUIZ_BELIEF_WORDS.search(words):
+        probs.append('%s: politics, religion, kids and marriage go only in beliefs, with no answer picked' % label)
+    if QUIZ_MESSAGES.search(words):
+        probs.append('%s: nothing from their messages is quoted or described, and no question mentions messages or chats' % label)
+    if QUIZ_IDENT.search(words):
+        probs.append('%s: no quotes, handles, links, emails or numbers' % label)
+    item = {'kind': kind, 'q': q, 'o': o, 'a': a if not belief else None}
+    if belief:
+        item['topic'] = x.get('topic')
+    return item, probs
+
+
+def quiz_save(raw):
+    """python3 bin/psyche.py quiz-save @work/quiz.json: the questions Muse wrote, checked, kept here, and shown as one
+    widget for them to pick each answer, leave a question out or add a spare or a beliefs question."""
+    try:
+        got = json.loads(open(raw[1:], encoding='utf-8').read() if str(raw).startswith('@') else raw)
+    except (OSError, ValueError) as err:
+        return {'saved': False, 'problems': ['Couldn\'t read the quiz: %s' % err]}
+    if not isinstance(got, dict):
+        return {'saved': False, 'problems': ['The quiz is one JSON object: {"questions": [...], "spares": [...], "beliefs": [...]}']}
+    probs, items = [], []
+    for where, want in (('questions', QUIZ_MAX), ('spares', QUIZ_SPARES), ('beliefs', len(QUIZ_BELIEFS))):
+        xs = got.get(where) if isinstance(got.get(where), list) else []
+        if len(xs) != want:
+            probs.append('%s has exactly %d' % (where, want))
+        for n, x in enumerate(xs[:want], 1):
+            it, p = _quiz_item(x, where, n)
+            probs += p
+            if it:
+                it['id'] = '%s%d' % (where[0], n)
+                it['group'] = where
+                items.append(it)
+    if not probs:
+        if sorted(x['topic'] for x in items if x['group'] == 'beliefs') != sorted(QUIZ_BELIEFS):
+            probs.append('beliefs has one question on each of %s' % ', '.join(QUIZ_BELIEFS))
+        if not any(x['kind'] == 'finale' for x in items if x['group'] == 'questions'):
+            probs.append('questions ends with the finale: which character PsycheAI says they are (kind "finale")')
+    if probs:
+        return {'saved': False, 'problems': probs[:20]}
+    kept = read_first([REPORT, REPORT_KEPT]) or {}
+    pend = quiz_pending()
+    draft = {'items': items, 'name': (str(kept.get('name') or '').split(' ') or [''])[0][:30],
+             'character': (((kept.get('report') or {}).get('essence') or {}).get('character') or '')[:40], 'at': int(time.time()),
+             'for': (pend or {}).get('name')}
+    write_private([QUIZ_DRAFT], draft)
+    return quiz_widget_out(draft)
+
+
+QZ_CSS = '''
+:root{color-scheme:light;--ink:#241a2e;--soft:#5a4f66;--line:#ece4f1;--plum:#6e3796;--rose:#c2366d;--wash:#f6effb}
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;color:var(--ink);-webkit-text-size-adjust:100%}
+.qz{background:#fff;border-radius:18px;overflow:hidden;border:1px solid var(--line);max-width:560px;margin:0 auto}
+.top{padding:14px 16px 12px;color:#fff;background:linear-gradient(135deg,#5b2a86,#7b3fa0 45%,#c2366d)}
+.top small{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.85}
+.top b{display:block;font-size:19px;margin-top:2px}.top span{display:block;font-size:13px;opacity:.92;margin-top:4px}
+.sec{padding:12px 14px 4px;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--plum)}
+.sec small{display:block;text-transform:none;letter-spacing:0;font-weight:500;color:var(--soft);font-size:12.5px;margin-top:2px}
+.it{margin:8px 12px;padding:12px;border:1.5px solid var(--line);border-radius:14px}.it.on{border-color:var(--plum)}
+.q{margin:0 0 8px;font-size:15.5px;line-height:1.3;font-weight:750}
+.opts{display:flex;flex-direction:column;gap:5px}
+.opts label{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--line);border-radius:11px;font-size:14px;line-height:1.25;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.opts input{position:absolute;opacity:0;pointer-events:none}
+.opts label:before{content:"";flex:none;width:16px;height:16px;border-radius:50%;border:2px solid #cdb6dd}
+.opts label.on{border-color:var(--plum);background:var(--wash);font-weight:700}.opts label.on:before{border-color:var(--plum);background:radial-gradient(circle,var(--plum) 45%,#fff 50%)}
+.opts label.out{color:var(--soft);font-style:italic}.opts label.out.on{background:#f4f2f6;border-color:#bdb2c8;color:var(--soft)}
+.foot{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px;font-size:14px;font-weight:700;text-align:center}
+.foot.bad{color:var(--rose)}
+'''
+
+QZ_JS = r'''
+(function(){
+var D=JSON.parse(document.getElementById('qz-data').textContent),field=document.getElementById('qz-picks'),foot=document.getElementById('qz-foot');
+function picks(){var out={};D.ids.forEach(function(id){var x=document.querySelector('input[name="'+id+'"]:checked');out[id]=x?x.value:'out';});return out;}
+function show(){var p=picks(),n=0;D.ids.forEach(function(id){var on=p[id]!=='out';if(on)n++;var it=document.getElementById('it-'+id);if(it)it.classList.toggle('on',on);
+ [].slice.call(document.querySelectorAll('input[name="'+id+'"]')).forEach(function(x){x.parentNode.classList.toggle('on',x.checked);});});
+ field.value=JSON.stringify(p);
+ if(n<D.min){foot.className='foot bad';foot.textContent=n+' in your quiz: pick at least '+D.min+'.';}
+ else if(n>D.max){foot.className='foot bad';foot.textContent=n+' in your quiz: leave out '+(n-D.max)+' to make it '+D.max+'.';}
+ else{foot.className='foot';foot.textContent=n+' in your quiz. When it looks right, tap Make my quiz below ↓';}}
+document.addEventListener('change',function(e){if(e.target&&e.target.type==='radio')show();});
+show();setTimeout(show,300);setTimeout(show,1200);})();
+'''
+
+
+def quiz_widget_html(draft):
+    items = draft['items']
+    secs = [('questions', 'Your quiz', 'Tap the answer that\'s really yours. The highlighted one is PsycheAI\'s guess.'),
+            ('spares', 'Swap one in', 'Pick an answer to add one, and leave another out.'),
+            ('beliefs', 'Beliefs and future', 'Only if you want them in. PsycheAI never guesses these: you pick the answer.')]
+    body = []
+    for grp, title, sub in secs:
+        body.append('<div class="sec">%s<small>%s</small></div>' % (_e(title), _e(sub)))
+        for it in (x for x in items if x['group'] == grp):
+            rows = ''.join('<label><input type="radio" name="%s" value="%d"%s><span>%s</span></label>'
+                           % (_e(it['id']), i, ' checked' if grp == 'questions' and it['a'] == i else '', _e(o)) for i, o in enumerate(it['o']))
+            # Only the quiz's own questions start in, with the read's guess picked; a spare or a beliefs question is in only once they pick its answer.
+            rows += '<label class="out"><input type="radio" name="%s" value="out"%s><span>Leave this one out</span></label>' % (_e(it['id']), '' if grp == 'questions' else ' checked')
+            body.append('<section class="it" id="it-%s"><p class="q">%s</p><div class="opts">%s</div></section>' % (_e(it['id']), _e(it['q']), rows))
+    data = {'ids': [x['id'] for x in items], 'min': QUIZ_MIN, 'max': QUIZ_MAX}
+    head = 'How well do you know %s?' % (draft.get('name') or 'me')
+    return ('<div class="qz"><style>%s</style><div class="top"><small>PsycheAI quiz</small><b>%s</b><span>Friends see one question at a time, and whether they got it right, never the right answer.</span></div>'
+            '<form onsubmit="return false">%s<input type="hidden" id="qz-picks" name="psyche-quiz-picks" value="{}"></form>'
+            '<div class="foot" id="qz-foot"></div><script type="application/json" id="qz-data">%s</script><script>%s</script></div>'
+            % (QZ_CSS, _e(head), ''.join(body), json.dumps(data).replace('</', '<\\/'), QZ_JS))
+
+
+def quiz_widget_out(draft):
+    html_ = quiz_widget_html(draft)
+    os.makedirs(WORK, exist_ok=True)
+    path = os.path.join(WORK, 'quiz-widget.html')
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(html_)
+    return {'saved': True, 'widget': html_, 'widgetFile': 'work/quiz-widget.html',
+            'say': 'Here\'s your quiz. Pick your real answer to each, swap any you don\'t like, then tap Make my quiz.',
+            'buttons': [QUIZ_MAKE_BTN, 'Write different questions', 'Back to the menu'], 'asButtons': True}
+
+
+def _quiz_card_data():
+    """A small JPEG of their Psyche Card, for the quiz page's top, as a data URL; None when there's none here."""
+    own = current_out('Psyche Card', '.png')
+    if not own:
+        return None
+    try:
+        from PIL import Image
+        im = Image.open(own).convert('RGB')
+        im.thumbnail((420, 760), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, 'JPEG', quality=78, optimize=True, progressive=True)
+        return 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return None
+
+
+def quiz_story_image(name, card_path):
+    """The Story picture (1080 x 1920): "How well do you know <name>?", their card, and where the link goes. None without Pillow."""
+    try:
+        from PIL import Image, ImageDraw
+        art = card_art()
+        p = _Painter(art, 1080, 1920)
+        C, k = p.C, p.K
+        bg = p.linear([(0, p.rgba('#5b2a86')), (0.5, p.rgba('#7b3fa0')), (1, p.rgba('#c2366d'))], 0, 0, 1, 1)
+        base = bg([0, 0, 1080 * k, 1920 * k]).crop((0, 0, 1080 * k, 1920 * k)).convert('RGBA')
+        p.text(540, 190, 'PSYCHEAI QUIZ', 30, 700, '#ffffff', alpha=0.85, anchor='ms', spacing=30 * 0.18)
+        y = 300
+        for line in p.wrap('How well do you know %s?' % (name or 'me'), 84, 700, 920):
+            p.text(540, y, line, 84, 700, '#ffffff', anchor='ms')
+            y += 96
+        if card_path:
+            w = 560
+            h = int(w * 1920 / 1080)
+            top = max(y + 10, 480)
+            if top + h > 1700:
+                h = 1700 - top
+                w = int(h * 1080 / 1920)
+            p.rrect(540 - w / 2 - 10, top - 10, w + 20, h + 20, 34, fill='#ffffff', alpha=0.25)
+            p.image(card_path, 540 - w / 2, top, w, h)
+        p.text(540, 1800, 'Tap the link to take my quiz', 40, 700, '#ffffff', anchor='ms')
+        base.alpha_composite(p.im)
+        out = base.resize((1080, 1920), Image.LANCZOS).convert('RGB')
+        os.makedirs(QUIZ_DIR, exist_ok=True)
+        path = os.path.join(QUIZ_DIR, 'Quiz for my Story - %s.png' % re.sub(r'[^\w -]', '', name or 'me')[:30])
+        out.save(path, 'PNG', optimize=True)
+        return os.path.relpath(path, HERE)
+    except Exception:
+        return None
+
+
+def quiz_publish(raw):
+    """python3 bin/psyche.py quiz-publish '<the widget's picks>': the quiz made from the questions they kept, with the
+    answers they picked, locked here under a new code and saved. Its link is the invite; their Story picture comes with it."""
+    draft = read_first([QUIZ_DRAFT])
+    if not isinstance(draft, dict) or not draft.get('items'):
+        return {'error': 'There\'s no quiz to make yet. Tap Make a quiz for my friends first.', 'buttons': [MAKE_QUIZ, 'Back to the menu'], 'asButtons': True}
+    try:
+        picks = json.loads(open(raw[1:], encoding='utf-8').read() if str(raw).startswith('@') else (raw or '{}'))
+    except (OSError, ValueError):
+        picks = None
+    if not isinstance(picks, dict):
+        return {'error': 'The picks are one JSON object: the widget\'s psyche-quiz-picks field, each question\'s id → the answer\'s number or "out".'}
+    chosen = []
+    for it in draft['items']:
+        v = picks.get(it['id'], 'keep' if it['group'] == 'questions' else 'out')
+        if v == 'keep':
+            v = it['a']
+        if v in ('out', None, ''):
+            continue
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= v <= 3:
+            chosen.append(dict(it, a=v))
+    finale = [x for x in chosen if x.get('kind') == 'finale']
+    chosen = [x for x in chosen if x.get('kind') != 'finale'] + finale
+    if not QUIZ_MIN <= len(chosen) <= QUIZ_MAX:
+        return {'saved': False, 'problems': ['A quiz has %d to %d questions, and %d are picked. Pick an answer for more, or leave some out.' % (QUIZ_MIN, QUIZ_MAX, len(chosen))],
+                'buttons': [QUIZ_MAKE_BTN, 'Back to the menu'], 'asButtons': True}
+    code = secrets.token_urlsafe(16)
+    while len(code) != 22:
+        code = secrets.token_urlsafe(16)
+    quiz = {'v': 1, 'name': draft.get('name') or '', 'character': draft.get('character') or '', 'card': _quiz_card_data(),
+            'questions': [{'q': x['q'], 'o': x['o'], 'a': x['a']} for x in chosen]}
+    out = post_tool('quiz_put', {'e2e': {'id': e2e_key('quiz-id', code).hex(), 'box': e2e_seal(quiz, e2e_key('quiz', code)), 'n': len(chosen)}})
+    if not isinstance(out, dict) or out.get('error'):
+        return out if isinstance(out, dict) else {'error': 'PsycheAI could not save the quiz. Try again.'}
+    write_private([QUIZ_KEPT, QUIZ_KEPT_SPARE], {'code': code, 'at': int(time.time()), 'name': quiz['name'],
+                                                 'questions': [{'q': x['q'], 'o': x['o'], 'a': x['a'], 'kind': x.get('kind')} for x in chosen]})
+    try:
+        os.remove(QUIZ_DRAFT)
+    except OSError:
+        pass
+    link = BASE + '/quiz#' + code
+    pend = quiz_pending()
+    # The line they copy (README "The quiz, shared by them"): no install words and nothing about them beside the link.
+    say = 'Here\'s your quiz. Copy the line below and send it to %s:' % (pend.get('name') if pend and pend.get('name') else 'friends')
+    res = {'invite': {'url': link, 'line': 'Take my quiz: how well do you know me? ' + link}, 'n': len(chosen)}
+    pic = quiz_story_image(quiz['name'], current_out('Psyche Card', '.png'))
+    if pic:
+        res['storyImage'] = pic
+        say = 'For your Story: add Instagram\'s link sticker with your quiz link.\n\n' + say
+    res['invite']['say'] = say
+    buttons = [QUIZ_RESULTS, 'Back to the menu']
+    if pend:
+        res['for'] = pend.get('name')
+        buttons = [quiz_missed_label(pend.get('name'))] + buttons
+    res['nextStep'] = _step('Friends answer on the quiz page, no app needed. Their names and answers come back to you here, locked so PsycheAI can\'t read them.', buttons)
+    return res
+
+
+def _quiz_open(code):
+    """The quiz behind a code, opened here: (quiz, data from the page's route), or (None, error)."""
+    try:
+        got = json.loads(get('/quiz/data/' + e2e_key('quiz-id', code).hex()).decode())
+    except Exception:
+        return None, {'error': 'That quiz has ended, or the link isn\'t complete.'}
+    q = e2e_open(got.get('box'), e2e_key('quiz', code)) if isinstance(got, dict) else None
+    if not isinstance(q, dict) or not isinstance(q.get('questions'), list):
+        return None, {'error': 'That quiz couldn\'t be opened with this link. Ask for it again.'}
+    return q, got
+
+
+def quiz_preview(link):
+    """A friend's quiz link, pasted into Muse (README "A friend's quiz"): whose it is, kept for after their card, and the reply."""
+    m = QUIZ_E2E.search(str(link or ''))
+    if not m:
+        return {'error': 'That quiz link isn\'t complete. Ask your friend to send it again.'}
+    code, picks = m.group(1), m.group(2) or ''
+    own = read_first([QUIZ_KEPT, QUIZ_KEPT_SPARE]) or {}
+    has = bool(read_first([REPORT, REPORT_KEPT]))
+    if own.get('code') == code:
+        return {'own': True, 'hasPsyche': has, 'nextStep': _step('That\'s your own quiz: it\'s for sending to friends.', [QUIZ_RESULTS, 'Back to the menu'])}
+    q, got = _quiz_open(code)
+    if q is None:
+        return got
+    name = re.sub(r'\s+', ' ', _letters(str(q.get('name') or ''))).strip()[:30] or 'Your friend'
+    write_private([QUIZ_PENDING], {'link': BASE + '/quiz#' + code + ('.' + picks if picks else ''), 'name': name})
+    out = {'own': False, 'with': name, 'hasPsyche': has}
+    if has:
+        out['nextStep'] = _step('%s sent you their quiz. You already have your Psyche, so you can make yours straight away.' % name, [quiz_label(name), 'Not now'])
+    else:
+        try:
+            out['firstRun'] = first_run()
+        except Exception as err:
+            out['firstRun'] = {'problem': 'Setting up could not finish here (%s).' % type(err).__name__}
+    return out
+
+
+def quiz_missed():
+    """python3 bin/psyche.py quiz-missed: once their own quiz is made, the answers they missed on the friend's quiz that
+    brought them (their picks ride in that link after the #, so only this workspace has them)."""
+    pend = quiz_pending()
+    if not pend:
+        return {'error': 'There\'s no friend\'s quiz kept here.', 'buttons': ['Back to the menu'], 'asButtons': True}
+    if not (read_first([QUIZ_KEPT, QUIZ_KEPT_SPARE]) or {}).get('code'):
+        return {'say': 'Make your own quiz first, and the answers you missed unlock.', 'buttons': [quiz_label(pend.get('name')), 'Back to the menu'], 'asButtons': True}
+    m = QUIZ_E2E.search(pend['link'])
+    q, got = _quiz_open(m.group(1))
+    if q is None:
+        return got
+    name = pend.get('name') or 'Your friend'
+    picks = [int(c) for c in (m.group(2) or '')]
+    rows = []
+    for i, x in enumerate(q['questions']):
+        o = x.get('o') or []
+        right = o[x['a']] if isinstance(x.get('a'), int) and 0 <= x['a'] < len(o) else None
+        if right is None:
+            continue
+        if picks and i < len(picks) and picks[i] == x['a']:
+            continue
+        rows.append({'question': _quiz_clean(x.get('q'), 160), 'answer': _quiz_clean(right, 70),
+                     'yours': _quiz_clean(o[picks[i]], 70) if picks and i < len(picks) and picks[i] < len(o) else None})
+    drop_quiz_pending()
+    if not rows:
+        say = 'You got every one of %s\'s questions right.' % name
+    elif picks:
+        say = 'The %d you missed on %s\'s quiz, and what %s really said:' % (len(rows), name, name)
+    else:
+        say = '%s\'s answers (your own picks weren\'t in the link):' % name
+    # The list is in the say itself, so the result is shown as it comes, with nothing to look up.
+    say += ''.join('\n• "%s" %s said "%s"%s' % (r['question'], name, r['answer'], ('; you said "%s"' % r['yours']) if r['yours'] else '') for r in rows)
+    return {'say': say, 'missed': rows, 'buttons': [QUIZ_RESULTS, 'Back to the menu'], 'asButtons': True}
+
+
+def quiz_results():
+    """python3 bin/psyche.py quiz-results: who took their quiz and their scores, opened here, and once three have, what
+    friends get wrong about them (counts only)."""
+    kept = read_first([QUIZ_KEPT, QUIZ_KEPT_SPARE]) or {}
+    if not kept.get('code'):
+        return {'say': 'You haven\'t made a quiz yet.', 'buttons': [MAKE_QUIZ, 'Back to the menu'], 'asButtons': True}
+    out = post_tool('quiz_get', {})
+    if not isinstance(out, dict) or out.get('error'):
+        return out if isinstance(out, dict) else {'error': 'PsycheAI could not get your quiz.'}
+    if out.get('none') or out.get('id') != e2e_key('quiz-id', kept['code']).hex():
+        return {'say': 'Your quiz has ended.', 'buttons': [NEW_QUIZ, 'Back to the menu'], 'asButtons': True}
+    qs, key = kept.get('questions') or [], e2e_key('quiz-answer', kept['code'])
+    friends, wrong = [], [dict() for _ in qs]
+    for a in out.get('answers') or []:
+        got = e2e_open(a.get('box'), key)
+        if not isinstance(got, dict):
+            continue
+        nm = re.sub(r'\s+', ' ', _letters(str(got.get('name') or ''))).strip()[:30] or 'A friend'
+        friends.append({'name': nm, 'score': '%d/%d' % (int(a.get('s') or 0), len(qs)), 's': int(a.get('s') or 0)})
+        for i, p in enumerate(got.get('p') or []):
+            if i < len(qs) and isinstance(p, int) and p != qs[i].get('a') and 0 <= p < len(qs[i].get('o') or []):
+                wrong[i][p] = wrong[i].get(p, 0) + 1
+    friends.sort(key=lambda f: -f['s'])
+    res = {'link': BASE + '/quiz#' + kept['code'], 'friends': [{'name': f['name'], 'score': f['score']} for f in friends], 'new': max(0, len(friends) - int(out.get('seen') or 0))}
+    if not friends:
+        res['say'] = 'No one has taken your quiz yet. Send the link to a few friends.'
+    else:
+        res['say'] = '%d %s took your quiz.' % (len(friends), 'friend' if len(friends) == 1 else 'friends')
+        if len(friends) >= 3:
+            gaps = []
+            for i, w in enumerate(wrong):
+                miss = sum(w.values())
+                if miss and len(friends) and miss / len(friends) >= 0.5:
+                    top = max(w, key=w.get)
+                    gaps.append({'question': qs[i]['q'], 'missed': '%d of %d' % (miss, len(friends)), 'theyThink': qs[i]['o'][top], 'you': qs[i]['o'][qs[i]['a']], 'n': miss})
+            gaps.sort(key=lambda g: -g['n'])
+            res['getWrong'] = [{k: g[k] for k in ('question', 'missed', 'theyThink', 'you')} for g in gaps[:3]]
+        else:
+            res['getWrongAt'] = 'What friends get wrong about you shows once 3 have taken it.'
+    lines = [res['say']] + ['• %s %s' % (f['name'], f['score']) for f in res['friends']]
+    if res.get('getWrong'):
+        lines.append('\nWhat friends get wrong about you:')
+        lines += ['• "%s" %s thought "%s". You said "%s".' % (g['question'], g['missed'], g['theyThink'], g['you']) for g in res['getWrong']]
+    elif res.get('getWrongAt') and res['friends']:
+        lines.append('\n' + res['getWrongAt'])
+    res['say'] = '\n'.join(lines)
+    res.update(buttons=[NEW_QUIZ, 'Back to the menu'], asButtons=True)
+    return res
+
+
+def quiz_first(nxt, friend):
+    """After their card, with a friend's quiz waiting (README "A friend's quiz"): only "Make my quiz for <name>" and "More",
+    the rest under More, as a friend's Sync link does (sync_first)."""
+    rest = [b for b in nxt['buttons'] if b not in (MAKE_QUIZ, 'More')]
+    nxt['buttons'] = [quiz_label(friend.get('name'))] + [b for b in rest if b == 'Continue Psyche Together'] + ['More']
+    more_ = [b for b in rest if b != 'Continue Psyche Together'] + [b for b in (nxt.get('more') or {}).get('buttons') or [] if b not in rest]
+    nxt['more'] = dict(nxt.get('more') or {}, buttons=more_)
+    try:
+        write_private([MENU], dict(read_first([MENU]) or {}, more=more_, at=int(time.time())))
+    except Exception:
+        pass
+    nm_ = friend.get('name') if friend.get('name') and friend.get('name') != 'Your friend' else ''
+    nxt['say'] = ('Next, your quiz for %s: make yours, and the answers you missed on theirs unlock.' % nm_) if nm_ else 'Next, your quiz: make yours, and the answers you missed on your friend\'s unlock.'
+    nxt['quizFor'] = friend.get('name')
+    return nxt
 
 
 # Release 216 (README "Every reply has its buttons"): an error comes with a way on, so the next step is never made up.

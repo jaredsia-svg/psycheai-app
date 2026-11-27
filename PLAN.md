@@ -121,7 +121,7 @@ Agreed 8 November 2026 (plan, fifth draft). Standalone skill in together/, off u
 
 ## How well do you know me? (the quiz)
 
-Agreed 27 November 2026. Not built yet. A PsycheAI user makes a quiz about themselves in Muse, sends the link to friends, and each friend answers on a web page with no sign-in. Making a quiz needs Muse; taking one doesn't.
+Agreed 27 November 2026. Built in release 225 (README "The quiz"). A PsycheAI user makes a quiz about themselves in Muse, sends the link to friends, and each friend answers on a web page with no sign-in. Making a quiz needs Muse; taking one doesn't.
 
 **Decisions**
 - Muse only for making a quiz. No web quiz for someone without Muse: the turnaround is "make your quiz in Muse".
@@ -170,12 +170,12 @@ Agreed 27 November 2026. Not built yet. A PsycheAI user makes a quiz about thems
 - New wording in SKILL.md and results goes to Jared before release; no safety-check baseline is raised without asking.
 
 **Build**
-- [ ] `bin/psyche.py quiz`: writes the questions from the read under the rules above, the widget, locking, the link; `tap` handles its buttons.
-- [ ] Menus: "Make a quiz for my friends" after the Psyche; "Make my quiz for <name>" after a quiz link; quiz news on the menu.
-- [ ] Server (`lib/quiz.js`): create, get, answer and end, with locked boxes only; counts for "better than X%" and the news; the digest line.
-- [ ] The quiz page `/quiz/<id>`: one question at a time, ✓/✗, score card, rank, "Show my name", the turnaround.
-- [ ] Images (`lib/cardimage.js`): the quiz card, the score card and the Story image, with no beliefs-and-future content.
-- [ ] "What friends get wrong about you", at 3 answers.
-- [ ] Unlocking a friend's missed answers once their own quiz exists.
-- [ ] Selftest: no stated-only answer pre-filled; nothing from messages; no other people's names; nothing readable on the server; the sensitive group off the images; safety-check phrase counts.
-- [ ] README design-log entry; sign a new skill release.
+- [x] `bin/psyche.py quiz`: writes the questions from the read under the rules above, the widget, locking, the link; `tap` handles its buttons.
+- [x] Menus: "Make a quiz for my friends" after the Psyche; "Make my quiz for <name>" after a quiz link; quiz news on the menu.
+- [x] Server (`lib/quiz.js`): create, get, answer and end, with locked boxes only; counts for "better than X%" and the news; the digest line.
+- [x] The quiz page `/quiz/<id>`: one question at a time, ✓/✗, score card, rank, "Show my name", the turnaround.
+- [x] Images: the Story image, drawn in the skill (`quiz_story_image`), with no beliefs-and-future content. The page shows their own Psyche Card; a score card image is left for later.
+- [x] "What friends get wrong about you", at 3 answers.
+- [x] Unlocking a friend's missed answers once their own quiz exists.
+- [x] Selftest: no stated-only answer pre-filled; nothing from messages; no other people's names; nothing readable on the server; the sensitive group off the images; safety-check phrase counts.
+- [x] README design-log entry; sign a new skill release.

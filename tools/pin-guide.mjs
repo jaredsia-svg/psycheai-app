@@ -25,6 +25,8 @@ const pinned = {
   read: { spec: read.spec, rubric: read.rubric, schema: read.schema },
   deepSpec: deep.spec.slice(read.spec.length),
   sync: { spec: sync.spec, brief: sync.brief, schema: sync.schema },
+  // The quiz's guide is this repo's own (lib/quizguide.js, README "The quiz"): psycheai.io has no quiz.
+  quiz: require(path.join(here, '..', 'lib', 'quizguide.js')),
   // The report's fixed wording (motivator names, labels, icons), so the skill lays out the report
   // itself and the read never leaves Muse (README "The report stays in Muse").
   labels: musepdf.labels(),

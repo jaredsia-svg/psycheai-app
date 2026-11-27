@@ -467,6 +467,17 @@ async function route(req, res) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600', 'Content-Length': html.length });
       return res.end(req.method === 'HEAD' ? undefined : html);
     }
+    // How well do you know me? (lib/quiz.js, lib/quizpage.js): the page, the locked quiz by id, and a friend's answers.
+    if (/^\/quiz\/?$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) return send(res, 200, require('./lib/quizpage').page(), 'text/html', { 'X-Robots-Tag': 'noindex' });
+    const quizData = /^\/quiz\/data\/([0-9a-f]{64})$/.exec(url.pathname);
+    if (quizData && req.method === 'GET') { const out = require('./lib/quiz').data(quizData[1]); return send(res, out.error ? 404 : 200, out, 'application/json', { 'X-Robots-Tag': 'noindex' }); }
+    const quizAnswer = /^\/quiz\/answer\/([0-9a-f]{64})$/.exec(url.pathname);
+    if (quizAnswer && req.method === 'POST') {
+      let body;
+      try { body = JSON.parse(await readBody(req, 8 * 1024) || '{}'); } catch { return send(res, 400, { error: 'Those answers couldn\'t be read.' }); }
+      const out = require('./lib/quiz').answer(quizAnswer[1], body);
+      return send(res, out.error ? 400 : 200, out);
+    }
     // Psyche Together's own skill (lib/togetherskill.js): its files and signed manifest, off unless PSYCHE_TOGETHER=1.
     const tg = require('./lib/togetherskill').route(url.pathname, req.method);
     if (tg) return send(res, tg.status, Buffer.isBuffer(tg.body) ? tg.body.toString('utf8') : tg.body, (tg.type || 'application/json').split(';')[0]);
@@ -561,6 +572,7 @@ async function main() {
     sync.sweep();
     join.sweep();
     require('./lib/together').sweep().catch(() => {});
+    require('./lib/quiz').sweep();
     require('./lib/waitlist').announce();
     psyche.remindUnopened().catch(err => console.error('[psyche] reminder check failed:', err.message));
     notify.digest(Date.now(), { hasNewDrop: weekly.hasNewDrop });
