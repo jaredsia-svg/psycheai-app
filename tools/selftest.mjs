@@ -5370,6 +5370,12 @@ print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years':
   // The skill's side, in a copy of the skill (its working files go there, never in this repo), with PsycheAI's tools stubbed.
   const dir = fsq.mkdtempSync(pathq.join(osq.tmpdir(), 'quiz-'));
   fsq.mkdirSync(pathq.join(dir, 'bin')); fsq.copyFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), pathq.join(dir, 'bin', 'psyche.py')); fsq.copyFileSync(pathq.join(process.cwd(), 'skill', 'guide.json'), pathq.join(dir, 'guide.json'));
+  // A digest with dated posts, timed comments, messages (never counted) and the hashtags of what they save, for the numbers questions.
+  fsq.mkdirSync(pathq.join(dir, 'digest'));
+  fsq.writeFileSync(pathq.join(dir, 'digest', 'digest.md'), ['# Psyche digest', '## Posts and stories',
+    ...Array.from({ length: 24 }, (_, i) => `${2019 + (i % 3 === 0 ? 2 : i % 2)}-0${1 + (i % 9)}-1${i % 9} ${i % 4 ? '21' : '08'}:15 Post ${i}`),
+    '## Comments', '2022-03-05 21:40 nice', '## Messages', ...Array.from({ length: 40 }, (_, i) => `2022-03-05 03:${10 + i} late message ${i}`),
+    '## Interests', "### What they save (other people's posts: the latest 40 of 40)", 'hashtags: #trailrunning 9 · #coffee 4'].join('\n'));
   fsq.writeFileSync(pathq.join(dir, 'report.json'), JSON.stringify({ name: 'Jared Sia', report: { essence: { character: 'Sherlock', why: 'Notices.' }, summary: 'Plans.', interests: ['Running'], beliefs: [{ label: 'religious' }], wellness: { overall: 'x' }, patterns: [{ title: 'The planner', detail: 'Plans ahead', evidence: ['May 2025 message'] }] } }));
   const py = String.raw`
 import importlib.util, json, os, sys
@@ -5383,28 +5389,32 @@ def nope(*a, **k): raise RuntimeError('no card art here')
 m.card_art = nope
 task = m.quiz_task()
 t = json.load(open(m.QUIZ_TASK))
-q = lambda kind, text, a=0: {'kind': kind, 'q': text, 'o': ['One', 'Two', 'Three', 'Four'], 'a': a}
-good = {'questions': [q('warm-up', 'W%d?' % i) for i in range(2)] + [q('deep', 'D%d?' % i, 1) for i in range(5)] + [q('hard', 'H%d?' % i, 2) for i in range(2)] + [q('finale', 'Which character am I?', 3)],
-        'spares': [q('deep', 'S%d?' % i) for i in range(4)],
-        'beliefs': [{'topic': x, 'q': 'Where do I stand on %s?' % x, 'o': ['One', 'Two', 'Three', 'Four'], 'a': None} for x in m.QUIZ_BELIEFS]}
+q = lambda kind, text, a=0, o=None: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a}
+r = lambda text, a=0: q('rather', text, a, ['Lead the room', 'Be the one everyone calls'])
+good = {'questions': [q('year', 'In which year did Jared run his first marathon?', 1, ['2019', '2020', '2021', '2022']), q('numbers', 'At what time of day is Jared most active on Instagram?', 2),
+                      r('Would Jared rather lead or help?'), q('deep', 'D1?', 1), q('year', 'Y2?', 0, ['2018', '2019', '2020', '2021']),
+                      q('numbers', 'Which of these has Jared posted about?', 3, ['Surfing', 'Pottery', 'Hiking', 'All of the above']), r('Would Jared rather rest or roam?', 1),
+                      q('deep', 'D2?', 2), q('hard', 'H1?', 2), q('finale', 'Which character did PsycheAI say Jared is?', 3)]}
 def bad(change):
     b = json.loads(json.dumps(good)); change(b); return m.quiz_save(json.dumps(b))
 probs = {
-  'messages': bad(lambda b: b['questions'][0].update(q='What did I text you last week?')),
-  'belief': bad(lambda b: b['questions'][1].update(q='Would I go to church on Sunday?')),
-  'guessed': bad(lambda b: b['beliefs'][0].update(a=2)),
-  'health': bad(lambda b: b['spares'][0].update(q='What is my mental health like?')),
-  'handle': bad(lambda b: b['questions'][2]['o'].__setitem__(0, '@ana')),
+  'messages': bad(lambda b: b['questions'][3].update(q='What did Jared text you last week?')),
+  'belief': bad(lambda b: b['questions'][7].update(q='Would Jared go to church on Sunday?')),
+  'health': bad(lambda b: b['questions'][8].update(q='What is Jared\'s mental health like?')),
+  'handle': bad(lambda b: b['questions'][3]['o'].__setitem__(0, '@ana')),
   'count': bad(lambda b: b['questions'].pop()),
+  'rather4': bad(lambda b: b['questions'][2].update(o=['A', 'B', 'C', 'D'])),
+  'allFirst': bad(lambda b: b['questions'][3].update(o=['All of the above', 'B', 'C', 'D'])),
+  'finaleLast': bad(lambda b: b['questions'].insert(0, b['questions'].pop())),
+  'noNumbers': bad(lambda b: [x.update(kind='deep') for x in b['questions'] if x['kind'] == 'numbers']),
 }
 # Release 226: words that only sound like messages pass ("hard conversations" was refused on a device).
-soft = m._quiz_item({'kind': 'deep', 'q': 'What do people get wrong about me?', 'o': ['They think I avoid hard conversations', 'I chat to anyone', 'I talk it through', 'I never stop talking'], 'a': 0}, 'questions', 8)[1]
+soft = m._quiz_item({'kind': 'deep', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'He will chat to anyone', 'He talks it through', 'He never stops talking'], 'a': 0}, 8)[1]
 saved = m.quiz_save(json.dumps(good))
 w = saved.get('widget', '')
 import re
 checked = re.findall(r'name="(\w+)" value="(\w+)" checked', w)
-pub_few = m.quiz_publish(json.dumps({'q%d' % i: 'out' for i in range(1, 7)}))
-pub = m.quiz_publish(json.dumps({'q2': 'out', 'b2': '1', 'q10': '3'}))
+pub = m.quiz_publish(json.dumps({'q2': '1', 'q10': '3', 'q4': 'nonsense'}))
 code = m.read_first([m.QUIZ_KEPT])['code']
 tool, args = sent[-1]
 opened = m.e2e_open(args['e2e']['box'], m.e2e_key('quiz', code))
@@ -5413,29 +5423,30 @@ nxt = m.quiz_first(json.loads(json.dumps(m.AFTER_PUBLISH)), {'name': 'Ana'})
 m.write_private([m.QUIZ_PENDING], {'link': m.BASE + '/quiz#' + code + '.0000000000', 'name': 'Jared'})
 m._quiz_open = lambda c: (opened, {})
 missed = m.quiz_missed()
-print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'),
-  'checked': checked, 'buttons': saved.get('buttons'), 'few': pub_few, 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
+print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'), 'widgetOut': 'Leave this one out' in w,
+  'checked': checked, 'buttons': saved.get('buttons'), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
   'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'draftGone': not os.path.exists(m.QUIZ_DRAFT),
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
   let Q = null, qerr = '';
   try { Q = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', py, dir], { maxBuffer: 1 << 24 }).toString()); } catch (e) { qerr = String(e.stderr || e.message).slice(-600); }
   const has = (k, rx) => Q && (Q.probs[k] || []).some(p => rx.test(p));
-  check('the quiz is written from their Psyche (README "The quiz, what it asks"): the task file leaves out the read\'s beliefs and wellbeing and every piece of evidence; quiz-save refuses a question that mentions messages, a belief outside beliefs, a belief answer the read picked, health, a handle, or the wrong count, each problem naming the question (counted from 1, "of 10"), the part and the word (release 226), and words that only sound like messages (hard conversations, a plain chat) pass',
+  check('the quiz is written from their Psyche and their own Instagram in numbers (README "The quiz, sharper", release 227): the task file leaves out the read\'s beliefs and wellbeing and every piece of evidence, and counts years, hours and days from their own posts and comments only (never messages), with the hashtags of what they save; quiz-save takes exactly ten questions with no spares and no beliefs group, refuses messages, politics/religion/kids/marriage, health, a handle, a rather question without exactly two options, "All of the above" anywhere but last, a finale not last, and too few numbers questions when there are numbers, each problem naming the question (from 1, of 10), the part and the word; words that only sound like messages pass',
     Q && Q.task.write === 'quiz' && !Q.taskKeys.includes('beliefs') && !Q.taskKeys.includes('wellness') && JSON.stringify(Q.patterns) === '[{"title":"The planner","detail":"Plans ahead"}]' &&
-      has('messages', /^questions 1 of 10, the question \("What did I text you last week\?"\): "text" points at their messages|^questions 1 of 10, the question[^:]*: "\w+" points at their messages/) && has('belief', /^questions 2 of 10, the question[^:]*: "church" is about politics, religion, kids or marriage/) && has('guessed', /a is null/) && has('health', /"mental health" is about health, which a quiz question can never be about/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has exactly 10/) &&
-      Q.soft.length === 0,
-    qerr || JSON.stringify(Q && Q.probs).slice(0, 600));
-  check('the quiz widget starts with the quiz\'s own ten questions in, each with the read\'s guess picked, and every spare and beliefs question out until they pick its answer; publishing takes 5 to 10, puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
-    Q && Q.saved === true && Q.checked.filter(([id, v]) => /^q/.test(id) && v !== 'out').length === 10 && Q.checked.filter(([id, v]) => /^[sb]/.test(id)).every(([, v]) => v === 'out') && Q.checked.length === 18 &&
-      JSON.stringify(Q.buttons) === '["Make my quiz","Write different questions","Back to the menu"]' && Q.few.saved === false && Q.tool === 'quiz_put' && Q.id && Q.n === 10 &&
-      Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 10 && Q.opened.questions[9].q === 'Which character am I?' && Q.opened.questions[9].a === 3 &&
-      Q.opened.questions.some(x => /religion/.test(x.q) && x.a === 1) && !Q.opened.questions.some(x => x.q === 'W1?') && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone &&
+      Q.facts && Q.facts.busiestYear && Q.facts.peakHours && /pm|am/.test(Q.facts.peakHours) && !/^(12am|1am|2am|3am) /.test(Q.facts.peakHours) && JSON.stringify(Q.facts.hashtagsOfWhatTheySaveAndLike) === '{"saves":["#trailrunning (9)","#coffee (4)"]}' &&
+      has('messages', /^questions 4 of 10, the question[^:]*: "text" points at their messages/) && has('belief', /"church" is about politics, religion, kids or marriage, which a quiz question can never be about/) &&
+      has('health', /"mental health" is about health/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has exactly 10/) && has('rather4', /exactly two/) &&
+      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 2 numbers/) && Q.soft.length === 0,
+    qerr || JSON.stringify(Q && { probs: Q.probs, facts: Q.facts }).slice(0, 900));
+  check('the quiz widget has the ten questions only, each with the read\'s guess picked, with nothing to swap in or leave out (release 227); publishing keeps all ten with the answers picked (a pick that isn\'t one keeps the guess), puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
+    Q && Q.saved === true && Q.checked.length === 10 && !Q.widgetOut && JSON.stringify(Q.buttons) === '["Make my quiz","Write different questions","Back to the menu"]' && Q.tool === 'quiz_put' && Q.id && Q.n === 10 &&
+      Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 10 && Q.opened.questions[9].k === 'finale' && Q.opened.questions[9].a === 3 &&
+      Q.opened.questions[1].a === 1 && Q.opened.questions[3].a === 1 && Q.opened.questions[2].o.length === 2 && Q.opened.questions[2].k === 'rather' && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone &&
       JSON.stringify(Q.pubButtons) === '["Show my quiz results","Back to the menu"]',
     qerr || JSON.stringify(Q && { checked: Q.checked, pub: Q.pub, opened: Q.opened }).slice(0, 600));
   check('a friend\'s quiz comes first after their card ("Make my quiz for <name>" and More, the rest under More), and once their own quiz is made, quiz-missed shows only the ones they missed with the right answer, then forgets the link; the quiz buttons are known labels',
     Q && JSON.stringify(Q.nxt.buttons) === '["Make my quiz for Ana","More"]' && Q.nxt.more.buttons[0] === 'Sync with a friend' && Q.nxt.more.buttons.includes('Ask PsycheAI questions about myself') &&
-      Q.missed.missed.length === Q.opened.questions.filter(x => x.a !== 0).length && Q.missed.missed.every(x => x.answer && x.yours === 'One') && /^The \d+ you missed on Jared's quiz/.test(Q.missed.say) &&
+      Q.missed.missed.length === Q.opened.questions.filter(x => x.a !== 0).length && Q.missed.missed.every(x => x.answer && x.yours === Q.opened.questions.find(y => y.q === x.question).o[0]) && /^The \d+ you missed on Jared's quiz/.test(Q.missed.say) &&
       JSON.stringify(Q.labels) === '[true,true,true,true,false]',
     qerr || JSON.stringify(Q && { nxt: Q.nxt, missed: Q.missed }).slice(0, 600));
   // The page's locking in Node's WebCrypto, against the skill's: a box the skill locked opens here, and one locked here opens there.
@@ -5459,10 +5470,10 @@ print(json.dumps(m.e2e_open(json.loads(sys.argv[3]), m.e2e_key('quiz-answer', sy
     JSON.stringify({ openedJs, back, tampered }).slice(0, 300));
   check('the quiz guide in the signed guide.json is this repo\'s lib/quizguide.js, and pin-guide keeps it there; its rules match what quiz-save checks',
     JSON.stringify(require('../skill/guide.json').quiz) === JSON.stringify(require('../lib/quizguide.js')) && /quiz: require\(path\.join\(here, '\.\.', 'lib', 'quizguide\.js'\)\)/.test(fsq.readFileSync(pathq.join(process.cwd(), 'tools', 'pin-guide.mjs'), 'utf8')) &&
-      /nothing in them is quoted, paraphrased or described/.test(require('../lib/quizguide.js').spec) && /each with a set to null: the read never picks these answers/.test(require('../lib/quizguide.js').spec));
+      /nothing in them is quoted, paraphrased or described/.test(require('../lib/quizguide.js').spec) && /Never politics, religion, kids or marriage/.test(require('../lib/quizguide.js').spec) && /kind "rather"\), two questions:\*\* exactly two options/.test(require('../lib/quizguide.js').spec));
   const md = require('../lib/skill.js').skillMd();
-  check('SKILL.md says how to make a quiz in one line near the top, inside the install read, with its limits in the same line (nothing from their messages; they choose the beliefs answers themselves), that the link is a line they copy and PsycheAI sends nothing, and that a friend\'s quiz link is made into their own quiz only on their tap; nothing about the quiz sits past the install read, where a mid-run look into SKILL.md has stopped Muse before (release 219)',
-    /\n- \*\*The quiz\*\* \("Make a quiz for my friends"\)[^\n]*nothing from their messages is quoted or described, and they choose the beliefs answers themselves\.[^\n]*PsycheAI sends nothing itself: they copy the line\./.test(md) &&
+  check('SKILL.md says how to make a quiz in one line near the top, inside the install read, with its limit in the same line (nothing from their messages), that the link is a line they copy and PsycheAI sends nothing, and that a friend\'s quiz link is made into their own quiz only on their tap; nothing about the quiz sits past the install read, where a mid-run look into SKILL.md has stopped Muse before (release 219)',
+    /\n- \*\*The quiz\*\* \("Make a quiz for my friends"\)[^\n]*nothing from their messages is quoted or described\.[^\n]*PsycheAI sends nothing itself: they copy the line\./.test(md) &&
       Buffer.byteLength(md.slice(0, md.lastIndexOf('quiz'))) < Buffer.byteLength(md.slice(0, md.indexOf('## The guide'))) &&
       /quiz-preview <the link>[^\n]*their quiz is made only if they tap it/.test(md) && /quiz-publish '<picks>'/.test(md) && !/\n## The quiz\n/.test(md));
   fsq.rmSync(dir, { recursive: true, force: true });

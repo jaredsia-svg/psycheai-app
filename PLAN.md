@@ -135,7 +135,8 @@ Agreed 27 November 2026. Built in release 225 (README "The quiz"). A PsycheAI us
 - The report's findings (traits, patterns, the character, blind spots): may be stated as findings.
 - Messages: nothing in them is quoted, paraphrased or described, no events and no conversations. A finding they helped shape is used only in words that would hold from posts alone.
 - Other people: never, even from posts (no names, handles, or who is in a photo).
-- Politics, religion, kids and marriage are allowed, but they're stated-only (CLAUDE.md), so the read never suggests or pre-fills an answer: they're a "Beliefs and future" group the owner adds on purpose, with the answer left blank for the owner to set. They never appear on the score card or the Story image.
+- Politics, religion, kids and marriage: never asked (release 226 took out the "Beliefs and future" group, with the spares and swapping: too confusing).
+- Ten questions of six kinds (release 226): two year, two numbers (counted from their own Instagram), two would-they-rather, two deep, one hard, and their character last. "All of the above" may end up to two questions.
 - Age, gender, orientation, ethnicity, health, height and drugs stay out.
 - Every question, including ones the owner writes, goes through the custom questions' keyword filter (`lib/questions.js`).
 

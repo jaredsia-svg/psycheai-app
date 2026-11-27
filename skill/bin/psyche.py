@@ -7258,11 +7258,13 @@ MAKE_QUIZ = 'Make a quiz for my friends'
 NEW_QUIZ = 'Make a new quiz'
 QUIZ_RESULTS = 'Show my quiz results'
 QUIZ_MAKE_BTN = 'Make my quiz'
-QUIZ_MIN, QUIZ_MAX, QUIZ_SPARES = 5, 10, 4
-QUIZ_KINDS = ('warm-up', 'deep', 'hard', 'finale')
-QUIZ_BELIEFS = ('politics', 'religion', 'kids', 'marriage')
+QUIZ_MIN, QUIZ_MAX = 10, 10
+# Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
+# happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
+QUIZ_KINDS = ('year', 'numbers', 'rather', 'deep', 'hard', 'finale')
+QUIZ_ALL = re.compile(r'^(all|none|both|neither) of (the above|these|them)$|^(both|neither)$', re.I)
 # What a question can never be about (README "The quiz, what it asks"). Politics, religion, kids and marriage are
-# stated-only, so they're only in the beliefs group, where the read never picks an answer: the owner does.
+# stated-only (CLAUDE.md), so since release 227, with no beliefs group, they're never asked at all.
 QUIZ_NEVER = [
     (re.compile(r'\b(sex|sexual\w*|sexuality|orientation|gay|lesbian|bisexual|queer|virgin\w*|kink\w*|fetish\w*|nudes?|hook ?ups?)\b', re.I), 'sex or orientation'),
     (re.compile(r'\b(race|racial\w*|ethnic\w*|skin colou?r)\b', re.I), 'race or ethnicity'),
@@ -7271,8 +7273,9 @@ QUIZ_NEVER = [
     (re.compile(r'\b(drugs?|weed|cannabis|cocaine|pills?)\b', re.I), 'drugs'),
     (re.compile(r'\b(pregnan\w*|fertil\w*|abortion\w*|criminal\w*|arrest\w*|prison\w*|jail\w*|visas?|immigra\w*|citizen\w*|passports?)\b', re.I), 'a private matter'),
     (re.compile(r'\b(how old|my age)\b', re.I), 'age'),
+    (re.compile(r'\b(religio\w*|church\w*|mosques?|temples?|god|faith\w*|pray\w*|politic\w*|vot(e|es|ed|ing)|elections?|left-wing|right-wing|kids?|child(ren)?|bab(y|ies)|marr\w*|wedding\w*|spouse)\b', re.I),
+     'politics, religion, kids or marriage'),
 ]
-QUIZ_BELIEF_WORDS = re.compile(r'\b(religio\w*|church\w*|mosques?|temples?|god|faith\w*|pray\w*|politic\w*|vot(e|es|ed|ing)|elections?|left-wing|right-wing|kids?|child(ren)?|bab(y|ies)|marr\w*|wedding\w*|spouse)\b', re.I)
 # Nothing from their messages is quoted or described (README "The quiz, what it asks"): a question that names them is
 # refused here, and the spec asks for words that would hold from their posts alone.
 # Release 226 (README "The quiz, a word at a time"): only words that point at their messages. "conversations" and a bare
@@ -7312,6 +7315,55 @@ def _digest_section(head):
     return '\n'.join(out).strip()
 
 
+def _hour_label(h):
+    h %= 24
+    return '12am' if h == 0 else '12pm' if h == 12 else ('%dam' % h if h < 12 else '%dpm' % (h - 12))
+
+
+def quiz_facts():
+    """Their Instagram in numbers, counted here from their own posts, stories and comments (never their messages), for
+    the quiz's numbers questions (README "The quiz, sharper"): years, hours, days, and the hashtags of what they save and like."""
+    years, hours, days, stamps = {}, [0] * 24, [0] * 7, 0
+    for head in ('## Posts and stories', '## Comments'):
+        for line in _digest_section(head).splitlines():
+            if not TIMED.match(line):
+                continue
+            stamps += 1
+            if head.startswith('## Posts'):
+                years[line[:4]] = years.get(line[:4], 0) + 1
+            hours[int(line[11:13].rstrip(':')) % 24] += 1
+            try:
+                days[datetime.strptime(line[:10], '%Y-%m-%d').weekday()] += 1
+            except ValueError:
+                pass
+    facts = {'counted': '%d of their own dated posts, stories and comments read for their Psyche (not every one they ever made)' % stamps}
+    if years:
+        facts['postsByYear'] = dict(sorted(years.items()))
+        facts['firstYearRead'] = min(years)
+        facts['busiestYear'] = max(years, key=lambda y: (years[y], y))
+    if stamps >= 20:
+        peak = max(range(24), key=lambda h: hours[h] + hours[(h + 1) % 24] + hours[(h + 2) % 24])
+        facts['peakHours'] = '%s to %s' % (_hour_label(peak), _hour_label(peak + 3))
+        facts['quietestHours'] = '%s to %s' % ((lambda q: (_hour_label(q), _hour_label(q + 3)))(min(range(24), key=lambda h: hours[h] + hours[(h + 1) % 24] + hours[(h + 2) % 24])))
+        facts['busiestDay'] = FULL_DAYS[max(range(7), key=lambda i: days[i])]
+        facts['weekendShare'] = '%d%%' % round(100 * (days[5] + days[6]) / max(1, sum(days)))
+    taste, which = {}, None
+    for line in _digest_section('## Interests').splitlines():
+        if line.startswith('### What they save'):
+            which = 'saves'
+        elif line.startswith('### What they like'):
+            which = 'likes'
+        elif line.startswith('### '):
+            which = None
+        elif which and line.startswith('hashtags: '):
+            tags = re.findall(r'#([^\s·#]{2,40}) (\d+)', line)
+            tags = [(t, int(n)) for t, n in tags if not QUIZ_IDENT.search(t)]
+            taste[which] = ['#%s (%d)' % (t, n) for t, n in tags[:8]]
+    if taste:
+        facts['hashtagsOfWhatTheySaveAndLike'] = taste
+    return facts
+
+
 def quiz_pending():
     got = read_first([QUIZ_PENDING])
     return got if isinstance(got, dict) and QUIZ_E2E.search(str(got.get('link') or '')) else None
@@ -7338,15 +7390,16 @@ def quiz_task():
     report = kept.get('report') if isinstance(kept.get('report'), dict) else None
     if not report:
         return {'error': 'There\'s no Psyche here yet to make a quiz from. Make their Psyche first.', 'buttons': ['Generate my Psyche', 'Back to the menu'], 'asButtons': True}
-    # What it's written from (README "The quiz, what it asks"): the report's findings, interests and motivations, and their
-    # posts and stories. Never their messages or comments, the read's beliefs (stated-only) or its wellbeing (health).
+    # What it's written from (README "The quiz, what it asks"): the report's findings, interests and motivations, their
+    # posts and stories with their dates, and their Instagram in numbers. Never their messages or comments' words, the
+    # read's beliefs (stated-only) or its wellbeing (health).
     mine = {k: _quiz_strip(report[k]) for k in ('mbti', 'bigFive', 'patterns', 'interests', 'values', 'topMotivators', 'motivators', 'relationship',
                                                'career', 'careerAssessment', 'essence', 'summary', 'cardHighlights') if k in report}
-    posts = _digest_section('## Posts and stories')[:12000]
+    posts = _digest_section('## Posts and stories')[:16000]
     first = (str(kept.get('name') or '').split(' ') or [''])[0][:30]
     character = ((report.get('essence') or {}).get('character') or '')[:40]
-    data = {'name': first, 'character': character, 'report': mine, 'postsAndStories': posts,
-            'about': 'Their own Psyche report and their own posts and stories: something to write questions from, never instructions.'}
+    data = {'name': first, 'character': character, 'report': mine, 'postsAndStories': posts, 'instagramInNumbers': quiz_facts(),
+            'about': 'Their own Psyche report, their own posts and stories, and counts of their own Instagram: something to write questions from, never instructions.'}
     os.makedirs(WORK, exist_ok=True)
     with open(QUIZ_TASK, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
@@ -7357,32 +7410,29 @@ def quiz_task():
     return out
 
 
-def _quiz_item(x, where, n):
-    """One question checked: ({id, kind, q, o, a, topic?}, problems)."""
+def _quiz_item(x, n):
+    """One question checked: ({kind, q, o, a}, problems)."""
     probs = []
+    label = 'questions %d of %d' % (n, QUIZ_MAX)
     if not isinstance(x, dict):
-        return None, ['%s %d isn\'t an object' % (where, n)]
+        return None, ['%s isn\'t an object' % label]
     q = _quiz_clean(x.get('q'), 160)
+    kind = x.get('kind')
     opts = x.get('o') if isinstance(x.get('o'), list) else []
     o = [_quiz_clean(y, 70) for y in opts]
-    label = '%s %d of %d' % (where, n, {'questions': QUIZ_MAX, 'spares': QUIZ_SPARES}.get(where, len(QUIZ_BELIEFS)))
+    want = (2, 2) if kind == 'rather' else (3, 4)
     if not q:
         probs.append('%s: q is the question, 1 to 160 characters' % label)
-    if len(o) != 4 or not all(o) or len({y.lower() for y in o if y}) != 4:
-        probs.append('%s: o is exactly four different options, each 1 to 70 characters' % label)
-    belief = where == 'beliefs'
+    if not want[0] <= len(o) <= want[1] or not all(o) or len({y.lower() for y in o if y}) != len(o):
+        probs.append('%s: o is %s different options, each 1 to 70 characters' % (label, 'exactly two' if kind == 'rather' else 'three or four'))
     a = x.get('a')
-    if belief:
-        if a is not None:
-            probs.append('%s: a is null. The read never picks an answer about %s: they choose it themselves' % (label, '/'.join(QUIZ_BELIEFS)))
-        topic = x.get('topic')
-        if topic not in QUIZ_BELIEFS:
-            probs.append('%s: topic is one of %s' % (label, ', '.join(QUIZ_BELIEFS)))
-    elif not (isinstance(a, int) and not isinstance(a, bool) and 0 <= a <= 3):
-        probs.append('%s: a is the index (0 to 3) of the option you think they\'d pick' % label)
-    kind = x.get('kind') if not belief else 'beliefs'
-    if not belief and kind not in QUIZ_KINDS:
+    if not (isinstance(a, int) and not isinstance(a, bool) and 0 <= a < max(1, len(o))):
+        probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
+    if kind not in QUIZ_KINDS:
         probs.append('%s: kind is one of %s' % (label, ', '.join(QUIZ_KINDS)))
+    alls = [i for i, y in enumerate(o) if y and QUIZ_ALL.match(y)]
+    if alls and (kind == 'rather' or alls != [len(o) - 1]):
+        probs.append('%s: "All of the above" (or "None of these", "Both") is only ever the last option, and never in a rather question' % label)
     # Each problem names the part and the words it found (release 226): "questions 8" alone was read as counting from 0,
     # the wrong question was changed, and the script was opened to find out what the check looks for.
     parts = [('the question', q)] + [('option %d' % (i + 1), y) for i, y in enumerate(o)]
@@ -7395,42 +7445,41 @@ def _quiz_item(x, where, n):
             probs.append('%s, %s ("%s"): "%s" %s' % (label, name, text, word, why))
     for rx, topic_ in QUIZ_NEVER:
         say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
-    if not belief:
-        say(hits(QUIZ_BELIEF_WORDS), 'is about politics, religion, kids or marriage, which go only in beliefs, with no answer picked. Reword it or move it there.')
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
-    item = {'kind': kind, 'q': q, 'o': o, 'a': a if not belief else None}
-    if belief:
-        item['topic'] = x.get('topic')
-    return item, probs
+    return {'kind': kind, 'q': q, 'o': o, 'a': a}, probs
 
 
 def quiz_save(raw):
-    """python3 bin/psyche.py quiz-save @work/quiz.json: the questions Muse wrote, checked, kept here, and shown as one
-    widget for them to pick each answer, leave a question out or add a spare or a beliefs question."""
+    """python3 bin/psyche.py quiz-save @work/quiz.json: the ten questions Muse wrote, checked, kept here, and shown as one
+    widget for them to pick their own answer to each."""
     try:
         got = json.loads(open(raw[1:], encoding='utf-8').read() if str(raw).startswith('@') else raw)
     except (OSError, ValueError) as err:
         return {'saved': False, 'problems': ['Couldn\'t read the quiz: %s' % err]}
     if not isinstance(got, dict):
-        return {'saved': False, 'problems': ['The quiz is one JSON object: {"questions": [...], "spares": [...], "beliefs": [...]}']}
+        return {'saved': False, 'problems': ['The quiz is one JSON object: {"questions": [...]}']}
+    xs = got.get('questions') if isinstance(got.get('questions'), list) else []
     probs, items = [], []
-    for where, want in (('questions', QUIZ_MAX), ('spares', QUIZ_SPARES), ('beliefs', len(QUIZ_BELIEFS))):
-        xs = got.get(where) if isinstance(got.get(where), list) else []
-        if len(xs) != want:
-            probs.append('%s has exactly %d' % (where, want))
-        for n, x in enumerate(xs[:want], 1):
-            it, p = _quiz_item(x, where, n)
-            probs += p
-            if it:
-                it['id'] = '%s%d' % (where[0], n)
-                it['group'] = where
-                items.append(it)
+    if len(xs) != QUIZ_MAX:
+        probs.append('questions has exactly %d' % QUIZ_MAX)
+    for n, x in enumerate(xs[:QUIZ_MAX], 1):
+        it, p = _quiz_item(x, n)
+        probs += p
+        if it:
+            it['id'] = 'q%d' % n
+            items.append(it)
     if not probs:
-        if sorted(x['topic'] for x in items if x['group'] == 'beliefs') != sorted(QUIZ_BELIEFS):
-            probs.append('beliefs has one question on each of %s' % ', '.join(QUIZ_BELIEFS))
-        if not any(x['kind'] == 'finale' for x in items if x['group'] == 'questions'):
-            probs.append('questions ends with the finale: which character PsycheAI says they are (kind "finale")')
+        kinds = [x['kind'] for x in items]
+        facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)
+        need = {'year': 2 if facts.get('postsByYear') else 0, 'numbers': 2 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 2, 'finale': 1}
+        short = ['%d %s' % (k_, w_) for w_, k_ in need.items() if k_ and kinds.count(w_) < k_]
+        if short:
+            probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
+        if kinds[-1] != 'finale':
+            probs.append('questions %d of %d is the finale: which character PsycheAI says they are (kind "finale")' % (QUIZ_MAX, QUIZ_MAX))
+        if sum(1 for x in items if QUIZ_ALL.match(x['o'][-1])) > 2:
+            probs.append('at most 2 questions end with "All of the above" (or "None of these", "Both")')
     if probs:
         return {'saved': False, 'problems': probs[:20]}
     kept = read_first([REPORT, REPORT_KEPT]) or {}
@@ -7450,54 +7499,42 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,
 .top{padding:14px 16px 12px;color:#fff;background:linear-gradient(135deg,#5b2a86,#7b3fa0 45%,#c2366d)}
 .top small{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.85}
 .top b{display:block;font-size:19px;margin-top:2px}.top span{display:block;font-size:13px;opacity:.92;margin-top:4px}
-.sec{padding:12px 14px 4px;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--plum)}
-.sec small{display:block;text-transform:none;letter-spacing:0;font-weight:500;color:var(--soft);font-size:12.5px;margin-top:2px}
-.it{margin:8px 12px;padding:12px;border:1.5px solid var(--line);border-radius:14px}.it.on{border-color:var(--plum)}
+.it{margin:10px 12px;padding:12px;border:1.5px solid var(--line);border-radius:14px}
+.k{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--plum);background:var(--wash);border-radius:999px;padding:3px 9px;margin-bottom:6px}
 .q{margin:0 0 8px;font-size:15.5px;line-height:1.3;font-weight:750}
 .opts{display:flex;flex-direction:column;gap:5px}
 .opts label{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--line);border-radius:11px;font-size:14px;line-height:1.25;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .opts input{position:absolute;opacity:0;pointer-events:none}
 .opts label:before{content:"";flex:none;width:16px;height:16px;border-radius:50%;border:2px solid #cdb6dd}
 .opts label.on{border-color:var(--plum);background:var(--wash);font-weight:700}.opts label.on:before{border-color:var(--plum);background:radial-gradient(circle,var(--plum) 45%,#fff 50%)}
-.opts label.out{color:var(--soft);font-style:italic}.opts label.out.on{background:#f4f2f6;border-color:#bdb2c8;color:var(--soft)}
 .foot{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px;font-size:14px;font-weight:700;text-align:center}
-.foot.bad{color:var(--rose)}
 '''
 
 QZ_JS = r'''
 (function(){
-var D=JSON.parse(document.getElementById('qz-data').textContent),field=document.getElementById('qz-picks'),foot=document.getElementById('qz-foot');
-function picks(){var out={};D.ids.forEach(function(id){var x=document.querySelector('input[name="'+id+'"]:checked');out[id]=x?x.value:'out';});return out;}
-function show(){var p=picks(),n=0;D.ids.forEach(function(id){var on=p[id]!=='out';if(on)n++;var it=document.getElementById('it-'+id);if(it)it.classList.toggle('on',on);
- [].slice.call(document.querySelectorAll('input[name="'+id+'"]')).forEach(function(x){x.parentNode.classList.toggle('on',x.checked);});});
- field.value=JSON.stringify(p);
- if(n<D.min){foot.className='foot bad';foot.textContent=n+' in your quiz: pick at least '+D.min+'.';}
- else if(n>D.max){foot.className='foot bad';foot.textContent=n+' in your quiz: leave out '+(n-D.max)+' to make it '+D.max+'.';}
- else{foot.className='foot';foot.textContent=n+' in your quiz. When it looks right, tap Make my quiz below ↓';}}
+var D=JSON.parse(document.getElementById('qz-data').textContent),field=document.getElementById('qz-picks');
+function show(){var p={};D.ids.forEach(function(id){var x=document.querySelector('input[name="'+id+'"]:checked');p[id]=x?x.value:null;
+ [].slice.call(document.querySelectorAll('input[name="'+id+'"]')).forEach(function(y){y.parentNode.classList.toggle('on',y.checked);});});
+ field.value=JSON.stringify(p);}
 document.addEventListener('change',function(e){if(e.target&&e.target.type==='radio')show();});
 show();setTimeout(show,300);setTimeout(show,1200);})();
 '''
 
+QUIZ_KIND_LABELS = {'year': '📅 The year', 'numbers': '📊 By the numbers', 'rather': '⚖️ Would they rather', 'deep': '💭 Deep', 'hard': '🔥 Hard', 'finale': '✨ Finale'}
+
 
 def quiz_widget_html(draft):
-    items = draft['items']
-    secs = [('questions', 'Your quiz', 'Tap the answer that\'s really yours. The highlighted one is PsycheAI\'s guess.'),
-            ('spares', 'Swap one in', 'Pick an answer to add one, and leave another out.'),
-            ('beliefs', 'Beliefs and future', 'Only if you want them in. PsycheAI never guesses these: you pick the answer.')]
     body = []
-    for grp, title, sub in secs:
-        body.append('<div class="sec">%s<small>%s</small></div>' % (_e(title), _e(sub)))
-        for it in (x for x in items if x['group'] == grp):
-            rows = ''.join('<label><input type="radio" name="%s" value="%d"%s><span>%s</span></label>'
-                           % (_e(it['id']), i, ' checked' if grp == 'questions' and it['a'] == i else '', _e(o)) for i, o in enumerate(it['o']))
-            # Only the quiz's own questions start in, with the read's guess picked; a spare or a beliefs question is in only once they pick its answer.
-            rows += '<label class="out"><input type="radio" name="%s" value="out"%s><span>Leave this one out</span></label>' % (_e(it['id']), '' if grp == 'questions' else ' checked')
-            body.append('<section class="it" id="it-%s"><p class="q">%s</p><div class="opts">%s</div></section>' % (_e(it['id']), _e(it['q']), rows))
-    data = {'ids': [x['id'] for x in items], 'min': QUIZ_MIN, 'max': QUIZ_MAX}
+    for it in draft['items']:
+        rows = ''.join('<label><input type="radio" name="%s" value="%d"%s><span>%s</span></label>'
+                       % (_e(it['id']), i, ' checked' if it['a'] == i else '', _e(o)) for i, o in enumerate(it['o']))
+        body.append('<section class="it"><span class="k">%s</span><p class="q">%s</p><div class="opts">%s</div></section>'
+                    % (_e(QUIZ_KIND_LABELS.get(it.get('kind'), '')), _e(it['q']), rows))
+    data = {'ids': [x['id'] for x in draft['items']]}
     head = 'How well do you know %s?' % (draft.get('name') or 'me')
-    return ('<div class="qz"><style>%s</style><div class="top"><small>PsycheAI quiz</small><b>%s</b><span>Friends see one question at a time, and whether they got it right, never the right answer.</span></div>'
+    return ('<div class="qz"><style>%s</style><div class="top"><small>PsycheAI quiz</small><b>%s</b><span>The highlighted answer is PsycheAI\'s guess. Tap the one that\'s really yours.</span></div>'
             '<form onsubmit="return false">%s<input type="hidden" id="qz-picks" name="psyche-quiz-picks" value="{}"></form>'
-            '<div class="foot" id="qz-foot"></div><script type="application/json" id="qz-data">%s</script><script>%s</script></div>'
+            '<div class="foot">When they look right, tap Make my quiz below ↓</div><script type="application/json" id="qz-data">%s</script><script>%s</script></div>'
             % (QZ_CSS, _e(head), ''.join(body), json.dumps(data).replace('</', '<\\/'), QZ_JS))
 
 
@@ -7508,7 +7545,7 @@ def quiz_widget_out(draft):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(html_)
     return {'saved': True, 'widget': html_, 'widgetFile': 'work/quiz-widget.html',
-            'say': 'Here\'s your quiz. Pick your real answer to each, swap any you don\'t like, then tap Make my quiz.',
+            'say': 'Here\'s your quiz. Check your answer to each, then tap Make my quiz.',
             'buttons': [QUIZ_MAKE_BTN, 'Write different questions', 'Back to the menu'], 'asButtons': True}
 
 
@@ -7574,23 +7611,19 @@ def quiz_publish(raw):
         picks = None
     if not isinstance(picks, dict):
         return {'error': 'The picks are one JSON object: the widget\'s psyche-quiz-picks field, each question\'s id → the answer\'s number or "out".'}
+    # Every question is in (release 227: no leaving out or swapping), with the answer they picked, or the read's guess.
     chosen = []
     for it in draft['items']:
-        v = picks.get(it['id'], 'keep' if it['group'] == 'questions' else 'out')
-        if v == 'keep':
-            v = it['a']
-        if v in ('out', None, ''):
-            continue
+        v = picks.get(it['id'])
         try:
             v = int(v)
         except (TypeError, ValueError):
-            continue
-        if 0 <= v <= 3:
-            chosen.append(dict(it, a=v))
+            v = it['a']
+        chosen.append(dict(it, a=v if 0 <= v < len(it['o']) else it['a']))
     finale = [x for x in chosen if x.get('kind') == 'finale']
     chosen = [x for x in chosen if x.get('kind') != 'finale'] + finale
     if not QUIZ_MIN <= len(chosen) <= QUIZ_MAX:
-        return {'saved': False, 'problems': ['A quiz has %d to %d questions, and %d are picked. Pick an answer for more, or leave some out.' % (QUIZ_MIN, QUIZ_MAX, len(chosen))],
+        return {'saved': False, 'problems': ['A quiz has %d questions, and this one has %d. Tap Write different questions.' % (QUIZ_MAX, len(chosen))],
                 'buttons': [QUIZ_MAKE_BTN, 'Back to the menu'], 'asButtons': True}
     code = secrets.token_urlsafe(16)
     while len(code) != 22:
