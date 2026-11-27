@@ -7258,10 +7258,10 @@ MAKE_QUIZ = 'Make a quiz for my friends'
 NEW_QUIZ = 'Make a new quiz'
 QUIZ_RESULTS = 'Show my quiz results'
 QUIZ_MAKE_BTN = 'Make my quiz'
-QUIZ_MIN, QUIZ_MAX = 8, 14       # 14 written (release 228); down to 8 once they've said some aren't true about them
+QUIZ_MIN, QUIZ_MAX = 8, 15       # 15 written (release 227); down to 8 once they've said some aren't true about them
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
 # happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
-QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'deep', 'hard', 'finale')
+QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'deep', 'hard', 'finale')
 # Release 228 (README "Fourteen, and the obscure"): a deep cut into a lesser-known passion, spot the fake among three true
 # things, and which caption they really posted, for fourteen questions.
 QUIZ_ALL = re.compile(r'^(all|none|both|neither) of (the above|these|them)$|^(both|neither)$', re.I)
@@ -7534,7 +7534,7 @@ def quiz_save(raw):
         kinds = [x['kind'] for x in items]
         facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)
         need = {'year': 2 if facts.get('postsByYear') else 0, 'numbers': 2 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 2,
-                'niche': 2, 'fake': 1, 'caption': 1 if facts.get('postsByYear') else 0, 'finale': 1}
+                'niche': 2, 'fake': 1, 'caption': 1 if facts.get('postsByYear') else 0, 'favourite': 1, 'finale': 1}
         short = ['%d %s' % (k_, w_) for w_, k_ in need.items() if k_ and kinds.count(w_) < k_]
         if short:
             probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
@@ -7588,7 +7588,7 @@ show();setTimeout(show,300);setTimeout(show,1200);})();
 '''
 
 QUIZ_KIND_LABELS = {'year': '📅 The year', 'numbers': '📊 By the numbers', 'rather': '⚖️ Would they rather', 'niche': '🔍 Deep cut', 'fake': '🕵️ Spot the fake',
-                    'caption': '📸 Did they post it?', 'deep': '💭 Deep', 'hard': '🔥 Hard', 'finale': '✨ Finale'}
+                    'caption': '📸 Did they post it?', 'favourite': '⭐ Favourite', 'deep': '💭 Deep', 'hard': '🔥 Hard', 'finale': '✨ Finale'}
 
 
 def quiz_widget_html(draft):
