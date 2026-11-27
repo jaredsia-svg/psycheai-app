@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 228
+RELEASE = 229
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7258,14 +7258,16 @@ MAKE_QUIZ = 'Make a quiz for my friends'
 NEW_QUIZ = 'Make a new quiz'
 QUIZ_RESULTS = 'Show my quiz results'
 QUIZ_MAKE_BTN = 'Make my quiz'
-QUIZ_MIN, QUIZ_MAX = 8, 15       # 15 written (release 227); down to 8 once they've said some aren't true about them
+QUIZ_MIN, QUIZ_MAX = 7, 11       # 11 written (release 229); down to 7 once they've said some aren't true about them
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
 # happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
-QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'first', 'never', 'deep', 'hard', 'finale')
+QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'never', 'deep', 'finale')
 # Release 229 (README "An arc, and a fact for every right answer"): the order is set here, not by Muse: an easy warm-up, then
 # real knowledge, then the deep end, an honest question and the character. One year and one numbers question now, with
 # "Which came first?" and "Which would they never do?" in their place.
-QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'numbers', 'deep', 'first', 'rather', 'niche', 'fake', 'never', 'deep', 'hard', 'finale')
+QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'numbers', 'deep', 'niche', 'fake', 'never', 'finale')
+# Release 229 (README "Eleven, and nothing twice"): one rather, one year, one deep scenario (always put to them to confirm),
+# no which came first and no blind spot (too personal): eleven questions.
 QUIZ_TWO = ('rather', 'first')         # the kinds with exactly two options
 # Release 228 (README "Fourteen, and the obscure"): a deep cut into a lesser-known passion, spot the fake among three true
 # things, and which caption they really posted, for fourteen questions.
@@ -7441,7 +7443,14 @@ def quiz_task():
     # read's beliefs (stated-only) or its wellbeing (health).
     mine = {k: _quiz_strip(report[k]) for k in ('mbti', 'bigFive', 'patterns', 'interests', 'values', 'topMotivators', 'motivators', 'relationship',
                                                'career', 'careerAssessment', 'essence', 'summary', 'cardHighlights') if k in report}
-    posts = _digest_section('## Posts and stories')[:16000]
+    # Their posts and stories, sampled evenly across every year (release 229): the first 16,000 characters were often one
+    # stretch of time, and the questions kept circling the same few topics.
+    lines_ = [x for x in _digest_section('## Posts and stories').splitlines() if x.strip()]
+    budget_, step_ = 40000, max(1, sum(len(x) + 1 for x in lines_) // 40000 + 1)
+    picked_ = lines_[::step_]
+    while picked_ and sum(len(x) + 1 for x in picked_) > budget_:
+        picked_ = picked_[::2]
+    posts = '\n'.join(picked_)
     first = (str(kept.get('name') or '').split(' ') or [''])[0][:30]
     character = ((report.get('essence') or {}).get('character') or '')[:40]
     # What they save and like (other people's posts, already scrubbed for the read): only for the topics of a deep cut.
@@ -7520,9 +7529,10 @@ def _quiz_item(x, n):
     # numbers and the finale stand on what was counted or the card, so they're always sure. A year question is sure only when
     # a post says the moment outright (release 227: one assumed a dog was adopted that year, and it wasn't).
     sure = x.get('sure')
-    if kind not in ('numbers', 'finale') and not isinstance(sure, bool):
+    if kind not in ('numbers', 'finale', 'deep') and not isinstance(sure, bool):
         probs.append('%s: sure is true when the report or their posts make the answer clear, false when it is a guess' % label)
-    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'sure': True if kind in ('numbers', 'finale') else sure is True}, probs
+    # The deep scenario is always put to them (release 229): how they'd act in a made-up situation is theirs to say.
+    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'sure': True if kind in ('numbers', 'finale') else False if kind == 'deep' else sure is True}, probs
 
 
 def quiz_arc(items):
@@ -7564,8 +7574,11 @@ def quiz_save(raw):
         kinds = [x['kind'] for x in items]
         facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)
         posted = bool(facts.get('postsByYear'))
-        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 2, 'niche': 2, 'fake': 1,
-                'caption': 1 if posted else 0, 'first': 1 if posted else 0, 'favourite': 1, 'never': 1, 'finale': 1}
+        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 1, 'niche': 2, 'fake': 1,
+                'caption': 1 if posted else 0, 'favourite': 1, 'never': 1, 'deep': 1, 'finale': 1}
+        over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('deep', 1), ('numbers', 1), ('niche', 2)) if kinds.count(w_) > most]
+        if over:
+            probs.append('questions has at most one rather, one year, one deep and one numbers question, and two deep cuts; this has %s' % ', '.join(over))
         short = ['%d %s' % (k_, w_) for w_, k_ in need.items() if k_ and kinds.count(w_) < k_]
         if short:
             probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
@@ -7583,6 +7596,18 @@ def quiz_save(raw):
                 ax, ay = words(x['o'][x['a']]), words(y['o'][y['a']])
                 if (len(wq & wy) >= 2 and len(wq & wy) / max(1, min(len(wq), len(wy))) >= 0.5) or (ax and ay and (ax == ay or len(ax & ay) / min(len(ax), len(ay)) >= 0.75)):
                     probs.append('questions %d and %d of %d ask about the same thing ("%s" and "%s"). Every question is about something different: change one.' % (i + 1, k + 1, QUIZ_MAX, x['q'], y['q']))
+        # Varied throughout (release 229, README "Eleven, and nothing twice"): a topic word in three or more questions,
+        # counting their options, is refused, naming the word and the questions.
+        seen_ = {}
+        for i, x in enumerate(items):
+            if x['kind'] == 'finale':
+                continue
+            for w_ in words(' '.join([x['q']] + x['o'])):
+                if len(w_) >= 4:
+                    seen_.setdefault(w_.rstrip('s'), set()).add(i + 1)
+        for w_, qs_ in sorted(seen_.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            if len(qs_) >= 3:
+                probs.append('"%s" comes up in questions %s of %d. Keep the quiz varied: no topic in more than two questions, options included.' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), QUIZ_MAX))
         if sum(1 for x in items if QUIZ_ALL.match(x['o'][-1])) > 2:
             probs.append('at most 2 questions end with "All of the above" (or "None of these", "Both")')
     if probs:
@@ -7632,7 +7657,7 @@ show();setTimeout(show,300);setTimeout(show,1200);})();
 '''
 
 QUIZ_KIND_LABELS = {'year': '📅 The year', 'numbers': '📊 By the numbers', 'rather': '⚖️ Would they rather', 'niche': '🔍 Deep cut', 'fake': '🕵️ Spot the fake',
-                    'caption': '📸 Did they post it?', 'favourite': '⭐ Favourite', 'first': '⏳ Which came first?', 'never': '✋ Never', 'deep': '💭 Deep', 'hard': '🔥 Hard', 'finale': '✨ Finale'}
+                    'caption': '📸 Did they post it?', 'favourite': '⭐ Favourite', 'never': '✋ Never', 'deep': '💭 Scenario', 'hard': '🔥 Hard', 'finale': '✨ Finale'}
 
 
 def quiz_widget_html(draft):
