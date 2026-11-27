@@ -7447,7 +7447,12 @@ def _quiz_item(x, n):
         say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
-    return {'kind': kind, 'q': q, 'o': o, 'a': a}, probs
+    # Release 226 (README "Only the unsure asked"): sure is Muse's own word on whether the data makes the answer clear. The
+    # year, numbers and finale questions stand on what was counted or the card, so they're always sure.
+    sure = x.get('sure')
+    if kind not in ('year', 'numbers', 'finale') and not isinstance(sure, bool):
+        probs.append('%s: sure is true when the report or their posts make the answer clear, false when it is a guess' % label)
+    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'sure': True if kind in ('year', 'numbers', 'finale') else sure is True}, probs
 
 
 def quiz_save(raw):
@@ -7488,6 +7493,9 @@ def quiz_save(raw):
              'character': (((kept.get('report') or {}).get('essence') or {}).get('character') or '')[:40], 'at': int(time.time()),
              'for': (pend or {}).get('name')}
     write_private([QUIZ_DRAFT], draft)
+    # Only the answers Muse isn't sure of are asked (README "Only the unsure asked"); with none, the quiz is made now.
+    if all(x.get('sure') for x in items):
+        return dict(quiz_publish('{}'), saved=True, asked=0)
     return quiz_widget_out(draft)
 
 
@@ -7525,14 +7533,14 @@ QUIZ_KIND_LABELS = {'year': '📅 The year', 'numbers': '📊 By the numbers', '
 
 def quiz_widget_html(draft):
     body = []
-    for it in draft['items']:
+    for it in (x for x in draft['items'] if not x.get('sure')):
         rows = ''.join('<label><input type="radio" name="%s" value="%d"%s><span>%s</span></label>'
                        % (_e(it['id']), i, ' checked' if it['a'] == i else '', _e(o)) for i, o in enumerate(it['o']))
         body.append('<section class="it"><span class="k">%s</span><p class="q">%s</p><div class="opts">%s</div></section>'
                     % (_e(QUIZ_KIND_LABELS.get(it.get('kind'), '')), _e(it['q']), rows))
-    data = {'ids': [x['id'] for x in draft['items']]}
+    data = {'ids': [x['id'] for x in draft['items'] if not x.get('sure')]}
     head = 'How well do you know %s?' % (draft.get('name') or 'me')
-    return ('<div class="qz"><style>%s</style><div class="top"><small>PsycheAI quiz</small><b>%s</b><span>The highlighted answer is PsycheAI\'s guess. Tap the one that\'s really yours.</span></div>'
+    return ('<div class="qz"><style>%s</style><div class="top"><small>PsycheAI quiz</small><b>%s</b><span>PsycheAI wasn\'t sure of these. The highlighted answer is its guess: tap the one that\'s really yours.</span></div>'
             '<form onsubmit="return false">%s<input type="hidden" id="qz-picks" name="psyche-quiz-picks" value="{}"></form>'
             '<div class="foot">When they look right, tap Make my quiz below ↓</div><script type="application/json" id="qz-data">%s</script><script>%s</script></div>'
             % (QZ_CSS, _e(head), ''.join(body), json.dumps(data).replace('</', '<\\/'), QZ_JS))
@@ -7545,7 +7553,10 @@ def quiz_widget_out(draft):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(html_)
     return {'saved': True, 'widget': html_, 'widgetFile': 'work/quiz-widget.html',
-            'say': 'Here\'s your quiz. Check your answer to each, then tap Make my quiz.',
+            'say': 'Your quiz is almost ready. I wasn\'t sure of %s: check %s, then tap Make my quiz.' % (
+                'one answer' if sum(1 for x in draft['items'] if not x.get('sure')) == 1 else '%d answers' % sum(1 for x in draft['items'] if not x.get('sure')),
+                'it' if sum(1 for x in draft['items'] if not x.get('sure')) == 1 else 'them'),
+            'asked': sum(1 for x in draft['items'] if not x.get('sure')),
             'buttons': [QUIZ_MAKE_BTN, 'Write different questions', 'Back to the menu'], 'asButtons': True}
 
 

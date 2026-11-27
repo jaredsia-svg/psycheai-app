@@ -5389,12 +5389,12 @@ def nope(*a, **k): raise RuntimeError('no card art here')
 m.card_art = nope
 task = m.quiz_task()
 t = json.load(open(m.QUIZ_TASK))
-q = lambda kind, text, a=0, o=None: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a}
-r = lambda text, a=0: q('rather', text, a, ['Lead the room', 'Be the one everyone calls'])
+q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure}
+r = lambda text, a=0, sure=True: q('rather', text, a, ['Lead the room', 'Be the one everyone calls'], sure)
 good = {'questions': [q('year', 'In which year did Jared run his first marathon?', 1, ['2019', '2020', '2021', '2022']), q('numbers', 'At what time of day is Jared most active on Instagram?', 2),
-                      r('Would Jared rather lead or help?'), q('deep', 'D1?', 1), q('year', 'Y2?', 0, ['2018', '2019', '2020', '2021']),
+                      r('Would Jared rather lead or help?', 0, False), q('deep', 'D1?', 1), q('year', 'Y2?', 0, ['2018', '2019', '2020', '2021']),
                       q('numbers', 'Which of these has Jared posted about?', 3, ['Surfing', 'Pottery', 'Hiking', 'All of the above']), r('Would Jared rather rest or roam?', 1),
-                      q('deep', 'D2?', 2), q('hard', 'H1?', 2), q('finale', 'Which character did PsycheAI say Jared is?', 3)]}
+                      q('deep', 'D2?', 2, None, False), q('hard', 'H1?', 2), q('finale', 'Which character did PsycheAI say Jared is?', 3)]}
 def bad(change):
     b = json.loads(json.dumps(good)); change(b); return m.quiz_save(json.dumps(b))
 probs = {
@@ -5407,25 +5407,32 @@ probs = {
   'allFirst': bad(lambda b: b['questions'][3].update(o=['All of the above', 'B', 'C', 'D'])),
   'finaleLast': bad(lambda b: b['questions'].insert(0, b['questions'].pop())),
   'noNumbers': bad(lambda b: [x.update(kind='deep') for x in b['questions'] if x['kind'] == 'numbers']),
+  'noSure': bad(lambda b: b['questions'][3].pop('sure')),
 }
 # Release 226: words that only sound like messages pass ("hard conversations" was refused on a device).
-soft = m._quiz_item({'kind': 'deep', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'He will chat to anyone', 'He talks it through', 'He never stops talking'], 'a': 0}, 8)[1]
+soft = m._quiz_item({'kind': 'deep', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'He will chat to anyone', 'He talks it through', 'He never stops talking'], 'a': 0, 'sure': False}, 8)[1]
 saved = m.quiz_save(json.dumps(good))
 w = saved.get('widget', '')
 import re
 checked = re.findall(r'name="(\w+)" value="(\w+)" checked', w)
-pub = m.quiz_publish(json.dumps({'q2': '1', 'q10': '3', 'q4': 'nonsense'}))
+pub = m.quiz_publish(json.dumps({'q3': '1', 'q8': 'nonsense'}))
 code = m.read_first([m.QUIZ_KEPT])['code']
 tool, args = sent[-1]
 opened = m.e2e_open(args['e2e']['box'], m.e2e_key('quiz', code))
+draftGone = not os.path.exists(m.QUIZ_DRAFT)
+# Every answer sure: no widget, the quiz is made at once (release 226, README "Only the unsure asked").
+allSure = json.loads(json.dumps(good)); [x.update(sure=True) for x in allSure['questions']]
+n_before = len(sent)
+straight = m.quiz_save(json.dumps(allSure))
+straight = {'widget': 'widget' in straight, 'invite': bool((straight.get('invite') or {}).get('url')), 'asked': straight.get('asked'), 'saved': straight.get('saved'), 'sent': len(sent) - n_before}
 nxt = m.quiz_first(json.loads(json.dumps(m.AFTER_PUBLISH)), {'name': 'Ana'})
 # A friend's quiz: their picks ride after the # of the link they paste, and only the ones they missed come back.
 m.write_private([m.QUIZ_PENDING], {'link': m.BASE + '/quiz#' + code + '.0000000000', 'name': 'Jared'})
 m._quiz_open = lambda c: (opened, {})
 missed = m.quiz_missed()
 print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'), 'widgetOut': 'Leave this one out' in w,
-  'checked': checked, 'buttons': saved.get('buttons'), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
-  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'draftGone': not os.path.exists(m.QUIZ_DRAFT),
+  'checked': checked, 'asked': saved.get('asked'), 'buttons': saved.get('buttons'), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
+  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'draftGone': draftGone, 'straight': straight,
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
   let Q = null, qerr = '';
@@ -5436,12 +5443,13 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       Q.facts && Q.facts.busiestYear && Q.facts.peakHours && /pm|am/.test(Q.facts.peakHours) && !/^(12am|1am|2am|3am) /.test(Q.facts.peakHours) && JSON.stringify(Q.facts.hashtagsOfWhatTheySaveAndLike) === '{"saves":["#trailrunning (9)","#coffee (4)"]}' &&
       has('messages', /^questions 4 of 10, the question[^:]*: "text" points at their messages/) && has('belief', /"church" is about politics, religion, kids or marriage, which a quiz question can never be about/) &&
       has('health', /"mental health" is about health/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has exactly 10/) && has('rather4', /exactly two/) &&
-      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 2 numbers/) && Q.soft.length === 0,
-    qerr || JSON.stringify(Q && { probs: Q.probs, facts: Q.facts }).slice(0, 900));
-  check('the quiz widget has the ten questions only, each with the read\'s guess picked, with nothing to swap in or leave out (release 227); publishing keeps all ten with the answers picked (a pick that isn\'t one keeps the guess), puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
-    Q && Q.saved === true && Q.checked.length === 10 && !Q.widgetOut && JSON.stringify(Q.buttons) === '["Make my quiz","Write different questions","Back to the menu"]' && Q.tool === 'quiz_put' && Q.id && Q.n === 10 &&
+      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 2 numbers/) && has('noSure', /questions 4 of 10: sure is true when/) && Q.soft.length === 0,
+    qerr || JSON.stringify(Q && { soft: Q.soft, facts: Q.facts, probs: Q.probs }).slice(0, 1500));
+  check('the quiz widget asks only the answers Muse wasn\'t sure of, each with its guess picked, with nothing to swap in or leave out, and with every answer sure the quiz is made at once with no widget (release 226, README "Only the unsure asked"); publishing keeps all ten with the answers picked (a pick that isn\'t one keeps the guess), puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
+    Q && Q.saved === true && Q.checked.length === 2 && JSON.stringify(Q.checked.map(c => c[0])) === '["q3","q8"]' && !Q.widgetOut && Q.asked === 2 &&
+      Q.straight.widget === false && Q.straight.invite === true && Q.straight.asked === 0 && Q.straight.saved === true && Q.straight.sent === 1 && JSON.stringify(Q.buttons) === '["Make my quiz","Write different questions","Back to the menu"]' && Q.tool === 'quiz_put' && Q.id && Q.n === 10 &&
       Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 10 && Q.opened.questions[9].k === 'finale' && Q.opened.questions[9].a === 3 &&
-      Q.opened.questions[1].a === 1 && Q.opened.questions[3].a === 1 && Q.opened.questions[2].o.length === 2 && Q.opened.questions[2].k === 'rather' && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone &&
+      Q.opened.questions[2].a === 1 && Q.opened.questions[7].a === 2 && Q.opened.questions[2].o.length === 2 && Q.opened.questions[2].k === 'rather' && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone &&
       JSON.stringify(Q.pubButtons) === '["Show my quiz results","Back to the menu"]',
     qerr || JSON.stringify(Q && { checked: Q.checked, pub: Q.pub, opened: Q.opened }).slice(0, 600));
   check('a friend\'s quiz comes first after their card ("Make my quiz for <name>" and More, the rest under More), and once their own quiz is made, quiz-missed shows only the ones they missed with the right answer, then forgets the link; the quiz buttons are known labels',
