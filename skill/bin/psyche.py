@@ -7283,6 +7283,7 @@ QUIZ_NEVER = [
 # how they text is read from their messages.
 QUIZ_MESSAGES = re.compile(r'\b(dms?|direct messages?|messag(e|es|ed|ing)|text(s|ed|ing)?|inbox|whatsapp|messenger|voice notes?|group ?chats?|(my|our|your) chats?)\b', re.I)
 QUIZ_IDENT = re.compile(r'https?:\S*|www\.\S*|@\w+|[\w.+-]+@[\w-]+\.\w|\d[\d\s-]{6,}\d|["“”]')
+QUIZ_COMMON = set('the and you your his her their they them with for from into that this what when who will would more than about have has are was were can could just only also not but all one out get got make makes made being been very really most'.split())
 QUIZ_STRIP = ('evidence', 'quotes', 'quote', 'basedOn', 'rationale', 'caveat', 'reading', 'confidence')
 
 
@@ -7430,6 +7431,20 @@ def _quiz_item(x, n):
         probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
     if kind not in QUIZ_KINDS:
         probs.append('%s: kind is one of %s' % (label, ', '.join(QUIZ_KINDS)))
+    # Wrong options clearly apart from the answer (release 226, README "Wrong options, far from the truth"): years at least
+    # two apart, and no option that mostly repeats the answer's own words.
+    if kind == 'year' and all(o) and isinstance(a, int) and 0 <= a < len(o):
+        ys = [int(y) if re.fullmatch(r'(19|20)\d\d', y) else None for y in o]
+        if None in ys:
+            probs.append('%s: each option of a year question is a year, like 2019' % label)
+        elif any(abs(y - z) < 2 for i, y in enumerate(ys) for z in ys[i + 1:]):
+            probs.append('%s: the years are at least two apart from each other, so a wrong one is never next to the right one' % label)
+    elif all(o) and isinstance(a, int) and 0 <= a < len(o):
+        mine_ = set(re.findall(r"[a-z']{3,}", o[a].lower())) - QUIZ_COMMON
+        for i, y in enumerate(o):
+            theirs = set(re.findall(r"[a-z']{3,}", y.lower())) - QUIZ_COMMON
+            if i != a and mine_ and theirs and len(mine_ & theirs) / min(len(mine_), len(theirs)) >= 0.6:
+                probs.append('%s, option %d ("%s"): it is too close to the answer ("%s"). Make it clearly different.' % (label, i + 1, y, o[a]))
     alls = [i for i, y in enumerate(o) if y and QUIZ_ALL.match(y)]
     if alls and (kind == 'rather' or alls != [len(o) - 1]):
         probs.append('%s: "All of the above" (or "None of these", "Both") is only ever the last option, and never in a rather question' % label)

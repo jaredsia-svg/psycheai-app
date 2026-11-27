@@ -5391,8 +5391,8 @@ task = m.quiz_task()
 t = json.load(open(m.QUIZ_TASK))
 q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure}
 r = lambda text, a=0, sure=True: q('rather', text, a, ['Lead the room', 'Be the one everyone calls'], sure)
-good = {'questions': [q('year', 'In which year did Jared run his first marathon?', 1, ['2019', '2020', '2021', '2022']), q('numbers', 'At what time of day is Jared most active on Instagram?', 2),
-                      r('Would Jared rather lead or help?', 0, False), q('deep', 'D1?', 1), q('year', 'Y2?', 0, ['2018', '2019', '2020', '2021']),
+good = {'questions': [q('year', 'In which year did Jared run his first marathon?', 1, ['2016', '2018', '2020', '2023']), q('numbers', 'At what time of day is Jared most active on Instagram?', 2),
+                      r('Would Jared rather lead or help?', 0, False), q('deep', 'D1?', 1), q('year', 'Y2?', 0, ['2012', '2015', '2018', '2021']),
                       q('numbers', 'Which of these has Jared posted about?', 3, ['Surfing', 'Pottery', 'Hiking', 'All of the above']), r('Would Jared rather rest or roam?', 1),
                       q('deep', 'D2?', 2, None, False), q('hard', 'H1?', 2), q('finale', 'Which character did PsycheAI say Jared is?', 3)]}
 def bad(change):
@@ -5408,6 +5408,8 @@ probs = {
   'finaleLast': bad(lambda b: b['questions'].insert(0, b['questions'].pop())),
   'noNumbers': bad(lambda b: [x.update(kind='deep') for x in b['questions'] if x['kind'] == 'numbers']),
   'noSure': bad(lambda b: b['questions'][3].pop('sure')),
+  'yearClose': bad(lambda b: b['questions'][0].update(o=['2019', '2020', '2022', '2024'])),
+  'nearCopy': bad(lambda b: b['questions'][7].update(o=['Make a careful plan', 'Make a plan', 'Call a friend', 'Go for a long run'], a=0)),
 }
 # Release 226: words that only sound like messages pass ("hard conversations" was refused on a device).
 soft = m._quiz_item({'kind': 'deep', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'He will chat to anyone', 'He talks it through', 'He never stops talking'], 'a': 0, 'sure': False}, 8)[1]
@@ -5443,7 +5445,7 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       Q.facts && Q.facts.busiestYear && Q.facts.peakHours && /pm|am/.test(Q.facts.peakHours) && !/^(12am|1am|2am|3am) /.test(Q.facts.peakHours) && JSON.stringify(Q.facts.hashtagsOfWhatTheySaveAndLike) === '{"saves":["#trailrunning (9)","#coffee (4)"]}' &&
       has('messages', /^questions 4 of 10, the question[^:]*: "text" points at their messages/) && has('belief', /"church" is about politics, religion, kids or marriage, which a quiz question can never be about/) &&
       has('health', /"mental health" is about health/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has exactly 10/) && has('rather4', /exactly two/) &&
-      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 2 numbers/) && has('noSure', /questions 4 of 10: sure is true when/) && Q.soft.length === 0,
+      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 2 numbers/) && has('noSure', /questions 4 of 10: sure is true when/) && has('yearClose', /at least two apart/) && has('nearCopy', /option 2 \("Make a plan"\): it is too close to the answer \("Make a careful plan"\)/) && Q.soft.length === 0,
     qerr || JSON.stringify(Q && { soft: Q.soft, facts: Q.facts, probs: Q.probs }).slice(0, 1500));
   check('the quiz widget asks only the answers Muse wasn\'t sure of, each with its guess picked, with nothing to swap in or leave out, and with every answer sure the quiz is made at once with no widget (release 226, README "Only the unsure asked"); publishing keeps all ten with the answers picked (a pick that isn\'t one keeps the guess), puts the finale last, locks the quiz here under a new code (PsycheAI gets its hash and a box it can\'t open), and gives the link with nothing sent',
     Q && Q.saved === true && Q.checked.length === 2 && JSON.stringify(Q.checked.map(c => c[0])) === '["q3","q8"]' && !Q.widgetOut && Q.asked === 2 &&
