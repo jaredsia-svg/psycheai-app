@@ -142,9 +142,9 @@ Agreed 27 November 2026. Not built yet. A PsycheAI user makes a quiz about thems
 **A quiz of 10:** 2 warm-ups (posts, interests), 5 deep (findings, motivations, hypotheticals), 2 hard (blind spots, how they come across vs who they are) and the finale, "Which character am I?". The wrong options are plausible: drawn from the owner's own traits, so only a friend who knows them gets it.
 
 **The owner, in Muse**
-1. After the Psyche is published, What's next has "Make a quiz for my friends" (it takes "Add WhatsApp or Facebook…"'s place, which moves under More). When a friend's Sync link is waiting (release 223) or the Together read is ready (release 224), the quiz goes under More.
+1. After the Psyche is published, What's next is, in order: "Make a quiz for my friends", "Sync with a friend", "Add WhatsApp or Facebook and generate a Fresh Psyche", "Psyche Together with my partner", "More". "Ask PsycheAI questions about myself" moves under More. When a friend's Sync link is waiting (release 223) or the Together read is ready (release 224), the quiz goes under More.
 2. One widget with the questions: each has Keep / Swap / Edit / Remove, the options, and the answer to confirm; "Add a question" and "Beliefs and future" at the end.
-3. "Your quiz is ready": the quiz card image and two buttons, "Send to a friend" (an invite line, sent only once they tap Send) and "Save for my Story" (an image for Instagram's link sticker).
+3. "Your quiz is ready": the quiz card image and the quiz link with a one-line invite in a code box to copy, as the Sync invite is (`Take my quiz: how well do you know me? <quiz link>`), and "Save for my Story" (an image for Instagram's link sticker). PsycheAI sends nothing itself: the user copies the line and sends it wherever they like.
 4. Results: a line on the next menu tap ("3 friends took your quiz: Ana got 9/10"), the digest when away, and, at 3 answers, "What friends get wrong about you" (counts only).
 
 **The friend, on the quiz page**
@@ -153,7 +153,7 @@ Agreed 27 November 2026. Not built yet. A PsycheAI user makes a quiz about thems
 3. The score card: "8/10, you know Jared better than 70% of his friends", a "Best friend" badge for the top score, their rank (others' first names only for friends who ticked "Show my name"), and "Share my score".
 4. "Your turn: make your quiz in Muse": one tap copies `Install https://psycheai.io/skill and make my quiz for Jared: <quiz link>`. Shown only after the score and only on that tap, never beside the friend's answers.
 
-**The friend, back in Muse:** the pasted line installs PsycheAI and makes their Psyche, as a Sync link does. Then What's next is "Make my quiz for <name>" and "More", and their quiz's first button is "Send to <name>". Making it unlocks the answers they missed on the owner's quiz.
+**The friend, back in Muse:** the pasted line installs PsycheAI and makes their Psyche, as a Sync link does. Then What's next is "Make my quiz for <name>" and "More", and their finished quiz shows the link and its invite line in a code box to copy, headed "For <name>", the same as any quiz: nothing is sent through Instagram messages. Making it unlocks the answers they missed on the owner's quiz.
 
 **Privacy and storage**
 - The quiz is locked on the owner's device, with its key after the # of the quiz link, so the server never receives the key.
@@ -165,7 +165,7 @@ Agreed 27 November 2026. Not built yet. A PsycheAI user makes a quiz about thems
 **Muse safety check (flag before shipping)**
 - The instruction that writes the questions states the messages limit in the same line: "from posts, stories, interests and the report's findings; nothing from messages is quoted or described".
 - The "Beliefs and future" line says in the same sentence that the owner states the answer.
-- The invite line and the Story image carry a link: only in a message meant for a friend, sent only after they tap Send.
+- The invite line and the Story image carry a link: they appear only in a code box or image for the user to copy or save, never sent by Muse, and never beside private data.
 - Results come back as counts and scores, never a friend's answers as text beside a link.
 - New wording in SKILL.md and results goes to Jared before release; no safety-check baseline is raised without asking.
 
