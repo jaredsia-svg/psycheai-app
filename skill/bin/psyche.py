@@ -7431,14 +7431,11 @@ def _quiz_item(x, n):
         probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
     if kind not in QUIZ_KINDS:
         probs.append('%s: kind is one of %s' % (label, ', '.join(QUIZ_KINDS)))
-    # Wrong options clearly apart from the answer (release 226, README "Wrong options, far from the truth"): years at least
-    # two apart, and no option that mostly repeats the answer's own words.
-    if kind == 'year' and all(o) and isinstance(a, int) and 0 <= a < len(o):
-        ys = [int(y) if re.fullmatch(r'(19|20)\d\d', y) else None for y in o]
-        if None in ys:
+    # Wrong options clearly apart from the answer (release 226, README "Wrong options, far from the truth"): a year question's
+    # options are years (any years: Jared, they needn't be spread out), and no option mostly repeats the answer's own words.
+    if kind == 'year' and all(o):
+        if not all(re.fullmatch(r'(19|20)\d\d', y) for y in o):
             probs.append('%s: each option of a year question is a year, like 2019' % label)
-        elif any(abs(y - z) < 2 for i, y in enumerate(ys) for z in ys[i + 1:]):
-            probs.append('%s: the years are at least two apart from each other, so a wrong one is never next to the right one' % label)
     elif all(o) and isinstance(a, int) and 0 <= a < len(o):
         mine_ = set(re.findall(r"[a-z']{3,}", o[a].lower())) - QUIZ_COMMON
         for i, y in enumerate(o):
