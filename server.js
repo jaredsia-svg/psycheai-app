@@ -37,7 +37,7 @@ const join = require('./lib/join');
 const links = require('./lib/links');
 const pages = require('./lib/pages');
 const site = require('./lib/site');
-const { renderCard } = require('./lib/cardimage');
+const { renderCard, renderAvatar } = require('./lib/cardimage');
 
 const PORT = Number(process.env.PORT || 8787);
 const DEV = process.env.PSYCHE_DEV === '1';
@@ -469,6 +469,14 @@ async function route(req, res) {
     }
     // How well do you know me? (lib/quiz.js, lib/quizpage.js): the page, the locked quiz by id, and a friend's answers.
     if (/^\/quiz\/?$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) return send(res, 200, require('./lib/quizpage').page(), 'text/html', { 'X-Robots-Tag': 'noindex' });
+    // The finale's character pictures (lib/cardimage.js renderAvatar): public art, one of the 28 by name.
+    const quizChar = /^\/quiz\/character\/([A-Za-z -]{2,40})\.png$/.exec(decodeURIComponent(url.pathname));
+    if (quizChar && (req.method === 'GET' || req.method === 'HEAD')) {
+      const png = renderAvatar(quizChar[1]);
+      if (!png) return send(res, 404, { error: 'No such character.' });
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'public, max-age=86400' });
+      return res.end(req.method === 'HEAD' ? undefined : png);
+    }
     const quizData = /^\/quiz\/data\/([0-9a-f]{64})$/.exec(url.pathname);
     if (quizData && req.method === 'GET') { const out = require('./lib/quiz').data(quizData[1]); return send(res, out.error ? 404 : 200, out, 'application/json', { 'X-Robots-Tag': 'noindex' }); }
     const quizAnswer = /^\/quiz\/answer\/([0-9a-f]{64})$/.exec(url.pathname);

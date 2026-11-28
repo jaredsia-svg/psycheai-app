@@ -5368,6 +5368,15 @@ print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years':
     /id="q-mys" class="q-mys"/.test(html) && /Unlocks when you finish/.test(html) && /<input type="checkbox" id="q-show" checked>/.test(html) && !/quiz\.character|quiz\.card/.test(page.JS.slice(page.JS.indexOf('function intro()'), page.JS.indexOf('function done('))) &&
       /id="q-zoom" class="q-zoom" hidden/.test(html) && /\$\('q-reveal-img'\)\.onclick=function\(\)\{\$\('q-zoom-img'\)\.src=quiz\.card;/.test(page.JS) && !/q-share|Challenge a friend/.test(html + page.JS) &&
       /function done\(again\)[^]*?if\(hasCard\(\)\)\{var im=\$\('q-reveal-img'\);im\.src=quiz\.card;/.test(page.JS) && /id="q-reveal" class="q-glass q-reveal" hidden/.test(html) && /Plus: see the '\+\(missed===1\?'one':missed\)\+' you missed on/.test(page.JS));
+  {
+    // README "Characters in the finale": each option shows the character's picture, cropped from the card art's scene.
+    const ci = require('../lib/cardimage.js');
+    const pngs = ['Sherlock Holmes', 'Mulan', 'The Tin Man', 'Hiccup'].map(n => ci.renderAvatar(n));
+    check('the quiz\'s finale shows each character\'s picture: one of the 28 drawn as a round PNG from the card art\'s scene (never the vector art alone, which crashes the renderer for some), served at /quiz/character/<name>.png, and nothing for a name outside the 28',
+      pngs.every(b => Buffer.isBuffer(b) && b.length > 3000 && b.subarray(1, 4).toString() === 'PNG') && ci.renderAvatar('Toothless') === null &&
+        /\/quiz\\\/character\\\/\(\[A-Za-z -\]\{2,40\}\)\\\.png\$/.test(srvSrc) && /if\(q\.k==='finale'\)\{l=document\.createElement\('img'\);l\.className='q-av'/.test(page.JS) && !/avatar\(name, 80, 80/.test(fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'cardimage.js'), 'utf8')),
+      JSON.stringify(pngs.map(b => b && b.length)));
+  }
   // The skill's side, in a copy of the skill (its working files go there, never in this repo), with PsycheAI's tools stubbed.
   const dir = fsq.mkdtempSync(pathq.join(osq.tmpdir(), 'quiz-'));
   fsq.mkdirSync(pathq.join(dir, 'bin')); fsq.copyFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), pathq.join(dir, 'bin', 'psyche.py')); fsq.copyFileSync(pathq.join(process.cwd(), 'skill', 'guide.json'), pathq.join(dir, 'guide.json'));
