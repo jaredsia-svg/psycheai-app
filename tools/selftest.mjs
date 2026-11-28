@@ -5406,14 +5406,14 @@ def nope(*a, **k): raise RuntimeError('no card art here')
 m.card_art = nope
 task = m.quiz_task()
 t = json.load(open(m.QUIZ_TASK))
-q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure, 'fact': 'True and specific, from the data: ' + text[:60], 'reveals': 'R: ' + text[:70].replace('post', '').replace('photo', 'view'), 'about': {'year': 'turning point', 'place': 'turning point', 'numbers': 'pattern', 'caption': 'pattern', 'rather': 'motivation', 'free': 'motivation', 'favourite': 'motivation', 'never': 'value', 'fake': 'contradiction'}.get(kind, 'passion'),
-  'source': {'year': 'post 2018-02-03', 'caption': 'post 2023-05-07', 'place': 'post 2022-08-09', 'favourite': 'numbers mostMentioned', 'numbers': 'numbers peakHours', 'rather': 'report patterns', 'never': 'report patterns', 'fake': 'report summary', 'free': 'post 2022-08-20', 'finale': ''}.get(kind, 'saves'),
+q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure, 'fact': 'True and specific, from the data: ' + text[:60], 'reveals': 'R: ' + text[:70].replace('post', '').replace('photo', 'view'), 'about': {'year': 'turning point', 'place': 'turning point', 'numbers': 'pattern', 'caption': 'pattern', 'rather': 'motivation', 'drive': 'motivation', 'free': 'motivation', 'favourite': 'motivation', 'never': 'value', 'fake': 'contradiction'}.get(kind, 'passion'),
+  'source': {'year': 'post 2018-02-03', 'caption': 'post 2023-05-07', 'place': 'post 2022-08-09', 'favourite': 'numbers mostMentioned', 'numbers': 'numbers peakHours', 'rather': 'report patterns', 'drive': 'report patterns', 'never': 'report patterns', 'fake': 'report summary', 'free': 'post 2022-08-20', 'finale': ''}.get(kind, 'saves'),
   'quote': {'year': 'First supper club night', 'caption': 'Mile 20 and still smiling somehow', 'place': 'Sunrise summit on Mount Batur in Bali', 'free': 'Birthday dinner, August again'}.get(kind, ''),
   'top': 'long black' if kind == 'favourite' else ''}
 r = lambda text, a=0, sure=True: dict(q('rather', text, a, ['Lead a team of fifty through a hard launch', 'Be the friend everyone calls at 2am'], sure), stands=['planning and leading', 'being there for people'])
 good = {'questions': [q('year', 'In which year did Jared host his first supper club?', 1, ['2016', '2018', '2020', '2023']),
                       q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
-                      r('Would Jared rather lead or help?', 0),
+                      q('drive', 'Which most closely describes what drives Jared?', 0, ['Planning every detail well ahead', 'Being the star of the show', 'Beating every rival', 'Drifting wherever the day goes']),
                       q('never', 'Which of these would Jared never do?', 2, ['Sign up for a muddy obstacle race', 'Spend a Sunday baking sourdough', 'Skip a friend\'s leaving drinks for overtime', 'Join a dawn hike with strangers']),
                       q('niche', 'What has Jared quietly been teaching himself?', 1, ['Restoring 1970s film cameras', 'Speaking conversational Portuguese', 'Fermenting hot sauce at home', 'Playing jazz piano by ear']),
                       q('fake', 'Which of these is NOT true about Jared?', 3, ['He ran a half marathon in the rain', 'He grew chillies on a windowsill', 'He hiked three peaks in one weekend', 'He keeps a pet tortoise named Kevin']),
@@ -5444,7 +5444,7 @@ revBad = m.quiz_revelations(json.dumps({'revelations': revs[:4] + [
   {'id': 'r_x', 'about': 'passion', 'finding': 'He jokes in his captions', 'part': 'interests', 'proof': [{'post': '2021-04-12', 'quote': 'adopted a rescue dog'}]},
   {'id': 'r_y', 'about': 'feed', 'finding': 'He loves maps', 'part': 'nowhere', 'proof': []}]}))
 m.quiz_revelations(json.dumps({'revelations': revs}))
-rid = {'numbers': 'r_num', 'rather': 'r_rat', 'never': 'r_nev', 'fake': 'r_fake', 'favourite': 'r_fav', 'free': 'r_free'}
+rid = {'numbers': 'r_num', 'drive': 'r_rat', 'never': 'r_nev', 'fake': 'r_fake', 'favourite': 'r_fav', 'free': 'r_free'}
 niche_ = iter(['r_n1', 'r_n2'])
 for x in good['questions']:
     if x['kind'] == 'niche':
@@ -5460,11 +5460,11 @@ probs = {
   'health': bad(lambda b: b['questions'][7].update(q='What is Jared\'s mental health like?')),
   'handle': bad(lambda b: b['questions'][3]['o'].__setitem__(0, '@ana')),
   'count': bad(lambda b: [b['questions'].pop(0) for _ in range(3)]),
-  'rather4': bad(lambda b: b['questions'][2].update(o=['A', 'B', 'C', 'D'])),
+  'rather4': bad(lambda b: b['questions'][2].update(kind='rather', o=['Rest at home with a good book', 'Roam a new city on foot all day'])),
   'allFirst': bad(lambda b: b['questions'][3].update(o=['All of the above', 'B', 'C', 'D'])),
   'finaleLast': bad(lambda b: b['questions'].insert(0, b['questions'].pop())),
   'noNumbers': bad(lambda b: [x.update(kind='niche') for x in b['questions'] if x['kind'] == 'numbers']),
-  'plainRather': bad(lambda b: b['questions'][2].update(o=['Lead', 'Help others out'])),
+  'plainRather': bad(lambda b: b['questions'][2].update(kind='rather', o=['Lead', 'Help others out'])),
   'noFact': bad(lambda b: b['questions'][3].pop('fact')),
   'repeat': bad(lambda b: b['questions'][6].update(q='What has Jared quietly been teaching himself lately?')),
   'sameAnswer': bad(lambda b: b['questions'][8].update(o=['Speaking conversational Portuguese', 'An iced oat latte', 'A double espresso standing up', 'A flat white with honey'], a=0)),
@@ -5488,12 +5488,12 @@ probs = {
   'hypo': bad(lambda b: b['questions'][2].update(source='post 2023-05-07')),
   'notCaption': bad(lambda b: b['questions'][7].update(source='post 2023-03-01')),
   'ten': bad(lambda b: b.__setitem__('questions', [x for x in b['questions'] if x['kind'] not in ('free', 'rather')])),
-  'driveOk': bad(lambda b: b['questions'][10].update(kind='drive', q='What drives Jared most?', o=['Planning every detail well ahead', 'Being admired by a big crowd', 'Winning at any cost', 'Keeping life simple and slow'], a=0, about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
-  'driveWrong': bad(lambda b: b['questions'][10].update(kind='drive', q='What drives Jared most?', o=['Being admired by a big crowd', 'Planning every detail well ahead', 'Winning at any cost', 'Keeping life simple and slow'], a=0, about='passion', source='report patterns', reveals='He feels safest with a plan in hand')),
+  'driveOk': bad(lambda b: b['questions'][2].update(kind='drive', q='What drives Jared most?', o=['Planning every detail well ahead', 'Being admired by a big crowd', 'Winning at any cost', 'Keeping life simple and slow'], a=0, about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
+  'driveWrong': bad(lambda b: b['questions'][2].update(kind='drive', q='What drives Jared most?', o=['Being admired by a big crowd', 'Planning every detail well ahead', 'Winning at any cost', 'Keeping life simple and slow'], a=0, about='passion', source='report patterns', reveals='He feels safest with a plan in hand')),
   'twoFindings': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] in ('numbers', 'fake', 'never', 'free')]),
-  'scenes': bad(lambda b: b['questions'][10].update(kind='drive', q="Which most closely describes Jared's ideal Saturday?", o=['A day mapping out next month in a fresh notebook', 'A packed festival with a roaring crowd', 'A trophy match he refuses to lose', 'A slow lie-in with nowhere to be'], a=0, stands=['planning', 'attention', 'winning', 'rest'], about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
-  'scenesSame': bad(lambda b: b['questions'][10].update(kind='drive', q="Which most closely describes Jared's ideal Saturday?", o=['A day mapping out next month in a fresh notebook', 'A packed festival with a roaring crowd', 'A trophy match he refuses to lose', 'A slow lie-in with nowhere to be'], a=1, stands=['planning', 'attention', 'attention', 'rest'], about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
-  'scenesWrong': bad(lambda b: b['questions'][10].update(kind='drive', q="Which most closely describes Jared's ideal Saturday?", o=['A day mapping out next month in a fresh notebook', 'A packed festival with a roaring crowd', 'A trophy match he refuses to lose', 'A slow lie-in with nowhere to be'], a=2, stands=['planning', 'attention', 'winning', 'rest'], about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
+  'scenes': bad(lambda b: b['questions'][2].update(kind='drive', q="Which most closely describes Jared's ideal Saturday?", o=['A day mapping out next month in a fresh notebook', 'A packed festival with a roaring crowd', 'A trophy match he refuses to lose', 'A slow lie-in with nowhere to be'], a=0, stands=['planning', 'attention', 'winning', 'rest'], about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
+  'scenesSame': bad(lambda b: b['questions'][2].update(kind='drive', q="Which most closely describes Jared's ideal Saturday?", o=['A day mapping out next month in a fresh notebook', 'A packed festival with a roaring crowd', 'A trophy match he refuses to lose', 'A slow lie-in with nowhere to be'], a=1, stands=['planning', 'attention', 'attention', 'rest'], about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
+  'scenesWrong': bad(lambda b: b['questions'][2].update(kind='drive', q="Which most closely describes Jared's ideal Saturday?", o=['A day mapping out next month in a fresh notebook', 'A packed festival with a roaring crowd', 'A trophy match he refuses to lose', 'A slow lie-in with nowhere to be'], a=2, stands=['planning', 'attention', 'winning', 'rest'], about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
   'likely': bad(lambda b: b['questions'][3].update(q='Which of these is Jared most likely to do?')),
   'dog': bad(lambda b: b['questions'][0].update(q='In which year did Jared adopt a rescue dog?', o=['2021', '2022', '2023', '2024'], a=1, source='post 2022-04-03', quote='Another adopted sweetie')),
   'noQuote': bad(lambda b: b['questions'][0].update(quote='')),
@@ -5504,7 +5504,8 @@ probs = {
   'lowTop': bad(lambda b: b['questions'][8].update(top='supper club')),
   'topNotAnswer': bad(lambda b: b['questions'][8].update(top='long black', o=['An iced oat latte', 'A long black, no sugar', 'A double espresso standing up', 'A flat white with honey'], a=0)),
   'topSource': bad(lambda b: b['questions'][8].update(source='saves')),
-  'ratherNoStands': bad(lambda b: b['questions'][2].pop('stands')),
+  'ratherNoStands': bad(lambda b: b['questions'][2].update(stands=['planning', 'attention', 'winning', 'rest'])),
+  'driveFromPosts': bad(lambda b: b['questions'][2]['o'].__setitem__(1, 'Portuguese lessons every single day')),
   'tooFeed': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] != 'finale']),
   'feedReveal': bad(lambda b: b['questions'][4].update(reveals='He jokes about the market when it falls')),
   'noAbout': bad(lambda b: b['questions'][4].pop('about')),
@@ -5563,15 +5564,15 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
     Q && Q.task.write === 'quiz' && !Q.taskKeys.includes('beliefs') && !Q.taskKeys.includes('wellness') && JSON.stringify(Q.patterns) === '[{"title":"The planner","detail":"Plans ahead"}]' &&
       Q.facts && !('busiestYear' in Q.facts) && !('busiestDay' in Q.facts) && !('weekendShare' in Q.facts) && Q.facts.peakHours && /pm|am/.test(Q.facts.peakHours) && !/^(12am|1am|2am|3am) /.test(Q.facts.peakHours) && JSON.stringify(Q.facts.hashtagsOfWhatTheySaveAndLike) === '{"saves":["#trailrunning (9)","#coffee (4)"]}' &&
       has('messages', /^questions 4 of 12, the question[^:]*: "text" points at their messages/) && has('belief', /"church" is about politics, religion, kids or marriage, which a quiz question can never be about/) &&
-      has('health', /"mental health" is about health/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has 10 to 12: leave out any that isn't certain/) && has('rather4', /exactly two/) &&
-      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 1 numbers/) && has('plainRather', /both options of a rather question are vivid scenes/) && has('noFact', /questions 4 of 12: fact is one line/) && has('repeat', /^questions 5 and 7 of 12 ask about the same thing/) && has('sameAnswer', /^questions 5 and 9 of 12 ask about the same thing/) && has('twoRather', /at most one rather/) && has('variety', /"tortoise" comes up in questions 4, 6, 7 of 12/) && has('scenario', /kind is one of/) && has('plain', /option 1 \("Ran once"\): it is much plainer than the answer/) && has('fake3', /exactly four/) && has('yearWord', /each option of a year question is a year/) && !(Q.probs.yearClose || []).length && has('nearCopy', /option 2 \("Make a plan"\): it is too close to the answer \("Make a careful plan"\)/) && Q.soft.length === 0,
+      has('health', /"mental health" is about health/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has 10 to 12: leave out any that isn't certain/) && has('rather4', /would-they-rather is no longer asked/) &&
+      has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 1 numbers/) && has('plainRather', /would-they-rather is no longer asked/) && has('noFact', /questions 4 of 12: fact is one line/) && has('repeat', /^questions 5 and 7 of 12 ask about the same thing/) && has('sameAnswer', /^questions 5 and 9 of 12 ask about the same thing/) && has('twoRather', /would-they-rather is no longer asked/) && has('variety', /"tortoise" comes up in questions 4, 6, 7 of 12/) && has('scenario', /kind is one of/) && has('plain', /option 1 \("Ran once"\): it is much plainer than the answer/) && has('fake3', /exactly four/) && has('yearWord', /each option of a year question is a year/) && !(Q.probs.yearClose || []).length && has('nearCopy', /option 2 \("Make a plan"\): it is too close to the answer \("Make a careful plan"\)/) && Q.soft.length === 0,
     qerr || JSON.stringify(Q && { soft: Q.soft, facts: Q.facts, probs: Q.probs }).slice(0, 1500));
   check('the quiz is made at once from the questions Muse wrote, with no widget and nothing put to them (release 230, README "No confirming"): twelve, in the arc\'s order, with a place and a wildcard last before the finale, the finale\'s options set here from the 28 characters (theirs and the three closest in temperament), each with its fact, locked here under a new code (PsycheAI gets its hash and a box it can\'t open), and the link given with nothing sent',
     Q && Q.saved === true && Q.straight.widget === false && Q.straight.invite === true && Q.straight.sent === 1 && Q.tool === 'quiz_put' && Q.id && Q.n === 12 &&
       Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 12 && Q.opened.questions[11].k === 'finale' && Q.opened.questions[11].o[Q.opened.questions[11].a] === 'Sherlock Holmes' && Q.opened.questions[10].k === 'free' && Q.opened.questions[10].o.length === 2 &&
       JSON.stringify(Q.opened.questions[11].o.slice().sort()) === '["Elsa","Hermione Granger","Remy","Sherlock Holmes"]' && Q.likeAll &&
-      Q.opened.questions[1].q === 'Would Jared rather…' && Q.opened.questions[1].o[Q.opened.questions[1].a] === 'Lead a team of fifty through a hard launch' && Q.opened.questions[1].o.length === 2 &&
-      JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","rather","caption","year","niche","numbers","place","niche","fake","never","free","finale"]' &&
+      Q.opened.questions[4].q === 'Which most closely describes what drives Jared?' && Q.opened.questions[4].o[Q.opened.questions[4].a] === 'Planning every detail well ahead' && Q.opened.questions[4].o.length === 4 &&
+      JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","caption","year","niche","drive","numbers","place","niche","fake","never","free","finale"]' &&
       Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone && Q.pub.invite.say.startsWith('[Open your quiz](' + Q.pub.invite.url + '): have a look before you send it.\n\nHere\'s your quiz.') &&
       JSON.stringify(Q.pubButtons) === '["Show my friends\' scores for my pop quiz","Generate fresh pop quiz","Back to the menu"]' && Q.labels2.every(Boolean) && !/quiz_widget|QZ_JS|That\'s not true about me/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
     qerr || JSON.stringify(Q && { straight: Q.straight, n: Q.n, kinds: Q.opened && Q.opened.questions.map(x => x.k) }).slice(0, 900));
@@ -5598,7 +5599,7 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
   check('first principles (release 234): every answer stands on a source in the file, checked: a dated post of theirs (the year question\'s answer is that post\'s year, the caption is that post\'s own), a part of the report, a count, or their saves; a rather and a never stand on the report; wrong options never come from their own posts and no two options are alike; ten to twelve questions, the rather and the wildcard only when certain; up to half straight from their posts (about "feed", no reveals needed), the rest from findings; the guide has no hypotheticals, and no example that plants a false fact',
     Q && (Q.probs.noSource || []).some(p => /questions 4 of 12 .*source is where its answer stands/.test(p)) && (Q.probs.badPost || []).some(p => /there is no post or story of theirs on 2017-01-01/.test(p)) &&
       (Q.probs.wrongYear || []).some(p => /its source is a post from 2018, but the answer is 2020/.test(p)) && (Q.probs.fromPosts || []).some(p => /option 2 \("Portuguese lessons every single day"\): it comes from their own posts/.test(p)) &&
-      (Q.probs.alike || []).some(p => /options 1 and 2 .* are too alike/.test(p)) && (Q.probs.hypo || []).some(p => /a rather question stands on a finding the report states/.test(p)) &&
+      (Q.probs.alike || []).some(p => /options 1 and 2 .* are too alike/.test(p)) && (Q.probs.hypo || []).some(p => /a drive question stands on a finding the report states/.test(p)) &&
       (Q.probs.notCaption || []).some(p => /isn't the caption of their post on 2023-03-01/.test(p)) && Q.probs.ten == null && (Q.probs.tooFeed || []).some(p => /11 of 12 questions are straight from their posts \(about "feed"\); up to 6 may be/.test(p)) && Q.saved === true &&
       require('../lib/quizguide.js').spec.includes('## Half from their posts') && require('../lib/quizguide.js').schema.properties.questions.items.properties.about.enum.includes('feed') &&
       Q.opened.questions.every(x => !('source' in x) && !('src' in x)) &&
@@ -5611,11 +5612,10 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
       require('../lib/quizguide.js').spec.includes('**What drives them (kind "drive"), up to two questions:**') && require('../lib/quizguide.js').spec.includes('aim for about five straight from their posts, six about findings') &&
       require('../lib/quizguide.js').schema.properties.questions.items.properties.kind.enum.includes('drive') && /'drive':\['🧭 What drives them',''\]/.test(require('../lib/quizpage.js').JS),
     qerr || JSON.stringify(Q && { driveOk: Q.probs.driveOk, driveWrong: Q.probs.driveWrong, twoFindings: Q.probs.twoFindings }).slice(0, 1500));
-  check('most closely, never most likely (release 235): a what-drives-them question may be four vivid scenes, with stands naming the motivation or value each stands for, all different, the right one\'s in the report part its source gives; a question with "most likely" is refused; stands never reaches the published quiz; would they rather stays at two',
-    Q && Q.probs.scenes == null && (Q.probs.scenesSame || []).some(p => /stands names the motivation or value each scene stands for, one per option, all different/.test(p)) &&
-      (Q.probs.scenesWrong || []).some(p => /the right scene stands for "winning", which isn't in the report's patterns/.test(p)) && (Q.probs.likely || []).some(p => /"most likely" lets more than one answer stand/.test(p)) &&
-      Q.opened.questions.every(x => !('stands' in x)) && require('../lib/quizguide.js').spec.includes('"Which most closely describes Jared\'s ideal Saturday?"') && require('../lib/quizguide.js').spec.includes('no "most likely"') &&
-      'stands' in require('../lib/quizguide.js').schema.properties.questions.items.properties,
+  check('most closely, never most likely (release 235; scenes retired in 241): a what-drives-them question is asked in plain words, never scenes; a question with "most likely" is refused; stands never reaches the published quiz; would they rather stays at two',
+    Q && (Q.probs.scenes || []).some(p => /what drives them is asked in plain words, never scenes/.test(p)) && (Q.probs.likely || []).some(p => /"most likely" lets more than one answer stand/.test(p)) &&
+      Q.opened.questions.every(x => !('stands' in x)) && require('../lib/quizguide.js').spec.includes('"Which most closely describes what drives Jared?"') && require('../lib/quizguide.js').spec.includes('no "most likely"') &&
+      !('stands' in require('../lib/quizguide.js').schema.properties.questions.items.properties),
     qerr || JSON.stringify(Q && ['scenes', 'scenesSame', 'scenesWrong', 'likely'].map(k => [k, Q.probs[k]])).slice(0, 1500));
   check('what the post says (release 236): a question on a post carries the words that say it, which must be in that post; a year or place question may ask only what those words say, so a comment about someone else\'s adopted pet is never "Jared adopted a dog"; the guide refuses a description that fits only the answer (Hoi An, "its historic trading port"); quote never reaches the published quiz',
     Q && (Q.probs.dog || []).some(p => /the question says more than their post does \("Another adopted sweetie"\)/.test(p)) && (Q.probs.noQuote || []).some(p => /quote is the words in their post on 2018-02-03 that say it/.test(p)) &&
@@ -5653,8 +5653,9 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
     Q && /^Making your pop quiz from your Psyche: it takes a few minutes\. I'll share its link here when it's ready\.$/.test(Q.task.say) &&
       /- \*\*The quiz\*\* \("Pop quiz my friends about me"\): with `write`: "quiz", reply first with its say, then, in that same turn, read its task file/.test(require('../lib/skill.js').skillMd()),
     JSON.stringify(Q && Q.task));
-  check('a rather that matches (release 240): its scenes stand for two named motivations or values, the right one in the report part its source gives, and the script words its question "Would Jared rather…", so no frame of its own can miss the scenes; the guide never reuses its own examples',
-    Q && (Q.probs.ratherNoStands || []).some(p => /a rather sets two of theirs against each other/.test(p)) && Q.opened.questions[1].q === 'Would Jared rather…' &&
+  check('no more guesses dressed as facts (release 241): would-they-rather is no longer asked and what drives them takes no scenes (which of two scenes they\'d pick is a guess); a what-drives-them wrong option can\'t come from their own posts; the guide never reuses its own examples',
+    Q && (Q.probs.ratherNoStands || []).some(p => /what drives them is asked in plain words, never scenes/.test(p)) && (Q.probs.driveFromPosts || []).some(p => /it comes from their own posts/.test(p)) &&
+      require('../lib/quizguide.js').spec.includes('**No would-they-rather:**') && !require('../lib/quizguide.js').schema.properties.questions.items.properties.kind.enum.includes('rather') &&
       require('../lib/quizguide.js').spec.includes('never use one, or its places, topics or words, in a quiz') && !/Norwegian fjords/.test(require('../lib/quizguide.js').spec),
     qerr || JSON.stringify(Q && Q.probs.ratherNoStands));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
@@ -5686,7 +5687,7 @@ print(json.dumps(m.e2e_open(json.loads(sys.argv[3]), m.e2e_key('quiz-answer', sy
     JSON.stringify({ openedJs, back, tampered }).slice(0, 300));
   check('the quiz guide in the signed guide.json is this repo\'s lib/quizguide.js, and pin-guide keeps it there; its rules match what quiz-save checks',
     JSON.stringify(require('../skill/guide.json').quiz) === JSON.stringify(require('../lib/quizguide.js')) && /quiz: require\(path\.join\(here, '\.\.', 'lib', 'quizguide\.js'\)\)/.test(fsq.readFileSync(pathq.join(process.cwd(), 'tools', 'pin-guide.mjs'), 'utf8')) &&
-      /nothing in them is quoted, paraphrased or described/.test(require('../lib/quizguide.js').spec) && /Never politics, religion, kids or marriage/.test(require('../lib/quizguide.js').spec) && /kind "rather"\), one question, a real dilemma:\*\* two vivid scenes with a cost on each side/.test(require('../lib/quizguide.js').spec) && /never let one topic \(running, coffee, a city\) turn up across several questions/.test(require('../lib/quizguide.js').spec));
+      /nothing in them is quoted, paraphrased or described/.test(require('../lib/quizguide.js').spec) && /Never politics, religion, kids or marriage/.test(require('../lib/quizguide.js').spec) && /No would-they-rather:\*\* which of two scenes they would pick is a guess, never certain/.test(require('../lib/quizguide.js').spec) && /never let one topic \(running, coffee, a city\) turn up across several questions/.test(require('../lib/quizguide.js').spec));
   const md = require('../lib/skill.js').skillMd();
   check('SKILL.md says how to make a quiz in one line near the top, inside the install read, with its limit in the same line (nothing from their messages), that the link is a line they copy and PsycheAI sends nothing, and that a friend\'s quiz link is made into their own quiz only on their tap; nothing about the quiz sits past the install read, where a mid-run look into SKILL.md has stopped Muse before (release 219)',
     /\n- \*\*The quiz\*\* \("Pop quiz my friends about me"\)[^\n]*nothing from their messages is quoted or described\.[^\n]*PsycheAI sends nothing itself: they copy the line\./.test(md) &&

@@ -103,7 +103,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 240
+RELEASE = 241
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7476,7 +7476,11 @@ def quiz_shifts(top=5):
             left.append((t, before, '%d posts %s to %s, none since' % (before, min(ys), max(ys))))
         if since >= 3 and not before:
             lately.append((t, since, '%d posts since %s, none before' % (since, min(ys))))
-    pick = lambda xs: [(t, why) for t, _, why in sorted(xs, key=lambda x: (-x[1], x[0]))[:top]]
+    # A word that only ever comes inside the same pair ("long" in "long black") is the pair, as in mostMentioned.
+    def pick(xs):
+        pairs = [(t, n) for t, n, _ in xs if ' ' in t]
+        xs = [x for x in xs if ' ' in x[0] or not any(x[1] == pn and x[0] in pt.split(' ') for pt, pn in pairs)]
+        return [(t, why) for t, _, why in sorted(xs, key=lambda x: (-x[1], x[0]))[:top]]
     out = {'always': pick(always), 'leftBehind': pick(left), 'lately': pick(lately)}
     return {k: v for k, v in out.items() if v}
 
@@ -7589,8 +7593,12 @@ def _quiz_item(x, n, total=QUIZ_MAX):
     a = x.get('a')
     if not (isinstance(a, int) and not isinstance(a, bool) and 0 <= a < max(1, len(o))):
         probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
+    # Retired (release 241, README "No more guesses dressed as facts"): which of two scenes they'd pick is a guess. A report's
+    # ranking of two abstract motivations can't decide a concrete choice, and both scenes came from their own posts.
+    if kind == 'rather':
+        probs.append('%s: would-they-rather is no longer asked: which of two scenes they\'d pick is a guess, never certain. Ask what drives them in plain words, or something their posts show.' % label)
     if kind not in QUIZ_KINDS:
-        probs.append('%s: kind is one of %s' % (label, ', '.join(QUIZ_KINDS)))
+        probs.append('%s: kind is one of %s' % (label, ', '.join(k_ for k_ in QUIZ_KINDS if k_ != 'rather')))
     # Wrong options clearly apart from the answer (release 226, README "Wrong options, far from the truth"): a year question's
     # options are years (any years: Jared, they needn't be spread out), and no option mostly repeats the answer's own words.
     if kind == 'year' and all(o):
@@ -7647,7 +7655,7 @@ QUIZ_GENERIC = set('time day week month year people friend thing place every fir
 QUIZ_HOURS = re.compile(r'(\d{1,2})\s*(am|pm)\s*(?:to|-|–|until)\s*(\d{1,2})\s*(am|pm)', re.I)
 QUIZ_LIKELY = re.compile(r"\b(most likely|more likely|likely to|probably|would most)\b", re.I)
 QUIZ_SOURCE = re.compile(r'^(post|report|numbers|saves)\b[\s:]*(.*)$', re.I)
-QUIZ_FALSE = ('favourite', 'niche', 'place', 'caption', 'free')     # kinds whose wrong options must be false of them
+QUIZ_FALSE = ('favourite', 'niche', 'place', 'caption', 'free', 'drive')     # kinds whose wrong options must be false of them
 
 
 def _quiz_posts():
@@ -7880,7 +7888,9 @@ def quiz_grounded(items, total, facts, words):
             part_ = next((v for k_, v in ((kept.get('report') or {}).items()) if str(k_).lower() == what.split(' ')[0].lower().rstrip('.,')), None)
             st_ = x.get('stands')
             stem = lambda t: {w_[:5] for w_ in cw(t)}       # "planning" and "planner" are the same motivation
-            if st_ is not None:
+            if st_ is not None and x['kind'] == 'drive':
+                probs.append('%s: what drives them is asked in plain words, never scenes: which scene they\'d pick is a guess. Drop stands and name the motivations or values themselves.' % label)
+            elif st_ is not None:
                 # Four scenes (release 235): each stands for a different motivation or value, named in stands; the answer's is the report's.
                 if len(st_) != len(x['o']) or not all(st_) or len({y.lower() for y in st_}) != len(st_):
                     probs.append('%s: stands names the motivation or value each scene stands for, one per option, all different' % label)
