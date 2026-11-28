@@ -103,7 +103,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 236
+RELEASE = 237
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7420,7 +7420,43 @@ def quiz_facts():
             taste[which] = ['#%s (%d)' % (t, n) for t, n in tags[:15]]
     if taste:
         facts['hashtagsOfWhatTheySaveAndLike'] = taste
+    most = quiz_mentions()
+    if most:
+        facts['mostMentioned'] = ['%s (%d posts)' % (t, n) for t, n in most]
     return facts
+
+
+QUIZ_STOP = set('''with from this that what when where which while into onto over under about after before again also just only very
+really more most much many some such than then them they their there these those your yours have has had been being were was are
+will would could should shall might must can cant dont didnt doesnt isnt wasnt arent cannot here today tonight tomorrow yesterday
+january february march april may june july august september october november december monday tuesday wednesday thursday friday
+saturday sunday back still even ever every always never other another each both made make makes making take took taken come came
+going went gone getting got thanks thank love loved loving like liked feel feeling felt know knew want wanted need needed time times
+year years week weeks day days moment moments life world people friend friends thing things little good great best better nice happy
+amazing finally first last next today'''.split())
+
+
+def quiz_mentions(top=25):
+    """What their own posts and stories keep naming (README "The top of something"): each term (a word of four letters or
+    more, or two such words side by side) with how many of their posts name it, most first, twice or more. Counted here
+    from their own posts and stories only, never comments or messages, for the quiz's top-of-something questions."""
+    name_ = set(re.findall(r'[a-z]+', str((read_first([REPORT, REPORT_KEPT]) or {}).get('name') or '').lower()))
+    seen = {}
+    for line in _digest_section('## Posts and stories').splitlines():
+        m = re.match(r'\d{4}-\d{2}-\d{2}\s*(?:\d{1,2}:\d{2}\s*)?(?:\[[a-z]+\]\s*)?(.*)', line.strip())
+        if not m:
+            continue
+        toks = [w for w in re.findall(r"[a-z][a-z'-]+", m.group(1).lower()) if not QUIZ_IDENT.search(w)]
+        keep = [w if len(w) >= 4 and w not in QUIZ_STOP and w not in QUIZ_COMMON and w not in name_ else None for w in toks]
+        terms = {w[:-1] if len(w) > 4 and w.endswith('s') and not w.endswith('ss') else w for w in keep if w}
+        terms |= {'%s %s' % (a, b) for a, b in zip(keep, keep[1:]) if a and b}
+        for t in terms:
+            seen[t] = seen.get(t, 0) + 1
+    most = sorted(((t, n) for t, n in seen.items() if n >= 2), key=lambda tn: (-tn[1], tn[0]))
+    # A word that only ever comes inside the same pair ("long" in "long black") is the pair.
+    pairs = [(t, n) for t, n in most if ' ' in t]
+    most = [(t, n) for t, n in most if ' ' in t or not any(n == pn and t in pt.split(' ') for pt, pn in pairs)]
+    return most[:top]
 
 
 def quiz_pending():
@@ -7549,14 +7585,29 @@ def _quiz_item(x, n, total=QUIZ_MAX):
         say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
+    # Times that don't overlap (release 237): "4pm to 7pm" beside "6pm to 9pm" makes two answers right.
+    spans = []
+    for y in o:
+        m_ = QUIZ_HOURS.search(y or '')
+        if m_:
+            h = lambda n_, ap: int(n_) % 12 + (12 if ap.lower() == 'pm' else 0)
+            a_, b_ = h(m_.group(1), m_.group(2)), h(m_.group(3), m_.group(4))
+            spans.append((y, {(a_ + k) % 24 for k in range((b_ - a_) % 24 or 24)}))
+    for k, (y, hs) in enumerate(spans):
+        for z, hz in spans[k + 1:]:
+            if hs & hz:
+                probs.append('%s: "%s" and "%s" overlap, so both could be right. Times never overlap: far apart, with gaps between them.' % (label, y, z))
     # Never "most likely" (release 235, README "Most closely, never most likely"): it lets two answers stand.
     if q and QUIZ_LIKELY.search(q):
         probs.append('%s, the question ("%s"): "%s" lets more than one answer stand. Ask what is true of them ("Which most closely describes Jared?", "Which of these has Jared actually done?").' % (label, q, QUIZ_LIKELY.search(q).group(0)))
     stands = [_quiz_clean(y, 40) for y in x.get('stands')] if isinstance(x.get('stands'), list) else None
     return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals, 'about': about if kind != 'finale' else 'character',
-            'src': _quiz_clean(x.get('source'), 60), 'stands': stands, 'quote': _quiz_clean(x.get('quote'), 140), 'rev': _quiz_clean(x.get('revelation'), 20)}, probs
+            'src': _quiz_clean(x.get('source'), 60), 'stands': stands, 'quote': _quiz_clean(x.get('quote'), 140), 'rev': _quiz_clean(x.get('revelation'), 20),
+            'top': (_quiz_clean(x.get('top'), 40) or '').lower()}, probs
 
 
+QUIZ_GENERIC = set('time day week month year people friend thing place every first best new old good great love life world home city way end start part kind lot one two three four five six ten night morning evening weekend jared long short big small little high low last next same own full half never always ever often'.split())
+QUIZ_HOURS = re.compile(r'(\d{1,2})\s*(am|pm)\s*(?:to|-|–|until)\s*(\d{1,2})\s*(am|pm)', re.I)
 QUIZ_LIKELY = re.compile(r"\b(most likely|more likely|likely to|probably|would most)\b", re.I)
 QUIZ_SOURCE = re.compile(r'^(post|report|numbers|saves)\b[\s:]*(.*)$', re.I)
 QUIZ_FALSE = ('favourite', 'niche', 'place', 'caption', 'free')     # kinds whose wrong options must be false of them
@@ -7646,6 +7697,36 @@ def quiz_revelations(raw):
     write_private([QUIZ_REVS], {'revelations': keep, 'at': int(time.time())})
     return {'saved': True, 'revelations': [r['id'] for r in keep],
             'next': 'Write work/quiz.json: each question about a finding names its revelation and stands on that revelation\'s proof or report part; then quiz-save.'}
+
+
+def quiz_tops(items, total):
+    """The top of something (release 237, README "The top of something"): a question about the extreme of their interests
+    names its term in mostMentioned, posted about three times or more, and its answer names it; a favourite always does,
+    and at least two questions do when their posts have two such terms."""
+    probs = []
+    most = dict(quiz_mentions(60))
+    big = [t for t, n in most.items() if n >= 3]
+    stem = lambda t: {w_[:5] for w_ in re.findall(r"[a-z]{3,}", t.lower())}
+    tops = 0
+    for i, x in enumerate(items):
+        label = 'questions %d of %d ("%s")' % (i + 1, total, x['q'])
+        t = x.get('top') or ''
+        if x['kind'] == 'favourite' and not t and big:
+            probs.append('%s: a favourite is the top of something: top names its term in instagramInNumbers.mostMentioned (%s), and the answer is it' % (label, ', '.join(big[:8])))
+        if not t:
+            continue
+        tops += 1
+        n = most.get(t, most.get(t[:-1] if t.endswith('s') else t + 's', 0))
+        right = x['o'][x['a']] if isinstance(x['a'], int) and 0 <= x['a'] < len(x['o']) else ''
+        if n < 3:
+            probs.append('%s: "%s" is in %d of their posts, not enough to be the top of anything. top names a term their posts name three times or more (%s).' % (label, t, n, ', '.join(big[:8]) or 'none here'))
+        elif not stem(t) <= stem(right):
+            probs.append('%s: the answer ("%s") doesn\'t name its top ("%s"). The right option is the top thing itself.' % (label, right, t))
+        if (x.get('src') or '').lower() != 'numbers mostmentioned':
+            probs.append('%s: a top-of-something question stands on the count: source "numbers mostMentioned"' % label)
+    if tops < min(2, len(big)):
+        probs.append('the quiz has %d question about the top of something; it needs %d: ask about the very top of their interests (what they post about most of a kind), with top naming its term in mostMentioned' % (tops, min(2, len(big))))
+    return probs
 
 
 def quiz_linked(items, total):
@@ -7867,19 +7948,27 @@ def quiz_save(raw):
                     probs.append('questions %d and %d of %d ask about the same thing ("%s" and "%s"). Every question is about something different: change one.' % (i + 1, k + 1, total, x['q'], y['q']))
         # Varied throughout (release 229, README "Eleven, and nothing twice"): a topic word in three or more questions,
         # counting their options, is refused, naming the word and the questions.
+        # Release 237 (README "Nothing twice, options included"): a topic in one question only, options included, and in two at
+        # most when it is core to them (in their report's interests or a revelation's finding); words of three letters count
+        # ("dog"), and a few words that are never a topic don't.
         seen_ = {}
         for i, x in enumerate(items):
             if x['kind'] == 'finale':
                 continue
             for w_ in words(' '.join([x['q']] + x['o'])):
-                if len(w_) >= 4:
+                if len(w_) >= 3 and w_.rstrip('s') not in QUIZ_GENERIC:
                     seen_.setdefault(w_.rstrip('s'), set()).add(i + 1)
+        rep_ = (read_first([REPORT, REPORT_KEPT]) or {}).get('report') or {}
+        core_ = {w_.rstrip('s') for w_ in words(json.dumps(rep_.get('interests') or [], ensure_ascii=False) + ' ' + ' '.join(
+            r.get('finding') or '' for r in ((read_first([QUIZ_REVS]) or {}).get('revelations') or [])))}
         for w_, qs_ in sorted(seen_.items(), key=lambda kv: (-len(kv[1]), kv[0])):
-            if len(qs_) >= 3:
-                probs.append('"%s" comes up in questions %s of %d. Keep the quiz varied: no topic in more than two questions, options included.' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), total))
+            most = 2 if w_ in core_ else 1
+            if len(qs_) > most:
+                probs.append('"%s" comes up in questions %s of %d. Nothing repeats across the quiz, options included: a topic, place, activity or thing in one question only (two at most when it is core to who they are).' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), total))
         # First principles (release 234, README "First principles"): every answer stands on something in the file, the wrong
         # options are invented (never from their own posts, where they might be true too), and no two options are alike.
         probs += quiz_linked(items, total)
+        probs += quiz_tops(items, total)
         probs += quiz_grounded(items, total, facts, words)
         # Who they are, covered (release 234, README "A structure that holds"): at least five questions about a finding,
         # across at least three parts of them, with no fixed count of any one (a fixed count made Muse stretch a question to fit).
