@@ -469,6 +469,11 @@ async function route(req, res) {
     }
     // How well do you know me? (lib/quiz.js, lib/quizpage.js): the page, the locked quiz by id, and a friend's answers.
     if (/^\/quiz\/?$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) return send(res, 200, require('./lib/quizpage').page(), 'text/html', { 'X-Robots-Tag': 'noindex' });
+    if (url.pathname === '/quiz/preview.png' && (req.method === 'GET' || req.method === 'HEAD')) {
+      const img = preview.quizImage();
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': img.length, 'Cache-Control': 'public, max-age=86400' });
+      return res.end(req.method === 'HEAD' ? undefined : img);
+    }
     // The finale's character pictures (lib/cardimage.js renderAvatar): public art, one of the 28 by name.
     const quizChar = /^\/quiz\/character\/([A-Za-z -]{2,40})\.png$/.exec(decodeURIComponent(url.pathname));
     if (quizChar && (req.method === 'GET' || req.method === 'HEAD')) {
