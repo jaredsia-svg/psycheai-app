@@ -5671,6 +5671,10 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
       (Q.revOnePost.problems || []).some(p => /their post on 2021-04-12 proves 3 findings; one post proves two at most/.test(p)) &&
       require('../lib/quizguide.js').spec.includes('**Never (kind "never"), up to one:**') && require('../lib/quizguide.js').spec.includes('each 70 characters at most (the question 160); the finale takes any options'),
     qerr || JSON.stringify(Q && { mentions: Q.mentions, p: ['longOpt', 'finaleOne'].map(k => [k, Q.probs[k]]), revProof: Q.revProof, revOnePost: Q.revOnePost }).slice(0, 1800));
+  check('the card\'s "Most in sync with" wraps a name wider than its third of the panel onto two lines, on the server and in the skill (release 242: "The Tin Man" and "Sherlock Holmes" ran into each other)',
+    /names = syncs\.map\(n => wrapMeasured\(n, 21, 600, inner \/ 3 - 12\)\.slice\(0, 2\)\)/.test(fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'cardimage.js'), 'utf8')) &&
+      /for j, ln in enumerate\(p\.wrap\(n, 21, 600, inner \/ 3 - 12\)\[:2\]\):/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
+      /Sherlock<\/text>[^]*Holmes<\/text>/.test(require('../lib/cardimage.js').cardSvg({ stage: 'psyche', fullName: 'A B', characterName: 'Remy', patterns: [], motivators: [], values: [], loveGiving: ['Acts of service'] })));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));

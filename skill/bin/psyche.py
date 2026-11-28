@@ -103,7 +103,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 241
+RELEASE = 242
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5022,8 +5022,12 @@ def draw_card(card, out_path, art=None):
                     p.ImageDraw.Draw(disc).ellipse([(cx - r) * k, (cy - r) * k, (cx + r) * k, (cy + r) * k], fill=255)
                     p.image(tmp, cx - r, cy - r, 2 * r, 2 * r, disc)
                 p.circle(cx, cy, r, outline='#ffffff', width=4)
-                p.text(cx, y0 + 84 + 28, n, 21, 600, C['ink'], anchor='ms')
-        right = ('Most in sync with', '🤝', 84 + 34, draw_syncs)
+                # A name wider than its third of the panel goes on two lines (release 242: "The Tin Man" and
+                # "Sherlock Holmes" ran into each other).
+                for j, ln in enumerate(p.wrap(n, 21, 600, inner / 3 - 12)[:2]):
+                    p.text(cx, y0 + 84 + 28 + j * 25, ln, 21, 600, C['ink'], anchor='ms')
+        two = any(len(p.wrap(n, 21, 600, inner / 3 - 12)) > 1 for n in syncs)
+        right = ('Most in sync with', '🤝', 84 + 34 + (25 if two else 0), draw_syncs)
     row(('Shows care as', '🎁', len(love) * 44 - 8, draw_care), right)
 
     # The signature, pinned to the foot.
