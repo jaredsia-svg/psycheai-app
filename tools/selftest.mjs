@@ -987,7 +987,7 @@ function signup(email, d) {
     check('save_card keeps only the card summary, its known fields clipped as summarize clips them, locked under a key handed back and never kept, sends nothing to psycheai.io, and comes back with the card image, What\'s next and ask ideas; the skill calls it only before a Sync tool (README "Nothing leaves Muse unless they Sync"), and publishes through psyche_saved, which sends nothing',
       sc.ok && sc.cardKey && /\/card\/.+\.png$/.test(sc.image) && opened && opened.character === 'Mulan' && opened.bigFive.openness === 80 && !('evidence' in opened) && !('summary' in opened) &&
         JSON.stringify(opened.letters) === '[{"letter":"E","strength":"slight"}]' && !JSON.stringify(store.kvGet('psyche', user.id)).includes(sc.cardKey) &&
-        psyche.saveCard(user, {}).ok === false && seen.length === before && sd && sd.ok && sd.nextStep && sd.nextStep.buttons[0] === 'Make a quiz for my friends' && Array.isArray(sd.askIdeas) && JSON.stringify(sd.askButtons) === JSON.stringify([...sd.askIdeas, 'Back to the menu']) &&
+        psyche.saveCard(user, {}).ok === false && seen.length === before && sd && sd.ok && sd.nextStep && sd.nextStep.buttons[0] === 'Pop quiz my friends about me' && Array.isArray(sd.askIdeas) && JSON.stringify(sd.askButtons) === JSON.stringify([...sd.askIdeas, 'Back to the menu']) &&
         !/call\('publish_psyche'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
         !/call\('psyche_saved'/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
         /nxt = json\.loads\(json\.dumps\(AFTER_PUBLISH\)\)[\s\S]{0,3000}'nextStep': nxt, 'askIdeas': ideas, 'askButtons': ideas \+ \['Back to the menu'\]\}/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
@@ -1003,7 +1003,7 @@ function signup(email, d) {
     await mcp.handle(store.getUser(fresh.id), { jsonrpc: '2.0', id: 12, method: 'tools/call', params: { name: 'psyche_saved', arguments: {} } });
     const after = mcp.startMenu(store.getUser(fresh.id)).options.map(o => o.id).join();
     check('psyche_saved takes nothing and notes only that a Psyche exists: What\'s next and ask ideas come back, the start menu then welcomes them back, and no card is kept for them',
-      md && md.ok && md.nextStep && md.nextStep.buttons[0] === 'Make a quiz for my friends' && Array.isArray(md.askIdeas) && Object.keys(mcp.TOOLS.find(t => t.name === 'psyche_saved').inputSchema.properties).length === 0 &&
+      md && md.ok && md.nextStep && md.nextStep.buttons[0] === 'Pop quiz my friends about me' && Array.isArray(md.askIdeas) && Object.keys(mcp.TOOLS.find(t => t.name === 'psyche_saved').inputSchema.properties).length === 0 &&
         before === 'messages,posts' && /sync,source,together,more/.test(after) && !psyche.has(fresh.id), JSON.stringify({ before, after }));
   }
   {
@@ -1878,7 +1878,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       /psycheai\.io\/muse-privacy for the details: PsycheAI keeps none of your report, and a short summary of it is kept, locked, for the card picture and Syncs/.test(instructions.MUSE_PROCEDURE));
     check('someone with a read gets a menu of four and More (Ask, Syncs, their data; release 225: the quiz first, made in the skill only, and Psyche Together last), three sources, one for WhatsApp, Facebook and Messenger', JSON.stringify(back.options.map(o => o.label)) ===
       '["Sync with a friend","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","More"]' &&
-      JSON.stringify(mcp.startMenu({ id: 'u_back_quiz', via: 'skill', profile: {} }).returning.options.map(o => o.label)) === '["Make a quiz for my friends","Sync with a friend","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","More"]' &&
+      JSON.stringify(mcp.startMenu({ id: 'u_back_quiz', via: 'skill', profile: {} }).returning.options.map(o => o.label)) === '["Pop quiz my friends about me","Sync with a friend","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","More"]' &&
       Array.isArray(back.options.find(o => o.id === 'more').askButtons) &&
       !JSON.stringify(back.options).includes('Deep Psyche') && JSON.stringify(back.options.find(o => o.id === 'more').buttons.filter(b => !/^Psyche Pair|matches|My Syncs/.test(b))) === '["Ask PsycheAI questions about myself","My data and privacy"]' && JSON.stringify(back.options.find(o => o.id === 'source').sources) === '["WhatsApp, Facebook and Messenger","WhatsApp chats","Facebook and Messenger"]' &&
       JSON.stringify(back.options.find(o => o.id === 'source').whatsapp.buttons) === '["I\'ve shared my chats","Not now"]' &&
@@ -1906,7 +1906,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
     check('Sync with someone named: synced has no next step to wait on, and a named person gets the same link, sent by the user themselves (release 197)',
       nextFor('sync_with', { status: 'synced' }) === null &&
       /"Sync with a friend" or "Sync me with <name>": call sync_link at once[^]*They send the invite themselves\./.test(instructions.MUSE_PROCEDURE));
-    check('results end with a next step: a line and buttons', pubNext.asButtons && JSON.stringify(pubNext.buttons) === '["Make a quiz for my friends","Sync with a friend","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","More"]' && JSON.stringify(pubNext.sources) === '["WhatsApp, Facebook and Messenger","WhatsApp chats","Facebook and Messenger"]' && JSON.stringify(pubNext.more.buttons) === '["Ask PsycheAI questions about myself","My data and privacy"]' && pubNext.say === 'What\'s next?' && /whenever they ask what else they can do \("What can I do next\?", "What's next\?", "Help", "Menu"\): call start/.test(instructions.MUSE_PROCEDURE) && /every one of its buttons, word for word, in its order, never one you made up, renamed \(no "Sync with <name>" here\) or left out/.test(instructions.MUSE_PROCEDURE) && /Anything you offer is a button/.test(instructions.MUSE_PROCEDURE) &&
+    check('results end with a next step: a line and buttons', pubNext.asButtons && JSON.stringify(pubNext.buttons) === '["Pop quiz my friends about me","Sync with a friend","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","More"]' && JSON.stringify(pubNext.sources) === '["WhatsApp, Facebook and Messenger","WhatsApp chats","Facebook and Messenger"]' && JSON.stringify(pubNext.more.buttons) === '["Ask PsycheAI questions about myself","My data and privacy"]' && pubNext.say === 'What\'s next?' && /whenever they ask what else they can do \("What can I do next\?", "What's next\?", "Help", "Menu"\): call start/.test(instructions.MUSE_PROCEDURE) && /every one of its buttons, word for word, in its order, never one you made up, renamed \(no "Sync with <name>" here\) or left out/.test(instructions.MUSE_PROCEDURE) && /Anything you offer is a button/.test(instructions.MUSE_PROCEDURE) &&
       /THE ROAST: their report's send-up and its advice are an intermission in their report file, after What drives you \("Your roast 🔥", closed until they open it\), with no button for it; the regret \("What will you regret most when you're old\?"\) is a second one, after How you work/.test(instructions.MUSE_PROCEDURE) && !/Reveal my roast/.test(instructions.MUSE_PROCEDURE) && /class="roast" id="roast"/.test(require('node:fs').readFileSync(new URL('../skill/bin/psyche.py', import.meta.url), 'utf8')) &&
       nextFor('get_weekly_matches', { cards: [{ firstName: 'Mei' }, { firstName: 'Jun', picked: true }], picksLeft: 2 }).buttons[0] === 'Pick Mei' &&
       nextFor('get_syncs', { incoming: [], syncs: [] }).buttons[0] === 'Sync with a friend' && nextFor('publish_psyche', { error: 'x' }) === null &&
@@ -3263,8 +3263,8 @@ print(json.dumps({'first': first, 'moreTap': moreTap, 'withTogether': withTogeth
           K.one.copy === 'I just synced with you on PsycheAI. Ask your Muse: Show my Syncs' && K.one.say === 'Copy this and send it to Kai:' && !K.one.to && !K.one.pick &&
           K.none.copy === K.none.message && K.calls.length === 0 && JSON.stringify(K.labels) === '[true,true,false]' &&
           /write_private\(\[SYNC_PENDING\], \{'link': BASE \+ '\/sync#' \+ code, 'name': name\}\)/.test(src) && /    if friend:[^\n]*\n        sync_first\(nxt, friend\)/.test(src) && JSON.stringify(K.first.buttons) === '["Sync with Kai","More"]' &&
-          JSON.stringify(K.first.more.buttons) === '["Make a quiz for my friends","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","Ask PsycheAI questions about myself","My data and privacy"]' &&
-          JSON.stringify(K.moreTap.buttons) === '["Make a quiz for my friends","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","Ask PsycheAI questions about myself","My data and privacy","Back to the menu"]' &&
+          JSON.stringify(K.first.more.buttons) === '["Pop quiz my friends about me","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","Ask PsycheAI questions about myself","My data and privacy"]' &&
+          JSON.stringify(K.moreTap.buttons) === '["Pop quiz my friends about me","Add WhatsApp or Facebook and generate a Fresh Psyche","Psyche Together with my partner","Ask PsycheAI questions about myself","My data and privacy","Back to the menu"]' &&
           JSON.stringify(K.withTogether.buttons) === '["Sync with Kai","Continue Psyche Together","More"]' &&
           /keep_e2e\(code, False\)\n    drop_pending_sync\(code\)/.test(src) && /told = \[\]      # release 199: no "Let <name> know"/.test(src) &&
           /link = argv\[1\] if len\(argv\) >= 2 else \(pending_sync\(\) or \{\}\)\.get\('link'\)/.test(src) && /out\['verified'\] = bool\(signed and same\)/.test(src) && /if raw in \('--help', '-h'\)/.test(src) &&
@@ -5501,7 +5501,7 @@ missed = m.quiz_missed()
 print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'),
   'likeAll': sorted(m.QUIZ_LIKE) == sorted(m.QUIZ_LIKE) and len(m.QUIZ_LIKE) == 28 and all(len(v) == 3 and c not in v and all(x in m.QUIZ_LIKE for x in v) for c, v in m.QUIZ_LIKE.items()), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
   'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'draftGone': draftGone, 'straight': straight,
-  'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
+  'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Pop quiz my friends about me', 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
   let Q = null, qerr = '';
   try { Q = JSON.parse(require('node:child_process').execFileSync('python3', ['-c', py, dir], { maxBuffer: 1 << 24 }).toString()); } catch (e) { qerr = String(e.stderr || e.message).slice(-600); }
@@ -5570,7 +5570,7 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
   check('a friend\'s quiz comes first after their card ("Make my quiz for <name>" and More, the rest under More), and once their own quiz is made, quiz-missed shows only the ones they missed with the right answer, then forgets the link; the quiz buttons are known labels',
     Q && JSON.stringify(Q.nxt.buttons) === '["Make my quiz for Ana","More"]' && Q.nxt.more.buttons[0] === 'Sync with a friend' && Q.nxt.more.buttons.includes('Ask PsycheAI questions about myself') &&
       Q.missed.missed.length === Q.opened.questions.filter(x => x.a !== 0).length && Q.missed.missed.every(x => x.answer && x.yours === Q.opened.questions.find(y => y.q === x.question).o[0]) && /^The \d+ you missed on Jared's quiz/.test(Q.missed.say) &&
-      JSON.stringify(Q.labels) === '[true,true,true,true,false]',
+      JSON.stringify(Q.labels) === '[true,true,true,true,true,false]',
     qerr || JSON.stringify(Q && { nxt: Q.nxt, missed: Q.missed }).slice(0, 600));
   // The page's locking in Node's WebCrypto, against the skill's: a box the skill locked opens here, and one locked here opens there.
   const C = new Function(page.CRYPTO + '; return { seal, open, keyFor, hex };')();
@@ -5596,7 +5596,7 @@ print(json.dumps(m.e2e_open(json.loads(sys.argv[3]), m.e2e_key('quiz-answer', sy
       /nothing in them is quoted, paraphrased or described/.test(require('../lib/quizguide.js').spec) && /Never politics, religion, kids or marriage/.test(require('../lib/quizguide.js').spec) && /kind "rather"\), one question, a real dilemma:\*\* two vivid scenes with a cost on each side/.test(require('../lib/quizguide.js').spec) && /never let one topic \(running, coffee, a city\) turn up across several questions/.test(require('../lib/quizguide.js').spec));
   const md = require('../lib/skill.js').skillMd();
   check('SKILL.md says how to make a quiz in one line near the top, inside the install read, with its limit in the same line (nothing from their messages), that the link is a line they copy and PsycheAI sends nothing, and that a friend\'s quiz link is made into their own quiz only on their tap; nothing about the quiz sits past the install read, where a mid-run look into SKILL.md has stopped Muse before (release 219)',
-    /\n- \*\*The quiz\*\* \("Make a quiz for my friends"\)[^\n]*nothing from their messages is quoted or described\.[^\n]*PsycheAI sends nothing itself: they copy the line\./.test(md) &&
+    /\n- \*\*The quiz\*\* \("Pop quiz my friends about me"\)[^\n]*nothing from their messages is quoted or described\.[^\n]*PsycheAI sends nothing itself: they copy the line\./.test(md) &&
       Buffer.byteLength(md.slice(0, md.lastIndexOf('quiz'))) < Buffer.byteLength(md.slice(0, md.indexOf('## The guide'))) &&
       /quiz-preview <the link>[^\n]*their quiz is made only if they tap it/.test(md) && /quiz-publish '<picks>'/.test(md) && !/\n## The quiz\n/.test(md));
   fsq.rmSync(dir, { recursive: true, force: true });

@@ -54,7 +54,7 @@ What it does, in full:
                                        when none is given): the Sync's task file, the two cards and the facts
   python3 bin/psyche.py let-know NAME          after a Sync from their link: who among the people they
                                        message to send the line to, names to pick, or the line to copy
-  python3 bin/psyche.py quiz                   "Make a quiz for my friends": work/quiz-task.json, from their
+  python3 bin/psyche.py quiz                   "Pop quiz my friends about me": work/quiz-task.json, from their
                                        report and their posts and stories, to write the quiz from
   python3 bin/psyche.py quiz-save @work/quiz.json  the quiz written, checked and kept here; its widget
   python3 bin/psyche.py quiz-publish '<picks>' the quiz they picked, locked here under a new code and
@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 235
+RELEASE = 236
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -6148,7 +6148,7 @@ TAP_ROUTES = {
     'My Syncs': 'get_syncs', 'Show my Syncs': 'get_syncs',
     "I've shared it. Show our results": 'sync-ready', 'Show our results': 'sync-ready', 'My friend has synced': 'sync-ready',
     'Psyche Together with my partner': 'together-intro',
-    'Make a quiz for my friends': 'quiz', 'Make a new quiz': 'quiz', 'Write different questions': 'quiz', 'Show my quiz results': 'quiz-results',
+    'Pop quiz my friends about me': 'quiz', 'Quiz my friends about me': 'quiz', 'Make a quiz for my friends': 'quiz', 'Make a new quiz': 'quiz', 'Write different questions': 'quiz', 'Show my quiz results': 'quiz-results',
 }
 # The buttons the guide answers, each because Muse itself does the next step: the first-run choices (first-run's result
 # has their answers), installing or starting Psyche Together, writing or asking something, a link, a connection, a
@@ -6394,7 +6394,7 @@ LABELS = frozenset([
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
     'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Install Psyche Together', 'Install and start Psyche Together', 'Install Psyche Together from https://app.psycheai.io/together and start it', TOGETHER_INSTALL, 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only',
-    'Make a quiz for my friends', 'Make a new quiz', 'Show my quiz results', 'Make my quiz', 'Write different questions'])
+    'Pop quiz my friends about me', 'Quiz my friends about me', 'Make a quiz for my friends', 'Make a new quiz', 'Show my quiz results', 'Make my quiz', 'Write different questions'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
               re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$'),
               re.compile(r'^Make my quiz for [^\n@/:]{1,30}$'), re.compile(r"^See what I missed on [^\n@/:]{1,30}'s quiz$")]
@@ -6434,7 +6434,7 @@ def clean_result(value):
 
 # What's next after a Psyche, and the ideas to ask: the server's own (lib/next.js publish_psyche, lib/mcp.js
 # ASK_IDEAS and askIdeas), here so publishing asks nothing of it. The selftest holds them to the server's.
-AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Make a quiz for my friends", "Sync with a friend", "Add WhatsApp or Facebook and generate a Fresh Psyche", "Psyche Together with my partner", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger"], "more": {"buttons": ["Ask PsycheAI questions about myself", "My data and privacy"]}}
+AFTER_PUBLISH = {"say": "What's next?", "buttons": ["Pop quiz my friends about me", "Sync with a friend", "Add WhatsApp or Facebook and generate a Fresh Psyche", "Psyche Together with my partner", "More"], "asButtons": True, "sources": ["WhatsApp, Facebook and Messenger", "WhatsApp chats", "Facebook and Messenger"], "more": {"buttons": ["Ask PsycheAI questions about myself", "My data and privacy"]}}
 ASK_IDEAS = [
 "Who am I when I'm not being useful, impressive or needed?",
 "What do I keep trying to prove, and to whom?",
@@ -7254,7 +7254,7 @@ QUIZ_KEPT = os.path.join(HERE, '.quiz.json')
 QUIZ_KEPT_SPARE = os.path.join(KEEP, 'quiz.json')
 QUIZ_PENDING = os.path.join(KEEP, 'quiz-pending.json')
 QUIZ_DIR = os.path.join(OUT, 'quiz')
-MAKE_QUIZ = 'Make a quiz for my friends'
+MAKE_QUIZ = 'Pop quiz my friends about me'
 NEW_QUIZ = 'Make a new quiz'
 QUIZ_RESULTS = 'Show my quiz results'
 QUIZ_MAKE_BTN = 'Make my quiz'
@@ -7818,7 +7818,7 @@ def quiz_publish(raw):
     answers they picked, locked here under a new code and saved. Its link is the invite."""
     draft = read_first([QUIZ_DRAFT])
     if not isinstance(draft, dict) or not draft.get('items'):
-        return {'error': 'There\'s no quiz to make yet. Tap Make a quiz for my friends first.', 'buttons': [MAKE_QUIZ, 'Back to the menu'], 'asButtons': True}
+        return {'error': 'There\'s no quiz to make yet. Tap Pop quiz my friends about me first.', 'buttons': [MAKE_QUIZ, 'Back to the menu'], 'asButtons': True}
     try:
         picks = json.loads(open(raw[1:], encoding='utf-8').read() if str(raw).startswith('@') else (raw or '{}'))
     except (OSError, ValueError):

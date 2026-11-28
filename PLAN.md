@@ -143,7 +143,7 @@ Agreed 27 November 2026. Built in release 225 (README "The quiz"). A PsycheAI us
 **A quiz of 10:** 2 warm-ups (posts, interests), 5 deep (findings, motivations, hypotheticals), 2 hard (blind spots, how they come across vs who they are) and the finale, "Which character am I?". The wrong options are plausible: drawn from the owner's own traits, so only a friend who knows them gets it.
 
 **The owner, in Muse**
-1. After the Psyche is published, What's next is, in order: "Make a quiz for my friends", "Sync with a friend", "Add WhatsApp or Facebook and generate a Fresh Psyche", "Psyche Together with my partner", "More". "Ask PsycheAI questions about myself" moves under More. When a friend's Sync link is waiting (release 223) or the Together read is ready (release 224), the quiz goes under More.
+1. After the Psyche is published, What's next is, in order: "Pop quiz my friends about me", "Sync with a friend", "Add WhatsApp or Facebook and generate a Fresh Psyche", "Psyche Together with my partner", "More". "Ask PsycheAI questions about myself" moves under More. When a friend's Sync link is waiting (release 223) or the Together read is ready (release 224), the quiz goes under More.
 2. One widget with the questions: each has Keep / Swap / Edit / Remove, the options, and the answer to confirm; "Add a question" and "Beliefs and future" at the end.
 3. "Your quiz is ready": the quiz card image and the quiz link with a one-line invite in a code box to copy, as the Sync invite is (`Take my quiz: how well do you know me? <quiz link>`), and "Save for my Story" (an image for Instagram's link sticker). PsycheAI sends nothing itself: the user copies the line and sends it wherever they like.
 4. Results: a line on the next menu tap ("3 friends took your quiz: Ana got 9/10"), the digest when away, and, at 3 answers, "What friends get wrong about you" (counts only).
@@ -172,7 +172,7 @@ Agreed 27 November 2026. Built in release 225 (README "The quiz"). A PsycheAI us
 
 **Build**
 - [x] `bin/psyche.py quiz`: writes the questions from the read under the rules above, the widget, locking, the link; `tap` handles its buttons.
-- [x] Menus: "Make a quiz for my friends" after the Psyche; "Make my quiz for <name>" after a quiz link; quiz news on the menu.
+- [x] Menus: "Pop quiz my friends about me" after the Psyche; "Make my quiz for <name>" after a quiz link; quiz news on the menu.
 - [x] Server (`lib/quiz.js`): create, get, answer and end, with locked boxes only; counts for "better than X%" and the news; the digest line.
 - [x] The quiz page `/quiz/<id>`: one question at a time, ✓/✗, score card, rank, "Show my name", the turnaround.
 - [x] Images: the Story image, drawn in the skill (`quiz_story_image`), with no beliefs-and-future content. The page shows their own Psyche Card; a score card image is left for later.
