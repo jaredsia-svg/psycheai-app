@@ -1132,7 +1132,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       /as buttons, one each: its questions, then "Back to the menu"/.test(instructions.MUSE_PROCEDURE) && /askButtons: \[\.\.\.ideas, 'Back to the menu'\]/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8')) && (require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8').match(/withAskButtons\(askIdeas\(/g) || []).length === 4 && /then "Ask something else" and "Back to the menu"/.test(instructions.MUSE_PROCEDURE) &&
         /"Ask something else": a few more questions they haven't seen[^.]*, then "Back to the menu"\./.test(instructions.MUSE_PROCEDURE) && /"Back to the menu", and "Done" where it ends a path: "What would you like to do\?" with the five buttons someone with a read gets/.test(instructions.MUSE_PROCEDURE) && /No path ends in a dead end: wherever one ends[^.]*, its last button is "Back to the menu"\./.test(instructions.MUSE_PROCEDURE));
     check('forget --everything also deletes news.json, which Syncs news has already said (release 198), and the kept first-run result (release 219)',
-      /SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_REVS, QUIZ_PENDING\):/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')));
+      /SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_REVS, QUIZ_LOG, QUIZ_PENDING\):/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')));
     {
       // Release 201 (README "The install read, as it was"): Muse reads about the first 50 KB of SKILL.md when it installs. With the
       // menu, Ask, Sync, adding a source and their data in it (198 to 200), that read failed Muse's safety check on both devices;
@@ -5415,7 +5415,7 @@ good = {'questions': [q('year', 'In which year did Jared host his first supper c
                       q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
                       q('drive', 'Which most closely describes what drives Jared?', 0, ['Planning every detail well ahead', 'Being the star of the show', 'Beating every rival', 'Drifting wherever the day goes']),
                       q('never', 'Which of these would Jared never do?', 2, ['Sign up for a muddy obstacle race', 'Spend a Sunday baking sourdough', 'Skip a friend\'s leaving drinks for overtime', 'Join a dawn hike with strangers']),
-                      q('niche', 'What has Jared quietly been teaching himself?', 1, ['Restoring 1970s film cameras', 'Speaking conversational Portuguese', 'Fermenting hot sauce at home', 'Playing jazz piano by ear']),
+                      q('niche', 'What has Jared quietly been teaching himself?', 1, ['Rebuilding old radios by hand', 'Speaking conversational Portuguese', 'Fermenting hot sauce at home', 'Playing jazz piano by ear']),
                       q('fake', 'Which of these is NOT true about Jared?', 3, ['He ran a half marathon in the rain', 'He grew chillies on a windowsill', 'He hiked three peaks in one weekend', 'He keeps a pet tortoise named Kevin']),
                       q('niche', 'Which oddly specific thing fills Jared\'s saved posts?', 0, ['Minimalist Japanese apartments', 'Street food in Mexico City', 'Rescue greyhounds finding homes', 'Vintage Swiss watch repairs']),
                       q('caption', 'Which of these did Jared actually post?', 2, ['Ferry across the bay, worth it', 'Legs said no, heart said yes', 'Mile 20 and still smiling somehow', 'Five am alarm, never again']),
@@ -5510,6 +5510,8 @@ probs = {
   'driveFromPosts': bad(lambda b: b['questions'][2]['o'].__setitem__(1, 'Portuguese lessons every single day')),
   'longOpt': bad(lambda b: b['questions'][5]['o'].__setitem__(1, 'He once spent a whole long weekend restoring an old wooden fishing boat by hand')),
   'finaleOne': bad(lambda b: b['questions'][11].update(o=['Sherlock'])),
+  'exampleCopy': bad(lambda b: b['questions'][4]['o'].__setitem__(2, 'A silent disco on the roof')),
+  'driveOwn': bad(lambda b: b['questions'][2]['o'].__setitem__(1, 'A careful planner, always')),
   'tooFeed': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] != 'finale']),
   'feedReveal': bad(lambda b: b['questions'][4].update(reveals='He jokes about the market when it falls')),
   'noAbout': bad(lambda b: b['questions'][4].pop('about')),
@@ -5557,7 +5559,7 @@ shiftProbs = {'ok': m.quiz_shifted([sq()], 12), 'wrong': m.quiz_shifted([sq(term
 m.DIGEST = old_
 print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'),
   'likeAll': sorted(m.QUIZ_LIKE) == sorted(m.QUIZ_LIKE) and len(m.QUIZ_LIKE) == 28 and all(len(v) == 3 and c not in v and all(x in m.QUIZ_LIKE for x in v) for c, v in m.QUIZ_LIKE.items()), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
-  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'revProof': revProof, 'revOnePost': revOnePost, 'mentions': m.quiz_mentions(), 'noRevs': noRevs, 'revSaved': revSaved, 'revBad': revBad, 'draftGone': draftGone, 'straight': straight,
+  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'qlog': (m.read_first([m.QUIZ_LOG]) or {}).get('rows'), 'revProof': revProof, 'revOnePost': revOnePost, 'mentions': m.quiz_mentions(), 'noRevs': noRevs, 'revSaved': revSaved, 'revBad': revBad, 'draftGone': draftGone, 'straight': straight,
   'labels2': [m.known_label(x) and m.TAP_ROUTES.get(x) == r for x, r in (("Show my friends' scores for my pop quiz", 'quiz-results'), ('Generate fresh pop quiz', 'quiz'), ('Show my quiz results', 'quiz-results'), ('Make a new quiz', 'quiz'))],
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Pop quiz my friends about me', 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
@@ -5675,6 +5677,13 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
     /names = syncs\.map\(n => wrapMeasured\(n, 21, 600, inner \/ 3 - 12\)\.slice\(0, 2\)\)/.test(fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'cardimage.js'), 'utf8')) &&
       /for j, ln in enumerate\(p\.wrap\(n, 21, 600, inner \/ 3 - 12\)\[:2\]\):/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')) &&
       /Sherlock<\/text>[^]*Holmes<\/text>/.test(require('../lib/cardimage.js').cardSvg({ stage: 'psyche', fullName: 'A B', characterName: 'Remy', patterns: [], motivators: [], values: [], loveGiving: ['Acts of service'] })));
+  check('the guide, twice over (release 242): a wrong option borrowing two key words from an example in the guide (or an earlier guide\'s) is refused; a what-drives-them wrong option that is another of their own values or top motivations is refused; each check is logged on the device with its time and how many problems; the guide asks for questions hard for a stranger and a top question only as wide as its count',
+    Q && (Q.probs.exampleCopy || []).some(p => /option 3 \("A silent disco on the roof"\): it borrows from an example in the guide/.test(p)) &&
+      (Q.probs.driveOwn || []).some(p => /option 2 \("A careful planner, always"\): it is theirs too/.test(p)) &&
+      Array.isArray(Q.qlog) && Q.qlog.some(r => r.step === 'quiz' && r.problems === 0) && Q.qlog.some(r => r.step === 'quiz' && r.problems > 0 && Array.isArray(r.what)) && Q.qlog.length <= 40 &&
+      ['3. **It is hard for a stranger.**', 'never narrow it to a place, year or trip the count doesn\'t', 'never in their report as theirs', '## A fact for every answer'].every(w => require('../lib/quizguide.js').spec.includes(w)) &&
+      !/silent disco|chess match|karaoke|night market|busiestYear/.test(require('../lib/quizguide.js').spec),
+    qerr || JSON.stringify(Q && { exampleCopy: Q.probs.exampleCopy, driveOwn: Q.probs.driveOwn, qlog: (Q.qlog || []).slice(-3) }).slice(0, 1500));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));

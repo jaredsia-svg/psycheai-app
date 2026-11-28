@@ -7178,7 +7178,7 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_REVS, QUIZ_PENDING):     # NEWS: which Syncs news has said (release 198)
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_REVS, QUIZ_LOG, QUIZ_PENDING):     # NEWS: which Syncs news has said (release 198)
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))
@@ -7259,7 +7259,8 @@ def main(argv):
 QUIZ_E2E = re.compile(r'/quiz/?#([A-Za-z0-9_-]{22})(?:\.([0-3]{1,15}))?(?![A-Za-z0-9_-])')
 QUIZ_TASK = os.path.join(WORK, 'quiz-task.json')
 QUIZ_DRAFT = os.path.join(HERE, '.quiz-draft.json')
-QUIZ_REVS = os.path.join(HERE, '.quiz-revelations.json')    # release 236: the findings checked, before any question
+QUIZ_REVS = os.path.join(HERE, '.quiz-revelations.json')
+QUIZ_LOG = os.path.join(HERE, '.quiz-log.json')      # release 242: each check, when and how many problems; on the device only    # release 236: the findings checked, before any question
 QUIZ_KEPT = os.path.join(HERE, '.quiz.json')
 QUIZ_KEPT_SPARE = os.path.join(KEEP, 'quiz.json')
 QUIZ_PENDING = os.path.join(KEEP, 'quiz-pending.json')
@@ -7773,11 +7774,38 @@ def quiz_revelations(raw):
     for g, k in sorted(used_posts.items()):
         if k > 2:
             probs.append('their %s proves %d findings; one post proves two at most, so the quiz draws on more of their life' % (g.replace('post ', 'post on '), k))
+    quiz_log('revelations', probs)
     if probs:
         return {'saved': False, 'problems': probs[:20]}
     write_private([QUIZ_REVS], {'revelations': keep, 'at': int(time.time())})
     return {'saved': True, 'revelations': [r['id'] for r in keep],
             'next': 'Write work/quiz.json: each question about a finding names its revelation and stands on that revelation\'s proof or report part; then quiz-save.'}
+
+
+def quiz_log(step, probs):
+    """One line per check (release 242, README "The guide, twice over"): when, which step, how many problems and their
+    first words, so a later review can see how many rounds a quiz took. Kept on the device, never sent."""
+    try:
+        got = read_first([QUIZ_LOG]) or {}
+        rows = (got.get('rows') if isinstance(got.get('rows'), list) else [])[-39:]
+        rows.append({'at': int(time.time()), 'step': step, 'problems': len(probs), 'what': [' '.join(str(p).split()[:6]) for p in probs[:8]]})
+        write_private([QUIZ_LOG], {'rows': rows})
+    except Exception:
+        pass
+
+
+QUIZ_PAST_EXAMPLES = ('a silent disco on a rooftop', 'a late chess match at a café', 'karaoke until 3am', 'a night market, tasting every stall',
+                      'a pizza hunt', 'a bar hop', 'a cabin alone in the Norwegian fjords', 'a tiny café in Lisbon', 'laksa from one Katong shop',
+                      'chilli crab at a hawker stall', 'restoring 1970s film cameras', 'growing chillies on a windowsill')
+
+
+def quiz_examples():
+    """The guide's own examples, quoted, and the ones earlier guides gave: words a wrong option must never borrow."""
+    try:
+        spec = (json.load(open(GUIDE, encoding='utf-8')).get('quiz') or {}).get('spec') or ''
+    except Exception:
+        spec = ''
+    return [q_ for q_ in re.findall(r'"([^"]{6,120})"', spec) if q_.count(' ') >= 1] + list(QUIZ_PAST_EXAMPLES)
 
 
 def quiz_tops(items, total):
@@ -7952,6 +7980,26 @@ def quiz_grounded(items, total, facts, words):
                 placed = x['kind'] == 'place' and next((w_ for w_ in caps(y) if any(w_ in caps(t) for t in texts)), None)
                 if hit or placed:
                     probs.append('%s, option %d ("%s"): it comes from their own posts, so it may be true of them too. A wrong option is invented: something clearly not them, from another world.' % (label, k + 1, y))
+        # Never the guide's own examples (release 242): a wrong option sharing two key words with one is a copy.
+        ex_ = [(e, {_quiz_fold(w_)[:5] for w_ in re.findall(r"[a-z]{4,}", e.lower()) if w_ not in QUIZ_STOP and w_ not in QUIZ_QWORDS}) for e in quiz_examples()]
+        for k, y in enumerate(x['o']):
+            if k == x['a'] or x['kind'] in ('finale', 'year', 'numbers', 'fake', 'never'):
+                continue
+            ys = {_quiz_fold(w_)[:5] for w_ in re.findall(r"[a-z]{4,}", y.lower()) if w_ not in QUIZ_STOP and w_ not in QUIZ_QWORDS}
+            hit = next((e for e, es in ex_ if len(es & ys) >= 2), None)
+            if hit:
+                probs.append('%s, option %d ("%s"): it borrows from an example in the guide ("%s"). Examples only show the shape: invent one from their own world.' % (label, k + 1, y, hit))
+        # What drives them: no wrong option is another of their own values or top motivations (release 242).
+        if x['kind'] == 'drive' and how == 'report':
+            part_ = next((v for k_, v in ((kept.get('report') or {}).items()) if str(k_).lower() == what.split(' ')[0].lower().rstrip('.,')), None)
+            names_ = [str(e if isinstance(e, str) else (e.get('label') or e.get('name') or e.get('title') or '')) for e in (part_ if isinstance(part_, list) else [])]
+            if 'value' not in what.lower():
+                names_ = names_[:max(1, -(-len(names_) // 2))]
+            st5 = lambda t: {_quiz_fold(w_)[:5] for w_ in re.findall(r"[a-z]{5,}", t.lower()) if w_ not in QUIZ_STOP}
+            for k, y in enumerate(x['o']):
+                own = next((n_ for n_ in names_ if n_ and st5(n_) & st5(y)), None) if k != x['a'] else None
+                if own:
+                    probs.append('%s, option %d ("%s"): it is theirs too ("%s" in their report), so two answers are right. A wrong option is one their report ranks low or not at all.' % (label, k + 1, y, own))
         # No two options alike: the same opening words, or most of the same words.
         if x['kind'] not in ('year', 'numbers', 'rather'):
             for k, y in enumerate(x['o']):
@@ -8122,6 +8170,7 @@ def quiz_save(raw):
                 probs.append('questions %d of %d ("%s"): "%s" is in the question and only in the right answer ("%s"), which gives it away. Put the shared frame in the question and in no option, or in every option.' % (i + 1, total, x['q'], given[0], x['o'][x['a']]))
         if sum(1 for x in items if QUIZ_ALL.match(x['o'][-1])) > 2:
             probs.append('at most 2 questions end with "All of the above" (or "None of these", "Both")')
+    quiz_log('quiz', probs)
     if probs:
         return {'saved': False, 'problems': probs[:20]}
     kept = read_first([REPORT, REPORT_KEPT]) or {}
