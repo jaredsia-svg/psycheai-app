@@ -103,7 +103,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 238
+RELEASE = 239
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -8148,7 +8148,7 @@ def quiz_publish(raw):
     buttons = [QUIZ_RESULTS, 'Back to the menu']
     if pend:
         res['for'] = pend.get('name')
-        buttons = [quiz_missed_label(pend.get('name'))] + buttons
+        # Release 239 (README "A shorter line to make their own"): no "See what I missed": a friend's right answers stay theirs.
     res['nextStep'] = _step('Friends answer on the quiz page, no app needed. Their names and answers come back to you here, locked so PsycheAI can\'t read them.', buttons)
     return res
 
