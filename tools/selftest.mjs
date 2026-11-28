@@ -5414,7 +5414,7 @@ r = lambda text, a=0, sure=True: dict(q('rather', text, a, ['Lead a team of fift
 good = {'questions': [q('year', 'In which year did Jared host his first supper club?', 1, ['2016', '2018', '2020', '2023']),
                       q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
                       q('drive', 'Which most closely describes what drives Jared?', 0, ['Planning every detail well ahead', 'Being the star of the show', 'Beating every rival', 'Drifting wherever the day goes']),
-                      q('free', 'Which of these has Jared turned down?', 2, ['Sign up for a muddy obstacle race', 'Spend a Sunday baking sourdough', 'Skip a friend\'s leaving drinks for overtime', 'Join a dawn hike with strangers']),
+                      q('never', 'Which of these would Jared never do?', 2, ['Sign up for a muddy obstacle race', 'Spend a Sunday baking sourdough', 'Skip a friend\'s leaving drinks for overtime', 'Join a dawn hike with strangers']),
                       q('niche', 'What has Jared quietly been teaching himself?', 1, ['Restoring 1970s film cameras', 'Speaking conversational Portuguese', 'Fermenting hot sauce at home', 'Playing jazz piano by ear']),
                       q('fake', 'Which of these is NOT true about Jared?', 3, ['He ran a half marathon in the rain', 'He grew chillies on a windowsill', 'He hiked three peaks in one weekend', 'He keeps a pet tortoise named Kevin']),
                       q('niche', 'Which oddly specific thing fills Jared\'s saved posts?', 0, ['Minimalist Japanese apartments', 'Street food in Mexico City', 'Rescue greyhounds finding homes', 'Vintage Swiss watch repairs']),
@@ -5453,7 +5453,6 @@ for x in good['questions']:
         x['revelation'] = next(niche_)
     elif x['kind'] in rid:
         x['revelation'] = rid[x['kind']]
-good['questions'][3].update(revelation='r_nev', about='value', source='report patterns', quote='')
 good['questions'][4]['source'] = 'post 2021-04-12'; good['questions'][4]['quote'] = 'Day 100 of Portuguese lessons'
 def bad(change):
     b = json.loads(json.dumps(good)); change(b); return m.quiz_save(json.dumps(b))
@@ -5509,8 +5508,6 @@ probs = {
   'topSource': bad(lambda b: b['questions'][8].update(source='saves')),
   'ratherNoStands': bad(lambda b: b['questions'][2].update(stands=['planning', 'attention', 'winning', 'rest'])),
   'driveFromPosts': bad(lambda b: b['questions'][2]['o'].__setitem__(1, 'Portuguese lessons every single day')),
-  'neverKind': bad(lambda b: b['questions'][3].update(kind='never')),
-  'neverWords': bad(lambda b: b['questions'][3].update(q='Which of these would Jared never do?')),
   'longOpt': bad(lambda b: b['questions'][5]['o'].__setitem__(1, 'He once spent a whole long weekend restoring an old wooden fishing boat by hand')),
   'finaleOne': bad(lambda b: b['questions'][11].update(o=['Sherlock'])),
   'tooFeed': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] != 'finale']),
@@ -5579,7 +5576,7 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
       Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 12 && Q.opened.questions[11].k === 'finale' && Q.opened.questions[11].o[Q.opened.questions[11].a] === 'Sherlock Holmes' && Q.opened.questions[10].k === 'free' && Q.opened.questions[10].o.length === 2 &&
       JSON.stringify(Q.opened.questions[11].o.slice().sort()) === '["Elsa","Hermione Granger","Remy","Sherlock Holmes"]' && Q.likeAll &&
       Q.opened.questions[4].q === 'Which most closely describes what drives Jared?' && Q.opened.questions[4].o[Q.opened.questions[4].a] === 'Planning every detail well ahead' && Q.opened.questions[4].o.length === 4 &&
-      JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","caption","year","niche","drive","numbers","place","niche","fake","free","free","finale"]' &&
+      JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","caption","year","niche","drive","numbers","place","niche","fake","never","free","finale"]' &&
       Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone && Q.pub.invite.say.startsWith('[Open your quiz](' + Q.pub.invite.url + '): have a look before you send it.\n\nHere\'s your quiz.') &&
       JSON.stringify(Q.pubButtons) === '["Show my friends\' scores for my pop quiz","Generate fresh pop quiz","Back to the menu"]' && Q.labels2.every(Boolean) && !/quiz_widget|QZ_JS|That\'s not true about me/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
     qerr || JSON.stringify(Q && { straight: Q.straight, n: Q.n, kinds: Q.opened && Q.opened.questions.map(x => x.k) }).slice(0, 900));
@@ -5665,15 +5662,15 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
       require('../lib/quizguide.js').spec.includes('**No would-they-rather:**') && !require('../lib/quizguide.js').schema.properties.questions.items.properties.kind.enum.includes('rather') &&
       require('../lib/quizguide.js').spec.includes('never use one, or its places, topics or words, in a quiz') && !/Norwegian fjords/.test(require('../lib/quizguide.js').spec),
     qerr || JSON.stringify(Q && Q.probs.ratherNoStands));
-  check('fewer save rounds and sounder findings (release 241): mostMentioned skips the digest\'s [name] and [handle] and plain words, "caves" counts as "cave", the repeat check skips plain words ("its", "still", "self"), the finale takes any options, a long option or question is named with its length, would-never is retired, a finding proved only by posts shares a word with one of their quotes, and one post proves two findings at most',
+  check('fewer save rounds and sounder findings (release 241): mostMentioned skips the digest\'s [name] and [handle] and plain words, "caves" counts as "cave", the repeat check skips plain words ("its", "still", "self"), the finale takes any options, a long option or question is named with its length, would-never stays (asked by Jared), a finding proved only by posts shares a word with one of their quotes, and one post proves two findings at most',
     Q && !Q.mentions.some(([t]) => /handle|name|though/.test(t)) && Q.mentions.some(([t, n]) => t === 'cave' && n === 2) &&
-      (Q.probs.neverKind || []).some(p => /would-never is no longer asked/.test(p)) && (Q.probs.neverWords || []).some(p => /would-never is no longer asked/.test(p)) &&
+      Q.opened.questions.some(x => x.k === 'never') &&
       (Q.probs.longOpt || []).some(p => /questions 6 of 12, option 2 \("He once spent a whole long weekend resto…"\): it is 79 characters; each option is 70 at most/.test(p)) &&
       !(Q.probs.finaleOne || []).some(p => /questions 12 of 12: o is/.test(p)) &&
       (Q.revProof.problems || []).some(p => /none of its proof shows it: no word of the finding is in its quotes/.test(p)) &&
       (Q.revOnePost.problems || []).some(p => /their post on 2021-04-12 proves 3 findings; one post proves two at most/.test(p)) &&
-      require('../lib/quizguide.js').spec.includes('**No would-never:**') && require('../lib/quizguide.js').spec.includes('each 70 characters at most (the question 160); the finale takes any options'),
-    qerr || JSON.stringify(Q && { mentions: Q.mentions, p: ['neverKind', 'neverWords', 'longOpt', 'finaleOne'].map(k => [k, Q.probs[k]]), revProof: Q.revProof, revOnePost: Q.revOnePost }).slice(0, 1800));
+      require('../lib/quizguide.js').spec.includes('**Never (kind "never"), up to one:**') && require('../lib/quizguide.js').spec.includes('each 70 characters at most (the question 160); the finale takes any options'),
+    qerr || JSON.stringify(Q && { mentions: Q.mentions, p: ['longOpt', 'finaleOne'].map(k => [k, Q.probs[k]]), revProof: Q.revProof, revOnePost: Q.revOnePost }).slice(0, 1800));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));

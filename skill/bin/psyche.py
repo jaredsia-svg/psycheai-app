@@ -7616,12 +7616,10 @@ def _quiz_item(x, n, total=QUIZ_MAX):
         probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
     # Retired (release 241, README "No more guesses dressed as facts"): which of two scenes they'd pick is a guess. A report's
     # ranking of two abstract motivations can't decide a concrete choice, and both scenes came from their own posts.
-    if kind == 'never' or (q and re.search(r'\bwould \w+ never\b|\bnever do\b', q, re.I)):
-        probs.append('%s: would-never is no longer asked: what someone would never do is a judgement, never certain. Ask something their posts or report state.' % label)
     if kind == 'rather':
         probs.append('%s: would-they-rather is no longer asked: which of two scenes they\'d pick is a guess, never certain. Ask what drives them in plain words, or something their posts show.' % label)
     if kind not in QUIZ_KINDS:
-        probs.append('%s: kind is one of %s' % (label, ', '.join(k_ for k_ in QUIZ_KINDS if k_ not in ('rather', 'never'))))
+        probs.append('%s: kind is one of %s' % (label, ', '.join(k_ for k_ in QUIZ_KINDS if k_ != 'rather')))
     # Wrong options clearly apart from the answer (release 226, README "Wrong options, far from the truth"): a year question's
     # options are years (any years: Jared, they needn't be spread out), and no option mostly repeats the answer's own words.
     if kind == 'year' and all(o):
