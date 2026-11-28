@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 230
+RELEASE = 231
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7775,7 +7775,7 @@ def quiz_results():
         got = e2e_open(a.get('box'), key)
         if not isinstance(got, dict):
             continue
-        nm = re.sub(r'\s+', ' ', _letters(str(got.get('name') or ''))).strip()[:30] or 'A friend'
+        nm = re.sub(r'\s+', ' ', _letters(str(got.get('name') or ''))).strip()[:30] or 'Anonymous'      # release 231: they played anonymously
         friends.append({'name': nm, 'score': '%d/%d' % (int(a.get('s') or 0), len(qs)), 's': int(a.get('s') or 0)})
         for i, p in enumerate(got.get('p') or []):
             if i < len(qs) and isinstance(p, int) and p != qs[i].get('a') and 0 <= p < len(qs[i].get('o') or []):
