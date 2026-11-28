@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 232
+RELEASE = 233
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7646,6 +7646,11 @@ def quiz_save(raw):
                 continue
             wrong_ = set().union(*[words(y) for k_, y in enumerate(x['o']) if k_ != x['a']])
             given = sorted(w_ for w_ in words(x['q']) & words(x['o'][x['a']]) if len(w_) >= 4 and w_ not in wrong_)
+            # A name, however short (release 233): "the An Hoi bridge" beside "Hoi An" names the answer.
+            toks = lambda t: set(re.findall(r"[a-z]+", t.lower()))
+            caps = {w_.lower() for w_ in re.findall(r"(?<![.?!]\s)(?<!^)\b[A-Z][a-zA-Z]+", x['q'])} - name_ - QUIZ_QWORDS
+            wrong_t = set().union(*[toks(y) for k_, y in enumerate(x['o']) if k_ != x['a']])
+            given += sorted(w_ for w_ in caps & toks(x['o'][x['a']]) if w_ not in wrong_t and w_ not in given)
             if given:
                 probs.append('questions %d of %d ("%s"): "%s" is in the question and only in the right answer ("%s"), which gives it away. Put the shared frame in the question and in no option, or in every option.' % (i + 1, QUIZ_MAX, x['q'], given[0], x['o'][x['a']]))
         if sum(1 for x in items if QUIZ_ALL.match(x['o'][-1])) > 2:

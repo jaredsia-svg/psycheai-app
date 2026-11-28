@@ -5443,6 +5443,7 @@ probs = {
   'scenario': bad(lambda b: b['questions'][3].update(kind='deep')),
   'noReveals': bad(lambda b: b['questions'][4].pop('reveals')),
   'sameReveals': bad(lambda b: (b['questions'][4].update(reveals='Rituals are how he steadies himself after setbacks'), b['questions'][6].update(reveals='He steadies himself after setbacks with rituals'))),
+  'landmark': bad(lambda b: b['questions'][9].update(q='Where was Jared when he crossed the An Hoi bridge?', o=['Hue, in Vietnam', 'Hoi An, in Vietnam', 'Nha Trang, in Vietnam', 'Da Nang, in Vietnam'], a=1)),
   'giveaway': bad(lambda b: b['questions'][8].update(q="What's Jared's favourite coffee find in Melbourne?", o=['The best flat white in Melbourne', 'The best iced latte in Seoul', 'The best espresso in Rome', 'The best cold brew in Austin'], a=0)),
 }
 # Release 232: options shuffled, the answers spread across A to D; years in order and "All of the above" last.
@@ -5499,12 +5500,13 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
     Q && (Q.probs.giveaway || []).some(p => /questions 9 of 12 .*"melbourne" is in the question and only in the right answer .*gives it away/.test(p)) &&
       Q.spread.kept && Q.spread.yearsAndAll && Q.spread.worst <= 4 && Q.spread.moved && /## No giveaways/.test(require('../lib/quizguide.js').spec) && /PsycheAI shuffles them/.test(require('../lib/quizguide.js').spec),
     qerr || JSON.stringify(Q && { giveaway: Q.probs.giveaway, spread: Q.spread }).slice(0, 900));
-  check('revelations, not trivia (release 232): every question but the finale needs a reveals line, never published and never alike, and the fact may run to 150 characters; the guide puts the surprising things first, the so-what test and surprising-never-embarrassing; the results show what the friend now knows, from the answers they got right only',
+  check('revelations, not trivia (release 232): every question but the finale needs a reveals line, never published and never alike, and the fact may run to 150 characters; the guide puts the surprising things first, the so-what test and surprising-never-embarrassing; no "What you now know" on the results (release 233); a place question never names a landmark of the answer, however short its name',
     Q && (Q.probs.noReveals || []).some(p => /questions 5 of 12: reveals is one line .*never shown to friends/.test(p)) && (Q.probs.sameReveals || []).some(p => /questions 5 and 7 of 12 reveal the same thing/.test(p)) &&
       Q.saved === true && Q.opened.questions.every(x => !('r' in x) && !('reveals' in x)) && !JSON.stringify(Q.opened).includes('R: ') &&
       ['## Revelations first', '## The so-what test', '## Surprising, never embarrassing', 'up to 150 characters'].every(w => require('../lib/quizguide.js').spec.includes(w)) &&
       require('../lib/quizguide.js').schema.properties.questions.items.required.includes('reveals') &&
-      /if\(x===q\.a&&q\.f\)kn\.push/.test(require('../lib/quizpage.js').JS) && /kn=kn\.slice\(-3\)/.test(require('../lib/quizpage.js').JS) && /What you now know about/.test(require('../lib/quizpage.js').JS) &&
+      !/q-know|What you now know/.test(fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') + require('../lib/quizguide.js').spec) &&
+      (Q.probs.landmark || []).some(p => /questions 10 of 12 .*"(hoi|an)" is in the question and only in the right answer/.test(p)) && /never by a landmark, street, bridge, venue or dish that belongs to one of the options/.test(require('../lib/quizguide.js').spec) &&
       /\[Open your quiz\]\([^)]+\): have a look before you send it\./.test(Q.pub.invite.say),
     qerr || JSON.stringify(Q && { noReveals: Q.probs.noReveals, sameReveals: Q.probs.sameReveals, say: Q.pub && Q.pub.invite.say }).slice(0, 900));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
