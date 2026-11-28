@@ -7334,6 +7334,8 @@ def quiz_finale(item, character):
 
 QUIZ_QWORDS = set('which what where when how does did year years jared most more these isn true quietly thing things something post posted posts actually favourite rather would'.split())
 QUIZ_COMMON = set('the and you your his her their they them with for from into that this what when who will would more than about have has are was were can could just only also not but all one out get got make makes made being been very really most'.split())
+QUIZ_ABOUT = ('motivation', 'value', 'passion', 'pattern', 'contradiction', 'turning point')
+QUIZ_FEED = re.compile(r"\b(posts?|posted|posting|captions?|stor(?:y|ies)|photos?|pictures?|jokes?|joked|joking|feed|reels?)\b", re.I)
 QUIZ_STRIP = ('evidence', 'quotes', 'quote', 'basedOn', 'rationale', 'caveat', 'reading', 'confidence')
 
 
@@ -7492,6 +7494,13 @@ def _quiz_item(x, n):
     reveals = _quiz_clean(x.get('reveals'), 120)
     if kind != 'finale' and not reveals:
         probs.append('%s: reveals is one line (up to 120 characters), never shown to friends: what this question shows about who they are. If it shows nothing, it is trivia: ask something else.' % label)
+    # Release 233 (README "One method, from the report"): the finding is about them, never their feed, and says which part
+    # of them it shows, so the quiz covers who they are.
+    if reveals and QUIZ_FEED.search(reveals):
+        probs.append('%s, reveals ("%s"): "%s" is about what they posted. reveals is the finding itself, a trait, drive or value of theirs; the post is its fact.' % (label, reveals, QUIZ_FEED.search(reveals).group(0)))
+    about = str(x.get('about') or '').strip().lower()
+    if kind != 'finale' and about not in QUIZ_ABOUT:
+        probs.append('%s: about is one of %s: which part of them it shows' % (label, ', '.join(QUIZ_ABOUT)))
     a = x.get('a')
     if not (isinstance(a, int) and not isinstance(a, bool) and 0 <= a < max(1, len(o))):
         probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
@@ -7528,7 +7537,7 @@ def _quiz_item(x, n):
         say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
-    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals}, probs
+    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals, 'about': about if kind != 'finale' else 'character'}, probs
 
 
 def quiz_spread(items):
@@ -7633,6 +7642,17 @@ def quiz_save(raw):
         for w_, qs_ in sorted(seen_.items(), key=lambda kv: (-len(kv[1]), kv[0])):
             if len(qs_) >= 3:
                 probs.append('"%s" comes up in questions %s of %d. Keep the quiz varied: no topic in more than two questions, options included.' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), QUIZ_MAX))
+        # Who they are, covered (release 233, README "One method, from the report"): at least two questions about a
+        # motivation, one about a value, two about a passion and one about a pattern or contradiction; at most four of one.
+        abouts = [x.get('about') for x in items if x['kind'] != 'finale']
+        want_ = [('a motivation', abouts.count('motivation'), 2), ('a value', abouts.count('value'), 1), ('a passion', abouts.count('passion'), 2),
+                 ('a pattern or a contradiction', abouts.count('pattern') + abouts.count('contradiction'), 1)]
+        short_ = ['%d about %s (this has %d)' % (k_, w_, n_) for w_, n_, k_ in want_ if n_ < k_]
+        if short_:
+            probs.append('the quiz shows too little of who they are: it needs at least %s. Start from the report\'s findings, as guide.json\'s quiz says.' % '; '.join(short_))
+        many_ = ['%s (%d)' % (w_, abouts.count(w_)) for w_ in QUIZ_ABOUT if abouts.count(w_) > 4]
+        if many_:
+            probs.append('no more than four questions are about any one part of them; this has %s' % ', '.join(many_))
         # A portrait, not a scatter (release 232): no two questions reveal the same thing about them.
         for i, x in enumerate(items):
             for k, y in enumerate(items[i + 1:], i + 1):

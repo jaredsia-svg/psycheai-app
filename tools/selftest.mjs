@@ -5404,7 +5404,7 @@ def nope(*a, **k): raise RuntimeError('no card art here')
 m.card_art = nope
 task = m.quiz_task()
 t = json.load(open(m.QUIZ_TASK))
-q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure, 'fact': 'True and specific, from the data: ' + text[:60], 'reveals': 'R: ' + text[:70]}
+q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure, 'fact': 'True and specific, from the data: ' + text[:60], 'reveals': 'R: ' + text[:70].replace('post', '').replace('photo', 'view'), 'about': {'year': 'turning point', 'place': 'turning point', 'numbers': 'pattern', 'caption': 'pattern', 'rather': 'motivation', 'free': 'motivation', 'never': 'value', 'fake': 'contradiction'}.get(kind, 'passion')}
 r = lambda text, a=0, sure=True: q('rather', text, a, ['Lead a team of fifty through a hard launch', 'Be the friend everyone calls at 2am'], sure)
 good = {'questions': [q('year', 'In which year did Jared move to Lisbon?', 1, ['2016', '2018', '2020', '2023']),
                       q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
@@ -5443,6 +5443,9 @@ probs = {
   'scenario': bad(lambda b: b['questions'][3].update(kind='deep')),
   'noReveals': bad(lambda b: b['questions'][4].pop('reveals')),
   'sameReveals': bad(lambda b: (b['questions'][4].update(reveals='Rituals are how he steadies himself after setbacks'), b['questions'][6].update(reveals='He steadies himself after setbacks with rituals'))),
+  'feedReveal': bad(lambda b: b['questions'][4].update(reveals='He jokes about the market when it falls')),
+  'noAbout': bad(lambda b: b['questions'][4].pop('about')),
+  'coverage': bad(lambda b: [x.update(about='passion') for x in b['questions'] if x['kind'] != 'finale']),
   'landmark': bad(lambda b: b['questions'][9].update(q='Where was Jared when he crossed the An Hoi bridge?', o=['Hue, in Vietnam', 'Hoi An, in Vietnam', 'Nha Trang, in Vietnam', 'Da Nang, in Vietnam'], a=1)),
   'giveaway': bad(lambda b: b['questions'][8].update(q="What's Jared's favourite coffee find in Melbourne?", o=['The best flat white in Melbourne', 'The best iced latte in Seoul', 'The best espresso in Rome', 'The best cold brew in Austin'], a=0)),
 }
@@ -5457,7 +5460,7 @@ spread = {
   'moved': len({r[i]['a'] for r in runs for i in (1, 2, 4)}) >= 3,
 }
 # Release 226: words that only sound like messages pass ("hard conversations" was refused on a device).
-soft = m._quiz_item({'kind': 'niche', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'They think he will chat to anyone at all', 'They think he talks every problem through', 'They think he never stops talking at parties'], 'a': 0, 'reveals': 'How he reads a room', 'fact': 'He has hosted the same supper club for four years.'}, 8)[1]
+soft = m._quiz_item({'kind': 'niche', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'They think he will chat to anyone at all', 'They think he talks every problem through', 'They think he never stops talking at parties'], 'a': 0, 'about': 'pattern', 'reveals': 'How he reads a room', 'fact': 'He has hosted the same supper club for four years.'}, 8)[1]
 # Made at once (release 230, README "No confirming"): no widget and nothing put to them.
 n_before = len(sent)
 saved = m.quiz_save(json.dumps(good))
@@ -5509,6 +5512,13 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       (Q.probs.landmark || []).some(p => /questions 10 of 12 .*"(hoi|an)" is in the question and only in the right answer/.test(p)) && /never by a landmark, street, bridge, venue or dish that belongs to one of the options/.test(require('../lib/quizguide.js').spec) &&
       /\[Open your quiz\]\([^)]+\): have a look before you send it\./.test(Q.pub.invite.say),
     qerr || JSON.stringify(Q && { noReveals: Q.probs.noReveals, sameReveals: Q.probs.sameReveals, say: Q.pub && Q.pub.invite.say }).slice(0, 900));
+  check('one method, from the report (release 233): the guide runs in order (read it all, revelations from the report\'s motivations, values, passions, patterns, contradictions and turning points, the so-what test, a kind for each, the question about the finding, read as a stranger); every question but the finale says what it is about, its reveals is a finding and never what they posted, and the quiz covers at least two motivations, a value, two passions and a pattern or contradiction, at most four of one; about never reaches the published quiz',
+    Q && (Q.probs.feedReveal || []).some(p => /questions 5 of 12, reveals .*"jokes" is about what they posted/.test(p)) && (Q.probs.noAbout || []).some(p => /questions 5 of 12: about is one of motivation, value, passion, pattern, contradiction, turning point/.test(p)) &&
+      (Q.probs.coverage || []).some(p => /needs at least 2 about a motivation \(this has 0\); 1 about a value \(this has 0\); 1 about a pattern or a contradiction \(this has 0\)/.test(p)) && (Q.probs.coverage || []).some(p => /no more than four .* passion \(11\)/.test(p)) &&
+      Q.opened.questions.every(x => !('about' in x)) &&
+      ['## The method, in order', 'Start from the report, never from a post', 'A post is evidence for a revelation, never the revelation itself', 'Their beliefs are never in the file and never asked: values are', '"He jokes about markets" is not a finding', 'When the market crashes, what does Jared do?'].every(w => require('../lib/quizguide.js').spec.includes(w)) &&
+      require('../lib/quizguide.js').schema.properties.questions.items.required.includes('about'),
+    qerr || JSON.stringify(Q && { feedReveal: Q.probs.feedReveal, noAbout: Q.probs.noAbout, coverage: Q.probs.coverage, saved: Q.saved }).slice(0, 900));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));
