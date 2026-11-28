@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 233
+RELEASE = 234
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7258,7 +7258,7 @@ MAKE_QUIZ = 'Make a quiz for my friends'
 NEW_QUIZ = 'Make a new quiz'
 QUIZ_RESULTS = 'Show my quiz results'
 QUIZ_MAKE_BTN = 'Make my quiz'
-QUIZ_MIN, QUIZ_MAX = 12, 12      # release 231: twelve, each answer clear from the data, made with no question to them
+QUIZ_MIN, QUIZ_MAX = 10, 12      # release 234: up to twelve, at least ten, every one certain: a weak one is left out
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
 # happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
 QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'never', 'place', 'free', 'finale')
@@ -7334,7 +7334,7 @@ def quiz_finale(item, character):
 
 QUIZ_QWORDS = set('which what where when how does did year years jared most more these isn true quietly thing things something post posted posts actually favourite rather would'.split())
 QUIZ_COMMON = set('the and you your his her their they them with for from into that this what when who will would more than about have has are was were can could just only also not but all one out get got make makes made being been very really most'.split())
-QUIZ_ABOUT = ('motivation', 'value', 'passion', 'pattern', 'contradiction', 'turning point')
+QUIZ_ABOUT = ('motivation', 'value', 'passion', 'pattern', 'contradiction', 'turning point', 'feed')     # feed: straight from their posts (release 234)
 QUIZ_FEED = re.compile(r"\b(posts?|posted|posting|captions?|stor(?:y|ies)|photos?|pictures?|jokes?|joked|joking|feed|reels?)\b", re.I)
 QUIZ_STRIP = ('evidence', 'quotes', 'quote', 'basedOn', 'rationale', 'caveat', 'reading', 'confidence')
 
@@ -7467,10 +7467,10 @@ def quiz_task():
     return out
 
 
-def _quiz_item(x, n):
+def _quiz_item(x, n, total=QUIZ_MAX):
     """One question checked: ({kind, q, o, a}, problems)."""
     probs = []
-    label = 'questions %d of %d' % (n, QUIZ_MAX)
+    label = 'questions %d of %d' % (n, total)
     if not isinstance(x, dict):
         return None, ['%s isn\'t an object' % label]
     q = _quiz_clean(x.get('q'), 160)
@@ -7492,13 +7492,14 @@ def _quiz_item(x, n):
     # What it reveals (release 232, README "Revelations, not trivia"): for Muse's own test, never shown to a friend and never
     # published: a question that reveals nothing about who they are is trivia.
     reveals = _quiz_clean(x.get('reveals'), 120)
-    if kind != 'finale' and not reveals:
+    about = str(x.get('about') or '').strip().lower()
+    # Straight from their posts (release 234, README "Half from their posts"): a feed question needs no finding.
+    if kind != 'finale' and not reveals and about != 'feed':
         probs.append('%s: reveals is one line (up to 120 characters), never shown to friends: what this question shows about who they are. If it shows nothing, it is trivia: ask something else.' % label)
     # Release 233 (README "One method, from the report"): the finding is about them, never their feed, and says which part
     # of them it shows, so the quiz covers who they are.
-    if reveals and QUIZ_FEED.search(reveals):
+    if reveals and about != 'feed' and QUIZ_FEED.search(reveals):
         probs.append('%s, reveals ("%s"): "%s" is about what they posted. reveals is the finding itself, a trait, drive or value of theirs; the post is its fact.' % (label, reveals, QUIZ_FEED.search(reveals).group(0)))
-    about = str(x.get('about') or '').strip().lower()
     if kind != 'finale' and about not in QUIZ_ABOUT:
         probs.append('%s: about is one of %s: which part of them it shows' % (label, ', '.join(QUIZ_ABOUT)))
     a = x.get('a')
@@ -7537,7 +7538,86 @@ def _quiz_item(x, n):
         say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
-    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals, 'about': about if kind != 'finale' else 'character'}, probs
+    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals, 'about': about if kind != 'finale' else 'character',
+            'src': _quiz_clean(x.get('source'), 60)}, probs
+
+
+QUIZ_SOURCE = re.compile(r'^(post|report|numbers|saves)\b[\s:]*(.*)$', re.I)
+QUIZ_FALSE = ('favourite', 'niche', 'place', 'caption', 'free')     # kinds whose wrong options must be false of them
+
+
+def _quiz_posts():
+    """Their posts and stories, as the task file has them: {date: [text, ...]}."""
+    out = {}
+    for line in _digest_section('## Posts and stories').splitlines():
+        m = re.match(r'(\d{4}-\d{2}-\d{2})\s*(?:\d{1,2}:\d{2}\s*)?(?:\[[a-z]+\]\s*)?(.*)', line.strip())
+        if m:
+            out.setdefault(m.group(1), []).append(m.group(2))
+    return out
+
+
+def quiz_grounded(items, total, facts, words):
+    """Problems with where the answers stand and how the options differ (README "First principles")."""
+    probs = []
+    posts = _quiz_posts()
+    texts = [t for ts in posts.values() for t in ts]
+    kept = read_first([REPORT, REPORT_KEPT]) or {}
+    parts_ = {str(k).lower() for k in ((kept.get('report') or {}) if isinstance(kept.get('report'), dict) else {})}
+    saves = bool(_digest_section('## Interests'))
+    cw = lambda t: set(re.findall(r"[a-z']{3,}", t.lower())) - QUIZ_COMMON
+    caps = lambda t: {w_.lower() for w_ in re.findall(r"\b[A-Z][a-zA-Z]+", t)} - QUIZ_QWORDS
+    for i, x in enumerate(items):
+        if x['kind'] == 'finale':
+            continue
+        label = 'questions %d of %d ("%s")' % (i + 1, total, x['q'])
+        m = QUIZ_SOURCE.match(x.get('src') or '')
+        if not m:
+            probs.append('%s: source is where its answer stands: "post YYYY-MM-DD", "report <part>", "numbers <count>" or "saves". If nothing in the file says it for certain, leave the question out.' % label)
+            continue
+        how, what = m.group(1).lower(), m.group(2).strip()
+        right = x['o'][x['a']] if isinstance(x['a'], int) and 0 <= x['a'] < len(x['o']) else ''
+        want = {'year': 'post', 'caption': 'post', 'place': 'post', 'numbers': 'numbers', 'rather': 'report', 'never': 'report'}.get(x['kind'])
+        if want and how != want:
+            probs.append('%s: a %s question stands on a %s, so its source is "%s"' % (label, x['kind'], {'post': 'dated post or story', 'numbers': 'count in instagramInNumbers', 'report': 'finding the report states'}[want],
+                                                                                    {'post': 'post YYYY-MM-DD', 'numbers': 'numbers <count>', 'report': 'report <part>'}[want]))
+            continue
+        if how == 'post':
+            day = what[:10]
+            said = posts.get(day)
+            if not said:
+                probs.append('%s: there is no post or story of theirs on %s, so the answer can\'t stand on it. Name the dated post that says it, or leave the question out.' % (label, day or '(no date)'))
+                continue
+            if x['kind'] == 'year' and right != day[:4]:
+                probs.append('%s: its source is a post from %s, but the answer is %s. The answer is the year of the post that says it.' % (label, day[:4], right))
+            if x['kind'] == 'caption' and not any(cw(right) and len(cw(right) & cw(t)) >= 0.7 * len(cw(right)) for t in said):
+                probs.append('%s: "%s" isn\'t the caption of their post on %s. The right option is their own caption, as posted.' % (label, right, day))
+            if x['kind'] == 'place' and caps(right) and not any(caps(right) & caps(t) for t in said):
+                probs.append('%s: their post on %s doesn\'t name "%s". The answer is the place that post names.' % (label, day, right))
+        elif how == 'report' and what.split(' ')[0].lower().rstrip('.,') not in parts_:
+            probs.append('%s: the report has no part called "%s". Name the part that states it (%s).' % (label, what, ', '.join(sorted(parts_)) or 'none here'))
+        elif how == 'numbers' and what.split(' ')[0] not in (facts or {}):
+            probs.append('%s: instagramInNumbers has no count called "%s" (%s).' % (label, what, ', '.join(sorted(facts or {})) or 'none here'))
+        elif how == 'saves' and not saves:
+            probs.append('%s: there is nothing they save or like in the file to stand on.' % label)
+        # Wrong options invented, never from their own posts (if they posted it, it may be true of them too).
+        if x['kind'] in QUIZ_FALSE:
+            for k, y in enumerate(x['o']):
+                if k == x['a'] or QUIZ_ALL.match(y):
+                    continue
+                mine_ = cw(y)
+                hit = next((t for t in texts if len(mine_) >= 2 and len(mine_ & cw(t)) >= max(2, 0.6 * len(mine_))), None)
+                placed = x['kind'] == 'place' and next((w_ for w_ in caps(y) if any(w_ in caps(t) for t in texts)), None)
+                if hit or placed:
+                    probs.append('%s, option %d ("%s"): it comes from their own posts, so it may be true of them too. A wrong option is invented: something clearly not them, from another world.' % (label, k + 1, y))
+        # No two options alike: the same opening words, or most of the same words.
+        if x['kind'] not in ('year', 'numbers', 'rather'):
+            for k, y in enumerate(x['o']):
+                for l_, z in enumerate(x['o'][k + 1:], k + 1):
+                    a_, b_ = cw(y), cw(z)
+                    same_open = re.findall(r"[a-z']+", y.lower())[:3] == re.findall(r"[a-z']+", z.lower())[:3] and len(re.findall(r"[a-z']+", y.lower())) >= 3
+                    if same_open or (a_ and b_ and len(a_ & b_) >= 2 and len(a_ & b_) / min(len(a_), len(b_)) >= 0.5):
+                        probs.append('%s, options %d and %d ("%s" / "%s") are too alike. Each option is from a different world, in different words.' % (label, k + 1, l_ + 1, y, z))
+    return probs
 
 
 def quiz_spread(items):
@@ -7596,10 +7676,11 @@ def quiz_save(raw):
         return {'saved': False, 'problems': ['The quiz is one JSON object: {"questions": [...]}']}
     xs = got.get('questions') if isinstance(got.get('questions'), list) else []
     probs, items = [], []
-    if len(xs) != QUIZ_MAX:
-        probs.append('questions has exactly %d' % QUIZ_MAX)
+    if not QUIZ_MIN <= len(xs) <= QUIZ_MAX:
+        probs.append('questions has %d to %d: leave out any that isn\'t certain, but no fewer than %d' % (QUIZ_MIN, QUIZ_MAX, QUIZ_MIN))
+    total = min(len(xs), QUIZ_MAX) or QUIZ_MAX
     for n, x in enumerate(xs[:QUIZ_MAX], 1):
-        it, p = _quiz_item(x, n)
+        it, p = _quiz_item(x, n, total)
         probs += p
         if it:
             it['id'] = 'q%d' % n
@@ -7608,8 +7689,9 @@ def quiz_save(raw):
         kinds = [x['kind'] for x in items]
         facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)
         posted = bool(facts.get('postsByYear'))
-        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 1, 'niche': 2, 'fake': 1,
-                'caption': 1 if posted else 0, 'favourite': 1, 'never': 1, 'free': 1, 'finale': 1}
+        # Release 234 (README "First principles"): a rather, a never and the wildcard only when the data answers them for certain.
+        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'niche': 2, 'fake': 1,
+                'caption': 1 if posted else 0, 'favourite': 1, 'finale': 1}
         over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('numbers', 1), ('niche', 2), ('place', 1), ('free', 2)) if kinds.count(w_) > most]
         if over:
             probs.append('questions has at most one rather, one year, one place and one numbers question, two deep cuts and two wildcards; this has %s' % ', '.join(over))
@@ -7617,7 +7699,7 @@ def quiz_save(raw):
         if short:
             probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
         if kinds[-1] != 'finale':
-            probs.append('questions %d of %d is the finale: which character PsycheAI says they are (kind "finale")' % (QUIZ_MAX, QUIZ_MAX))
+            probs.append('questions %d of %d is the finale: which character PsycheAI says they are (kind "finale")' % (total, total))
         # No two questions on the same thing (release 228, README "Nothing asked twice"): much the same words in two questions,
         # or the same right answer, is refused, naming both.
         name_ = set(re.findall(r"[a-z']{3,}", str((read_first([REPORT, REPORT_KEPT]) or {}).get('name') or '').lower()))
@@ -7629,7 +7711,7 @@ def quiz_save(raw):
                 wq, wy = words(x['q']), words(y['q'])
                 ax, ay = words(x['o'][x['a']]), words(y['o'][y['a']])
                 if (len(wq & wy) >= 2 and len(wq & wy) / max(1, min(len(wq), len(wy))) >= 0.5) or (ax and ay and (ax == ay or len(ax & ay) / min(len(ax), len(ay)) >= 0.75)):
-                    probs.append('questions %d and %d of %d ask about the same thing ("%s" and "%s"). Every question is about something different: change one.' % (i + 1, k + 1, QUIZ_MAX, x['q'], y['q']))
+                    probs.append('questions %d and %d of %d ask about the same thing ("%s" and "%s"). Every question is about something different: change one.' % (i + 1, k + 1, total, x['q'], y['q']))
         # Varied throughout (release 229, README "Eleven, and nothing twice"): a topic word in three or more questions,
         # counting their options, is refused, naming the word and the questions.
         seen_ = {}
@@ -7641,24 +7723,30 @@ def quiz_save(raw):
                     seen_.setdefault(w_.rstrip('s'), set()).add(i + 1)
         for w_, qs_ in sorted(seen_.items(), key=lambda kv: (-len(kv[1]), kv[0])):
             if len(qs_) >= 3:
-                probs.append('"%s" comes up in questions %s of %d. Keep the quiz varied: no topic in more than two questions, options included.' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), QUIZ_MAX))
+                probs.append('"%s" comes up in questions %s of %d. Keep the quiz varied: no topic in more than two questions, options included.' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), total))
+        # First principles (release 234, README "First principles"): every answer stands on something in the file, the wrong
+        # options are invented (never from their own posts, where they might be true too), and no two options are alike.
+        probs += quiz_grounded(items, total, facts, words)
         # Who they are, covered (release 233, README "One method, from the report"): at least two questions about a
         # motivation, one about a value, two about a passion and one about a pattern or contradiction; at most four of one.
         abouts = [x.get('about') for x in items if x['kind'] != 'finale']
-        want_ = [('a motivation', abouts.count('motivation'), 2), ('a value', abouts.count('value'), 1), ('a passion', abouts.count('passion'), 2),
+        want_ = [('a motivation', abouts.count('motivation'), 1), ('a value', abouts.count('value'), 1), ('a passion', abouts.count('passion'), 2),
                  ('a pattern or a contradiction', abouts.count('pattern') + abouts.count('contradiction'), 1)]
         short_ = ['%d about %s (this has %d)' % (k_, w_, n_) for w_, n_, k_ in want_ if n_ < k_]
         if short_:
             probs.append('the quiz shows too little of who they are: it needs at least %s. Start from the report\'s findings, as guide.json\'s quiz says.' % '; '.join(short_))
-        many_ = ['%s (%d)' % (w_, abouts.count(w_)) for w_ in QUIZ_ABOUT if abouts.count(w_) > 4]
+        many_ = ['%s (%d)' % (w_, abouts.count(w_)) for w_ in QUIZ_ABOUT if w_ != 'feed' and abouts.count(w_) > 4]
         if many_:
             probs.append('no more than four questions are about any one part of them; this has %s' % ', '.join(many_))
+        # Balanced (release 234): up to half straight from their posts, the rest from what the report finds.
+        if abouts.count('feed') > total // 2:
+            probs.append('%d of %d questions are straight from their posts (about "feed"); up to %d may be. Make the rest about who they are, from the report\'s findings.' % (abouts.count('feed'), total, total // 2))
         # A portrait, not a scatter (release 232): no two questions reveal the same thing about them.
         for i, x in enumerate(items):
             for k, y in enumerate(items[i + 1:], i + 1):
                 rx, ry = words(x.get('r') or ''), words(y.get('r') or '')
                 if rx and ry and len(rx & ry) >= 2 and len(rx & ry) / min(len(rx), len(ry)) >= 0.6:
-                    probs.append('questions %d and %d of %d reveal the same thing ("%s" and "%s"). Each question shows something different about them: change one.' % (i + 1, k + 1, QUIZ_MAX, x['r'], y['r']))
+                    probs.append('questions %d and %d of %d reveal the same thing ("%s" and "%s"). Each question shows something different about them: change one.' % (i + 1, k + 1, total, x['r'], y['r']))
         # No giveaways (release 232, README "No giveaways, and answers anywhere"): a word of the question that only the
         # right option shares ("favourite food find in Singapore?" beside "The best pizza in Singapore") answers it.
         for i, x in enumerate(items):
@@ -7672,7 +7760,7 @@ def quiz_save(raw):
             wrong_t = set().union(*[toks(y) for k_, y in enumerate(x['o']) if k_ != x['a']])
             given += sorted(w_ for w_ in caps & toks(x['o'][x['a']]) if w_ not in wrong_t and w_ not in given)
             if given:
-                probs.append('questions %d of %d ("%s"): "%s" is in the question and only in the right answer ("%s"), which gives it away. Put the shared frame in the question and in no option, or in every option.' % (i + 1, QUIZ_MAX, x['q'], given[0], x['o'][x['a']]))
+                probs.append('questions %d of %d ("%s"): "%s" is in the question and only in the right answer ("%s"), which gives it away. Put the shared frame in the question and in no option, or in every option.' % (i + 1, total, x['q'], given[0], x['o'][x['a']]))
         if sum(1 for x in items if QUIZ_ALL.match(x['o'][-1])) > 2:
             probs.append('at most 2 questions end with "All of the above" (or "None of these", "Both")')
     if probs:
