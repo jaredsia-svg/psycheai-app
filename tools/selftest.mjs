@@ -5552,6 +5552,7 @@ m.DIGEST = old_
 print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'),
   'likeAll': sorted(m.QUIZ_LIKE) == sorted(m.QUIZ_LIKE) and len(m.QUIZ_LIKE) == 28 and all(len(v) == 3 and c not in v and all(x in m.QUIZ_LIKE for x in v) for c, v in m.QUIZ_LIKE.items()), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
   'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'mentions': m.quiz_mentions(), 'noRevs': noRevs, 'revSaved': revSaved, 'revBad': revBad, 'draftGone': draftGone, 'straight': straight,
+  'labels2': [m.known_label(x) and m.TAP_ROUTES.get(x) == r for x, r in (("Show my friends' scores for my pop quiz", 'quiz-results'), ('Generate fresh pop quiz', 'quiz'), ('Show my quiz results', 'quiz-results'), ('Make a new quiz', 'quiz'))],
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Pop quiz my friends about me', 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
   let Q = null, qerr = '';
@@ -5571,7 +5572,7 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
       Q.opened.questions[1].q === 'Would Jared rather lead or help?' && Q.opened.questions[1].o[Q.opened.questions[1].a] === 'Lead a team of fifty through a hard launch' && Q.opened.questions[1].o.length === 2 &&
       JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","rather","caption","year","niche","numbers","place","niche","fake","never","free","finale"]' &&
       Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone && Q.pub.invite.say.startsWith('[Open your quiz](' + Q.pub.invite.url + '): have a look before you send it.\n\nHere\'s your quiz.') &&
-      JSON.stringify(Q.pubButtons) === '["Show my quiz results","Back to the menu"]' && !/quiz_widget|QZ_JS|That\'s not true about me/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
+      JSON.stringify(Q.pubButtons) === '["Show my friends\' scores for my pop quiz","Generate fresh pop quiz","Back to the menu"]' && Q.labels2.every(Boolean) && !/quiz_widget|QZ_JS|That\'s not true about me/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
     qerr || JSON.stringify(Q && { straight: Q.straight, n: Q.n, kinds: Q.opened && Q.opened.questions.map(x => x.k) }).slice(0, 900));
   check('no giveaways, and answers anywhere (release 232): a word of the question that only the right option shares is refused, naming it; the script shuffles every question\'s options, keeping the answer, years in order and "All of the above" last, so no letter holds more than four of the eleven answers',
     Q && (Q.probs.giveaway || []).some(p => /questions 9 of 12 .*"melbourne" is in the question and only in the right answer .*gives it away/.test(p)) &&

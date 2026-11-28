@@ -103,7 +103,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 239
+RELEASE = 240
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -5970,7 +5970,7 @@ def news_for(force=False):
     fresh = int(qz.get('new') or 0)
     if fresh and int(kept.get('quizSaid') or 0) != int(qz.get('answers') or 0):
         lines.append('%s took your quiz.' % ('A friend' if fresh == 1 else '%d friends' % fresh))
-        buttons.append('Show my quiz results')
+        buttons.append(QUIZ_RESULTS)
     kept['quizSaid'] = int(qz.get('answers') or 0)
     kept.update(syncs=sorted(said)[-200:], together=bool(got.get('together')))
     write_private([NEWS], kept)
@@ -6150,7 +6150,7 @@ TAP_ROUTES = {
     'My Syncs': 'get_syncs', 'Show my Syncs': 'get_syncs',
     "I've shared it. Show our results": 'sync-ready', 'Show our results': 'sync-ready', 'My friend has synced': 'sync-ready',
     'Psyche Together with my partner': 'together-intro',
-    'Pop quiz my friends about me': 'quiz', 'Quiz my friends about me': 'quiz', 'Make a quiz for my friends': 'quiz', 'Make a new quiz': 'quiz', 'Write different questions': 'quiz', 'Show my quiz results': 'quiz-results',
+    'Pop quiz my friends about me': 'quiz', 'Quiz my friends about me': 'quiz', 'Make a quiz for my friends': 'quiz', 'Make a new quiz': 'quiz', 'Generate fresh pop quiz': 'quiz', 'Show my friends\' scores for my pop quiz': 'quiz-results', 'Write different questions': 'quiz', 'Show my quiz results': 'quiz-results',
 }
 # The buttons the guide answers, each because Muse itself does the next step: the first-run choices (first-run's result
 # has their answers), installing or starting Psyche Together, writing or asking something, a link, a connection, a
@@ -6396,7 +6396,7 @@ LABELS = frozenset([
     'Sunday evening', 'Monday morning', 'Not yet', 'Change it', 'Stop check-ins', 'Try again', 'Save to PsycheAI',
     'Explain why you said this', 'Correct something', 'More', 'Show our Psyche Together', 'Back to the menu', 'Ask something else', 'Install Psyche Together', 'Install and start Psyche Together', 'Install Psyche Together from https://app.psycheai.io/together and start it', TOGETHER_INSTALL, 'Fresh Psyche', 'Psyche Together with my partner', 'Continue Psyche Together', 'Add WhatsApp as data source', 'My data and privacy',
     'Delete everything', 'Yes, delete everything', 'Cancel', 'Make it anyway', "I've connected another account", 'Privacy policy', 'Include my messages (Recommended)', 'Posts only',
-    'Pop quiz my friends about me', 'Quiz my friends about me', 'Make a quiz for my friends', 'Make a new quiz', 'Show my quiz results', 'Make my quiz', 'Write different questions'])
+    'Pop quiz my friends about me', 'Quiz my friends about me', 'Make a quiz for my friends', 'Make a new quiz', 'Show my quiz results', 'Generate fresh pop quiz', 'Show my friends\' scores for my pop quiz', 'Make my quiz', 'Write different questions'])
 LABEL_FORMS = [re.compile(r'^My Syncs \(\d{1,3} new\)$'), re.compile(r'^Show my Sync with [^\n@/:]{1,40}$'), re.compile(r'^Pick [^\n@/:]{1,30}$'),
               re.compile(r'^Let [^\n@/:]{1,30} know$'), re.compile(r'^Sync with [^\n@/:]{1,30}$'),
               re.compile(r'^Make my quiz for [^\n@/:]{1,30}$'), re.compile(r"^See what I missed on [^\n@/:]{1,30}'s quiz$")]
@@ -7261,8 +7261,8 @@ QUIZ_KEPT_SPARE = os.path.join(KEEP, 'quiz.json')
 QUIZ_PENDING = os.path.join(KEEP, 'quiz-pending.json')
 QUIZ_DIR = os.path.join(OUT, 'quiz')
 MAKE_QUIZ = 'Pop quiz my friends about me'
-NEW_QUIZ = 'Make a new quiz'
-QUIZ_RESULTS = 'Show my quiz results'
+NEW_QUIZ = 'Generate fresh pop quiz'                  # release 240: was "Make a new quiz"
+QUIZ_RESULTS = 'Show my friends\' scores for my pop quiz'   # release 240: was "Show my quiz results"
 QUIZ_MAKE_BTN = 'Make my quiz'
 QUIZ_MIN, QUIZ_MAX = 10, 12      # release 234: up to twelve, at least ten, every one certain: a weak one is left out
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
@@ -8145,7 +8145,7 @@ def quiz_publish(raw):
     say = '[Open your quiz](%s): have a look before you send it.\n\nHere\'s your quiz. Copy the line below and send it to %s:' % (link, pend.get('name') if pend and pend.get('name') else 'friends')
     res = {'invite': {'url': link, 'line': 'Take my quiz: how well do you know me? ' + link}, 'n': len(chosen)}
     res['invite']['say'] = say          # release 227: no Story picture with it (it showed their card)
-    buttons = [QUIZ_RESULTS, 'Back to the menu']
+    buttons = [QUIZ_RESULTS, NEW_QUIZ, 'Back to the menu']      # release 240
     if pend:
         res['for'] = pend.get('name')
         # Release 239 (README "A shorter line to make their own"): no "See what I missed": a friend's right answers stay theirs.
@@ -8174,7 +8174,7 @@ def quiz_preview(link):
     own = read_first([QUIZ_KEPT, QUIZ_KEPT_SPARE]) or {}
     has = bool(read_first([REPORT, REPORT_KEPT]))
     if own.get('code') == code:
-        return {'own': True, 'hasPsyche': has, 'nextStep': _step('That\'s your own quiz: it\'s for sending to friends.', [QUIZ_RESULTS, 'Back to the menu'])}
+        return {'own': True, 'hasPsyche': has, 'nextStep': _step('That\'s your own quiz: it\'s for sending to friends.', [QUIZ_RESULTS, NEW_QUIZ, 'Back to the menu'])}
     q, got = _quiz_open(code)
     if q is None:
         return got
@@ -8224,7 +8224,7 @@ def quiz_missed():
         say = '%s\'s answers (your own picks weren\'t in the link):' % name
     # The list is in the say itself, so the result is shown as it comes, with nothing to look up.
     say += ''.join('\n• "%s" %s said "%s"%s' % (r['question'], name, r['answer'], ('; you said "%s"' % r['yours']) if r['yours'] else '') for r in rows)
-    return {'say': say, 'missed': rows, 'buttons': [QUIZ_RESULTS, 'Back to the menu'], 'asButtons': True}
+    return {'say': say, 'missed': rows, 'buttons': [QUIZ_RESULTS, NEW_QUIZ, 'Back to the menu'], 'asButtons': True}
 
 
 def quiz_results():
