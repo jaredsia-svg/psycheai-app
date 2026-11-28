@@ -5648,6 +5648,10 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
       /source "numbers howTheyChanged"/.test(Q.shiftProbs.src[0] || '') && Q.shiftProbs.two.some(p => /asks one at most/.test(p)) &&
       require('../lib/quizguide.js').spec.includes('never a busiest year or day') && require('../lib/quizguide.js').spec.includes('"What did Jared post about all the time, but quietly stopped?"'),
     qerr || JSON.stringify(Q && { shifts: Q.shifts, shiftProbs: Q.shiftProbs }).slice(0, 1500));
+  check('the quiz says straight away that it takes a few minutes (release 240): quiz\'s say tells them, and SKILL.md has Muse reply with it first, then write the quiz in that same turn',
+    Q && /^Making your pop quiz from your Psyche: it takes a few minutes\. I'll share its link here when it's ready\.$/.test(Q.task.say) &&
+      /- \*\*The quiz\*\* \("Pop quiz my friends about me"\): with `write`: "quiz", reply first with its say, then, in that same turn, read its task file/.test(require('../lib/skill.js').skillMd()),
+    JSON.stringify(Q && Q.task));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));

@@ -7540,7 +7540,7 @@ def quiz_task():
     with open(QUIZ_TASK, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
     pend = quiz_pending()
-    out = {'write': 'quiz', 'task': 'work/quiz-task.json', 'say': 'Writing your quiz from your Psyche. About a minute.',
+    out = {'write': 'quiz', 'task': 'work/quiz-task.json', 'say': 'Making your pop quiz from your Psyche: it takes a few minutes. I\'ll share its link here when it\'s ready.',     # release 241: shown first
            'steps': ['work/revelations.json, then quiz-revelations', 'work/quiz.json, then quiz-save']}     # release 236
     try:
         os.remove(QUIZ_REVS)        # a new quiz starts from new findings
