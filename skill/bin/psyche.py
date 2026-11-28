@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 231
+RELEASE = 232
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7674,7 +7674,8 @@ def quiz_publish(raw):
     link = BASE + '/quiz#' + code
     pend = quiz_pending()
     # The line they copy (README "The quiz, shared by them"): no install words and nothing about them beside the link.
-    say = 'Here\'s your quiz. Copy the line below and send it to %s:' % (pend.get('name') if pend and pend.get('name') else 'friends')
+    # Release 232 (README "A link to the quiz at the top"): their own quiz, one tap away, before the line they copy.
+    say = '[Open your quiz](%s)\n\nHere\'s your quiz. Copy the line below and send it to %s:' % (link, pend.get('name') if pend and pend.get('name') else 'friends')
     res = {'invite': {'url': link, 'line': 'Take my quiz: how well do you know me? ' + link}, 'n': len(chosen)}
     res['invite']['say'] = say          # release 227: no Story picture with it (it showed their card)
     buttons = [QUIZ_RESULTS, 'Back to the menu']
