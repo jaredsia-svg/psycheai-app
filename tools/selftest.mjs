@@ -1132,7 +1132,7 @@ print(json.dumps({'after': m.AFTER_PUBLISH, 'ideas': m.ASK_IDEAS, 'own': m.ask_i
       /as buttons, one each: its questions, then "Back to the menu"/.test(instructions.MUSE_PROCEDURE) && /askButtons: \[\.\.\.ideas, 'Back to the menu'\]/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8')) && (require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'lib', 'mcp.js'), 'utf8').match(/withAskButtons\(askIdeas\(/g) || []).length === 4 && /then "Ask something else" and "Back to the menu"/.test(instructions.MUSE_PROCEDURE) &&
         /"Ask something else": a few more questions they haven't seen[^.]*, then "Back to the menu"\./.test(instructions.MUSE_PROCEDURE) && /"Back to the menu", and "Done" where it ends a path: "What would you like to do\?" with the five buttons someone with a read gets/.test(instructions.MUSE_PROCEDURE) && /No path ends in a dead end: wherever one ends[^.]*, its last button is "Back to the menu"\./.test(instructions.MUSE_PROCEDURE));
     check('forget --everything also deletes news.json, which Syncs news has already said (release 198), and the kept first-run result (release 219)',
-      /SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_PENDING\):/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')));
+      /SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_REVS, QUIZ_PENDING\):/.test(require('node:fs').readFileSync(require('node:path').join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')));
     {
       // Release 201 (README "The install read, as it was"): Muse reads about the first 50 KB of SKILL.md when it installs. With the
       // menu, Ask, Sync, adding a source and their data in it (198 to 200), that read failed Muse's safety check on both devices;
@@ -5426,6 +5426,31 @@ good = {'questions': [q('year', 'In which year did Jared host his first supper c
 for x in good['questions']:
     if x['kind'] in ('year', 'caption', 'place'):
         x.update(about='feed'); x.pop('reveals')
+# Release 236: the findings first, each proved, then each finding question names one.
+revs = [
+  {'id': 'r_num', 'about': 'pattern', 'finding': 'He comes alive in the evening', 'part': 'patterns', 'proof': [{'numbers': 'peakHours'}]},
+  {'id': 'r_rat', 'about': 'motivation', 'finding': 'He would rather lead than follow', 'part': 'patterns', 'proof': [{'saves': True}]},
+  {'id': 'r_nev', 'about': 'value', 'finding': 'He never lets a friend down for work', 'part': 'patterns', 'proof': [{'saves': True}]},
+  {'id': 'r_n1', 'about': 'passion', 'finding': 'He teaches himself languages quietly', 'part': 'interests', 'proof': [{'post': '2021-04-12', 'quote': 'Day 100 of Portuguese lessons'}]},
+  {'id': 'r_n2', 'about': 'passion', 'finding': 'Small homes and good design pull him in', 'part': 'interests', 'proof': [{'saves': True}]},
+  {'id': 'r_fake', 'about': 'contradiction', 'finding': 'Calm on the surface, restless underneath', 'part': 'summary', 'proof': [{'saves': True}]},
+  {'id': 'r_fav', 'about': 'motivation', 'finding': 'Rituals are how he steadies himself', 'part': 'patterns', 'proof': [{'post': '2023-03-01', 'quote': 'Long black, no sugar'}]},
+  {'id': 'r_free', 'about': 'motivation', 'finding': 'He marks every year with the same people', 'part': 'patterns', 'proof': [{'post': '2022-08-20', 'quote': 'Birthday dinner'}]},
+]
+noRevs = m.quiz_save(json.dumps(good)).get('problems')
+revSaved = m.quiz_revelations(json.dumps({'revelations': revs}))
+revBad = m.quiz_revelations(json.dumps({'revelations': revs[:4] + [
+  {'id': 'r_x', 'about': 'passion', 'finding': 'He jokes in his captions', 'part': 'interests', 'proof': [{'post': '2021-04-12', 'quote': 'adopted a rescue dog'}]},
+  {'id': 'r_y', 'about': 'feed', 'finding': 'He loves maps', 'part': 'nowhere', 'proof': []}]}))
+m.quiz_revelations(json.dumps({'revelations': revs}))
+rid = {'numbers': 'r_num', 'rather': 'r_rat', 'never': 'r_nev', 'fake': 'r_fake', 'favourite': 'r_fav', 'free': 'r_free'}
+niche_ = iter(['r_n1', 'r_n2'])
+for x in good['questions']:
+    if x['kind'] == 'niche':
+        x['revelation'] = next(niche_)
+    elif x['kind'] in rid:
+        x['revelation'] = rid[x['kind']]
+good['questions'][4]['source'] = 'post 2021-04-12'; good['questions'][4]['quote'] = 'Day 100 of Portuguese lessons'
 def bad(change):
     b = json.loads(json.dumps(good)); change(b); return m.quiz_save(json.dumps(b))
 probs = {
@@ -5449,7 +5474,10 @@ probs = {
   'twoRather': bad(lambda b: b['questions'][3].update(kind='rather', o=['Rest at home with a good book', 'Roam a new city on foot all day'], a=0)),
   'variety': bad(lambda b: (b['questions'][3]['o'].__setitem__(0, 'Adopt a second pet tortoise'), b['questions'][6]['o'].__setitem__(1, 'Tortoise habitats built from scratch'))),
   'scenario': bad(lambda b: b['questions'][3].update(kind='deep')),
-  'noReveals': bad(lambda b: b['questions'][4].pop('reveals')),
+  'noReveals': bad(lambda b: (b['questions'][4].pop('reveals'), b['questions'][4].pop('revelation'))),
+  'noRev': bad(lambda b: b['questions'][6].pop('revelation')),
+  'revTwice': bad(lambda b: b['questions'][6].update(revelation='r_n1')),
+  'revSource': bad(lambda b: b['questions'][10].update(source='post 2018-02-03', quote='First supper club night')),
   'sameReveals': bad(lambda b: (b['questions'][4].update(reveals='Rituals are how he steadies himself after setbacks'), b['questions'][6].update(reveals='He steadies himself after setbacks with rituals'))),
   'noSource': bad(lambda b: b['questions'][3].pop('source')),
   'badPost': bad(lambda b: b['questions'][0].update(source='post 2017-01-01')),
@@ -5504,7 +5532,7 @@ m._quiz_open = lambda c: (opened, {})
 missed = m.quiz_missed()
 print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'),
   'likeAll': sorted(m.QUIZ_LIKE) == sorted(m.QUIZ_LIKE) and len(m.QUIZ_LIKE) == 28 and all(len(v) == 3 and c not in v and all(x in m.QUIZ_LIKE for x in v) for c, v in m.QUIZ_LIKE.items()), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
-  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'draftGone': draftGone, 'straight': straight,
+  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'noRevs': noRevs, 'revSaved': revSaved, 'revBad': revBad, 'draftGone': draftGone, 'straight': straight,
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Pop quiz my friends about me', 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
   let Q = null, qerr = '';
@@ -5573,6 +5601,14 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       (Q.probs.fakeQuote || []).some(p => /"Adopted a rescue dog today" isn't in their post on 2018-02-03/.test(p)) && Q.opened.questions.every(x => !('quote' in x)) &&
       require('../lib/quizguide.js').spec.includes('"so proud of you, congrats on the new job" is not "Jared got a new job"') && require('../lib/quizguide.js').spec.includes('only Hoi An is a trading port, so the question answers itself'),
     qerr || JSON.stringify(Q && ['dog', 'noQuote', 'fakeQuote'].map(k => [k, Q.probs[k]])).slice(0, 1500));
+  check('revelations, then questions (release 236): quiz-revelations checks 5 to 15 findings before any question, each from a part of the report, about who they are (never their feed), proved by a post of theirs whose words are really in it, a count or their saves; every finding question then names one, asked once, standing on its proof or its report part; with no findings saved, quiz-save asks for them first',
+    Q && Q.revSaved && Q.revSaved.saved === true && Q.revSaved.revelations.length === 8 && /^the findings come first: write work\/revelations\.json/.test((Q.noRevs || [])[0] || '') &&
+      (Q.revBad.problems || []).some(p => /their post on 2021-04-12 doesn't say "adopted a rescue dog"/.test(p)) && (Q.revBad.problems || []).some(p => /"jokes" is about what they posted/.test(p)) &&
+      (Q.revBad.problems || []).some(p => /revelations 6 of 6 .*about is one of motivation/.test(p)) && (Q.revBad.problems || []).some(p => /part is the part of the report it comes from/.test(p)) && (Q.revBad.problems || []).some(p => /proof needs at least one post of theirs/.test(p)) &&
+      (Q.probs.noRev || []).some(p => /revelation names the finding it asks about/.test(p)) && (Q.probs.revTwice || []).some(p => /revelation r_n1 is already asked in questions/.test(p)) &&
+      (Q.probs.revSource || []).some(p => /its source is one of revelation r_free's: post 2022-08-20, report patterns/.test(p)) && Q.saved === true &&
+      require('../lib/quizguide.js').spec.includes('python3 bin/psyche.py quiz-revelations @work/revelations.json'),
+    qerr || JSON.stringify(Q && { noRevs: Q.noRevs, revSaved: Q.revSaved, revBad: Q.revBad, p: ['noRev', 'revTwice', 'revSource'].map(k => [k, Q.probs[k]]) }).slice(0, 1800));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));

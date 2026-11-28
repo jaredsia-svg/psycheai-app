@@ -56,6 +56,8 @@ What it does, in full:
                                        message to send the line to, names to pick, or the line to copy
   python3 bin/psyche.py quiz                   "Pop quiz my friends about me": work/quiz-task.json, from their
                                        report and their posts and stories, to write the quiz from
+  python3 bin/psyche.py quiz-revelations @work/revelations.json  the findings the quiz asks about, each
+                                       with the posts that prove it, checked before any question
   python3 bin/psyche.py quiz-save @work/quiz.json  the quiz written, checked and kept here; its widget
   python3 bin/psyche.py quiz-publish '<picks>' the quiz they picked, locked here under a new code and
                                        saved; its link (app.psycheai.io/quiz#<code>)
@@ -7035,6 +7037,9 @@ def main(argv):
     if argv[0] == 'quiz':
         print(json.dumps(quiz_task(), ensure_ascii=False, indent=1))
         return
+    if argv[0] == 'quiz-revelations' and len(argv) >= 2:
+        print(json.dumps(quiz_revelations(argv[1]), ensure_ascii=False, indent=1))
+        return
     if argv[0] == 'quiz-save' and len(argv) >= 2:
         print(json.dumps(quiz_save(argv[1]), ensure_ascii=False, indent=1))
         return
@@ -7169,7 +7174,7 @@ def main(argv):
             shutil.rmtree(d, ignore_errors=True)
         if everything:
             # Without its keys, what PsycheAI keeps locked for them can't be opened by anyone.
-            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_PENDING):     # NEWS: which Syncs news has said (release 198)
+            for f in (REPORT, REPORT_KEPT, KEYS, KEYS_KEPT, COACH, COACH_KEPT, CORRECTIONS, CORRECTIONS_KEPT, TAG_KEPT, SYNC_STORE, SYNC_STORE_KEPT, SYNC_PENDING, NEWS, FIRST_RUN_KEPT, QUIZ_KEPT, QUIZ_KEPT_SPARE, QUIZ_DRAFT, QUIZ_REVS, QUIZ_PENDING):     # NEWS: which Syncs news has said (release 198)
                 if os.path.exists(f):
                     os.remove(f)
         print(json.dumps({'ok': True, 'deleted': ['work/', 'sources/', 'notes/'] + (['digest/', 'report.json', 'keys', 'check-ins', 'corrections'] if everything else [])}))
@@ -7250,6 +7255,7 @@ def main(argv):
 QUIZ_E2E = re.compile(r'/quiz/?#([A-Za-z0-9_-]{22})(?:\.([0-3]{1,15}))?(?![A-Za-z0-9_-])')
 QUIZ_TASK = os.path.join(WORK, 'quiz-task.json')
 QUIZ_DRAFT = os.path.join(HERE, '.quiz-draft.json')
+QUIZ_REVS = os.path.join(HERE, '.quiz-revelations.json')    # release 236: the findings checked, before any question
 QUIZ_KEPT = os.path.join(HERE, '.quiz.json')
 QUIZ_KEPT_SPARE = os.path.join(KEEP, 'quiz.json')
 QUIZ_PENDING = os.path.join(KEEP, 'quiz-pending.json')
@@ -7461,7 +7467,12 @@ def quiz_task():
     with open(QUIZ_TASK, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
     pend = quiz_pending()
-    out = {'write': 'quiz', 'task': 'work/quiz-task.json', 'say': 'Writing your quiz from your Psyche. About a minute.'}
+    out = {'write': 'quiz', 'task': 'work/quiz-task.json', 'say': 'Writing your quiz from your Psyche. About a minute.',
+           'steps': ['work/revelations.json, then quiz-revelations', 'work/quiz.json, then quiz-save']}     # release 236
+    try:
+        os.remove(QUIZ_REVS)        # a new quiz starts from new findings
+    except OSError:
+        pass
     if pend:
         out['for'] = pend.get('name')
     return out
@@ -7494,7 +7505,7 @@ def _quiz_item(x, n, total=QUIZ_MAX):
     reveals = _quiz_clean(x.get('reveals'), 120)
     about = str(x.get('about') or '').strip().lower()
     # Straight from their posts (release 234, README "Half from their posts"): a feed question needs no finding.
-    if kind != 'finale' and not reveals and about != 'feed':
+    if kind != 'finale' and not reveals and about != 'feed' and not x.get('revelation'):
         probs.append('%s: reveals is one line (up to 120 characters), never shown to friends: what this question shows about who they are. If it shows nothing, it is trivia: ask something else.' % label)
     # Release 233 (README "One method, from the report"): the finding is about them, never their feed, and says which part
     # of them it shows, so the quiz covers who they are.
@@ -7543,7 +7554,7 @@ def _quiz_item(x, n, total=QUIZ_MAX):
         probs.append('%s, the question ("%s"): "%s" lets more than one answer stand. Ask what is true of them ("Which most closely describes Jared?", "Which of these has Jared actually done?").' % (label, q, QUIZ_LIKELY.search(q).group(0)))
     stands = [_quiz_clean(y, 40) for y in x.get('stands')] if isinstance(x.get('stands'), list) else None
     return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals, 'about': about if kind != 'finale' else 'character',
-            'src': _quiz_clean(x.get('source'), 60), 'stands': stands, 'quote': _quiz_clean(x.get('quote'), 140)}, probs
+            'src': _quiz_clean(x.get('source'), 60), 'stands': stands, 'quote': _quiz_clean(x.get('quote'), 140), 'rev': _quiz_clean(x.get('revelation'), 20)}, probs
 
 
 QUIZ_LIKELY = re.compile(r"\b(most likely|more likely|likely to|probably|would most)\b", re.I)
@@ -7559,6 +7570,112 @@ def _quiz_posts():
         if m:
             out.setdefault(m.group(1), []).append(m.group(2))
     return out
+
+
+def _quiz_proof(day, quote, posts):
+    """Whether a quote is in their post or story that day."""
+    norm = lambda t: re.sub(r'\s+', ' ', t).strip().lower()
+    return bool(quote) and any(norm(quote) in norm(t) for t in posts.get(day[:10], []))
+
+
+def quiz_revelations(raw):
+    """python3 bin/psyche.py quiz-revelations @work/revelations.json (release 236, README "Revelations, then questions"):
+    the findings the quiz will ask about, each from a part of the report and proved by their own posts, counts or saves,
+    checked here before any question is written. Kept for quiz-save, which ties each finding question to one."""
+    try:
+        got = json.loads(open(raw[1:], encoding='utf-8').read() if str(raw).startswith('@') else raw)
+    except (OSError, ValueError) as err:
+        return {'saved': False, 'problems': ['Couldn\'t read the revelations: %s' % err]}
+    xs = got.get('revelations') if isinstance(got, dict) and isinstance(got.get('revelations'), list) else []
+    probs, keep = [], []
+    if not 5 <= len(xs) <= 15:
+        probs.append('revelations has 5 to 15 findings, each proved by their own posts, counts or saves')
+    kept = read_first([REPORT, REPORT_KEPT]) or {}
+    parts_ = {str(k).lower() for k in ((kept.get('report') or {}) if isinstance(kept.get('report'), dict) else {})}
+    posts, facts, saves = _quiz_posts(), quiz_facts(), bool(_digest_section('## Interests'))
+    seen_ids = set()
+    for n, x in enumerate(xs[:15], 1):
+        label = 'revelations %d of %d' % (n, len(xs))
+        if not isinstance(x, dict):
+            probs.append('%s isn\'t an object' % label)
+            continue
+        rid = _quiz_clean(x.get('id'), 20)
+        about = str(x.get('about') or '').strip().lower()
+        finding = _quiz_clean(x.get('finding'), 120)
+        part = str(x.get('part') or '').strip()
+        label = '%s ("%s")' % (label, finding or rid)
+        if not rid or rid in seen_ids:
+            probs.append('%s: id is a short name of its own, like r1' % label)
+        seen_ids.add(rid)
+        if about not in QUIZ_ABOUT or about == 'feed':
+            probs.append('%s: about is one of motivation, value, passion, pattern, contradiction, turning point' % label)
+        if not finding:
+            probs.append('%s: finding is one line on who they are: a trait, drive or value of theirs' % label)
+        elif QUIZ_FEED.search(finding):
+            probs.append('%s: "%s" is about what they posted. A finding is about who they are; the posts are its proof.' % (label, QUIZ_FEED.search(finding).group(0)))
+        for rx, topic_ in QUIZ_NEVER:
+            if finding and rx.search(finding):
+                probs.append('%s: "%s" is about %s, which a quiz can never be about' % (label, rx.search(finding).group(0), topic_))
+        if finding and QUIZ_MESSAGES.search(finding):
+            probs.append('%s: "%s" points at their messages; a finding is shown only by their posts, counts or saves' % (label, QUIZ_MESSAGES.search(finding).group(0)))
+        if part.split(' ')[0].lower() not in parts_:
+            probs.append('%s: part is the part of the report it comes from (%s)' % (label, ', '.join(sorted(parts_)) or 'none here'))
+        proof = x.get('proof') if isinstance(x.get('proof'), list) else []
+        good = []
+        for pr in proof[:6]:
+            if not isinstance(pr, dict):
+                continue
+            if pr.get('post'):
+                day = str(pr.get('post'))[:10]
+                if _quiz_proof(day, _quiz_clean(pr.get('quote'), 140), posts):
+                    good.append('post ' + day)
+                else:
+                    probs.append('%s: their post on %s doesn\'t say "%s". Proof is a post of theirs that day, with words from it as written.' % (label, day, _quiz_clean(pr.get('quote'), 140)))
+            elif pr.get('numbers'):
+                if str(pr.get('numbers')) in (facts or {}):
+                    good.append('numbers ' + str(pr.get('numbers')))
+                else:
+                    probs.append('%s: instagramInNumbers has no count called "%s"' % (label, pr.get('numbers')))
+            elif pr.get('saves') and saves:
+                good.append('saves')
+        if not good:
+            probs.append('%s: proof needs at least one post of theirs (with its date and words), count or their saves that shows it. A finding nothing of theirs proves is left out.' % label)
+        keep.append({'id': rid, 'about': about, 'finding': finding, 'part': part.split(' ')[0].lower(), 'proof': good})
+    if probs:
+        return {'saved': False, 'problems': probs[:20]}
+    write_private([QUIZ_REVS], {'revelations': keep, 'at': int(time.time())})
+    return {'saved': True, 'revelations': [r['id'] for r in keep],
+            'next': 'Write work/quiz.json: each question about a finding names its revelation and stands on that revelation\'s proof or report part; then quiz-save.'}
+
+
+def quiz_linked(items, total):
+    """Each finding question asks about one checked revelation, on its proof (release 236)."""
+    probs = []
+    revs = {r['id']: r for r in ((read_first([QUIZ_REVS]) or {}).get('revelations') or [])}
+    finding_qs = [x for x in items if x['kind'] != 'finale' and x.get('about') != 'feed']
+    if finding_qs and not revs:
+        return ['the findings come first: write work/revelations.json and run python3 bin/psyche.py quiz-revelations @work/revelations.json, then save the questions again']
+    used = {}
+    for i, x in enumerate(items):
+        if x['kind'] == 'finale' or x.get('about') == 'feed':
+            continue
+        label = 'questions %d of %d ("%s")' % (i + 1, total, x['q'])
+        r = revs.get(x.get('rev') or '')
+        if not r:
+            probs.append('%s: revelation names the finding it asks about (%s). A question that asks about none is "feed" (straight from their posts) or left out.' % (label, ', '.join(sorted(revs))))
+            continue
+        if x['rev'] in used:
+            probs.append('%s: revelation %s is already asked in questions %d. Each finding is asked once.' % (label, x['rev'], used[x['rev']]))
+        used[x['rev']] = i + 1
+        src = re.sub(r'\s+', ' ', (x.get('src') or '').strip().lower())
+        ok = src in [p.lower() for p in r['proof']] or src == 'report ' + r['part']
+        if not ok:
+            probs.append('%s: its source is one of revelation %s\'s: %s' % (label, x['rev'], ', '.join(r['proof'] + ['report ' + r['part']])))
+        if not x.get('r'):
+            x['r'] = r['finding']
+        if x.get('about') != r['about']:
+            probs.append('%s: about is its revelation\'s ("%s")' % (label, r['about']))
+    return probs
 
 
 def quiz_grounded(items, total, facts, words):
@@ -7762,6 +7879,7 @@ def quiz_save(raw):
                 probs.append('"%s" comes up in questions %s of %d. Keep the quiz varied: no topic in more than two questions, options included.' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), total))
         # First principles (release 234, README "First principles"): every answer stands on something in the file, the wrong
         # options are invented (never from their own posts, where they might be true too), and no two options are alike.
+        probs += quiz_linked(items, total)
         probs += quiz_grounded(items, total, facts, words)
         # Who they are, covered (release 234, README "A structure that holds"): at least five questions about a finding,
         # across at least three parts of them, with no fixed count of any one (a fixed count made Muse stretch a question to fit).
