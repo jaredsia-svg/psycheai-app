@@ -7543,7 +7543,7 @@ def _quiz_item(x, n, total=QUIZ_MAX):
         probs.append('%s, the question ("%s"): "%s" lets more than one answer stand. Ask what is true of them ("Which most closely describes Jared?", "Which of these has Jared actually done?").' % (label, q, QUIZ_LIKELY.search(q).group(0)))
     stands = [_quiz_clean(y, 40) for y in x.get('stands')] if isinstance(x.get('stands'), list) else None
     return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals, 'about': about if kind != 'finale' else 'character',
-            'src': _quiz_clean(x.get('source'), 60), 'stands': stands}, probs
+            'src': _quiz_clean(x.get('source'), 60), 'stands': stands, 'quote': _quiz_clean(x.get('quote'), 140)}, probs
 
 
 QUIZ_LIKELY = re.compile(r"\b(most likely|more likely|likely to|probably|would most)\b", re.I)
@@ -7592,6 +7592,20 @@ def quiz_grounded(items, total, facts, words):
             if not said:
                 probs.append('%s: there is no post or story of theirs on %s, so the answer can\'t stand on it. Name the dated post that says it, or leave the question out.' % (label, day or '(no date)'))
                 continue
+            # Release 236 (README "What the post says"): the words that say it, found in that post, and a year or place question
+            # asking only what they say ("another adopted sweetie" is not "Jared adopted a rescue dog").
+            norm = lambda t: re.sub(r'\s+', ' ', t).strip().lower()
+            quote = x.get('quote') or ''
+            if not quote:
+                probs.append('%s: quote is the words in their post on %s that say it, as written. If no words in a post of theirs say it plainly, leave the question out.' % (label, day))
+            elif not any(norm(quote) in norm(t) for t in said):
+                probs.append('%s: "%s" isn\'t in their post on %s. quote is words from that post, as written.' % (label, quote, day))
+            elif x['kind'] in ('year', 'place'):
+                stem5 = lambda t: {w_[:5] for w_ in cw(t)}
+                topic = stem5(x['q']) - stem5(' '.join(QUIZ_QWORDS)) - stem5('year city place visit visited where which when name') - stem5(str(kept.get('name') or ''))
+                said_ = stem5(quote + ' ' + (right if x['kind'] == 'place' else ''))
+                if topic and len(topic & said_) < 0.5 * len(topic):
+                    probs.append('%s: the question says more than their post does ("%s"). Ask only what the post says they did, in its terms: a comment on someone else\'s news, pet or trip is never theirs.' % (label, quote))
             if x['kind'] == 'year' and right != day[:4]:
                 probs.append('%s: its source is a post from %s, but the answer is %s. The answer is the year of the post that says it.' % (label, day[:4], right))
             if x['kind'] == 'caption' and not any(cw(right) and len(cw(right) & cw(t)) >= 0.7 * len(cw(right)) for t in said):

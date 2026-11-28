@@ -5390,7 +5390,7 @@ print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years':
   fsq.writeFileSync(pathq.join(dir, 'digest', 'digest.md'), ['# Psyche digest', '## Posts and stories',
     ...Array.from({ length: 24 }, (_, i) => `${2019 + (i % 3 === 0 ? 2 : i % 2)}-0${1 + (i % 9)}-1${i % 9} ${i % 4 ? '21' : '08'}:15 Post ${i}`),
     '2018-02-03 [post] First supper club night at mine', '2023-05-07 [post] Mile 20 and still smiling somehow', '2022-08-09 [story] Sunrise summit on Mount Batur in Bali',
-    '2023-03-01 [post] Long black, no sugar, after the run', '2021-04-12 [post] Day 100 of Portuguese lessons', '2022-08-20 [post] Birthday dinner, August again',
+    '2023-03-01 [post] Long black, no sugar, after the run', '2021-04-12 [post] Day 100 of Portuguese lessons', '2022-08-20 [post] Birthday dinner, August again', '2022-04-03 [post] Another adopted sweetie at the shelter',
     '## Comments', '2022-03-05 21:40 nice', '## Messages', ...Array.from({ length: 40 }, (_, i) => `2022-03-05 03:${10 + i} late message ${i}`),
     '## Interests', "### What they save (other people's posts: the latest 40 of 40)", 'hashtags: #trailrunning 9 · #coffee 4'].join('\n'));
   fsq.writeFileSync(pathq.join(dir, 'report.json'), JSON.stringify({ name: 'Jared Sia', report: { essence: { character: 'Sherlock', why: 'Notices.' }, summary: 'Plans.', interests: ['Running'], beliefs: [{ label: 'religious' }], wellness: { overall: 'x' }, patterns: [{ title: 'The planner', detail: 'Plans ahead', evidence: ['May 2025 message'] }] } }));
@@ -5407,7 +5407,8 @@ m.card_art = nope
 task = m.quiz_task()
 t = json.load(open(m.QUIZ_TASK))
 q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure, 'fact': 'True and specific, from the data: ' + text[:60], 'reveals': 'R: ' + text[:70].replace('post', '').replace('photo', 'view'), 'about': {'year': 'turning point', 'place': 'turning point', 'numbers': 'pattern', 'caption': 'pattern', 'rather': 'motivation', 'free': 'motivation', 'favourite': 'motivation', 'never': 'value', 'fake': 'contradiction'}.get(kind, 'passion'),
-  'source': {'year': 'post 2018-02-03', 'caption': 'post 2023-05-07', 'place': 'post 2022-08-09', 'favourite': 'post 2023-03-01', 'numbers': 'numbers peakHours', 'rather': 'report patterns', 'never': 'report patterns', 'fake': 'report summary', 'free': 'post 2022-08-20', 'finale': ''}.get(kind, 'saves')}
+  'source': {'year': 'post 2018-02-03', 'caption': 'post 2023-05-07', 'place': 'post 2022-08-09', 'favourite': 'post 2023-03-01', 'numbers': 'numbers peakHours', 'rather': 'report patterns', 'never': 'report patterns', 'fake': 'report summary', 'free': 'post 2022-08-20', 'finale': ''}.get(kind, 'saves'),
+  'quote': {'year': 'First supper club night', 'caption': 'Mile 20 and still smiling somehow', 'place': 'Sunrise summit on Mount Batur in Bali', 'favourite': 'Long black, no sugar', 'free': 'Birthday dinner, August again'}.get(kind, '')}
 r = lambda text, a=0, sure=True: q('rather', text, a, ['Lead a team of fifty through a hard launch', 'Be the friend everyone calls at 2am'], sure)
 good = {'questions': [q('year', 'In which year did Jared host his first supper club?', 1, ['2016', '2018', '2020', '2023']),
                       q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
@@ -5465,6 +5466,9 @@ probs = {
   'scenesSame': bad(lambda b: b['questions'][10].update(kind='drive', q="Which most closely describes Jared's ideal Saturday?", o=['A day mapping out next month in a fresh notebook', 'A packed festival with thousands of strangers', 'A trophy match he refuses to lose', 'A slow lie-in with nowhere to be'], a=1, stands=['planning', 'attention', 'attention', 'rest'], about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
   'scenesWrong': bad(lambda b: b['questions'][10].update(kind='drive', q="Which most closely describes Jared's ideal Saturday?", o=['A day mapping out next month in a fresh notebook', 'A packed festival with thousands of strangers', 'A trophy match he refuses to lose', 'A slow lie-in with nowhere to be'], a=2, stands=['planning', 'attention', 'winning', 'rest'], about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
   'likely': bad(lambda b: b['questions'][3].update(q='Which of these is Jared most likely to do?')),
+  'dog': bad(lambda b: b['questions'][0].update(q='In which year did Jared adopt a rescue dog?', o=['2021', '2022', '2023', '2024'], a=1, source='post 2022-04-03', quote='Another adopted sweetie')),
+  'noQuote': bad(lambda b: b['questions'][0].update(quote='')),
+  'fakeQuote': bad(lambda b: b['questions'][0].update(quote='Adopted a rescue dog today')),
   'tooFeed': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] != 'finale']),
   'feedReveal': bad(lambda b: b['questions'][4].update(reveals='He jokes about the market when it falls')),
   'noAbout': bad(lambda b: b['questions'][4].pop('about')),
@@ -5564,6 +5568,11 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       Q.opened.questions.every(x => !('stands' in x)) && require('../lib/quizguide.js').spec.includes('"Which most closely describes Jared\'s ideal Saturday?"') && require('../lib/quizguide.js').spec.includes('no "most likely"') &&
       'stands' in require('../lib/quizguide.js').schema.properties.questions.items.properties,
     qerr || JSON.stringify(Q && ['scenes', 'scenesSame', 'scenesWrong', 'likely'].map(k => [k, Q.probs[k]])).slice(0, 1500));
+  check('what the post says (release 236): a question on a post carries the words that say it, which must be in that post; a year or place question may ask only what those words say, so a comment about someone else\'s adopted pet is never "Jared adopted a dog"; the guide refuses a description that fits only the answer (Hoi An, "its historic trading port"); quote never reaches the published quiz',
+    Q && (Q.probs.dog || []).some(p => /the question says more than their post does \("Another adopted sweetie"\)/.test(p)) && (Q.probs.noQuote || []).some(p => /quote is the words in their post on 2018-02-03 that say it/.test(p)) &&
+      (Q.probs.fakeQuote || []).some(p => /"Adopted a rescue dog today" isn't in their post on 2018-02-03/.test(p)) && Q.opened.questions.every(x => !('quote' in x)) &&
+      require('../lib/quizguide.js').spec.includes('"so proud of you, congrats on the new job" is not "Jared got a new job"') && require('../lib/quizguide.js').spec.includes('only Hoi An is a trading port, so the question answers itself'),
+    qerr || JSON.stringify(Q && ['dog', 'noQuote', 'fakeQuote'].map(k => [k, Q.probs[k]])).slice(0, 1500));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));
