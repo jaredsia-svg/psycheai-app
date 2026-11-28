@@ -5537,7 +5537,19 @@ nxt = m.quiz_first(json.loads(json.dumps(m.AFTER_PUBLISH)), {'name': 'Ana'})
 m.write_private([m.QUIZ_PENDING], {'link': m.BASE + '/quiz#' + code + '.' + '0' * len(opened['questions']), 'name': 'Jared'})
 m._quiz_open = lambda c: (opened, {})
 missed = m.quiz_missed()
-print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'),
+# Release 238: how they've changed, from a digest of its own (always, left behind, lately).
+alt = os.path.join(sys.argv[1], 'digest', 'alt.md')
+open(alt, 'w').write(chr(10).join(['## Posts and stories'] + ['%d-03-0%d [post] Sunday swim, cold water' % (y, k) for y in range(2018, 2025) for k in (1, 2)]
+  + ['2019-05-05 [post] Surfing at dawn', '2020-02-02 [post] Surfing again', '2020-07-07 [story] Surfing lesson, wiped out',
+     '2023-04-04 [post] Pottery wheel, first bowl', '2024-01-01 [post] Pottery class again', '2024-06-06 [story] Pottery glaze day', '## Comments']))
+old_ = m.DIGEST; m.DIGEST = alt
+shifts = m.quiz_shifts()
+sq = lambda **kw: dict({'kind': 'numbers', 'q': 'What did Jared post about all the time, but quietly stopped?', 'o': ['Surfing at dawn', 'Rock climbing indoors', 'Jazz piano lessons', 'Chess in the park'], 'a': 0,
+                        'shift': 'leftBehind', 'term': 'surfing', 'src': 'numbers howTheyChanged'}, **kw)
+shiftProbs = {'ok': m.quiz_shifted([sq()], 12), 'wrong': m.quiz_shifted([sq(term='pottery')], 12), 'notAnswer': m.quiz_shifted([sq(a=1)], 12),
+              'src': m.quiz_shifted([sq(src='numbers mostMentioned')], 12), 'two': m.quiz_shifted([sq(), sq(shift='lately', term='pottery', o=['Pottery', 'Golf', 'Sailing', 'Opera'])], 12)}
+m.DIGEST = old_
+print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'),
   'likeAll': sorted(m.QUIZ_LIKE) == sorted(m.QUIZ_LIKE) and len(m.QUIZ_LIKE) == 28 and all(len(v) == 3 and c not in v and all(x in m.QUIZ_LIKE for x in v) for c, v in m.QUIZ_LIKE.items()), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
   'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'mentions': m.quiz_mentions(), 'noRevs': noRevs, 'revSaved': revSaved, 'revBad': revBad, 'draftGone': draftGone, 'straight': straight,
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Pop quiz my friends about me', 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
@@ -5547,7 +5559,7 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
   const has = (k, rx) => Q && (Q.probs[k] || []).some(p => rx.test(p));
   check('the quiz is written from their Psyche and their own Instagram in numbers (README "The quiz, sharper", release 227): the task file leaves out the read\'s beliefs and wellbeing and every piece of evidence, and counts years, hours and days from their own posts and comments only (never messages), with the hashtags of what they save; quiz-save takes exactly ten questions with no spares and no beliefs group, refuses messages, politics/religion/kids/marriage, health, a handle, a rather question without exactly two options, "All of the above" anywhere but last, a finale not last, and too few numbers questions when there are numbers, each problem naming the question (from 1, of 12), the part and the word; words that only sound like messages pass',
     Q && Q.task.write === 'quiz' && !Q.taskKeys.includes('beliefs') && !Q.taskKeys.includes('wellness') && JSON.stringify(Q.patterns) === '[{"title":"The planner","detail":"Plans ahead"}]' &&
-      Q.facts && Q.facts.busiestYear && Q.facts.peakHours && /pm|am/.test(Q.facts.peakHours) && !/^(12am|1am|2am|3am) /.test(Q.facts.peakHours) && JSON.stringify(Q.facts.hashtagsOfWhatTheySaveAndLike) === '{"saves":["#trailrunning (9)","#coffee (4)"]}' &&
+      Q.facts && !('busiestYear' in Q.facts) && !('busiestDay' in Q.facts) && !('weekendShare' in Q.facts) && Q.facts.peakHours && /pm|am/.test(Q.facts.peakHours) && !/^(12am|1am|2am|3am) /.test(Q.facts.peakHours) && JSON.stringify(Q.facts.hashtagsOfWhatTheySaveAndLike) === '{"saves":["#trailrunning (9)","#coffee (4)"]}' &&
       has('messages', /^questions 4 of 12, the question[^:]*: "text" points at their messages/) && has('belief', /"church" is about politics, religion, kids or marriage, which a quiz question can never be about/) &&
       has('health', /"mental health" is about health/) && has('handle', /option 1 \("@ana"\): "@ana" is a quote mark, handle/) && has('count', /questions has 10 to 12: leave out any that isn't certain/) && has('rather4', /exactly two/) &&
       has('allFirst', /only ever the last option/) && has('finaleLast', /is the finale/) && has('noNumbers', /at least 1 numbers/) && has('plainRather', /both options of a rather question are vivid scenes/) && has('noFact', /questions 4 of 12: fact is one line/) && has('repeat', /^questions 5 and 7 of 12 ask about the same thing/) && has('sameAnswer', /^questions 5 and 9 of 12 ask about the same thing/) && has('twoRather', /at most one rather/) && has('variety', /"tortoise" comes up in questions 4, 6, 7 of 12/) && has('scenario', /kind is one of/) && has('plain', /option 1 \("Ran once"\): it is much plainer than the answer/) && has('fake3', /exactly four/) && has('yearWord', /each option of a year question is a year/) && !(Q.probs.yearClose || []).length && has('nearCopy', /option 2 \("Make a plan"\): it is too close to the answer \("Make a careful plan"\)/) && Q.soft.length === 0,
@@ -5629,6 +5641,12 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       (Q.probs.topSource || []).some(p => /a top-of-something question stands on the count: source "numbers mostMentioned"/.test(p)) && Q.saved === true &&
       require('../lib/quizguide.js').spec.includes('## The top of something') && require('../lib/quizguide.js').spec.length < 15000,
     qerr || JSON.stringify(Q && { mentions: Q.mentions, p: ['noTop', 'lowTop', 'topNotAnswer', 'topSource'].map(k => [k, Q.probs[k]]) }).slice(0, 1500));
+  check('how they\'ve changed (release 238): no busiest year, day or weekend share; howTheyChanged counts, from their dated posts and stories, what they post about in most of their years, what they left behind (three posts or more before their last two years, none since) and what is new lately; a how-they\'ve-changed question names its shift and term, its answer names the term, its source is the count, one at most',
+    Q && Q.shifts && JSON.stringify((Q.shifts.always || []).map(x => x[0])).includes('swim') && (Q.shifts.leftBehind || [])[0] && Q.shifts.leftBehind[0][0] === 'surfing' && (Q.shifts.lately || [])[0] && Q.shifts.lately[0][0] === 'pottery' &&
+      Q.shiftProbs.ok.length === 0 && /"pottery" isn't in howTheyChanged\.leftBehind/.test(Q.shiftProbs.wrong[0] || '') && /the answer \("Rock climbing indoors"\) doesn't name "surfing"/.test(Q.shiftProbs.notAnswer[0] || '') &&
+      /source "numbers howTheyChanged"/.test(Q.shiftProbs.src[0] || '') && Q.shiftProbs.two.some(p => /asks one at most/.test(p)) &&
+      require('../lib/quizguide.js').spec.includes('never a busiest year or day') && require('../lib/quizguide.js').spec.includes('"What did Jared post about all the time, but quietly stopped?"'),
+    qerr || JSON.stringify(Q && { shifts: Q.shifts, shiftProbs: Q.shiftProbs }).slice(0, 1500));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));

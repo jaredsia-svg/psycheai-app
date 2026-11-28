@@ -103,7 +103,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 237
+RELEASE = 238
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7399,13 +7399,10 @@ def quiz_facts():
     if years:
         facts['postsByYear'] = dict(sorted(years.items()))
         facts['firstYearRead'] = min(years)
-        facts['busiestYear'] = max(years, key=lambda y: (years[y], y))
     if stamps >= 20:
         peak = max(range(24), key=lambda h: hours[h] + hours[(h + 1) % 24] + hours[(h + 2) % 24])
         facts['peakHours'] = '%s to %s' % (_hour_label(peak), _hour_label(peak + 3))
-        facts['quietestHours'] = '%s to %s' % ((lambda q: (_hour_label(q), _hour_label(q + 3)))(min(range(24), key=lambda h: hours[h] + hours[(h + 1) % 24] + hours[(h + 2) % 24])))
-        facts['busiestDay'] = FULL_DAYS[max(range(7), key=lambda i: days[i])]
-        facts['weekendShare'] = '%d%%' % round(100 * (days[5] + days[6]) / max(1, sum(days)))
+        # Release 238 (README "How they've changed"): no busiest year, day or weekend share: they say nothing about them.
     taste, which = {}, None
     for line in _digest_section('## Interests').splitlines():
         if line.startswith('### What they save'):
@@ -7423,6 +7420,9 @@ def quiz_facts():
     most = quiz_mentions()
     if most:
         facts['mostMentioned'] = ['%s (%d posts)' % (t, n) for t, n in most]
+    shifts = quiz_shifts()
+    if shifts:
+        facts['howTheyChanged'] = {k: ['%s (%s)' % (t, why) for t, why in v] for k, v in shifts.items()}
     return facts
 
 
@@ -7436,20 +7436,57 @@ year years week weeks day days moment moments life world people friend friends t
 amazing finally first last next today'''.split())
 
 
+def _post_terms():
+    """Each of their own posts and stories as (year, the terms it names): words of four letters or more and pairs of them."""
+    name_ = set(re.findall(r'[a-z]+', str((read_first([REPORT, REPORT_KEPT]) or {}).get('name') or '').lower()))
+    out = []
+    for line in _digest_section('## Posts and stories').splitlines():
+        m = re.match(r'(\d{4})-\d{2}-\d{2}\s*(?:\d{1,2}:\d{2}\s*)?(?:\[[a-z]+\]\s*)?(.*)', line.strip())
+        if not m:
+            continue
+        toks = [w for w in re.findall(r"[a-z][a-z'-]+", m.group(2).lower()) if not QUIZ_IDENT.search(w)]
+        keep = [w if len(w) >= 4 and w not in QUIZ_STOP and w not in QUIZ_COMMON and w not in name_ else None for w in toks]
+        terms = {w[:-1] if len(w) > 4 and w.endswith('s') and not w.endswith('ss') else w for w in keep if w}
+        terms |= {'%s %s' % (a, b) for a, b in zip(keep, keep[1:]) if a and b}
+        out.append((m.group(1), terms))
+    return out
+
+
+def quiz_shifts(top=5):
+    """How they've changed (release 238, README "How they've changed"), counted from their own dated posts and stories:
+    always (in most of their years), leftBehind (three posts or more before their last two years, none since) and
+    lately (three posts or more in their last two years, none before). Needs three years of posts or more."""
+    posts = _post_terms()
+    years = sorted({y for y, _ in posts})
+    if len(years) < 3:
+        return {}
+    recent = set(years[-2:])
+    by = {}
+    for y, terms in posts:
+        for t in terms:
+            by.setdefault(t, {})
+            by[t][y] = by[t].get(y, 0) + 1
+    always, left, lately = [], [], []
+    for t, ys in by.items():
+        before = sum(n for y, n in ys.items() if y not in recent)
+        since = sum(n for y, n in ys.items() if y in recent)
+        if len(ys) >= max(3, -(-3 * len(years) // 4)):
+            always.append((t, len(ys), 'in %d of their %d years' % (len(ys), len(years))))
+        if before >= 3 and not since:
+            left.append((t, before, '%d posts %s to %s, none since' % (before, min(ys), max(ys))))
+        if since >= 3 and not before:
+            lately.append((t, since, '%d posts since %s, none before' % (since, min(ys))))
+    pick = lambda xs: [(t, why) for t, _, why in sorted(xs, key=lambda x: (-x[1], x[0]))[:top]]
+    out = {'always': pick(always), 'leftBehind': pick(left), 'lately': pick(lately)}
+    return {k: v for k, v in out.items() if v}
+
+
 def quiz_mentions(top=25):
     """What their own posts and stories keep naming (README "The top of something"): each term (a word of four letters or
     more, or two such words side by side) with how many of their posts name it, most first, twice or more. Counted here
     from their own posts and stories only, never comments or messages, for the quiz's top-of-something questions."""
-    name_ = set(re.findall(r'[a-z]+', str((read_first([REPORT, REPORT_KEPT]) or {}).get('name') or '').lower()))
     seen = {}
-    for line in _digest_section('## Posts and stories').splitlines():
-        m = re.match(r'\d{4}-\d{2}-\d{2}\s*(?:\d{1,2}:\d{2}\s*)?(?:\[[a-z]+\]\s*)?(.*)', line.strip())
-        if not m:
-            continue
-        toks = [w for w in re.findall(r"[a-z][a-z'-]+", m.group(1).lower()) if not QUIZ_IDENT.search(w)]
-        keep = [w if len(w) >= 4 and w not in QUIZ_STOP and w not in QUIZ_COMMON and w not in name_ else None for w in toks]
-        terms = {w[:-1] if len(w) > 4 and w.endswith('s') and not w.endswith('ss') else w for w in keep if w}
-        terms |= {'%s %s' % (a, b) for a, b in zip(keep, keep[1:]) if a and b}
+    for _, terms in _post_terms():
         for t in terms:
             seen[t] = seen.get(t, 0) + 1
     most = sorted(((t, n) for t, n in seen.items() if n >= 2), key=lambda tn: (-tn[1], tn[0]))
@@ -7603,7 +7640,7 @@ def _quiz_item(x, n, total=QUIZ_MAX):
     stands = [_quiz_clean(y, 40) for y in x.get('stands')] if isinstance(x.get('stands'), list) else None
     return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals, 'about': about if kind != 'finale' else 'character',
             'src': _quiz_clean(x.get('source'), 60), 'stands': stands, 'quote': _quiz_clean(x.get('quote'), 140), 'rev': _quiz_clean(x.get('revelation'), 20),
-            'top': (_quiz_clean(x.get('top'), 40) or '').lower()}, probs
+            'top': (_quiz_clean(x.get('top'), 40) or '').lower(), 'shift': _quiz_clean(x.get('shift'), 20) or '', 'term': (_quiz_clean(x.get('term'), 40) or '').lower()}, probs
 
 
 QUIZ_GENERIC = set('time day week month year people friend thing place every first best new old good great love life world home city way end start part kind lot one two three four five six ten night morning evening weekend jared long short big small little high low last next same own full half never always ever often'.split())
@@ -7726,6 +7763,32 @@ def quiz_tops(items, total):
             probs.append('%s: a top-of-something question stands on the count: source "numbers mostMentioned"' % label)
     if tops < min(2, len(big)):
         probs.append('the quiz has %d question about the top of something; it needs %d: ask about the very top of their interests (what they post about most of a kind), with top naming its term in mostMentioned' % (tops, min(2, len(big))))
+    return probs
+
+
+def quiz_shifted(items, total):
+    """A how-they've-changed question (release 238) names its shift and term in howTheyChanged; its answer names the term."""
+    probs, n = [], 0
+    shifts = {k: [t for t, _ in v] for k, v in quiz_shifts(15).items()}
+    stem = lambda t: {w_[:5] for w_ in re.findall(r"[a-z]{3,}", t.lower())}
+    for i, x in enumerate(items):
+        sh = x.get('shift') or ''
+        if not sh:
+            continue
+        n += 1
+        label = 'questions %d of %d ("%s")' % (i + 1, total, x['q'])
+        t = x.get('term') or ''
+        right = x['o'][x['a']] if isinstance(x['a'], int) and 0 <= x['a'] < len(x['o']) else ''
+        if sh not in ('always', 'leftBehind', 'lately'):
+            probs.append('%s: shift is always, leftBehind or lately' % label)
+        elif t not in shifts.get(sh, []):
+            probs.append('%s: "%s" isn\'t in howTheyChanged.%s (%s). The answer is a term the count shows.' % (label, t, sh, ', '.join(shifts.get(sh, [])[:6]) or 'none here'))
+        elif not stem(t) <= stem(right):
+            probs.append('%s: the answer ("%s") doesn\'t name "%s"' % (label, right, t))
+        if (x.get('src') or '').lower() != 'numbers howtheychanged':
+            probs.append('%s: a how-they\'ve-changed question stands on the count: source "numbers howTheyChanged"' % label)
+    if n > 1:
+        probs.append('the quiz has %d how-they\'ve-changed questions; it asks one at most, whichever their posts show most clearly' % n)
     return probs
 
 
@@ -7923,7 +7986,7 @@ def quiz_save(raw):
         posted = bool(facts.get('postsByYear'))
         # Release 234 (README "First principles"): a rather, a never and the wildcard only when the data answers them for certain.
         # Release 234 (README "A structure that holds"): six kinds always (when there's data for them), the rest Muse's choice.
-        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'niche': 1, 'fake': 1,
+        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('howTheyChanged') else 0, 'niche': 1, 'fake': 1,
                 'favourite': 1, 'finale': 1}
         over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('numbers', 1), ('niche', 2), ('place', 1), ('free', 2), ('drive', 2), ('caption', 1), ('never', 1), ('fake', 1), ('favourite', 2)) if kinds.count(w_) > most]
         if over:
@@ -7969,6 +8032,7 @@ def quiz_save(raw):
         # options are invented (never from their own posts, where they might be true too), and no two options are alike.
         probs += quiz_linked(items, total)
         probs += quiz_tops(items, total)
+        probs += quiz_shifted(items, total)
         probs += quiz_grounded(items, total, facts, words)
         # Who they are, covered (release 234, README "A structure that holds"): at least five questions about a finding,
         # across at least three parts of them, with no fixed count of any one (a fixed count made Muse stretch a question to fit).
