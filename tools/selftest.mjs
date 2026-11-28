@@ -5458,6 +5458,9 @@ probs = {
   'hypo': bad(lambda b: b['questions'][2].update(source='post 2023-05-07')),
   'notCaption': bad(lambda b: b['questions'][7].update(source='post 2023-03-01')),
   'ten': bad(lambda b: b.__setitem__('questions', [x for x in b['questions'] if x['kind'] not in ('free', 'rather')])),
+  'driveOk': bad(lambda b: b['questions'][10].update(kind='drive', q='What drives Jared most?', o=['Planning every detail well ahead', 'Being admired by a big crowd', 'Winning at any cost', 'Keeping life simple and slow'], a=0, about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
+  'driveWrong': bad(lambda b: b['questions'][10].update(kind='drive', q='What drives Jared most?', o=['Being admired by a big crowd', 'Planning every detail well ahead', 'Winning at any cost', 'Keeping life simple and slow'], a=0, about='passion', source='report patterns', reveals='He feels safest with a plan in hand')),
+  'twoFindings': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] in ('numbers', 'fake', 'never', 'free')]),
   'tooFeed': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] != 'finale']),
   'feedReveal': bad(lambda b: b['questions'][4].update(reveals='He jokes about the market when it falls')),
   'noAbout': bad(lambda b: b['questions'][4].pop('about')),
@@ -5530,7 +5533,7 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
     qerr || JSON.stringify(Q && { noReveals: Q.probs.noReveals, sameReveals: Q.probs.sameReveals, say: Q.pub && Q.pub.invite.say }).slice(0, 900));
   check('one method, from the report (release 233): the guide runs in order (read it all, revelations from the report\'s motivations, values, passions, patterns, contradictions and turning points, the so-what test, a kind for each, the question about the finding, read as a stranger); every question but the finale says what it is about, its reveals is a finding and never what they posted, and the quiz covers at least one motivation (release 234; two before), a value, two passions and a pattern or contradiction, at most four of one; about never reaches the published quiz',
     Q && (Q.probs.feedReveal || []).some(p => /questions 5 of 12, reveals .*"jokes" is about what they posted/.test(p)) && (Q.probs.noAbout || []).some(p => /questions 5 of 12: about is one of motivation, value, passion, pattern, contradiction, turning point/.test(p)) &&
-      (Q.probs.coverage || []).some(p => /needs at least 1 about a motivation \(this has 0\); 1 about a value \(this has 0\); 1 about a pattern or a contradiction \(this has 0\)/.test(p)) && (Q.probs.coverage || []).some(p => /no more than four .* passion \(11\)/.test(p)) &&
+      (Q.probs.coverage || []).some(p => /needs at least 5 questions about a finding \(this has 11\), across at least 3 of motivation, value, passion, pattern, contradiction and turning point \(this has 1\)/.test(p)) && (Q.probs.coverage || []).some(p => /no more than four .* passion \(11\)/.test(p)) &&
       Q.opened.questions.every(x => !('about' in x)) &&
       ['## The method, in order', 'Start from the report, never from a post', 'A post is evidence for a revelation, never the revelation itself', 'Their beliefs are never in the file and never asked: values are', '"He jokes about markets" is not a finding'].every(w => require('../lib/quizguide.js').spec.includes(w)) &&
       require('../lib/quizguide.js').schema.properties.questions.items.required.includes('about'),
@@ -5545,6 +5548,12 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       ['## First principles', 'It is certainly true.', 'Exactly one option is right.', 'Invent them.', 'never "When the market crashes, what does Jared do?"', 'Fewer, better questions beat twelve weak ones'].every(w => require('../lib/quizguide.js').spec.includes(w)) &&
       !/adopted|rescue dog|word for word/.test(require('../lib/quizguide.js').spec) && require('../lib/quizguide.js').schema.properties.questions.items.required.includes('source'),
     qerr || JSON.stringify(Q && { p: ['noSource', 'badPost', 'wrongYear', 'fromPosts', 'alike', 'hypo', 'notCaption', 'ten'].map(k => [k, Q.probs[k]]) }).slice(0, 1500));
+  check('a structure that holds (release 234): what drives them asks a finding straight out, its answer named in the report part its source gives and about a motivation or value, up to two; five findings across three parts replace the fixed motivation and value counts; six kinds always, the rest Muse\'s choice; the page labels it',
+    Q && Q.probs.driveOk == null && (Q.probs.driveWrong || []).some(p => /"Being admired by a big crowd" isn't in the report's patterns/.test(p)) && (Q.probs.driveWrong || []).some(p => /a what-drives-them question is about a motivation or a value/.test(p)) &&
+      (Q.probs.twoFindings || []).some(p => /needs at least 5 questions about a finding \(this has 4\)/.test(p)) &&
+      require('../lib/quizguide.js').spec.includes('**What drives them (kind "drive"), up to two questions:**') && require('../lib/quizguide.js').spec.includes('aim for about five straight from their posts, six about findings') &&
+      require('../lib/quizguide.js').schema.properties.questions.items.properties.kind.enum.includes('drive') && /'drive':\['🧭 What drives them',''\]/.test(require('../lib/quizpage.js').JS),
+    qerr || JSON.stringify(Q && { driveOk: Q.probs.driveOk, driveWrong: Q.probs.driveWrong, twoFindings: Q.probs.twoFindings }).slice(0, 1500));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));

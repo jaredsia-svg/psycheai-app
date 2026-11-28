@@ -7261,11 +7261,11 @@ QUIZ_MAKE_BTN = 'Make my quiz'
 QUIZ_MIN, QUIZ_MAX = 10, 12      # release 234: up to twelve, at least ten, every one certain: a weak one is left out
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
 # happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
-QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'never', 'place', 'free', 'finale')
+QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'never', 'place', 'free', 'drive', 'finale')
 # Release 229 (README "An arc, and a fact for every right answer"): the order is set here, not by Muse: an easy warm-up, then
 # real knowledge, then the deep end, an honest question and the character. One year and one numbers question now, with
 # "Which came first?" and "Which would they never do?" in their place.
-QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'numbers', 'place', 'niche', 'fake', 'never', 'free', 'finale')
+QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'drive', 'numbers', 'place', 'niche', 'fake', 'drive', 'never', 'free', 'finale')
 # Release 231 (README "Where in the world, and a wildcard"): a place from their posts, and a wildcard last before the finale.
 # Release 230 (README "No confirming"): every answer must be clear from the data, so nothing is put to them and the
 # quiz is made at once; the scenario went, since only they could say how they'd act.
@@ -7576,7 +7576,7 @@ def quiz_grounded(items, total, facts, words):
             continue
         how, what = m.group(1).lower(), m.group(2).strip()
         right = x['o'][x['a']] if isinstance(x['a'], int) and 0 <= x['a'] < len(x['o']) else ''
-        want = {'year': 'post', 'caption': 'post', 'place': 'post', 'numbers': 'numbers', 'rather': 'report', 'never': 'report'}.get(x['kind'])
+        want = {'year': 'post', 'caption': 'post', 'place': 'post', 'numbers': 'numbers', 'rather': 'report', 'never': 'report', 'drive': 'report'}.get(x['kind'])
         if want and how != want:
             probs.append('%s: a %s question stands on a %s, so its source is "%s"' % (label, x['kind'], {'post': 'dated post or story', 'numbers': 'count in instagramInNumbers', 'report': 'finding the report states'}[want],
                                                                                     {'post': 'post YYYY-MM-DD', 'numbers': 'numbers <count>', 'report': 'report <part>'}[want]))
@@ -7595,6 +7595,13 @@ def quiz_grounded(items, total, facts, words):
                 probs.append('%s: their post on %s doesn\'t name "%s". The answer is the place that post names.' % (label, day, right))
         elif how == 'report' and what.split(' ')[0].lower().rstrip('.,') not in parts_:
             probs.append('%s: the report has no part called "%s". Name the part that states it (%s).' % (label, what, ', '.join(sorted(parts_)) or 'none here'))
+        elif how == 'report' and x['kind'] == 'drive':
+            # What drives them (release 234): the answer is the report's own top motivation or value, named in that part.
+            part_ = next((v for k_, v in ((kept.get('report') or {}).items()) if str(k_).lower() == what.split(' ')[0].lower().rstrip('.,')), None)
+            if not (cw(right) & cw(json.dumps(part_, ensure_ascii=False))):
+                probs.append('%s: "%s" isn\'t in the report\'s %s. The answer is the motivation or value the report puts first there.' % (label, right, what.split(' ')[0]))
+            if x.get('about') not in ('motivation', 'value'):
+                probs.append('%s: a what-drives-them question is about a motivation or a value' % label)
         elif how == 'numbers' and what.split(' ')[0] not in (facts or {}):
             probs.append('%s: instagramInNumbers has no count called "%s" (%s).' % (label, what, ', '.join(sorted(facts or {})) or 'none here'))
         elif how == 'saves' and not saves:
@@ -7690,11 +7697,12 @@ def quiz_save(raw):
         facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)
         posted = bool(facts.get('postsByYear'))
         # Release 234 (README "First principles"): a rather, a never and the wildcard only when the data answers them for certain.
-        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'niche': 2, 'fake': 1,
-                'caption': 1 if posted else 0, 'favourite': 1, 'finale': 1}
-        over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('numbers', 1), ('niche', 2), ('place', 1), ('free', 2)) if kinds.count(w_) > most]
+        # Release 234 (README "A structure that holds"): six kinds always (when there's data for them), the rest Muse's choice.
+        need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'niche': 1, 'fake': 1,
+                'favourite': 1, 'finale': 1}
+        over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('numbers', 1), ('niche', 2), ('place', 1), ('free', 2), ('drive', 2), ('caption', 1), ('never', 1), ('fake', 1), ('favourite', 2)) if kinds.count(w_) > most]
         if over:
-            probs.append('questions has at most one rather, one year, one place and one numbers question, two deep cuts and two wildcards; this has %s' % ', '.join(over))
+            probs.append('questions has at most one rather, year, place, numbers, caption, never and spot-the-fake question, and two each of deep cuts, wildcards, favourites and what-drives-them; this has %s' % ', '.join(over))
         short = ['%d %s' % (k_, w_) for w_, k_ in need.items() if k_ and kinds.count(w_) < k_]
         if short:
             probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
@@ -7727,14 +7735,12 @@ def quiz_save(raw):
         # First principles (release 234, README "First principles"): every answer stands on something in the file, the wrong
         # options are invented (never from their own posts, where they might be true too), and no two options are alike.
         probs += quiz_grounded(items, total, facts, words)
-        # Who they are, covered (release 233, README "One method, from the report"): at least two questions about a
-        # motivation, one about a value, two about a passion and one about a pattern or contradiction; at most four of one.
+        # Who they are, covered (release 234, README "A structure that holds"): at least five questions about a finding,
+        # across at least three parts of them, with no fixed count of any one (a fixed count made Muse stretch a question to fit).
         abouts = [x.get('about') for x in items if x['kind'] != 'finale']
-        want_ = [('a motivation', abouts.count('motivation'), 1), ('a value', abouts.count('value'), 1), ('a passion', abouts.count('passion'), 2),
-                 ('a pattern or a contradiction', abouts.count('pattern') + abouts.count('contradiction'), 1)]
-        short_ = ['%d about %s (this has %d)' % (k_, w_, n_) for w_, n_, k_ in want_ if n_ < k_]
-        if short_:
-            probs.append('the quiz shows too little of who they are: it needs at least %s. Start from the report\'s findings, as guide.json\'s quiz says.' % '; '.join(short_))
+        found_ = [w_ for w_ in abouts if w_ and w_ != 'feed']
+        if len(found_) < 5 or len(set(found_)) < 3:
+            probs.append('the quiz shows too little of who they are: it needs at least 5 questions about a finding (this has %d), across at least 3 of motivation, value, passion, pattern, contradiction and turning point (this has %d). Start from the report\'s findings, as guide.json\'s quiz says.' % (len(found_), len(set(found_))))
         many_ = ['%s (%d)' % (w_, abouts.count(w_)) for w_ in QUIZ_ABOUT if w_ != 'feed' and abouts.count(w_) > 4]
         if many_:
             probs.append('no more than four questions are about any one part of them; this has %s' % ', '.join(many_))
