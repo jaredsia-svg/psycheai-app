@@ -7258,14 +7258,15 @@ MAKE_QUIZ = 'Make a quiz for my friends'
 NEW_QUIZ = 'Make a new quiz'
 QUIZ_RESULTS = 'Show my quiz results'
 QUIZ_MAKE_BTN = 'Make my quiz'
-QUIZ_MIN, QUIZ_MAX = 10, 10      # release 230: ten, each answer clear from the data, made with no question to them
+QUIZ_MIN, QUIZ_MAX = 12, 12      # release 231: twelve, each answer clear from the data, made with no question to them
 # Release 227 (README "The quiz, sharper"): ten questions of six kinds, no spares and no beliefs group. A year something
 # happened, their Instagram in numbers, would they rather, two deep, one hard, and their character to finish.
-QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'never', 'finale')
+QUIZ_KINDS = ('year', 'numbers', 'rather', 'niche', 'fake', 'caption', 'favourite', 'never', 'place', 'free', 'finale')
 # Release 229 (README "An arc, and a fact for every right answer"): the order is set here, not by Muse: an easy warm-up, then
 # real knowledge, then the deep end, an honest question and the character. One year and one numbers question now, with
 # "Which came first?" and "Which would they never do?" in their place.
-QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'numbers', 'niche', 'fake', 'never', 'finale')
+QUIZ_ORDER = ('favourite', 'rather', 'caption', 'year', 'niche', 'numbers', 'place', 'niche', 'fake', 'never', 'free', 'finale')
+# Release 231 (README "Where in the world, and a wildcard"): a place from their posts, and a wildcard last before the finale.
 # Release 230 (README "No confirming"): every answer must be clear from the data, so nothing is put to them and the
 # quiz is made at once; the scenario went, since only they could say how they'd act.
 # Release 229 (README "Eleven, and nothing twice"): one rather, one year, one deep scenario (always put to them to confirm),
@@ -7474,11 +7475,11 @@ def _quiz_item(x, n):
     kind = x.get('kind')
     opts = x.get('o') if isinstance(x.get('o'), list) else []
     o = [_quiz_clean(y, 70) for y in opts]
-    want = (2, 2) if kind in QUIZ_TWO else (4, 4) if kind == 'fake' else (3, 4)
+    want = (2, 2) if kind in QUIZ_TWO else (4, 4) if kind == 'fake' else (2, 4) if kind == 'free' else (3, 4)
     if not q:
         probs.append('%s: q is the question, 1 to 160 characters' % label)
     if not want[0] <= len(o) <= want[1] or not all(o) or len({y.lower() for y in o if y}) != len(o):
-        probs.append('%s: o is %s different options, each 1 to 70 characters' % (label, 'exactly two' if kind in QUIZ_TWO else 'exactly four' if kind == 'fake' else 'three or four'))
+        probs.append('%s: o is %s different options, each 1 to 70 characters' % (label, 'exactly two' if kind in QUIZ_TWO else 'exactly four' if kind == 'fake' else 'two to four' if kind == 'free' else 'three or four'))
     # Would they rather, as two vivid scenes (release 229): both options a real picture, neither a few plain words.
     if kind == 'rather' and len(o) == 2 and all(o) and (min(len(o[0]), len(o[1])) < 20 or min(len(o[0]), len(o[1])) < 0.5 * max(len(o[0]), len(o[1]))):
         probs.append('%s: both options of a rather question are vivid scenes of about the same length, each 20 characters or more ("%s" / "%s")' % (label, o[0], o[1]))
@@ -7503,7 +7504,7 @@ def _quiz_item(x, n):
             if i != a and mine_ and theirs and len(mine_ & theirs) / min(len(mine_), len(theirs)) >= 0.6:
                 probs.append('%s, option %d ("%s"): it is too close to the answer ("%s"). Make it clearly different.' % (label, i + 1, y, o[a]))
             # As vivid as the answer (release 228): a wrong option much shorter than it gives the answer away.
-            elif i != a and kind not in ('rather', 'first', 'finale') and len(o[a]) >= 24 and len(y) < 0.5 * len(o[a]) and not QUIZ_ALL.match(y):
+            elif i != a and kind not in ('rather', 'first', 'finale') and not (kind == 'free' and len(o) == 2) and len(o[a]) >= 24 and len(y) < 0.5 * len(o[a]) and not QUIZ_ALL.match(y):
                 probs.append('%s, option %d ("%s"): it is much plainer than the answer ("%s"), which gives it away. Make it as specific and vivid.' % (label, i + 1, y, o[a]))
     alls = [i for i, y in enumerate(o) if y and QUIZ_ALL.match(y)]
     if alls and (kind in QUIZ_TWO or alls != [len(o) - 1]):
@@ -7565,10 +7566,10 @@ def quiz_save(raw):
         facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)
         posted = bool(facts.get('postsByYear'))
         need = {'year': 1 if posted else 0, 'numbers': 1 if facts.get('peakHours') or facts.get('busiestYear') else 0, 'rather': 1, 'niche': 2, 'fake': 1,
-                'caption': 1 if posted else 0, 'favourite': 1, 'never': 1, 'finale': 1}
-        over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('numbers', 1), ('niche', 2)) if kinds.count(w_) > most]
+                'caption': 1 if posted else 0, 'favourite': 1, 'never': 1, 'free': 1, 'finale': 1}
+        over = ['%s (%d)' % (w_, kinds.count(w_)) for w_, most in (('rather', 1), ('year', 1), ('numbers', 1), ('niche', 2), ('place', 1), ('free', 2)) if kinds.count(w_) > most]
         if over:
-            probs.append('questions has at most one rather, one year and one numbers question, and two deep cuts; this has %s' % ', '.join(over))
+            probs.append('questions has at most one rather, one year, one place and one numbers question, two deep cuts and two wildcards; this has %s' % ', '.join(over))
         short = ['%d %s' % (k_, w_) for w_, k_ in need.items() if k_ and kinds.count(w_) < k_]
         if short:
             probs.append('questions has at least %s, as guide.json\'s quiz asks' % ', '.join(short))
