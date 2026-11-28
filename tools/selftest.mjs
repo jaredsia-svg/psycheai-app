@@ -5390,7 +5390,7 @@ print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years':
   fsq.writeFileSync(pathq.join(dir, 'digest', 'digest.md'), ['# Psyche digest', '## Posts and stories',
     ...Array.from({ length: 24 }, (_, i) => `${2019 + (i % 3 === 0 ? 2 : i % 2)}-0${1 + (i % 9)}-1${i % 9} ${i % 4 ? '21' : '08'}:15 Moment ${i}`),
     '2018-02-03 [post] First supper club night at mine', '2023-05-07 [post] Mile 20 and still smiling somehow', '2022-08-09 [story] Sunrise summit on Mount Batur in Bali',
-    '2023-03-01 [post] Long black, no sugar, after the run', '2021-04-12 [post] Day 100 of Portuguese lessons', '2022-08-20 [post] Birthday dinner, August again', '2022-04-03 [post] Another adopted sweetie at the shelter', '2023-06-02 [story] Long black before work', '2024-01-09 [post] Long black on the pier',
+    '2023-03-01 [post] Long black, no sugar, after the run', '2021-04-12 [post] Day 100 of Portuguese lessons', '2022-08-20 [post] Birthday dinner, August again', '2022-04-03 [post] Another adopted sweetie at the shelter', '2023-06-02 [story] Long black before work, [name] came too', '2023-07-07 [post] Caves at dawn with [handle]', '2023-08-08 [post] Caves again, [handle] [handle]', '2024-01-09 [post] Long black on the pier',
     '## Comments', '2022-03-05 21:40 nice', '## Messages', ...Array.from({ length: 40 }, (_, i) => `2022-03-05 03:${10 + i} late message ${i}`),
     '## Interests', "### What they save (other people's posts: the latest 40 of 40)", 'hashtags: #trailrunning 9 · #coffee 4'].join('\n'));
   fsq.writeFileSync(pathq.join(dir, 'report.json'), JSON.stringify({ name: 'Jared Sia', report: { essence: { character: 'Sherlock', why: 'Notices.' }, summary: 'Plans.', interests: ['Running'], beliefs: [{ label: 'religious' }], wellness: { overall: 'x' }, patterns: [{ title: 'The planner', detail: 'Plans ahead', evidence: ['May 2025 message'] }] } }));
@@ -5414,7 +5414,7 @@ r = lambda text, a=0, sure=True: dict(q('rather', text, a, ['Lead a team of fift
 good = {'questions': [q('year', 'In which year did Jared host his first supper club?', 1, ['2016', '2018', '2020', '2023']),
                       q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
                       q('drive', 'Which most closely describes what drives Jared?', 0, ['Planning every detail well ahead', 'Being the star of the show', 'Beating every rival', 'Drifting wherever the day goes']),
-                      q('never', 'Which of these would Jared never do?', 2, ['Sign up for a muddy obstacle race', 'Spend a Sunday baking sourdough', 'Skip a friend\'s leaving drinks for overtime', 'Join a dawn hike with strangers']),
+                      q('free', 'Which of these has Jared turned down?', 2, ['Sign up for a muddy obstacle race', 'Spend a Sunday baking sourdough', 'Skip a friend\'s leaving drinks for overtime', 'Join a dawn hike with strangers']),
                       q('niche', 'What has Jared quietly been teaching himself?', 1, ['Restoring 1970s film cameras', 'Speaking conversational Portuguese', 'Fermenting hot sauce at home', 'Playing jazz piano by ear']),
                       q('fake', 'Which of these is NOT true about Jared?', 3, ['He ran a half marathon in the rain', 'He grew chillies on a windowsill', 'He hiked three peaks in one weekend', 'He keeps a pet tortoise named Kevin']),
                       q('niche', 'Which oddly specific thing fills Jared\'s saved posts?', 0, ['Minimalist Japanese apartments', 'Street food in Mexico City', 'Rescue greyhounds finding homes', 'Vintage Swiss watch repairs']),
@@ -5432,14 +5432,16 @@ revs = [
   {'id': 'r_num', 'about': 'pattern', 'finding': 'He comes alive in the evening', 'part': 'patterns', 'proof': [{'numbers': 'peakHours'}]},
   {'id': 'r_rat', 'about': 'motivation', 'finding': 'He would rather lead than follow', 'part': 'patterns', 'proof': [{'saves': True}]},
   {'id': 'r_nev', 'about': 'value', 'finding': 'He never lets a friend down for work', 'part': 'patterns', 'proof': [{'saves': True}]},
-  {'id': 'r_n1', 'about': 'passion', 'finding': 'He teaches himself languages quietly', 'part': 'interests', 'proof': [{'post': '2021-04-12', 'quote': 'Day 100 of Portuguese lessons'}]},
+  {'id': 'r_n1', 'about': 'passion', 'finding': 'He quietly keeps up his Portuguese lessons', 'part': 'interests', 'proof': [{'post': '2021-04-12', 'quote': 'Day 100 of Portuguese lessons'}]},
   {'id': 'r_n2', 'about': 'passion', 'finding': 'Small homes and good design pull him in', 'part': 'interests', 'proof': [{'saves': True}]},
   {'id': 'r_fake', 'about': 'contradiction', 'finding': 'Calm on the surface, restless underneath', 'part': 'summary', 'proof': [{'saves': True}]},
   {'id': 'r_fav', 'about': 'motivation', 'finding': 'Rituals are how he steadies himself', 'part': 'patterns', 'proof': [{'numbers': 'mostMentioned'}]},
-  {'id': 'r_free', 'about': 'motivation', 'finding': 'He marks every year with the same people', 'part': 'patterns', 'proof': [{'post': '2022-08-20', 'quote': 'Birthday dinner'}]},
+  {'id': 'r_free', 'about': 'motivation', 'finding': 'Every year his birthday dinner is the same ritual', 'part': 'patterns', 'proof': [{'post': '2022-08-20', 'quote': 'Birthday dinner'}]},
 ]
 noRevs = m.quiz_save(json.dumps(good)).get('problems')
 revSaved = m.quiz_revelations(json.dumps({'revelations': revs}))
+revProof = m.quiz_revelations(json.dumps({'revelations': revs[:4] + [{'id': 'r_q', 'about': 'passion', 'finding': 'He tracks markets with exact figures', 'part': 'interests', 'proof': [{'post': '2021-04-12', 'quote': 'Day 100 of Portuguese lessons'}]}]}))
+revOnePost = m.quiz_revelations(json.dumps({'revelations': revs[:5] + [{'id': 'r_a%d' % k, 'about': 'passion', 'finding': 'Portuguese lessons are his quiet project', 'part': 'interests', 'proof': [{'post': '2021-04-12', 'quote': 'Portuguese lessons'}]} for k in range(2)]}))
 revBad = m.quiz_revelations(json.dumps({'revelations': revs[:4] + [
   {'id': 'r_x', 'about': 'passion', 'finding': 'He jokes in his captions', 'part': 'interests', 'proof': [{'post': '2021-04-12', 'quote': 'adopted a rescue dog'}]},
   {'id': 'r_y', 'about': 'feed', 'finding': 'He loves maps', 'part': 'nowhere', 'proof': []}]}))
@@ -5451,6 +5453,7 @@ for x in good['questions']:
         x['revelation'] = next(niche_)
     elif x['kind'] in rid:
         x['revelation'] = rid[x['kind']]
+good['questions'][3].update(revelation='r_nev', about='value', source='report patterns', quote='')
 good['questions'][4]['source'] = 'post 2021-04-12'; good['questions'][4]['quote'] = 'Day 100 of Portuguese lessons'
 def bad(change):
     b = json.loads(json.dumps(good)); change(b); return m.quiz_save(json.dumps(b))
@@ -5487,7 +5490,7 @@ probs = {
   'alike': bad(lambda b: b['questions'][7].update(o=['Counting my blessings on a slow morning', 'Counting my blessings on a long weekend', 'Mile 20 and still smiling somehow', 'Counting my blessings on a quiet Sunday'], a=2)),
   'hypo': bad(lambda b: b['questions'][2].update(source='post 2023-05-07')),
   'notCaption': bad(lambda b: b['questions'][7].update(source='post 2023-03-01')),
-  'ten': bad(lambda b: b.__setitem__('questions', [x for x in b['questions'] if x['kind'] not in ('free', 'rather')])),
+  'ten': bad(lambda b: b.__setitem__('questions', [x for x in b['questions'] if x['kind'] != 'free'])),
   'driveOk': bad(lambda b: b['questions'][2].update(kind='drive', q='What drives Jared most?', o=['Planning every detail well ahead', 'Being admired by a big crowd', 'Winning at any cost', 'Keeping life simple and slow'], a=0, about='motivation', source='report patterns', reveals='He feels safest with a plan in hand')),
   'driveWrong': bad(lambda b: b['questions'][2].update(kind='drive', q='What drives Jared most?', o=['Being admired by a big crowd', 'Planning every detail well ahead', 'Winning at any cost', 'Keeping life simple and slow'], a=0, about='passion', source='report patterns', reveals='He feels safest with a plan in hand')),
   'twoFindings': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] in ('numbers', 'fake', 'never', 'free')]),
@@ -5506,6 +5509,10 @@ probs = {
   'topSource': bad(lambda b: b['questions'][8].update(source='saves')),
   'ratherNoStands': bad(lambda b: b['questions'][2].update(stands=['planning', 'attention', 'winning', 'rest'])),
   'driveFromPosts': bad(lambda b: b['questions'][2]['o'].__setitem__(1, 'Portuguese lessons every single day')),
+  'neverKind': bad(lambda b: b['questions'][3].update(kind='never')),
+  'neverWords': bad(lambda b: b['questions'][3].update(q='Which of these would Jared never do?')),
+  'longOpt': bad(lambda b: b['questions'][5]['o'].__setitem__(1, 'He once spent a whole long weekend restoring an old wooden fishing boat by hand')),
+  'finaleOne': bad(lambda b: b['questions'][11].update(o=['Sherlock'])),
   'tooFeed': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] != 'finale']),
   'feedReveal': bad(lambda b: b['questions'][4].update(reveals='He jokes about the market when it falls')),
   'noAbout': bad(lambda b: b['questions'][4].pop('about')),
@@ -5553,7 +5560,7 @@ shiftProbs = {'ok': m.quiz_shifted([sq()], 12), 'wrong': m.quiz_shifted([sq(term
 m.DIGEST = old_
 print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'),
   'likeAll': sorted(m.QUIZ_LIKE) == sorted(m.QUIZ_LIKE) and len(m.QUIZ_LIKE) == 28 and all(len(v) == 3 and c not in v and all(x in m.QUIZ_LIKE for x in v) for c, v in m.QUIZ_LIKE.items()), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
-  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'mentions': m.quiz_mentions(), 'noRevs': noRevs, 'revSaved': revSaved, 'revBad': revBad, 'draftGone': draftGone, 'straight': straight,
+  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'revProof': revProof, 'revOnePost': revOnePost, 'mentions': m.quiz_mentions(), 'noRevs': noRevs, 'revSaved': revSaved, 'revBad': revBad, 'draftGone': draftGone, 'straight': straight,
   'labels2': [m.known_label(x) and m.TAP_ROUTES.get(x) == r for x, r in (("Show my friends' scores for my pop quiz", 'quiz-results'), ('Generate fresh pop quiz', 'quiz'), ('Show my quiz results', 'quiz-results'), ('Make a new quiz', 'quiz'))],
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Pop quiz my friends about me', 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
@@ -5572,7 +5579,7 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
       Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 12 && Q.opened.questions[11].k === 'finale' && Q.opened.questions[11].o[Q.opened.questions[11].a] === 'Sherlock Holmes' && Q.opened.questions[10].k === 'free' && Q.opened.questions[10].o.length === 2 &&
       JSON.stringify(Q.opened.questions[11].o.slice().sort()) === '["Elsa","Hermione Granger","Remy","Sherlock Holmes"]' && Q.likeAll &&
       Q.opened.questions[4].q === 'Which most closely describes what drives Jared?' && Q.opened.questions[4].o[Q.opened.questions[4].a] === 'Planning every detail well ahead' && Q.opened.questions[4].o.length === 4 &&
-      JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","caption","year","niche","drive","numbers","place","niche","fake","never","free","finale"]' &&
+      JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","caption","year","niche","drive","numbers","place","niche","fake","free","free","finale"]' &&
       Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone && Q.pub.invite.say.startsWith('[Open your quiz](' + Q.pub.invite.url + '): have a look before you send it.\n\nHere\'s your quiz.') &&
       JSON.stringify(Q.pubButtons) === '["Show my friends\' scores for my pop quiz","Generate fresh pop quiz","Back to the menu"]' && Q.labels2.every(Boolean) && !/quiz_widget|QZ_JS|That\'s not true about me/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
     qerr || JSON.stringify(Q && { straight: Q.straight, n: Q.n, kinds: Q.opened && Q.opened.questions.map(x => x.k) }).slice(0, 900));
@@ -5658,6 +5665,15 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
       require('../lib/quizguide.js').spec.includes('**No would-they-rather:**') && !require('../lib/quizguide.js').schema.properties.questions.items.properties.kind.enum.includes('rather') &&
       require('../lib/quizguide.js').spec.includes('never use one, or its places, topics or words, in a quiz') && !/Norwegian fjords/.test(require('../lib/quizguide.js').spec),
     qerr || JSON.stringify(Q && Q.probs.ratherNoStands));
+  check('fewer save rounds and sounder findings (release 241): mostMentioned skips the digest\'s [name] and [handle] and plain words, "caves" counts as "cave", the repeat check skips plain words ("its", "still", "self"), the finale takes any options, a long option or question is named with its length, would-never is retired, a finding proved only by posts shares a word with one of their quotes, and one post proves two findings at most',
+    Q && !Q.mentions.some(([t]) => /handle|name|though/.test(t)) && Q.mentions.some(([t, n]) => t === 'cave' && n === 2) &&
+      (Q.probs.neverKind || []).some(p => /would-never is no longer asked/.test(p)) && (Q.probs.neverWords || []).some(p => /would-never is no longer asked/.test(p)) &&
+      (Q.probs.longOpt || []).some(p => /questions 6 of 12, option 2 \("He once spent a whole long weekend resto…"\): it is 79 characters; each option is 70 at most/.test(p)) &&
+      !(Q.probs.finaleOne || []).some(p => /questions 12 of 12: o is/.test(p)) &&
+      (Q.revProof.problems || []).some(p => /none of its proof shows it: no word of the finding is in its quotes/.test(p)) &&
+      (Q.revOnePost.problems || []).some(p => /their post on 2021-04-12 proves 3 findings; one post proves two at most/.test(p)) &&
+      require('../lib/quizguide.js').spec.includes('**No would-never:**') && require('../lib/quizguide.js').spec.includes('each 70 characters at most (the question 160); the finale takes any options'),
+    qerr || JSON.stringify(Q && { mentions: Q.mentions, p: ['neverKind', 'neverWords', 'longOpt', 'finaleOne'].map(k => [k, Q.probs[k]]), revProof: Q.revProof, revOnePost: Q.revOnePost }).slice(0, 1800));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));

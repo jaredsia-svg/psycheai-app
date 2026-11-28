@@ -7433,7 +7433,16 @@ january february march april may june july august september october november dec
 saturday sunday back still even ever every always never other another each both made make makes making take took taken come came
 going went gone getting got thanks thank love loved loving like liked feel feeling felt know knew want wanted need needed time times
 year years week weeks day days moment moments life world people friend friends thing things little good great best better nice happy
-amazing finally first last next today'''.split())
+amazing finally first last next today though although local full whole right left well quite pretty around yeah okay haha
+handle handles name names link links number email photo video post posts story stories caption reel reels self also'''.split())
+
+
+QUIZ_PLACEHOLDER = re.compile(r'\[[A-Za-z ]{2,20}\]')
+
+
+def _quiz_fold(w):
+    """A plural folded into its word: "caves" is "cave" (release 241)."""
+    return w[:-1] if len(w) > 3 and w.endswith('s') and not w.endswith('ss') else w
 
 
 def _post_terms():
@@ -7444,7 +7453,8 @@ def _post_terms():
         m = re.match(r'(\d{4})-\d{2}-\d{2}\s*(?:\d{1,2}:\d{2}\s*)?(?:\[[a-z]+\]\s*)?(.*)', line.strip())
         if not m:
             continue
-        toks = [w for w in re.findall(r"[a-z][a-z'-]+", m.group(2).lower()) if not QUIZ_IDENT.search(w)]
+        text_ = QUIZ_PLACEHOLDER.sub(' ', m.group(2))       # release 241: "[name]", "[handle]" are the digest's, never a topic
+        toks = [w for w in re.findall(r"[a-z][a-z'-]+", text_.lower()) if not QUIZ_IDENT.search(w)]
         keep = [w if len(w) >= 4 and w not in QUIZ_STOP and w not in QUIZ_COMMON and w not in name_ else None for w in toks]
         terms = {w[:-1] if len(w) > 4 and w.endswith('s') and not w.endswith('ss') else w for w in keep if w}
         terms |= {'%s %s' % (a, b) for a, b in zip(keep, keep[1:]) if a and b}
@@ -7566,9 +7576,20 @@ def _quiz_item(x, n, total=QUIZ_MAX):
     opts = x.get('o') if isinstance(x.get('o'), list) else []
     o = [_quiz_clean(y, 70) for y in opts]
     want = (2, 2) if kind in QUIZ_TWO else (4, 4) if kind == 'fake' else (2, 4) if kind == 'free' else (3, 4)
-    if not q:
+    # Release 241 (README "Fewer save rounds"): each long part is named with its length, and the finale takes any options
+    # (PsycheAI sets them itself).
+    raw_q = re.sub(r'\s+', ' ', str(x.get('q') or '')).strip()
+    if len(raw_q) > 160:
+        probs.append('%s: the question is %d characters; it is 160 at most' % (label, len(raw_q)))
+    elif not q:
         probs.append('%s: q is the question, 1 to 160 characters' % label)
-    if not want[0] <= len(o) <= want[1] or not all(o) or len({y.lower() for y in o if y}) != len(o):
+    for i_, y_ in enumerate(opts):
+        n_ = len(re.sub(r'\s+', ' ', str(y_ or '')).strip())
+        if n_ > 70:
+            probs.append('%s, option %d ("%s"): it is %d characters; each option is 70 at most' % (label, i_ + 1, str(y_)[:40] + '…', n_))
+    if kind == 'finale':
+        pass
+    elif not want[0] <= len(o) <= want[1] or not all(o) or len({y.lower() for y in o if y}) != len(o):
         probs.append('%s: o is %s different options, each 1 to 70 characters' % (label, 'exactly two' if kind in QUIZ_TWO else 'exactly four' if kind == 'fake' else 'two to four' if kind == 'free' else 'three or four'))
     # Would they rather, as two vivid scenes (release 229): both options a real picture, neither a few plain words.
     if kind == 'rather' and len(o) == 2 and all(o) and (min(len(o[0]), len(o[1])) < 20 or min(len(o[0]), len(o[1])) < 0.5 * max(len(o[0]), len(o[1]))):
@@ -7595,10 +7616,12 @@ def _quiz_item(x, n, total=QUIZ_MAX):
         probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
     # Retired (release 241, README "No more guesses dressed as facts"): which of two scenes they'd pick is a guess. A report's
     # ranking of two abstract motivations can't decide a concrete choice, and both scenes came from their own posts.
+    if kind == 'never' or (q and re.search(r'\bwould \w+ never\b|\bnever do\b', q, re.I)):
+        probs.append('%s: would-never is no longer asked: what someone would never do is a judgement, never certain. Ask something their posts or report state.' % label)
     if kind == 'rather':
         probs.append('%s: would-they-rather is no longer asked: which of two scenes they\'d pick is a guess, never certain. Ask what drives them in plain words, or something their posts show.' % label)
     if kind not in QUIZ_KINDS:
-        probs.append('%s: kind is one of %s' % (label, ', '.join(k_ for k_ in QUIZ_KINDS if k_ != 'rather')))
+        probs.append('%s: kind is one of %s' % (label, ', '.join(k_ for k_ in QUIZ_KINDS if k_ not in ('rather', 'never'))))
     # Wrong options clearly apart from the answer (release 226, README "Wrong options, far from the truth"): a year question's
     # options are years (any years: Jared, they needn't be spread out), and no option mostly repeats the answer's own words.
     if kind == 'year' and all(o):
@@ -7651,7 +7674,7 @@ def _quiz_item(x, n, total=QUIZ_MAX):
             'top': (_quiz_clean(x.get('top'), 40) or '').lower(), 'shift': _quiz_clean(x.get('shift'), 20) or '', 'term': (_quiz_clean(x.get('term'), 40) or '').lower()}, probs
 
 
-QUIZ_GENERIC = set('time day week month year people friend thing place every first best new old good great love life world home city way end start part kind lot one two three four five six ten night morning evening weekend jared long short big small little high low last next same own full half never always ever often'.split())
+QUIZ_GENERIC = set('time day week month year people friend thing place every first best new old good great love life world home city way end start part kind lot one two three four five six ten night morning evening weekend jared long short big small little high low last next same own full half never always ever often self still its'.split())
 QUIZ_HOURS = re.compile(r'(\d{1,2})\s*(am|pm)\s*(?:to|-|–|until)\s*(\d{1,2})\s*(am|pm)', re.I)
 QUIZ_LIKELY = re.compile(r"\b(most likely|more likely|likely to|probably|would most)\b", re.I)
 QUIZ_SOURCE = re.compile(r'^(post|report|numbers|saves)\b[\s:]*(.*)$', re.I)
@@ -7689,7 +7712,7 @@ def quiz_revelations(raw):
     kept = read_first([REPORT, REPORT_KEPT]) or {}
     parts_ = {str(k).lower() for k in ((kept.get('report') or {}) if isinstance(kept.get('report'), dict) else {})}
     posts, facts, saves = _quiz_posts(), quiz_facts(), bool(_digest_section('## Interests'))
-    seen_ids = set()
+    seen_ids, used_posts = set(), {}
     for n, x in enumerate(xs[:15], 1):
         label = 'revelations %d of %d' % (n, len(xs))
         if not isinstance(x, dict):
@@ -7734,9 +7757,20 @@ def quiz_revelations(raw):
                     probs.append('%s: instagramInNumbers has no count called "%s"' % (label, pr.get('numbers')))
             elif pr.get('saves') and saves:
                 good.append('saves')
+        # Release 241 (README "Findings their proof shows"): a finding proved only by posts shares a word with one of them.
+        quotes_ = [_quiz_clean(pr.get('quote'), 140) or '' for pr in proof[:6] if isinstance(pr, dict) and pr.get('post')]
+        fstem = lambda t: {_quiz_fold(w_)[:5] for w_ in re.findall(r"[a-z]{4,}", t.lower()) if w_ not in QUIZ_STOP and w_ not in QUIZ_COMMON}
+        if finding and good and all(g.startswith('post ') for g in good) and not any(fstem(finding) & fstem(qt) for qt in quotes_):
+            probs.append('%s: none of its proof shows it: no word of the finding is in its quotes. Choose posts that say it plainly, or leave it out.' % label)
+        for g in good:
+            if g.startswith('post '):
+                used_posts[g] = used_posts.get(g, 0) + 1
         if not good:
             probs.append('%s: proof needs at least one post of theirs (with its date and words), count or their saves that shows it. A finding nothing of theirs proves is left out.' % label)
         keep.append({'id': rid, 'about': about, 'finding': finding, 'part': part.split(' ')[0].lower(), 'proof': good})
+    for g, k in sorted(used_posts.items()):
+        if k > 2:
+            probs.append('their %s proves %d findings; one post proves two at most, so the quiz draws on more of their life' % (g.replace('post ', 'post on '), k))
     if probs:
         return {'saved': False, 'problems': probs[:20]}
     write_private([QUIZ_REVS], {'revelations': keep, 'at': int(time.time())})
@@ -7751,7 +7785,7 @@ def quiz_tops(items, total):
     probs = []
     most = dict(quiz_mentions(60))
     big = [t for t, n in most.items() if n >= 3]
-    stem = lambda t: {w_[:5] for w_ in re.findall(r"[a-z]{3,}", t.lower())}
+    stem = lambda t: {_quiz_fold(w_)[:5] for w_ in re.findall(r"[a-z]{3,}", t.lower())}
     tops = 0
     for i, x in enumerate(items):
         label = 'questions %d of %d ("%s")' % (i + 1, total, x['q'])
@@ -7778,7 +7812,7 @@ def quiz_shifted(items, total):
     """A how-they've-changed question (release 238) names its shift and term in howTheyChanged; its answer names the term."""
     probs, n = [], 0
     shifts = {k: [t for t, _ in v] for k, v in quiz_shifts(15).items()}
-    stem = lambda t: {w_[:5] for w_ in re.findall(r"[a-z]{3,}", t.lower())}
+    stem = lambda t: {_quiz_fold(w_)[:5] for w_ in re.findall(r"[a-z]{3,}", t.lower())}
     for i, x in enumerate(items):
         sh = x.get('shift') or ''
         if not sh:
@@ -7887,7 +7921,7 @@ def quiz_grounded(items, total, facts, words):
             # What drives them (release 234): the answer is the report's own top motivation or value, named in that part.
             part_ = next((v for k_, v in ((kept.get('report') or {}).items()) if str(k_).lower() == what.split(' ')[0].lower().rstrip('.,')), None)
             st_ = x.get('stands')
-            stem = lambda t: {w_[:5] for w_ in cw(t)}       # "planning" and "planner" are the same motivation
+            stem = lambda t: {_quiz_fold(w_)[:5] for w_ in cw(t)}       # "planning" and "planner" are the same motivation
             if st_ is not None and x['kind'] == 'drive':
                 probs.append('%s: what drives them is asked in plain words, never scenes: which scene they\'d pick is a guess. Drop stands and name the motivations or values themselves.' % label)
             elif st_ is not None:
@@ -8037,7 +8071,7 @@ def quiz_save(raw):
             if x['kind'] == 'finale':
                 continue
             for w_ in words(' '.join([x['q']] + x['o'])):
-                if len(w_) >= 3 and w_.rstrip('s') not in QUIZ_GENERIC:
+                if len(w_.rstrip('s')) >= 3 and w_.rstrip('s') not in QUIZ_GENERIC and w_ not in QUIZ_STOP and w_.rstrip('s') not in QUIZ_STOP:
                     seen_.setdefault(w_.rstrip('s'), set()).add(i + 1)
         rep_ = (read_first([REPORT, REPORT_KEPT]) or {}).get('report') or {}
         core_ = {w_.rstrip('s') for w_ in words(json.dumps(rep_.get('interests') or [], ensure_ascii=False) + ' ' + ' '.join(
