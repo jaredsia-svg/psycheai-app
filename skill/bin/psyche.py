@@ -7484,9 +7484,14 @@ def _quiz_item(x, n):
     if kind == 'rather' and len(o) == 2 and all(o) and (min(len(o[0]), len(o[1])) < 20 or min(len(o[0]), len(o[1])) < 0.5 * max(len(o[0]), len(o[1]))):
         probs.append('%s: both options of a rather question are vivid scenes of about the same length, each 20 characters or more ("%s" / "%s")' % (label, o[0], o[1]))
     # The fact shown with a right answer (release 229): what the data says, never shown with a wrong one.
-    fact = _quiz_clean(x.get('fact'), 120)
+    fact = _quiz_clean(x.get('fact'), 150)
     if kind != 'finale' and not fact:
-        probs.append('%s: fact is one line (up to 120 characters) shown only when a friend gets it right: something true they might not know, from the data' % label)
+        probs.append('%s: fact is one line (up to 150 characters) shown only when a friend gets it right: what the data shows, then what it means about them' % label)
+    # What it reveals (release 232, README "Revelations, not trivia"): for Muse's own test, never shown to a friend and never
+    # published: a question that reveals nothing about who they are is trivia.
+    reveals = _quiz_clean(x.get('reveals'), 120)
+    if kind != 'finale' and not reveals:
+        probs.append('%s: reveals is one line (up to 120 characters), never shown to friends: what this question shows about who they are. If it shows nothing, it is trivia: ask something else.' % label)
     a = x.get('a')
     if not (isinstance(a, int) and not isinstance(a, bool) and 0 <= a < max(1, len(o))):
         probs.append('%s: a is the index (from 0) of the option you think is theirs' % label)
@@ -7511,7 +7516,7 @@ def _quiz_item(x, n):
         probs.append('%s: "All of the above" (or "None of these", "Both") is only ever the last option, and never in a rather question' % label)
     # Each problem names the part and the words it found (release 226): "questions 8" alone was read as counting from 0,
     # the wrong question was changed, and the script was opened to find out what the check looks for.
-    parts = [('the question', q)] + [('option %d' % (i + 1), y) for i, y in enumerate(o)] + ([('the fact', fact)] if fact else [])
+    parts = [('the question', q)] + [('option %d' % (i + 1), y) for i, y in enumerate(o)] + ([('the fact', fact)] if fact else []) + ([('reveals', reveals)] if reveals else [])
 
     def hits(rx):
         return [(name, text, m.group(0)) for name, text in parts if text for m in [rx.search(text)] if m]
@@ -7523,7 +7528,7 @@ def _quiz_item(x, n):
         say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
-    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact}, probs
+    return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals}, probs
 
 
 def quiz_spread(items):
@@ -7628,6 +7633,12 @@ def quiz_save(raw):
         for w_, qs_ in sorted(seen_.items(), key=lambda kv: (-len(kv[1]), kv[0])):
             if len(qs_) >= 3:
                 probs.append('"%s" comes up in questions %s of %d. Keep the quiz varied: no topic in more than two questions, options included.' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), QUIZ_MAX))
+        # A portrait, not a scatter (release 232): no two questions reveal the same thing about them.
+        for i, x in enumerate(items):
+            for k, y in enumerate(items[i + 1:], i + 1):
+                rx, ry = words(x.get('r') or ''), words(y.get('r') or '')
+                if rx and ry and len(rx & ry) >= 2 and len(rx & ry) / min(len(rx), len(ry)) >= 0.6:
+                    probs.append('questions %d and %d of %d reveal the same thing ("%s" and "%s"). Each question shows something different about them: change one.' % (i + 1, k + 1, QUIZ_MAX, x['r'], y['r']))
         # No giveaways (release 232, README "No giveaways, and answers anywhere"): a word of the question that only the
         # right option shares ("favourite food find in Singapore?" beside "The best pizza in Singapore") answers it.
         for i, x in enumerate(items):
@@ -7713,7 +7724,7 @@ def quiz_publish(raw):
     pend = quiz_pending()
     # The line they copy (README "The quiz, shared by them"): no install words and nothing about them beside the link.
     # Release 232 (README "A link to the quiz at the top"): their own quiz, one tap away, before the line they copy.
-    say = '[Open your quiz](%s)\n\nHere\'s your quiz. Copy the line below and send it to %s:' % (link, pend.get('name') if pend and pend.get('name') else 'friends')
+    say = '[Open your quiz](%s): have a look before you send it.\n\nHere\'s your quiz. Copy the line below and send it to %s:' % (link, pend.get('name') if pend and pend.get('name') else 'friends')
     res = {'invite': {'url': link, 'line': 'Take my quiz: how well do you know me? ' + link}, 'n': len(chosen)}
     res['invite']['say'] = say          # release 227: no Story picture with it (it showed their card)
     buttons = [QUIZ_RESULTS, 'Back to the menu']

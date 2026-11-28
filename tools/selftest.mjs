@@ -5404,7 +5404,7 @@ def nope(*a, **k): raise RuntimeError('no card art here')
 m.card_art = nope
 task = m.quiz_task()
 t = json.load(open(m.QUIZ_TASK))
-q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure, 'fact': 'True and specific, from the data: ' + text[:60]}
+q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o or ['One', 'Two', 'Three', 'Four'], 'a': a, 'sure': sure, 'fact': 'True and specific, from the data: ' + text[:60], 'reveals': 'R: ' + text[:70]}
 r = lambda text, a=0, sure=True: q('rather', text, a, ['Lead a team of fifty through a hard launch', 'Be the friend everyone calls at 2am'], sure)
 good = {'questions': [q('year', 'In which year did Jared move to Lisbon?', 1, ['2016', '2018', '2020', '2023']),
                       q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
@@ -5441,6 +5441,8 @@ probs = {
   'twoRather': bad(lambda b: b['questions'][3].update(kind='rather', o=['Rest at home with a good book', 'Roam a new city on foot all day'], a=0)),
   'variety': bad(lambda b: (b['questions'][3]['o'].__setitem__(0, 'Adopt a second pet tortoise'), b['questions'][6]['o'].__setitem__(1, 'Tortoise habitats built from scratch'))),
   'scenario': bad(lambda b: b['questions'][3].update(kind='deep')),
+  'noReveals': bad(lambda b: b['questions'][4].pop('reveals')),
+  'sameReveals': bad(lambda b: (b['questions'][4].update(reveals='Rituals are how he steadies himself after setbacks'), b['questions'][6].update(reveals='He steadies himself after setbacks with rituals'))),
   'giveaway': bad(lambda b: b['questions'][8].update(q="What's Jared's favourite coffee find in Melbourne?", o=['The best flat white in Melbourne', 'The best iced latte in Seoul', 'The best espresso in Rome', 'The best cold brew in Austin'], a=0)),
 }
 # Release 232: options shuffled, the answers spread across A to D; years in order and "All of the above" last.
@@ -5454,7 +5456,7 @@ spread = {
   'moved': len({r[i]['a'] for r in runs for i in (1, 2, 4)}) >= 3,
 }
 # Release 226: words that only sound like messages pass ("hard conversations" was refused on a device).
-soft = m._quiz_item({'kind': 'niche', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'They think he will chat to anyone at all', 'They think he talks every problem through', 'They think he never stops talking at parties'], 'a': 0, 'fact': 'He has hosted the same supper club for four years.'}, 8)[1]
+soft = m._quiz_item({'kind': 'niche', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'They think he will chat to anyone at all', 'They think he talks every problem through', 'They think he never stops talking at parties'], 'a': 0, 'reveals': 'How he reads a room', 'fact': 'He has hosted the same supper club for four years.'}, 8)[1]
 # Made at once (release 230, README "No confirming"): no widget and nothing put to them.
 n_before = len(sent)
 saved = m.quiz_save(json.dumps(good))
@@ -5490,13 +5492,21 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
       JSON.stringify(Q.opened.questions[11].o.slice().sort()) === '["Elsa","Hermione Granger","Remy","Sherlock Holmes"]' && Q.likeAll &&
       Q.opened.questions[1].q === 'Would Jared rather lead or help?' && Q.opened.questions[1].o[Q.opened.questions[1].a] === 'Lead a team of fifty through a hard launch' && Q.opened.questions[1].o.length === 2 &&
       JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","rather","caption","year","niche","numbers","place","niche","fake","never","free","finale"]' &&
-      Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone && Q.pub.invite.say.startsWith('[Open your quiz](' + Q.pub.invite.url + ')\n\nHere\'s your quiz.') &&
+      Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone && Q.pub.invite.say.startsWith('[Open your quiz](' + Q.pub.invite.url + '): have a look before you send it.\n\nHere\'s your quiz.') &&
       JSON.stringify(Q.pubButtons) === '["Show my quiz results","Back to the menu"]' && !/quiz_widget|QZ_JS|That\'s not true about me/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
     qerr || JSON.stringify(Q && { straight: Q.straight, n: Q.n, kinds: Q.opened && Q.opened.questions.map(x => x.k) }).slice(0, 900));
   check('no giveaways, and answers anywhere (release 232): a word of the question that only the right option shares is refused, naming it; the script shuffles every question\'s options, keeping the answer, years in order and "All of the above" last, so no letter holds more than four of the eleven answers',
     Q && (Q.probs.giveaway || []).some(p => /questions 9 of 12 .*"melbourne" is in the question and only in the right answer .*gives it away/.test(p)) &&
       Q.spread.kept && Q.spread.yearsAndAll && Q.spread.worst <= 4 && Q.spread.moved && /## No giveaways/.test(require('../lib/quizguide.js').spec) && /PsycheAI shuffles them/.test(require('../lib/quizguide.js').spec),
     qerr || JSON.stringify(Q && { giveaway: Q.probs.giveaway, spread: Q.spread }).slice(0, 900));
+  check('revelations, not trivia (release 232): every question but the finale needs a reveals line, never published and never alike, and the fact may run to 150 characters; the guide puts the surprising things first, the so-what test and surprising-never-embarrassing; the results show what the friend now knows, from the answers they got right only',
+    Q && (Q.probs.noReveals || []).some(p => /questions 5 of 12: reveals is one line .*never shown to friends/.test(p)) && (Q.probs.sameReveals || []).some(p => /questions 5 and 7 of 12 reveal the same thing/.test(p)) &&
+      Q.saved === true && Q.opened.questions.every(x => !('r' in x) && !('reveals' in x)) && !JSON.stringify(Q.opened).includes('R: ') &&
+      ['## Revelations first', '## The so-what test', '## Surprising, never embarrassing', 'up to 150 characters'].every(w => require('../lib/quizguide.js').spec.includes(w)) &&
+      require('../lib/quizguide.js').schema.properties.questions.items.required.includes('reveals') &&
+      /if\(x===q\.a&&q\.f\)kn\.push/.test(require('../lib/quizpage.js').JS) && /kn=kn\.slice\(-3\)/.test(require('../lib/quizpage.js').JS) && /What you now know about/.test(require('../lib/quizpage.js').JS) &&
+      /\[Open your quiz\]\([^)]+\): have a look before you send it\./.test(Q.pub.invite.say),
+    qerr || JSON.stringify(Q && { noReveals: Q.probs.noReveals, sameReveals: Q.probs.sameReveals, say: Q.pub && Q.pub.invite.say }).slice(0, 900));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));
