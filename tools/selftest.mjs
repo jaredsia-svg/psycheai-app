@@ -5441,6 +5441,17 @@ probs = {
   'twoRather': bad(lambda b: b['questions'][3].update(kind='rather', o=['Rest at home with a good book', 'Roam a new city on foot all day'], a=0)),
   'variety': bad(lambda b: (b['questions'][3]['o'].__setitem__(0, 'Adopt a second pet tortoise'), b['questions'][6]['o'].__setitem__(1, 'Tortoise habitats built from scratch'))),
   'scenario': bad(lambda b: b['questions'][3].update(kind='deep')),
+  'giveaway': bad(lambda b: b['questions'][8].update(q="What's Jared's favourite coffee find in Melbourne?", o=['The best flat white in Melbourne', 'The best iced latte in Seoul', 'The best espresso in Rome', 'The best cold brew in Austin'], a=0)),
+}
+# Release 232: options shuffled, the answers spread across A to D; years in order and "All of the above" last.
+base = [{'kind': x['kind'], 'q': x['q'], 'o': list(x['o']), 'a': x['a']} for x in good['questions']]
+base[3] = dict(base[3], o=['Sign up for a muddy obstacle race', 'Spend a Sunday baking sourdough', 'Join a dawn hike with strangers', 'All of the above'], a=3)
+runs = [m.quiz_spread(json.loads(json.dumps(base))) for _ in range(40)]
+spread = {
+  'kept': all(r[i]['o'][r[i]['a']] == x['o'][x['a']] and sorted(r[i]['o']) == sorted(x['o']) for r in runs for i, x in enumerate(base)),
+  'yearsAndAll': all(r[0]['o'] == base[0]['o'] and r[3]['o'][-1] == 'All of the above' and r[-1] == base[-1] for r in runs),
+  'worst': max(max([y['a'] for y in r if y['kind'] != 'finale'].count(k) for k in range(4)) for r in runs),
+  'moved': len({r[i]['a'] for r in runs for i in (1, 2, 4)}) >= 3,
 }
 # Release 226: words that only sound like messages pass ("hard conversations" was refused on a device).
 soft = m._quiz_item({'kind': 'niche', 'q': 'What do people get wrong about Jared?', 'o': ['They think he avoids hard conversations', 'They think he will chat to anyone at all', 'They think he talks every problem through', 'They think he never stops talking at parties'], 'a': 0, 'fact': 'He has hosted the same supper club for four years.'}, 8)[1]
@@ -5460,7 +5471,7 @@ m._quiz_open = lambda c: (opened, {})
 missed = m.quiz_missed()
 print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'patterns': t['report'].get('patterns'), 'probs': {k: v.get('problems') for k, v in probs.items()}, 'soft': soft, 'saved': saved.get('saved'), 'facts': t.get('instagramInNumbers'),
   'likeAll': sorted(m.QUIZ_LIKE) == sorted(m.QUIZ_LIKE) and len(m.QUIZ_LIKE) == 28 and all(len(v) == 3 and c not in v and all(x in m.QUIZ_LIKE for x in v) for c, v in m.QUIZ_LIKE.items()), 'pub': {k: v for k, v in pub.items() if k != 'nextStep'}, 'pubButtons': pub['nextStep']['buttons'], 'tool': tool, 'id': args['e2e']['id'] == m.e2e_key('quiz-id', code).hex(),
-  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'draftGone': draftGone, 'straight': straight,
+  'n': args['e2e']['n'], 'opened': opened, 'nxt': nxt, 'missed': missed, 'spread': spread, 'draftGone': draftGone, 'straight': straight,
   'labels': [m.known_label(x) for x in ('Make my quiz for Ana', "See what I missed on Ana's quiz", 'Make a quiz for my friends', 'Show my quiz results', 'Make my quiz for http://x')]}))
 `;
   let Q = null, qerr = '';
@@ -5477,11 +5488,18 @@ print(json.dumps({'task': task, 'taskKeys': sorted(t['report'].keys()), 'pattern
     Q && Q.saved === true && Q.straight.widget === false && Q.straight.invite === true && Q.straight.sent === 1 && Q.tool === 'quiz_put' && Q.id && Q.n === 12 &&
       Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 12 && Q.opened.questions[11].k === 'finale' && Q.opened.questions[11].o[Q.opened.questions[11].a] === 'Sherlock Holmes' && Q.opened.questions[10].k === 'free' && Q.opened.questions[10].o.length === 2 &&
       JSON.stringify(Q.opened.questions[11].o.slice().sort()) === '["Elsa","Hermione Granger","Remy","Sherlock Holmes"]' && Q.likeAll &&
-      Q.opened.questions[1].q === 'Would Jared rather lead or help?' && Q.opened.questions[1].a === 0 && Q.opened.questions[1].o.length === 2 &&
+      Q.opened.questions[1].q === 'Would Jared rather lead or help?' && Q.opened.questions[1].o[Q.opened.questions[1].a] === 'Lead a team of fifty through a hard launch' && Q.opened.questions[1].o.length === 2 &&
       JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","rather","caption","year","niche","numbers","place","niche","fake","never","free","finale"]' &&
       Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone && Q.pub.invite.say.startsWith('[Open your quiz](' + Q.pub.invite.url + ')\n\nHere\'s your quiz.') &&
       JSON.stringify(Q.pubButtons) === '["Show my quiz results","Back to the menu"]' && !/quiz_widget|QZ_JS|That\'s not true about me/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
     qerr || JSON.stringify(Q && { straight: Q.straight, n: Q.n, kinds: Q.opened && Q.opened.questions.map(x => x.k) }).slice(0, 900));
+  check('no giveaways, and answers anywhere (release 232): a word of the question that only the right option shares is refused, naming it; the script shuffles every question\'s options, keeping the answer, years in order and "All of the above" last, so no letter holds more than four of the eleven answers',
+    Q && (Q.probs.giveaway || []).some(p => /questions 9 of 12 .*"melbourne" is in the question and only in the right answer .*gives it away/.test(p)) &&
+      Q.spread.kept && Q.spread.yearsAndAll && Q.spread.worst <= 4 && Q.spread.moved && /## No giveaways/.test(require('../lib/quizguide.js').spec) && /PsycheAI shuffles them/.test(require('../lib/quizguide.js').spec),
+    qerr || JSON.stringify(Q && { giveaway: Q.probs.giveaway, spread: Q.spread }).slice(0, 900));
+  check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
+    /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
+      /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));
   check('a friend\'s quiz comes first after their card ("Make my quiz for <name>" and More, the rest under More), and once their own quiz is made, quiz-missed shows only the ones they missed with the right answer, then forgets the link; the quiz buttons are known labels',
     Q && JSON.stringify(Q.nxt.buttons) === '["Make my quiz for Ana","More"]' && Q.nxt.more.buttons[0] === 'Sync with a friend' && Q.nxt.more.buttons.includes('Ask PsycheAI questions about myself') &&
       Q.missed.missed.length === Q.opened.questions.filter(x => x.a !== 0).length && Q.missed.missed.every(x => x.answer && x.yours === Q.opened.questions.find(y => y.q === x.question).o[0]) && /^The \d+ you missed on Jared's quiz/.test(Q.missed.say) &&

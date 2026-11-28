@@ -7526,6 +7526,35 @@ def _quiz_item(x, n):
     return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact}, probs
 
 
+def quiz_spread(items):
+    """The options in a new order (release 232, README "No giveaways, and answers anywhere"): Muse tends to write the
+    right answer first, so each question's options are shuffled, with the answers spread across A to D. Years stay in
+    order, "All of the above" stays last, and the finale is already shuffled."""
+    def once():
+        out = []
+        for x in items:
+            o, a = list(x['o']), x['a']
+            if x['kind'] in ('finale', 'year'):
+                out.append(x)
+                continue
+            fixed = len(o) - 1 if QUIZ_ALL.match(o[-1]) else len(o)
+            idx = list(range(fixed))
+            random.shuffle(idx)
+            idx += list(range(fixed, len(o)))
+            out.append(dict(x, o=[o[k] for k in idx], a=idx.index(a)))
+        return out
+    best = None
+    for _ in range(60):
+        got = once()
+        at = [x['a'] for x in got if x['kind'] != 'finale']
+        worst = max(at.count(k) for k in range(4)) if at else 0
+        if best is None or worst < best[0]:
+            best = (worst, got)
+        if worst <= max(1, -(-len(at) // 4) + 1):
+            break
+    return best[1]
+
+
 def quiz_arc(items):
     """The questions in QUIZ_ORDER (release 229): each slot takes the next question of its kind; any left over (a kind
     written in place of one there was no data for) go into the deep end, before the hard question and the finale."""
@@ -7599,13 +7628,22 @@ def quiz_save(raw):
         for w_, qs_ in sorted(seen_.items(), key=lambda kv: (-len(kv[1]), kv[0])):
             if len(qs_) >= 3:
                 probs.append('"%s" comes up in questions %s of %d. Keep the quiz varied: no topic in more than two questions, options included.' % (w_, ', '.join(str(n_) for n_ in sorted(qs_)), QUIZ_MAX))
+        # No giveaways (release 232, README "No giveaways, and answers anywhere"): a word of the question that only the
+        # right option shares ("favourite food find in Singapore?" beside "The best pizza in Singapore") answers it.
+        for i, x in enumerate(items):
+            if x['kind'] in ('finale', 'year') or len(x['o']) < 3:
+                continue
+            wrong_ = set().union(*[words(y) for k_, y in enumerate(x['o']) if k_ != x['a']])
+            given = sorted(w_ for w_ in words(x['q']) & words(x['o'][x['a']]) if len(w_) >= 4 and w_ not in wrong_)
+            if given:
+                probs.append('questions %d of %d ("%s"): "%s" is in the question and only in the right answer ("%s"), which gives it away. Put the shared frame in the question and in no option, or in every option.' % (i + 1, QUIZ_MAX, x['q'], given[0], x['o'][x['a']]))
         if sum(1 for x in items if QUIZ_ALL.match(x['o'][-1])) > 2:
             probs.append('at most 2 questions end with "All of the above" (or "None of these", "Both")')
     if probs:
         return {'saved': False, 'problems': probs[:20]}
     kept = read_first([REPORT, REPORT_KEPT]) or {}
     items = [quiz_finale(x, ((kept.get('report') or {}).get('essence') or {}).get('character')) if x['kind'] == 'finale' else x for x in items]
-    items = quiz_arc(items)
+    items = quiz_arc(quiz_spread(items))
     pend = quiz_pending()
     draft = {'items': items, 'name': (str(kept.get('name') or '').split(' ') or [''])[0][:30],
              'character': (((kept.get('report') or {}).get('essence') or {}).get('character') or '')[:40], 'at': int(time.time()),
