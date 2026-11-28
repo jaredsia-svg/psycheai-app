@@ -101,7 +101,7 @@ import urllib.request
 BASE = os.environ.get('PSYCHEAI_BASE', 'https://app.psycheai.io')
 # This release's number, set by tools/sign-skill.mjs and signed with the rest:
 # update never installs a release older than this one.
-RELEASE = 234
+RELEASE = 235
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ACCOUNT = os.path.join(HERE, '.account.json')
 CLIENT_ID = 'psycheai-skill'
@@ -7538,10 +7538,15 @@ def _quiz_item(x, n, total=QUIZ_MAX):
         say(hits(rx), 'is about %s, which a quiz question can never be about. Reword it.' % topic_)
     say(hits(QUIZ_MESSAGES), 'points at their messages. Nothing from their messages is quoted or described: reword it without that word.')
     say(hits(QUIZ_IDENT), 'is a quote mark, handle, link, email or number. Reword it without one.')
+    # Never "most likely" (release 235, README "Most closely, never most likely"): it lets two answers stand.
+    if q and QUIZ_LIKELY.search(q):
+        probs.append('%s, the question ("%s"): "%s" lets more than one answer stand. Ask what is true of them ("Which most closely describes Jared?", "Which of these has Jared actually done?").' % (label, q, QUIZ_LIKELY.search(q).group(0)))
+    stands = [_quiz_clean(y, 40) for y in x.get('stands')] if isinstance(x.get('stands'), list) else None
     return {'kind': kind, 'q': q, 'o': o, 'a': a, 'f': fact, 'r': reveals, 'about': about if kind != 'finale' else 'character',
-            'src': _quiz_clean(x.get('source'), 60)}, probs
+            'src': _quiz_clean(x.get('source'), 60), 'stands': stands}, probs
 
 
+QUIZ_LIKELY = re.compile(r"\b(most likely|more likely|likely to|probably|would most)\b", re.I)
 QUIZ_SOURCE = re.compile(r'^(post|report|numbers|saves)\b[\s:]*(.*)$', re.I)
 QUIZ_FALSE = ('favourite', 'niche', 'place', 'caption', 'free')     # kinds whose wrong options must be false of them
 
@@ -7598,7 +7603,15 @@ def quiz_grounded(items, total, facts, words):
         elif how == 'report' and x['kind'] == 'drive':
             # What drives them (release 234): the answer is the report's own top motivation or value, named in that part.
             part_ = next((v for k_, v in ((kept.get('report') or {}).items()) if str(k_).lower() == what.split(' ')[0].lower().rstrip('.,')), None)
-            if not (cw(right) & cw(json.dumps(part_, ensure_ascii=False))):
+            st_ = x.get('stands')
+            stem = lambda t: {w_[:5] for w_ in cw(t)}       # "planning" and "planner" are the same motivation
+            if st_ is not None:
+                # Four scenes (release 235): each stands for a different motivation or value, named in stands; the answer's is the report's.
+                if len(st_) != len(x['o']) or not all(st_) or len({y.lower() for y in st_}) != len(st_):
+                    probs.append('%s: stands names the motivation or value each scene stands for, one per option, all different' % label)
+                elif not (stem(st_[x['a']]) & stem(json.dumps(part_, ensure_ascii=False))):
+                    probs.append('%s: the right scene stands for "%s", which isn\'t in the report\'s %s. The right scene is the one for the motivation or value the report puts first.' % (label, st_[x['a']], what.split(' ')[0]))
+            elif not (stem(right) & stem(json.dumps(part_, ensure_ascii=False))):
                 probs.append('%s: "%s" isn\'t in the report\'s %s. The answer is the motivation or value the report puts first there.' % (label, right, what.split(' ')[0]))
             if x.get('about') not in ('motivation', 'value'):
                 probs.append('%s: a what-drives-them question is about a motivation or a value' % label)
@@ -7711,7 +7724,8 @@ def quiz_save(raw):
         # No two questions on the same thing (release 228, README "Nothing asked twice"): much the same words in two questions,
         # or the same right answer, is refused, naming both.
         name_ = set(re.findall(r"[a-z']{3,}", str((read_first([REPORT, REPORT_KEPT]) or {}).get('name') or '').lower()))
-        words = lambda t: set(re.findall(r"[a-z']{3,}", t.lower())) - QUIZ_COMMON - QUIZ_QWORDS - name_
+        # "Jared's" is their name, never a topic (release 235: it was counted as one, so three "Jared's" questions were refused).
+        words = lambda t: {w_[:-2] if w_.endswith("'s") else w_.strip("'") for w_ in re.findall(r"[a-z']{3,}", t.lower())} - QUIZ_COMMON - QUIZ_QWORDS - name_
         for i, x in enumerate(items):
             for k, y in enumerate(items[i + 1:], i + 1):
                 if 'finale' in (x['kind'], y['kind']):
