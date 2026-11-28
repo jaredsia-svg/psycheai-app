@@ -7540,7 +7540,7 @@ def quiz_task():
     with open(QUIZ_TASK, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
     pend = quiz_pending()
-    out = {'write': 'quiz', 'task': 'work/quiz-task.json', 'say': 'Making your pop quiz from your Psyche: it takes a few minutes. I\'ll share its link here when it\'s ready.',     # release 241: shown first
+    out = {'write': 'quiz', 'task': 'work/quiz-task.json', 'say': 'Making your pop quiz from your Psyche: it takes a few minutes. I\'ll share its link here when it\'s ready.',     # release 240: shown first
            'steps': ['work/revelations.json, then quiz-revelations', 'work/quiz.json, then quiz-save']}     # release 236
     try:
         os.remove(QUIZ_REVS)        # a new quiz starts from new findings
@@ -7875,7 +7875,7 @@ def quiz_grounded(items, total, facts, words):
                 probs.append('%s: their post on %s doesn\'t name "%s". The answer is the place that post names.' % (label, day, right))
         elif how == 'report' and what.split(' ')[0].lower().rstrip('.,') not in parts_:
             probs.append('%s: the report has no part called "%s". Name the part that states it (%s).' % (label, what, ', '.join(sorted(parts_)) or 'none here'))
-        elif how == 'report' and x['kind'] == 'drive':
+        elif how == 'report' and x['kind'] in ('drive', 'rather'):
             # What drives them (release 234): the answer is the report's own top motivation or value, named in that part.
             part_ = next((v for k_, v in ((kept.get('report') or {}).items()) if str(k_).lower() == what.split(' ')[0].lower().rstrip('.,')), None)
             st_ = x.get('stands')
@@ -7888,8 +7888,10 @@ def quiz_grounded(items, total, facts, words):
                     probs.append('%s: the right scene stands for "%s", which isn\'t in the report\'s %s. The right scene is the one for the motivation or value the report puts first.' % (label, st_[x['a']], what.split(' ')[0]))
             elif not (stem(right) & stem(json.dumps(part_, ensure_ascii=False))):
                 probs.append('%s: "%s" isn\'t in the report\'s %s. The answer is the motivation or value the report puts first there.' % (label, right, what.split(' ')[0]))
+            if x['kind'] == 'rather' and st_ is None:
+                probs.append('%s: stands names the motivation or value each scene stands for, one per option, all different: a rather sets two of theirs against each other' % label)
             if x.get('about') not in ('motivation', 'value'):
-                probs.append('%s: a what-drives-them question is about a motivation or a value' % label)
+                probs.append('%s: a %s question is about a motivation or a value' % (label, 'what-drives-them' if x['kind'] == 'drive' else 'rather'))
         elif how == 'numbers' and what.split(' ')[0] not in (facts or {}):
             probs.append('%s: instagramInNumbers has no count called "%s" (%s).' % (label, what, ', '.join(sorted(facts or {})) or 'none here'))
         elif how == 'saves' and not saves:
@@ -7980,6 +7982,12 @@ def quiz_save(raw):
         if it:
             it['id'] = 'q%d' % n
             items.append(it)
+    # A rather is asked as the choice itself (release 240, README "A rather that matches"): the question carried a frame of
+    # its own ("own path, or the group?") the two scenes didn't fit, so the script words it and the scenes carry it.
+    first_ = (str((read_first([REPORT, REPORT_KEPT]) or {}).get('name') or '').split(' ') or [''])[0][:30] or 'they'
+    for it in items:
+        if it.get('kind') == 'rather':
+            it['q'] = 'Would %s rather…' % first_
     if not probs:
         kinds = [x['kind'] for x in items]
         facts = quiz_facts()      # the year and numbers questions need something counted to stand on (guide.json's quiz)

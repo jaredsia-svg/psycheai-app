@@ -5359,10 +5359,10 @@ print(json.dumps({'chars': sum(len(x) + 1 for x in out), 'n': len(out), 'years':
       put2.ok && oldGone && taken.error && forgotten &&
       /quiz\.forget\(user\.id\);/.test(mcpSrc) && /'quiz_put', 'quiz_get', 'quiz_end'\]\);/.test(mcpSrc) && /quiz: quiz\.news\(user\)/.test(mcpSrc) && /require\('\.\/lib\/quiz'\)\.sweep\(\);/.test(srvSrc),
     JSON.stringify({ bad, a1, a2, data, news1, news2, queued, oldGone, taken, forgotten }).slice(0, 700));
-  check('the quiz page opens everything in the friend\'s browser from the code after the #, which is never sent: it is noindex, shows right or wrong after each answer and never the right one, sends only a score and locked boxes, and gives the line to make their own quiz with the score (only after it): "Install psycheai.io/skill and make my quiz", with no link and no picks (release 239)',
+  check('the quiz page opens everything in the friend\'s browser from the code after the #, which is never sent: it is noindex, shows right or wrong after each answer and, on a miss, the right one with its fact (release 240), sends only a score and locked boxes, and gives the line to make their own quiz with the score (only after it): "Install psycheai.io/skill and make my quiz", with no link and no picks (release 239)',
     /<meta name="robots" content="noindex">/.test(html) && /X-Robots-Tag': 'noindex'/.test(srvSrc) && (() => { try { new Function(page.JS); return true; } catch { return false; } })() &&
       /location\.hash/.test(page.JS) && !/fetch\([^)]*code/.test(page.JS.replace(/keyFor\([^)]*\)/g, '')) && /'✗ Not quite'/.test(page.JS) && /b\.className=ok\?'right':'wrong'/.test(page.JS) &&
-      !/\.a\]\.className|children\[q\.a\]|nth\(q\.a\)/.test(page.JS) && /body:JSON\.stringify\(\{s:right,box:b\[0\],name:b\[1\]\}\)/.test(page.JS) &&
+      /if\(!ok&&\$\('q-opts'\)\.children\[q\.a\]\)\$\('q-opts'\)\.children\[q\.a\]\.classList\.add\('right'\);/.test(page.JS) && /if\(q\.f\)\{\$\('q-fact'\)/.test(page.JS) && /body:JSON\.stringify\(\{s:right,box:b\[0\],name:b\[1\]\}\)/.test(page.JS) &&
       /function done\(again\)[^]*?\$\('q-line'\)\.textContent=installLine\(\)/.test(page.JS) && /return 'Install '\+short\+' and make my quiz';\}/.test(page.JS) && !/picks\.join\(''\)\+|id="q-myst"|\$\('q-myst'\)|you missed on/.test(page.JS + html) && /<section id="q-done" hidden>[^]*id="q-turn-box"/.test(html) && !/id="q-turn"/.test(html));
   check('the quiz page has a link preview of its own (README "The quiz link\'s preview"): Open Graph tags with a quiz picture served at /quiz/preview.png, saying what a quiz is and never whose; a Next button and a tap on the card to go on, the tap on an answer never counting; progress kept in the browser so a friend picks up where they left off; and the end lists every question with its tick or cross, never the right answer',
     /<meta property="og:image" content="[^"]*\/quiz\/preview\.png">/.test(html) && /<meta property="og:title" content="How well do you know your friend\? 🔮">/.test(html) && /url\.pathname === '\/quiz\/preview\.png'/.test(srvSrc) &&
@@ -5410,7 +5410,7 @@ q = lambda kind, text, a=0, o=None, sure=True: {'kind': kind, 'q': text, 'o': o 
   'source': {'year': 'post 2018-02-03', 'caption': 'post 2023-05-07', 'place': 'post 2022-08-09', 'favourite': 'numbers mostMentioned', 'numbers': 'numbers peakHours', 'rather': 'report patterns', 'never': 'report patterns', 'fake': 'report summary', 'free': 'post 2022-08-20', 'finale': ''}.get(kind, 'saves'),
   'quote': {'year': 'First supper club night', 'caption': 'Mile 20 and still smiling somehow', 'place': 'Sunrise summit on Mount Batur in Bali', 'free': 'Birthday dinner, August again'}.get(kind, ''),
   'top': 'long black' if kind == 'favourite' else ''}
-r = lambda text, a=0, sure=True: q('rather', text, a, ['Lead a team of fifty through a hard launch', 'Be the friend everyone calls at 2am'], sure)
+r = lambda text, a=0, sure=True: dict(q('rather', text, a, ['Lead a team of fifty through a hard launch', 'Be the friend everyone calls at 2am'], sure), stands=['planning and leading', 'being there for people'])
 good = {'questions': [q('year', 'In which year did Jared host his first supper club?', 1, ['2016', '2018', '2020', '2023']),
                       q('numbers', 'At what time of day is Jared most active on Instagram?', 2, ['Early morning, 6am to 9am', 'Mid-afternoon, 12pm to 3pm', 'Evening, 7pm to 10pm', 'The small hours, 1am to 4am']),
                       r('Would Jared rather lead or help?', 0),
@@ -5504,6 +5504,7 @@ probs = {
   'lowTop': bad(lambda b: b['questions'][8].update(top='supper club')),
   'topNotAnswer': bad(lambda b: b['questions'][8].update(top='long black', o=['An iced oat latte', 'A long black, no sugar', 'A double espresso standing up', 'A flat white with honey'], a=0)),
   'topSource': bad(lambda b: b['questions'][8].update(source='saves')),
+  'ratherNoStands': bad(lambda b: b['questions'][2].pop('stands')),
   'tooFeed': bad(lambda b: [x.update(about='feed') for x in b['questions'] if x['kind'] != 'finale']),
   'feedReveal': bad(lambda b: b['questions'][4].update(reveals='He jokes about the market when it falls')),
   'noAbout': bad(lambda b: b['questions'][4].pop('about')),
@@ -5569,7 +5570,7 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
     Q && Q.saved === true && Q.straight.widget === false && Q.straight.invite === true && Q.straight.sent === 1 && Q.tool === 'quiz_put' && Q.id && Q.n === 12 &&
       Q.opened && Q.opened.name === 'Jared' && Q.opened.character === 'Sherlock' && Q.opened.questions.length === 12 && Q.opened.questions[11].k === 'finale' && Q.opened.questions[11].o[Q.opened.questions[11].a] === 'Sherlock Holmes' && Q.opened.questions[10].k === 'free' && Q.opened.questions[10].o.length === 2 &&
       JSON.stringify(Q.opened.questions[11].o.slice().sort()) === '["Elsa","Hermione Granger","Remy","Sherlock Holmes"]' && Q.likeAll &&
-      Q.opened.questions[1].q === 'Would Jared rather lead or help?' && Q.opened.questions[1].o[Q.opened.questions[1].a] === 'Lead a team of fifty through a hard launch' && Q.opened.questions[1].o.length === 2 &&
+      Q.opened.questions[1].q === 'Would Jared rather…' && Q.opened.questions[1].o[Q.opened.questions[1].a] === 'Lead a team of fifty through a hard launch' && Q.opened.questions[1].o.length === 2 &&
       JSON.stringify(Q.opened.questions.map(x => x.k)) === '["favourite","rather","caption","year","niche","numbers","place","niche","fake","never","free","finale"]' &&
       Q.opened.questions.every(x => x.k === 'finale' ? !x.f : /^True and specific/.test(x.f)) && /\/quiz#[A-Za-z0-9_-]{22}$/.test(Q.pub.invite.url) && Q.draftGone && Q.pub.invite.say.startsWith('[Open your quiz](' + Q.pub.invite.url + '): have a look before you send it.\n\nHere\'s your quiz.') &&
       JSON.stringify(Q.pubButtons) === '["Show my friends\' scores for my pop quiz","Generate fresh pop quiz","Back to the menu"]' && Q.labels2.every(Boolean) && !/quiz_widget|QZ_JS|That\'s not true about me/.test(fsq.readFileSync(pathq.join(process.cwd(), 'skill', 'bin', 'psyche.py'), 'utf8')),
@@ -5652,6 +5653,10 @@ print(json.dumps({'shifts': shifts, 'shiftProbs': shiftProbs, 'task': task, 'tas
     Q && /^Making your pop quiz from your Psyche: it takes a few minutes\. I'll share its link here when it's ready\.$/.test(Q.task.say) &&
       /- \*\*The quiz\*\* \("Pop quiz my friends about me"\): with `write`: "quiz", reply first with its say, then, in that same turn, read its task file/.test(require('../lib/skill.js').skillMd()),
     JSON.stringify(Q && Q.task));
+  check('a rather that matches (release 240): its scenes stand for two named motivations or values, the right one in the report part its source gives, and the script words its question "Would Jared rather…", so no frame of its own can miss the scenes; the guide never reuses its own examples',
+    Q && (Q.probs.ratherNoStands || []).some(p => /a rather sets two of theirs against each other/.test(p)) && Q.opened.questions[1].q === 'Would Jared rather…' &&
+      require('../lib/quizguide.js').spec.includes('never use one, or its places, topics or words, in a quiz') && !/Norwegian fjords/.test(require('../lib/quizguide.js').spec),
+    qerr || JSON.stringify(Q && Q.probs.ratherNoStands));
   check('the quiz page fits a phone (release 232): the score and streak share one row with the progress bar, and Next stays in view at the bottom of the screen',
     /<div class="q-hud"><span id="q-pts">⭐ 0<\/span><div id="q-steps" class="q-steps"><\/div><span id="q-streak">🔥 0<\/span><\/div>/.test(require('../lib/quizpage.js').page ? fsq.readFileSync(pathq.join(process.cwd(), 'lib', 'quizpage.js'), 'utf8') : '') &&
       /\.q-next\{position:sticky;bottom:12px/.test(require('../lib/quizpage.js').CSS) && /\.q-said:empty\{display:none\}/.test(require('../lib/quizpage.js').CSS));
